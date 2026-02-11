@@ -2,7 +2,7 @@ from collections import defaultdict
 import math
 from random import normalvariate
 from matplotlib import pyplot as plt
-from env_cuda import Env
+from env_cuda import Env, apply_camera_effects
 import torch
 from torch.nn import functional as F
 from torch.optim import AdamW
@@ -41,8 +41,12 @@ parser.add_argument('--scaffold', default=False, action='store_true')
 parser.add_argument('--random_rotation', default=False, action='store_true')
 parser.add_argument('--yaw_drift', default=False, action='store_true')
 parser.add_argument('--no_odom', default=False, action='store_true')
+parser.add_argument('--diff_cam', default=False, action='store_true', help='enable differentiable perception (camera params)')
+parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='camera param smoothness regularization')
+parser.add_argument('--coef_fov_reg', type=float, default=0.005, help='FOV deviation from default regularization')
+parser.add_argument('--coef_cam_range', type=float, default=0.001, help='camera param range regularization')
 args = parser.parse_args()
-writer = SummaryWriter()
+writer = SummaryWriter(flush_secs=5)
 print(args)
 
 device = torch.device('cuda')
@@ -53,9 +57,9 @@ env = Env(args.batch_size, 64, 48, args.grad_decay, device,
           scaffold=args.scaffold, speed_mtp=args.speed_mtp,
           random_rotation=args.random_rotation, cam_angle=args.cam_angle)
 if args.no_odom:
-    model = Model(7, 6)
+    model = Model(7, 6, use_diff_cam=args.diff_cam)
 else:
-    model = Model(7+3, 6)
+    model = Model(7+3, 6, use_diff_cam=args.diff_cam)
 model = model.to(device)
 
 if args.resume:
@@ -114,10 +118,22 @@ for i in pbar:
             zeros, zeros, ones,
         ], -1).reshape(B, 3, 3)
 
+    # Differentiable camera: initialize camera params to defaults
+    cam_params_history = []
+    if args.diff_cam:
+        cam_fov = torch.full((B,), env._fov_x_half_tan, device=device)
+        cam_exposure = torch.full((B,), 0.5, device=device)
+        cam_iso = torch.full((B,), 0.5, device=device)
+        cam_focus = torch.full((B,), 0.5, device=device)
 
     for t in range(args.timesteps):
         ctl_dt = normalvariate(1 / 15, 0.1 / 15)
-        depth, flow = env.render(ctl_dt)
+        # Render: use differentiable FOV if diff_cam is enabled
+        if args.diff_cam:
+            depth = env.render_diff(cam_fov)
+            depth = apply_camera_effects(depth, cam_exposure, cam_iso, cam_focus)
+        else:
+            depth, flow = env.render(ctl_dt)
         p_history.append(env.p)
         vec_to_pt_history.append(env.find_vec_to_nearest_pt())
 
@@ -150,10 +166,24 @@ for i in pbar:
             state.insert(0, local_v)
         state = torch.cat(state, -1)
 
-        # normalize
-        x = 3 / depth.clamp_(0.3, 24) - 0.6 + torch.randn_like(depth) * 0.02
+        # normalize depth to inverse-depth feature
+        if args.diff_cam:
+            # Use non-inplace clamp to preserve autograd graph through depth
+            x = 3 / depth.clamp(0.3, 24) - 0.6 + torch.randn_like(depth) * 0.02
+        else:
+            x = 3 / depth.clamp_(0.3, 24) - 0.6 + torch.randn_like(depth) * 0.02
         x = F.max_pool2d(x[:, None], 4, 4)
-        act, values, h = model(x, state, h)
+        act, cam_params, h = model(x, state, h)
+
+        # Update camera parameters for next timestep's render
+        if cam_params is not None:
+            fov_delta, exposure, iso, focus_dist = cam_params.unbind(-1)
+            # fov_delta in [0,1] via sigmoid -> FOV in [0.5*base, 1.5*base]
+            cam_fov = env._fov_x_half_tan * (0.5 + fov_delta)
+            cam_exposure = exposure
+            cam_iso = iso
+            cam_focus = focus_dist
+            cam_params_history.append(cam_params)
 
         a_pred, v_pred, *_ = (R @ act.reshape(B, 3, -1)).unbind(-1)
         v_preds.append(v_pred)
@@ -201,6 +231,21 @@ for i in pbar:
     speed_history = v_history.norm(2, -1)
     loss_speed = F.smooth_l1_loss(fwd_v, target_v_history_norm)
 
+    # Camera parameter losses (differentiable perception)
+    loss_cam_smooth = torch.tensor(0.0, device=device)
+    loss_fov_reg = torch.tensor(0.0, device=device)
+    loss_cam_range = torch.tensor(0.0, device=device)
+    if args.diff_cam and len(cam_params_history) > 1:
+        cam_hist = torch.stack(cam_params_history)  # (T, B, 4)
+        # Smoothness: penalize rapid camera parameter changes between timesteps
+        cam_diff = cam_hist.diff(1, 0)  # (T-1, B, 4)
+        loss_cam_smooth = cam_diff.pow(2).mean()
+        # FOV regularization: keep FOV near default (fov_delta=0.5 → default FOV)
+        fov_deltas = cam_hist[:, :, 0]  # (T, B)
+        loss_fov_reg = (fov_deltas - 0.5).pow(2).mean()
+        # Range regularization: keep all params near center to avoid extreme values
+        loss_cam_range = (cam_hist - 0.5).pow(2).mean()
+
     loss = args.coef_v * loss_v + \
         args.coef_obj_avoidance * loss_obj_avoidance + \
         args.coef_bias * loss_bias + \
@@ -210,7 +255,10 @@ for i in pbar:
         args.coef_speed * loss_speed + \
         args.coef_v_pred * loss_v_pred + \
         args.coef_collide * loss_collide + \
-        args.coef_ground_affinity + loss_ground_affinity
+        args.coef_ground_affinity + loss_ground_affinity + \
+        args.coef_cam_smooth * loss_cam_smooth + \
+        args.coef_fov_reg * loss_fov_reg + \
+        args.coef_cam_range * loss_cam_range
 
     if torch.isnan(loss):
         print("loss is nan, exiting...")
@@ -239,13 +287,18 @@ for i in pbar:
             'loss_speed': loss_speed,
             'loss_collide': loss_collide,
             'loss_ground_affinity': loss_ground_affinity,
+            'loss_cam_smooth': loss_cam_smooth,
+            'loss_fov_reg': loss_fov_reg,
+            'loss_cam_range': loss_cam_range,
             'success': _success,
             'max_speed': speed_history.max(0).values.mean(),
             'avg_speed': avg_speed.mean(),
             'ar': (success * avg_speed).mean()})
         log_dict = {}
         if is_save_iter(i):
-            # vid = torch.stack(vid).cpu().div(10).clamp(0, 1)[None, :, None]
+            print("save check success:", i)
+            vid = torch.stack(vid).cpu().div(10).clamp(0, 1)[None, :, None]
+            vid = vid.repeat(1, 1, 3, 1, 1)
             fig_p, ax = plt.subplots()
             p_history = p_history[:, 4].cpu()
             ax.plot(p_history[:, 0], label='x')
@@ -264,10 +317,20 @@ for i in pbar:
             ax.plot(act_buffer[:, 1], label='y')
             ax.plot(act_buffer[:, 2], label='z')
             ax.legend()
-            # writer.add_video('demo', vid, i + 1, 15)
+            writer.add_video('demo', vid, i + 1, 15)
             writer.add_figure('p_history', fig_p, i + 1)
             writer.add_figure('v_history', fig_v, i + 1)
             writer.add_figure('a_reals', fig_a, i + 1)
+            if args.diff_cam and len(cam_params_history) > 0:
+                cam_hist = torch.stack(cam_params_history)[:, 4].cpu()
+                fig_cam, axes = plt.subplots(2, 2, figsize=(8, 6))
+                labels = ['FOV delta', 'Exposure', 'ISO', 'Focus']
+                for ci, (ax_c, lb) in enumerate(zip(axes.flatten(), labels)):
+                    ax_c.plot(cam_hist[:, ci].numpy(), label=lb)
+                    ax_c.set_title(lb)
+                    ax_c.set_ylim(-0.05, 1.05)
+                fig_cam.tight_layout()
+                writer.add_figure('cam_params', fig_cam, i + 1)
         if (i + 1) % 10000 == 0:
             torch.save(model.state_dict(), f'checkpoint{i//10000:04d}.pth')
         if (i + 1) % 25 == 0:

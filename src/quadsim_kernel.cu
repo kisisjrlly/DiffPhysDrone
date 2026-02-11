@@ -274,6 +274,197 @@ __global__ void nearest_pt_cuda_kernel(
 }
 
 
+// ==================== Differentiable FOV Rendering ====================
+
+// Device function: trace a single ray through all scene geometry, return min intersection depth
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t trace_ray_device(
+    scalar_t dx, scalar_t dy, scalar_t dz,
+    scalar_t ox, scalar_t oy, scalar_t oz,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
+    int n_drones_per_group, int batch_base, int bi, int B)
+{
+    scalar_t min_dist = 100;
+    // ground plane z = -1
+    scalar_t gt = (-1 - oz) / dz;
+    if (gt > 0) min_dist = gt;
+
+    // other drones (ellipsoid with z scaled by 2)
+    for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
+        if (i == bi || i >= B) continue;
+        scalar_t cx = pos[i][0], cy = pos[i][1], cz = pos[i][2];
+        scalar_t rad = 0.15;
+        scalar_t qa = dx*dx + dy*dy + 4*dz*dz;
+        scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy) + 4*dz*(oz-cz));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + 4*(oz-cz)*(oz-cz) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qd >= 0) {
+            scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
+            if (qt > 1e-5) { min_dist = min(min_dist, qt); }
+            else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
+        }
+    }
+
+    // balls (spheres)
+    for (int i = 0; i < balls.size(1); i++) {
+        scalar_t cx = balls[batch_base][i][0], cy = balls[batch_base][i][1];
+        scalar_t cz = balls[batch_base][i][2], rad = balls[batch_base][i][3];
+        scalar_t qa = dx*dx + dy*dy + dz*dz;
+        scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy) + dz*(oz-cz));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + (oz-cz)*(oz-cz) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qd >= 0) {
+            scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
+            if (qt > 1e-5) { min_dist = min(min_dist, qt); }
+            else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
+        }
+    }
+
+    // vertical cylinders
+    for (int i = 0; i < cylinders.size(1); i++) {
+        scalar_t cx = cylinders[batch_base][i][0], cy = cylinders[batch_base][i][1];
+        scalar_t rad = cylinders[batch_base][i][2];
+        scalar_t qa = dx*dx + dy*dy;
+        scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qd >= 0) {
+            scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
+            if (qt > 1e-5) { min_dist = min(min_dist, qt); }
+            else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
+        }
+    }
+
+    // horizontal cylinders
+    for (int i = 0; i < cylinders_h.size(1); i++) {
+        scalar_t cx = cylinders_h[batch_base][i][0], cz = cylinders_h[batch_base][i][1];
+        scalar_t rad = cylinders_h[batch_base][i][2];
+        scalar_t qa = dx*dx + dz*dz;
+        scalar_t qb = 2*(dx*(ox-cx) + dz*(oz-cz));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oz-cz)*(oz-cz) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qd >= 0) {
+            scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
+            if (qt > 1e-5) { min_dist = min(min_dist, qt); }
+            else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
+        }
+    }
+
+    // voxels (AABB)
+    for (int i = 0; i < voxels.size(1); i++) {
+        scalar_t cx = voxels[batch_base][i][0], cy = voxels[batch_base][i][1];
+        scalar_t cz = voxels[batch_base][i][2];
+        scalar_t rx = voxels[batch_base][i][3], ry = voxels[batch_base][i][4];
+        scalar_t rz = voxels[batch_base][i][5];
+        scalar_t tx1 = (cx - rx - ox) / dx, tx2 = (cx + rx - ox) / dx;
+        scalar_t tx_min = min(tx1, tx2), tx_max = max(tx1, tx2);
+        scalar_t ty1 = (cy - ry - oy) / dy, ty2 = (cy + ry - oy) / dy;
+        scalar_t ty_min = min(ty1, ty2), ty_max = max(ty1, ty2);
+        scalar_t tz1 = (cz - rz - oz) / dz, tz2 = (cz + rz - oz) / dz;
+        scalar_t tz_min = min(tz1, tz2), tz_max = max(tz1, tz2);
+        scalar_t t_min_v = max(max(tx_min, ty_min), tz_min);
+        scalar_t t_max_v = min(min(tx_max, ty_max), tz_max);
+        if (t_min_v < min_dist && t_min_v < t_max_v && t_min_v > 0)
+            min_dist = t_min_v;
+    }
+
+    return min_dist;
+}
+
+
+// Forward kernel: render with per-batch FOV tensor (differentiable w.r.t. FOV)
+template <typename scalar_t>
+__global__ void render_diff_fov_cuda_kernel(
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
+    int n_drones_per_group,
+    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
+
+    const int c = blockIdx.x * blockDim.x + threadIdx.x;
+    const int B = canvas.size(0);
+    const int H = canvas.size(1);
+    const int W = canvas.size(2);
+    if (c >= B * H * W) return;
+    const int b = c / (H * W);
+    const int u = (c % (H * W)) / W;
+    const int v = c % W;
+
+    const scalar_t fov = fov_x_half_tan[b];
+    const scalar_t fov_y_ht = fov / W * H;
+    const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_ht - 1e-5;
+    const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
+    scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
+    scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
+    scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
+
+    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+    canvas[b][u][v] = trace_ray_device(dx, dy, dz,
+        pos[b][0], pos[b][1], pos[b][2],
+        balls, cylinders, cylinders_h, voxels, pos,
+        n_drones_per_group, batch_base, b, B);
+}
+
+
+// Backward kernel: compute d(depth)/d(fov) via finite differences, accumulate per-batch with atomicAdd
+template <typename scalar_t>
+__global__ void render_backward_fov_cuda_kernel(
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_output,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
+    scalar_t* __restrict__ grad_fov,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
+    int n_drones_per_group,
+    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
+
+    const int c = blockIdx.x * blockDim.x + threadIdx.x;
+    const int B = canvas.size(0);
+    const int H = canvas.size(1);
+    const int W = canvas.size(2);
+    if (c >= B * H * W) return;
+    const int b = c / (H * W);
+    const int u = (c % (H * W)) / W;
+    const int v = c % W;
+
+    const scalar_t go = grad_output[b][u][v];
+    if (abs(go) < 1e-8) return;  // skip zero-gradient pixels
+
+    const scalar_t fov = fov_x_half_tan[b];
+    const scalar_t eps = (scalar_t)1e-3;
+    const scalar_t fov_p = fov + eps;
+    const scalar_t ox = pos[b][0], oy = pos[b][1], oz = pos[b][2];
+
+    // Perturbed ray direction at fov + eps
+    const scalar_t fov_y_p = fov_p / W * H;
+    const scalar_t fu_p = (2 * (u + 0.5) / H - 1) * fov_y_p - 1e-5;
+    const scalar_t fv_p = (2 * (v + 0.5) / W - 1) * fov_p - 1e-5;
+    scalar_t dx_p = R[b][0][0] - fu_p * R[b][0][2] - fv_p * R[b][0][1];
+    scalar_t dy_p = R[b][1][0] - fu_p * R[b][1][2] - fv_p * R[b][1][1];
+    scalar_t dz_p = R[b][2][0] - fu_p * R[b][2][2] - fv_p * R[b][2][1];
+
+    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+    scalar_t depth_p = trace_ray_device(dx_p, dy_p, dz_p, ox, oy, oz,
+        balls, cylinders, cylinders_h, voxels, pos,
+        n_drones_per_group, batch_base, b, B);
+
+    scalar_t depth_orig = canvas[b][u][v];
+    scalar_t local_grad = (depth_p - depth_orig) / eps;
+    atomicAdd(&grad_fov[b], go * local_grad);
+}
+
+
 template <typename scalar_t>
 __global__ void rerender_backward_cuda_kernel(
     torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> depth,
@@ -389,5 +580,65 @@ void find_nearest_pt_cuda(
             pos.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             drone_radius,
             n_drones_per_group);
+    }));
+}
+
+void render_diff_fov_cuda(
+    torch::Tensor canvas,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    torch::Tensor fov_x_half_tan) {
+    const int threads = 1024;
+    size_t state_size = canvas.numel();
+    const dim3 blocks((state_size + threads - 1) / threads);
+
+    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_diff_fov_cuda", ([&] {
+        render_diff_fov_cuda_kernel<scalar_t><<<blocks, threads>>>(
+            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+            n_drones_per_group,
+            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
+    }));
+}
+
+void render_backward_fov_cuda(
+    torch::Tensor grad_fov,
+    torch::Tensor grad_output,
+    torch::Tensor canvas,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    torch::Tensor fov_x_half_tan) {
+    const int threads = 1024;
+    size_t state_size = canvas.numel();
+    const dim3 blocks((state_size + threads - 1) / threads);
+
+    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_backward_fov_cuda", ([&] {
+        render_backward_fov_cuda_kernel<scalar_t><<<blocks, threads>>>(
+            grad_output.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            grad_fov.data_ptr<scalar_t>(),
+            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+            n_drones_per_group,
+            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
 }

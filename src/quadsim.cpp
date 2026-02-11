@@ -72,6 +72,30 @@ std::vector<torch::Tensor> run_backward_cuda(
     float grad_decay,
     float ctl_dt);
 
+void render_diff_fov_cuda(
+    torch::Tensor canvas,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    torch::Tensor fov_x_half_tan);
+
+void render_backward_fov_cuda(
+    torch::Tensor grad_fov,
+    torch::Tensor grad_output,
+    torch::Tensor canvas,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    torch::Tensor fov_x_half_tan);
+
 // C++ interface
 
 // // NOTE: AT_ASSERT has become AT_CHECK on master after 0.4.
@@ -102,4 +126,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("run_forward", &run_forward_cuda, "run_forward_cuda (CUDA)");
   m.def("run_backward", &run_backward_cuda, "run_backward_cuda (CUDA)");
   m.def("rerender_backward", &rerender_backward_cuda, "rerender_backward_cuda (CUDA)");
+  m.def("render_diff_fov", &render_diff_fov_cuda, "render_diff_fov (CUDA)");
+  m.def("render_backward_fov", &render_backward_fov_cuda, "render_backward_fov (CUDA)");
 }

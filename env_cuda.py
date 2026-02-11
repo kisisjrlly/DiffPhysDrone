@@ -40,6 +40,72 @@ class RunFunction(torch.autograd.Function):
 run = RunFunction.apply
 
 
+class DiffRenderFunction(torch.autograd.Function):
+    """Differentiable rendering w.r.t. per-batch FOV tensor via CUDA forward/backward."""
+    @staticmethod
+    def forward(ctx, fov_x_half_tan, R_cam, pos, balls, cyl, cyl_h, voxels,
+                n_drones_per_group, height, width):
+        B = pos.shape[0]
+        fov_x_half_tan = fov_x_half_tan.contiguous()
+        R_cam = R_cam.contiguous()
+        pos = pos.contiguous()
+        canvas = torch.empty((B, height, width), device=pos.device)
+        quadsim_cuda.render_diff_fov(canvas, balls, cyl, cyl_h, voxels,
+                                     R_cam, pos, n_drones_per_group, fov_x_half_tan)
+        ctx.save_for_backward(fov_x_half_tan, canvas, R_cam, pos, balls, cyl, cyl_h, voxels)
+        ctx.n_drones_per_group = n_drones_per_group
+        return canvas
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        fov, canvas, R_cam, pos, balls, cyl, cyl_h, voxels = ctx.saved_tensors
+        grad_fov = torch.zeros_like(fov)
+        quadsim_cuda.render_backward_fov(grad_fov, grad_output.contiguous(), canvas,
+                                         balls, cyl, cyl_h, voxels, R_cam, pos,
+                                         ctx.n_drones_per_group, fov)
+        return grad_fov, None, None, None, None, None, None, None, None, None
+
+diff_render = DiffRenderFunction.apply
+
+
+def apply_camera_effects(depth, exposure, iso, focus_dist):
+    """Apply differentiable camera sensor effects to depth image.
+
+    Args:
+        depth: (B, H, W) raw depth from renderer
+        exposure: (B,) in [0, 1] from sigmoid
+        iso: (B,) in [0, 1] from sigmoid
+        focus_dist: (B,) in [0, 1] from sigmoid
+    Returns:
+        (B, H, W) processed depth with sensor effects
+    """
+    # Map [0,1] to physical ranges
+    exposure_phys = exposure * 10 + 0.5       # [0.5, 10.5] ms
+    iso_phys = iso * 6400 + 100               # [100, 6500]
+    focus_phys = focus_dist * 20 + 0.5        # [0.5, 20.5] m
+
+    # 1. Effective sensing range: max depth the sensor can detect
+    #    Higher exposure / ISO -> longer range
+    max_range = 2.0 + 1.5 * exposure_phys + 0.001 * iso_phys  # ~[3, 24] meters
+    max_range = max_range[:, None, None]  # (B, 1, 1)
+    # Smooth clamp: depth beyond max_range mapped to max_range (differentiable)
+    depth = max_range - F.softplus(max_range - depth, beta=2.0)
+
+    # 2. Depth noise: higher ISO increases noise, higher exposure decreases it
+    noise_sigma = 0.03 * (1.0 + 2.0 * iso) / (exposure + 0.3)  # (B,)
+    depth_dist_scale = depth.detach().clamp(0.3, 20) / 5.0  # noise scales with distance
+    depth = depth + torch.randn_like(depth) * noise_sigma[:, None, None] * depth_dist_scale
+
+    # 3. Focus distance: out-of-focus regions get degraded depth readings
+    focus_phys = focus_phys[:, None, None]  # (B, 1, 1)
+    dof_sigma = 4.0
+    focus_weight = torch.exp(-((depth.detach() - focus_phys) ** 2) / (2 * dof_sigma ** 2))
+    # In-focus: keep depth; out-of-focus: blend with detached (stops gradient → encourages focus)
+    depth = depth * focus_weight + depth.detach() * (1 - focus_weight)
+
+    return depth
+
+
 class Env:
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.53,
                  single=False, gate=False, ground_voxels=False, scaffold=False, speed_mtp=1,
@@ -286,6 +352,13 @@ class Env:
                             self.p_old, self.drone_radius, self.n_drones_per_group,
                             self._fov_x_half_tan)
         return canvas, None
+
+    def render_diff(self, fov_tensor):
+        """Render with differentiable per-batch FOV tensor. Gradients flow through fov_tensor."""
+        canvas = diff_render(fov_tensor, self.R @ self.R_cam, self.p,
+                             self.balls, self.cyl, self.cyl_h, self.voxels,
+                             self.n_drones_per_group, self.height, self.width)
+        return canvas
 
     def find_vec_to_nearest_pt(self):
         p = self.p + self.v * self.sub_div
