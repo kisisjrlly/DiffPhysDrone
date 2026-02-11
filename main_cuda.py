@@ -1,13 +1,16 @@
 from collections import defaultdict
 import math
+import os
 from random import normalvariate
 from matplotlib import pyplot as plt
 from env_cuda import Env, apply_camera_effects
+import imageio
 import torch
 from torch.nn import functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.utils.tensorboard import SummaryWriter
+import wandb
+import time
 from tqdm import tqdm
 
 import argparse
@@ -45,8 +48,30 @@ parser.add_argument('--diff_cam', default=False, action='store_true', help='enab
 parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='camera param smoothness regularization')
 parser.add_argument('--coef_fov_reg', type=float, default=0.005, help='FOV deviation from default regularization')
 parser.add_argument('--coef_cam_range', type=float, default=0.001, help='camera param range regularization')
+parser.add_argument('--wandb_disabled', default=False, action='store_true', help='Disable wandb logging')
 args = parser.parse_args()
-writer = SummaryWriter(flush_secs=5)
+
+# Generate a unique run name based on time
+run_name = f"run_{time.strftime('%Y%m%d_%H%M%S')}"
+
+wandb.init(
+    project="diff-simulation", 
+    name=run_name,
+    config=args,
+    # Automatically save only relevant code files
+    settings=wandb.Settings(code_dir="."),
+    mode="disabled" if args.wandb_disabled else "online"
+)
+
+# Manually save specific source files to ensure they are tracked
+# Exclude build catalogs and installation directories by only selecting specific files/folders
+wandb.save("*.py")
+wandb.save("src/*.cu")
+wandb.save("src/*.cpp")
+wandb.save("src/*.py")
+wandb.save("configs/*.args")
+wandb.save("*.sh")
+
 print(args)
 
 device = torch.device('cuda')
@@ -317,10 +342,33 @@ for i in pbar:
             ax.plot(act_buffer[:, 1], label='y')
             ax.plot(act_buffer[:, 2], label='z')
             ax.legend()
-            writer.add_video('demo', vid, i + 1, 15)
-            writer.add_figure('p_history', fig_p, i + 1)
-            writer.add_figure('v_history', fig_v, i + 1)
-            writer.add_figure('a_reals', fig_a, i + 1)
+            
+            # Log to wandb
+            # wandb expects video in (T, C, H, W) format, but vid is (1, T, 3, H, W)
+            # Remove batch dim: (T, 3, H, W)
+            # Convert to numpy array for wandb and scaling
+            # vid[0] is (T, 3, H, W)
+            # Save video to temp file to avoid wandb/moviepy fps bug
+            vid_np = vid[0].permute(0, 2, 3, 1).cpu().numpy()  # (T, C, H, W) -> (T, H, W, C)
+            vid_np = (vid_np * 255).astype('uint8')
+            tmp_video_path = f'/tmp/wandb_demo_{i}.mp4'
+            writer = imageio.get_writer(tmp_video_path, fps=15)
+            for frame in vid_np:
+                writer.append_data(frame)
+            writer.close()
+            wandb.log({
+                "demo": wandb.Video(tmp_video_path, fps=15, format="mp4"),
+                "p_history": wandb.Image(fig_p),
+                "v_history": wandb.Image(fig_v),
+                "a_reals": wandb.Image(fig_a)
+            }, step=i + 1)
+            if os.path.exists(tmp_video_path):
+                os.remove(tmp_video_path)
+            
+            plt.close(fig_p)
+            plt.close(fig_v)
+            plt.close(fig_a)
+
             if args.diff_cam and len(cam_params_history) > 0:
                 cam_hist = torch.stack(cam_params_history)[:, 4].cpu()
                 fig_cam, axes = plt.subplots(2, 2, figsize=(8, 6))
@@ -330,10 +378,15 @@ for i in pbar:
                     ax_c.set_title(lb)
                     ax_c.set_ylim(-0.05, 1.05)
                 fig_cam.tight_layout()
-                writer.add_figure('cam_params', fig_cam, i + 1)
+                wandb.log({'cam_params': wandb.Image(fig_cam)}, step=i + 1)
+                plt.close(fig_cam)
         if (i + 1) % 10000 == 0:
             torch.save(model.state_dict(), f'checkpoint{i//10000:04d}.pth')
+            # Optionally log checkpoint to wandb
+            wandb.save(f'checkpoint{i//10000:04d}.pth')
         if (i + 1) % 25 == 0:
+            log_data = {}
             for k, v in scaler_q.items():
-                writer.add_scalar(k, sum(v) / len(v), i + 1)
+                log_data[k] = sum(v) / len(v)
+            wandb.log(log_data, step=i + 1)
             scaler_q.clear()

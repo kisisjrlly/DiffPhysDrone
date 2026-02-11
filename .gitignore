@@ -6,3 +6,4 @@ copliot.md
 Design.md
 src/build/
 __pycache__/
+wandb/
