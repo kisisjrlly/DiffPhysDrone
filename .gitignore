@@ -2,8 +2,8 @@
 *.so
 src/quadsim_cuda.egg-info/
 runs
-copliot.md
-Design.md
+# copliot.md
+# Design.md
 src/build/
 __pycache__/
 wandb/
