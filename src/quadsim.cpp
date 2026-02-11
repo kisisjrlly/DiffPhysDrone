@@ -34,6 +34,19 @@ void find_nearest_pt_cuda(
     float drone_radius,
     int n_drones_per_group);
 
+void find_nearest_pt_ellipsoid_cuda(
+    torch::Tensor nearest_pt,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor pos,
+    torch::Tensor R_body,
+    float drone_radius,
+    int n_drones_per_group,
+    float ellipsoid_a,
+    float ellipsoid_c);
+
 torch::Tensor update_state_vec_cuda(
     torch::Tensor R,
     torch::Tensor a_thr,
@@ -122,6 +135,7 @@ void render_backward_fov_cuda(
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("render", &render_cuda, "render (CUDA)");
   m.def("find_nearest_pt", &find_nearest_pt_cuda, "find_nearest_pt (CUDA)");
+  m.def("find_nearest_pt_ellipsoid", &find_nearest_pt_ellipsoid_cuda, "find_nearest_pt_ellipsoid (CUDA)");
   m.def("update_state_vec", &update_state_vec_cuda, "update_state_vec (CUDA)");
   m.def("run_forward", &run_forward_cuda, "run_forward_cuda (CUDA)");
   m.def("run_backward", &run_backward_cuda, "run_backward_cuda (CUDA)");

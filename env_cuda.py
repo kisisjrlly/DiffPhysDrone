@@ -109,12 +109,17 @@ def apply_camera_effects(depth, exposure, iso, focus_dist):
 class Env:
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.53,
                  single=False, gate=False, ground_voxels=False, scaffold=False, speed_mtp=1,
-                 random_rotation=False, cam_angle=10) -> None:
+                 random_rotation=False, cam_angle=10,
+                 wall_slit=False, ellipsoid_a=0.0, ellipsoid_c=0.0) -> None:
         self.device = device
         self.batch_size = batch_size
         self.width = width
         self.height = height
         self.grad_decay = grad_decay
+        self.wall_slit = wall_slit
+        self.ellipsoid_a = ellipsoid_a
+        self.ellipsoid_c = ellipsoid_c
+        self.use_ellipsoid = ellipsoid_a > 0 and ellipsoid_c > 0
         self.ball_w = torch.tensor([8., 18, 6, 0.2], device=device)
         self.ball_b = torch.tensor([0., -9, -1, 0.4], device=device)
         self.voxel_w = torch.tensor([8., 18, 6, 0.1, 0.1, 0.1], device=device)
@@ -160,6 +165,8 @@ class Env:
         self.random_rotation = random_rotation
         self.cam_angle = cam_angle
         self.fov_x_half_tan = fov_x_half_tan
+        if wall_slit:
+            self.single = True  # wall_slit forces single drone mode
         self.reset()
         # self.obj_avoid_grad_mtp = torch.tensor([0.5, 2., 1.], device=device)
 
@@ -315,10 +322,124 @@ class Env:
         self.p_old = self.p
         self.margin = torch.rand((B,), device=device) * 0.2 + 0.1
 
+        # ==================== Wall-Slit Environment ====================
+        if self.wall_slit:
+            self._reset_wall_slit(B, device)
+
         # drag coef
         self.drag_2 = torch.rand((B, 2), device=device) * 0.15 + 0.3
         self.drag_2[:, 0] = 0
         self.z_drag_coef = torch.ones((B, 1), device=device)
+
+    def _reset_wall_slit(self, B, device):
+        """Override obstacle and drone placement for wall-slit scenario.
+
+        Creates a thin wall (along YZ plane) with a narrow vertical slit.
+        The slit is taller than it is wide, so the drone must roll/tilt
+        sideways to pass through. Drone starts on one side of the wall,
+        target is on the other side.
+        """
+        # Wall parameters (randomized per reset, shared across batch)
+        wall_x = 2.0 + random.random() * 4.0      # wall x-position in [2, 6]
+        slit_y_center = random.uniform(-1.0, 1.0)  # slit lateral center
+        slit_z_center = random.uniform(0.0, 1.5)   # slit vertical center (above ground z=-1)
+        slit_half_w = random.uniform(0.10, 0.18)    # half-width of slit (narrow, ~0.20-0.36m total)
+        slit_half_h = random.uniform(0.35, 0.60)    # half-height of slit (tall, ~0.70-1.20m total)
+        wall_thickness = 0.15                        # wall half-thickness in X
+
+        # Store wall params for evaluation / logging
+        self.wall_x = wall_x
+        self.slit_y_center = slit_y_center
+        self.slit_z_center = slit_z_center
+        self.slit_half_w = slit_half_w
+        self.slit_half_h = slit_half_h
+
+        # Build 4 voxels forming a wall with a rectangular slit opening:
+        #   Left wall:  everything to the left of the slit opening
+        #   Right wall: everything to the right of the slit opening
+        #   Top wall:   above the slit opening (same Y span as slit)
+        #   Bottom wall: below the slit opening (same Y span as slit)
+        big = 10.0  # large half-extent to cover scene
+
+        wall_voxels = torch.zeros((B, 4, 6), device=device)
+        # Left: center_y = slit_y - slit_half_w - big, ry = big
+        wall_voxels[:, 0, 0] = wall_x
+        wall_voxels[:, 0, 1] = slit_y_center - slit_half_w - big
+        wall_voxels[:, 0, 2] = slit_z_center
+        wall_voxels[:, 0, 3] = wall_thickness
+        wall_voxels[:, 0, 4] = big
+        wall_voxels[:, 0, 5] = big
+
+        # Right: center_y = slit_y + slit_half_w + big, ry = big
+        wall_voxels[:, 1, 0] = wall_x
+        wall_voxels[:, 1, 1] = slit_y_center + slit_half_w + big
+        wall_voxels[:, 1, 2] = slit_z_center
+        wall_voxels[:, 1, 3] = wall_thickness
+        wall_voxels[:, 1, 4] = big
+        wall_voxels[:, 1, 5] = big
+
+        # Top: center_z = slit_z + slit_half_h + big, rz = big, ry = slit_half_w
+        wall_voxels[:, 2, 0] = wall_x
+        wall_voxels[:, 2, 1] = slit_y_center
+        wall_voxels[:, 2, 2] = slit_z_center + slit_half_h + big
+        wall_voxels[:, 2, 3] = wall_thickness
+        wall_voxels[:, 2, 4] = slit_half_w
+        wall_voxels[:, 2, 5] = big
+
+        # Bottom: center_z = slit_z - slit_half_h - big, rz = big, ry = slit_half_w
+        wall_voxels[:, 3, 0] = wall_x
+        wall_voxels[:, 3, 1] = slit_y_center
+        wall_voxels[:, 3, 2] = slit_z_center - slit_half_h - big
+        wall_voxels[:, 3, 3] = wall_thickness
+        wall_voxels[:, 3, 4] = slit_half_w
+        wall_voxels[:, 3, 5] = big
+
+        # Replace all obstacles with just the wall voxels
+        # Push existing random obstacles out of scene
+        self.balls[:, :, 2] = -200  # move all balls far below ground
+        self.cyl[:, :, 2] = 0.001   # shrink cylinders to negligible
+        self.cyl_h[:, :, 2] = 0.001
+        self.voxels = wall_voxels
+
+        # Drone placement: start before wall, target after wall
+        dist_from_wall = 1.5 + random.random() * 1.5  # 1.5-3.0m from wall
+        noise_y = torch.randn(B, device=device) * 0.3
+        noise_z = torch.randn(B, device=device) * 0.2
+        self.p = torch.stack([
+            torch.full((B,), wall_x - dist_from_wall, device=device),
+            torch.full((B,), slit_y_center, device=device) + noise_y,
+            torch.full((B,), slit_z_center, device=device) + noise_z,
+        ], -1)
+        self.p_target = torch.stack([
+            torch.full((B,), wall_x + dist_from_wall, device=device),
+            torch.full((B,), slit_y_center, device=device) + noise_y * 0.5,
+            torch.full((B,), slit_z_center, device=device) + noise_z * 0.5,
+        ], -1)
+
+        # Force single drone mode
+        self.n_drones_per_group = 1
+        self.drone_radius = 0.15
+
+        # Lower max speed for precise maneuvering
+        self.max_speed = torch.full((B, 1), 0.5 + random.random() * 1.0, device=device) * self.speed_mtp
+
+        # Smaller margin for slit passage (the slit is tight!)
+        self.margin = torch.full((B,), 0.02, device=device)
+
+        # Re-initialize v, R, etc. with updated positions
+        self.v = torch.randn((B, 3), device=device) * 0.1
+        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * 0.3  # less wind
+        self.act = torch.randn_like(self.v) * 0.05
+        self.a = self.act
+        self.dg = torch.randn((B, 3), device=device) * 0.1
+
+        R = torch.zeros((B, 3, 3), device=device)
+        self.R = quadsim_cuda.update_state_vec(
+            R, self.act,
+            torch.randn((B, 3), device=device) * 0.2 + F.normalize(self.p_target - self.p),
+            torch.zeros_like(self.yaw_ctl_delay), 5)
+        self.R_old = self.R.clone()
+        self.p_old = self.p
 
     @staticmethod
     @torch.no_grad()
@@ -363,7 +484,15 @@ class Env:
     def find_vec_to_nearest_pt(self):
         p = self.p + self.v * self.sub_div
         nearest_pt = torch.empty_like(p)
-        quadsim_cuda.find_nearest_pt(nearest_pt, self.balls, self.cyl, self.cyl_h, self.voxels, p, self.drone_radius, self.n_drones_per_group)
+        if self.use_ellipsoid:
+            quadsim_cuda.find_nearest_pt_ellipsoid(
+                nearest_pt, self.balls, self.cyl, self.cyl_h, self.voxels, p,
+                self.R.contiguous(), self.drone_radius, self.n_drones_per_group,
+                self.ellipsoid_a, self.ellipsoid_c)
+        else:
+            quadsim_cuda.find_nearest_pt(
+                nearest_pt, self.balls, self.cyl, self.cyl_h, self.voxels, p,
+                self.drone_radius, self.n_drones_per_group)
         return nearest_pt - p
 
     def run(self, act_pred, ctl_dt=1/15, v_pred=None):

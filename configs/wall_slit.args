@@ -1,0 +1,18 @@
+--single
+--wall_slit
+--ellipsoid_collision
+--drone_a 0.15
+--drone_c 0.075
+--speed_mtp 0.5
+--coef_d_acc 0.01
+--coef_d_jerk 0.001
+--coef_collide 10.0
+--coef_obj_avoidance 5.0
+--coef_v 1.0
+--coef_v_pred 2.0
+--cam_angle 10
+--fov_x_half_tan 0.82
+--timesteps 120
+--batch_size 64
+--num_iters 50000
+--grad_decay 0.4

@@ -274,6 +274,186 @@ __global__ void nearest_pt_cuda_kernel(
 }
 
 
+// ==================== Ellipsoid Drone Collision ====================
+// Treats the drone as an oriented ellipsoid with semi-axes (a, a, c) in body frame.
+// R_body[B,3,3] gives the body-to-world rotation (columns = body axes in world).
+// For each obstacle surface point, we compute the effective ellipsoid radius along
+// the contact direction and subtract it from the point-to-obstacle distance.
+
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t ellipsoid_radius_along_dir(
+    scalar_t dx, scalar_t dy, scalar_t dz,
+    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t>& R_body,
+    int b, scalar_t ea, scalar_t ec) {
+    // Transform world-frame direction (dx, dy, dz) into body frame via R^T
+    // R_body[b] columns are [fwd, left, up] in world coords
+    scalar_t bx = R_body[b][0][0]*dx + R_body[b][1][0]*dy + R_body[b][2][0]*dz;
+    scalar_t by = R_body[b][0][1]*dx + R_body[b][1][1]*dy + R_body[b][2][1]*dz;
+    scalar_t bz = R_body[b][0][2]*dx + R_body[b][1][2]*dy + R_body[b][2][2]*dz;
+    // Ellipsoid support distance: 1/sqrt((bx/a)^2+(by/a)^2+(bz/c)^2)
+    scalar_t inv_a2 = 1.0f / (ea * ea);
+    scalar_t inv_c2 = 1.0f / (ec * ec);
+    scalar_t s = bx*bx*inv_a2 + by*by*inv_a2 + bz*bz*inv_c2;
+    return 1.0f / sqrt(max(s, 1e-8f));
+}
+
+template <typename scalar_t>
+__global__ void nearest_pt_ellipsoid_cuda_kernel(
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> nearest_pt,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> pos,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R_body,
+    float drone_radius,
+    int n_drones_per_group,
+    float ellipsoid_a,
+    float ellipsoid_c) {
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int B = nearest_pt.size(1);
+    const int j = idx / B;
+    if (j >= nearest_pt.size(0)) return;
+    const int b = idx % B;
+
+    const scalar_t ea = (scalar_t)ellipsoid_a;
+    const scalar_t ec = (scalar_t)ellipsoid_c;
+
+    const scalar_t ox = pos[j][b][0];
+    const scalar_t oy = pos[j][b][1];
+    const scalar_t oz = pos[j][b][2];
+
+    // Ground plane z = -1: direction is (0, 0, -1)
+    scalar_t ground_reff = ellipsoid_radius_along_dir((scalar_t)0, (scalar_t)0, (scalar_t)-1, R_body, b, ea, ec);
+    scalar_t min_dist = max(1e-3f, oz + 1 - ground_reff);
+    scalar_t nearest_ptx = ox;
+    scalar_t nearest_pty = oy;
+    scalar_t nearest_ptz = oz - min_dist;
+
+    // other drones
+    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+    for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
+        if (i == b || i >= B) continue;
+        scalar_t cx = pos[j][i][0];
+        scalar_t cy = pos[j][i][1];
+        scalar_t cz = pos[j][i][2];
+        scalar_t r = 0.15;
+        scalar_t raw_dist2 = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + 4*(oz-cz)*(oz-cz);
+        scalar_t raw_dist = sqrt(raw_dist2);
+        scalar_t point_dist = max(1e-3f, raw_dist - r);
+        // Direction from drone to obstacle (toward center)
+        scalar_t ddx = (cx - ox), ddy = (cy - oy), ddz = (cz - oz);
+        scalar_t dd_norm = sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+        if (dd_norm > 1e-6f) { ddx /= dd_norm; ddy /= dd_norm; ddz /= dd_norm; }
+        scalar_t reff = ellipsoid_radius_along_dir(ddx, ddy, ddz, R_body, b, ea, ec);
+        scalar_t dist = max(1e-3f, point_dist - reff);
+        if (dist < min_dist) {
+            min_dist = dist;
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy + dist * ddy;
+            nearest_ptz = oz + dist * ddz;
+        }
+    }
+
+    // balls
+    for (int i = 0; i < balls.size(1); i++) {
+        scalar_t cx = balls[batch_base][i][0];
+        scalar_t cy = balls[batch_base][i][1];
+        scalar_t cz = balls[batch_base][i][2];
+        scalar_t r = balls[batch_base][i][3];
+        scalar_t ddx = cx - ox, ddy = cy - oy, ddz = cz - oz;
+        scalar_t dd_norm = sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+        scalar_t point_dist = max(1e-3f, dd_norm - r);
+        if (dd_norm > 1e-6f) { ddx /= dd_norm; ddy /= dd_norm; ddz /= dd_norm; }
+        scalar_t reff = ellipsoid_radius_along_dir(ddx, ddy, ddz, R_body, b, ea, ec);
+        scalar_t dist = max(1e-3f, point_dist - reff);
+        if (dist < min_dist) {
+            min_dist = dist;
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy + dist * ddy;
+            nearest_ptz = oz + dist * ddz;
+        }
+    }
+
+    // vertical cylinders
+    for (int i = 0; i < cylinders.size(1); i++) {
+        scalar_t cx = cylinders[batch_base][i][0];
+        scalar_t cy = cylinders[batch_base][i][1];
+        scalar_t r = cylinders[batch_base][i][2];
+        scalar_t ddx = cx - ox, ddy = cy - oy;
+        scalar_t dd_norm = sqrt(ddx*ddx + ddy*ddy);
+        scalar_t point_dist = max(1e-3f, dd_norm - r);
+        if (dd_norm > 1e-6f) { ddx /= dd_norm; ddy /= dd_norm; }
+        else { ddx = 0; ddy = 0; }
+        // Direction in world: (ddx, ddy, 0) — horizontal toward cylinder axis
+        scalar_t reff = ellipsoid_radius_along_dir(ddx, ddy, (scalar_t)0, R_body, b, ea, ec);
+        scalar_t dist = max(1e-3f, point_dist - reff);
+        if (dist < min_dist) {
+            min_dist = dist;
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy + dist * ddy;
+            nearest_ptz = oz;
+        }
+    }
+
+    // horizontal cylinders (along Y)
+    for (int i = 0; i < cylinders_h.size(1); i++) {
+        scalar_t cx = cylinders_h[batch_base][i][0];
+        scalar_t cz = cylinders_h[batch_base][i][1];
+        scalar_t r = cylinders_h[batch_base][i][2];
+        scalar_t ddx = cx - ox, ddz = cz - oz;
+        scalar_t dd_norm = sqrt(ddx*ddx + ddz*ddz);
+        scalar_t point_dist = max(1e-3f, dd_norm - r);
+        if (dd_norm > 1e-6f) { ddx /= dd_norm; ddz /= dd_norm; }
+        else { ddx = 0; ddz = 0; }
+        scalar_t reff = ellipsoid_radius_along_dir(ddx, (scalar_t)0, ddz, R_body, b, ea, ec);
+        scalar_t dist = max(1e-3f, point_dist - reff);
+        if (dist < min_dist) {
+            min_dist = dist;
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy;
+            nearest_ptz = oz + dist * ddz;
+        }
+    }
+
+    // voxels (AABB)
+    for (int i = 0; i < voxels.size(1); i++) {
+        scalar_t cx = voxels[batch_base][i][0];
+        scalar_t cy = voxels[batch_base][i][1];
+        scalar_t cz = voxels[batch_base][i][2];
+        scalar_t max_r = max(abs(ox - cx), max(abs(oy - cy), abs(oz - cz))) - 1e-3;
+        scalar_t rx = min(max_r, voxels[batch_base][i][3]);
+        scalar_t ry = min(max_r, voxels[batch_base][i][4]);
+        scalar_t rz = min(max_r, voxels[batch_base][i][5]);
+        scalar_t ptx = cx + max(-rx, min(rx, ox - cx));
+        scalar_t pty = cy + max(-ry, min(ry, oy - cy));
+        scalar_t ptz = cz + max(-rz, min(rz, oz - cz));
+        scalar_t ddx = ptx - ox, ddy = pty - oy, ddz = ptz - oz;
+        scalar_t point_dist = sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+        if (point_dist > 1e-6f) { ddx /= point_dist; ddy /= point_dist; ddz /= point_dist; }
+        scalar_t reff = (point_dist > 1e-6f) ?
+            ellipsoid_radius_along_dir(ddx, ddy, ddz, R_body, b, ea, ec) : ea;
+        scalar_t dist = max(0.0f, point_dist - reff);
+        if (dist < min_dist) {
+            min_dist = dist;
+            if (point_dist > 1e-6f) {
+                nearest_ptx = ox + dist * ddx;
+                nearest_pty = oy + dist * ddy;
+                nearest_ptz = oz + dist * ddz;
+            } else {
+                nearest_ptx = ptx;
+                nearest_pty = pty;
+                nearest_ptz = ptz;
+            }
+        }
+    }
+    nearest_pt[j][b][0] = nearest_ptx;
+    nearest_pt[j][b][1] = nearest_pty;
+    nearest_pt[j][b][2] = nearest_ptz;
+}
+
+
 // ==================== Differentiable FOV Rendering ====================
 
 // Device function: trace a single ray through all scene geometry, return min intersection depth
@@ -580,6 +760,37 @@ void find_nearest_pt_cuda(
             pos.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             drone_radius,
             n_drones_per_group);
+    }));
+}
+
+void find_nearest_pt_ellipsoid_cuda(
+    torch::Tensor nearest_pt,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor pos,
+    torch::Tensor R_body,
+    float drone_radius,
+    int n_drones_per_group,
+    float ellipsoid_a,
+    float ellipsoid_c) {
+    const int threads = 1024;
+    size_t state_size = pos.size(0) * pos.size(1);
+    const dim3 blocks((state_size + threads - 1) / threads);
+    AT_DISPATCH_FLOATING_TYPES(pos.type(), "nearest_pt_ellipsoid_cuda", ([&] {
+        nearest_pt_ellipsoid_cuda_kernel<scalar_t><<<blocks, threads>>>(
+            nearest_pt.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            pos.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            R_body.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            drone_radius,
+            n_drones_per_group,
+            ellipsoid_a,
+            ellipsoid_c);
     }));
 }
 
