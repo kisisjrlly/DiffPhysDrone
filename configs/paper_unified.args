@@ -1,0 +1,1 @@
+--single --wall_slit --ellipsoid_collision --drone_a 0.15 --drone_c 0.075 --speed_mtp 0.5 --coef_collide 10.0 --coef_obj_avoidance 5.0 --timesteps 120 --paper_unified_control --paper_cam_obs --paper_optical_loss --coef_blur 0.1 --coef_noise 0.05 --coef_defocus 0.05 --coef_cam_smooth 0.01 --coef_fov_reg 0.005 --coef_cam_range 0.001 --cam_delta_scale 0.05

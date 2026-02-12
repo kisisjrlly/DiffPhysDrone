@@ -5,6 +5,7 @@ reporting pass-through rate, collision rate, and other statistics.
 
 Usage:
     python eval_wall_slit.py --resume checkpoint0004.pth [--num_episodes 200] [--batch_size 64]
+    python eval_wall_slit.py --resume checkpoint0004.pth --paper_unified_control --paper_cam_obs --ellipsoid_collision
 """
 
 import argparse
@@ -16,7 +17,7 @@ from torch.nn import functional as F
 import numpy as np
 from tqdm import tqdm
 
-from env_cuda import Env
+from env_cuda import Env, apply_camera_effects
 from model import Model
 
 
@@ -35,6 +36,15 @@ def parse_args():
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true')
     parser.add_argument('--no_odom', default=False, action='store_true')
     parser.add_argument('--save_gif', default=False, action='store_true', help='Save a GIF of one episode')
+    # Paper.md model architecture flags
+    parser.add_argument('--diff_cam', default=False, action='store_true',
+                        help='Legacy diff_cam model (separate camera head)')
+    parser.add_argument('--paper_unified_control', default=False, action='store_true',
+                        help='Paper §2.1: unified control model (camera deltas in action)')
+    parser.add_argument('--paper_cam_obs', default=False, action='store_true',
+                        help='Paper §2.1: camera state in observation')
+    parser.add_argument('--cam_delta_scale', type=float, default=0.05,
+                        help='Per-step scale for incremental camera deltas')
     return parser.parse_args()
 
 
@@ -42,11 +52,16 @@ def parse_args():
 def evaluate_batch(env, model, args, device):
     """Run one batch of episodes, return per-drone statistics."""
     B = args.batch_size
+    use_cam = args.diff_cam or args.paper_unified_control
     env.reset()
     model.reset()
 
     p_history = []
     distance_history = []
+    roll_history = []
+    cam_fov_history = []
+    cam_exp_history = []
+    speed_history_eval = []
     h = None
 
     act_lag = 1
@@ -54,14 +69,35 @@ def evaluate_batch(env, model, args, device):
     target_v_raw = env.p_target - env.p
     depth_frames = []  # for GIF
 
+    # Initialize camera params
+    if use_cam:
+        cam_fov = torch.full((B,), env._fov_x_half_tan, device=device)
+        cam_exposure = torch.full((B,), 0.5, device=device)
+        cam_iso = torch.full((B,), 0.5, device=device)
+        cam_focus = torch.full((B,), 0.5, device=device)
+
     for t in range(args.timesteps):
         ctl_dt = 1 / 15  # fixed dt for evaluation
-        depth, flow = env.render(ctl_dt)
+
+        if use_cam:
+            depth = env.render_diff(cam_fov)
+            depth = apply_camera_effects(depth, cam_exposure, cam_iso, cam_focus)
+        else:
+            depth, flow = env.render(ctl_dt)
         p_history.append(env.p.clone())
 
         vec_to_pt = env.find_vec_to_nearest_pt()
         dist = torch.norm(vec_to_pt, 2, -1)  # (sub_steps, B)
         distance_history.append(dist)
+
+        # Track roll angle (angle of up-vector from vertical)
+        up_vec = env.R[:, :, 2]  # (B, 3)
+        roll_angle = torch.acos(up_vec[:, 2].clamp(-1, 1))  # (B,) radians
+        roll_history.append(roll_angle * 180 / math.pi)
+        speed_history_eval.append(env.v.norm(2, -1))
+        if use_cam:
+            cam_fov_history.append(cam_fov.clone())
+            cam_exp_history.append(cam_exposure.clone())
 
         if args.save_gif and t % 2 == 0:
             depth_frames.append(depth[0].cpu())
@@ -87,11 +123,37 @@ def evaluate_batch(env, model, args, device):
         local_v = torch.squeeze(env.v[:, None] @ R, 1)
         if not args.no_odom:
             state.insert(0, local_v)
+        # Paper: include camera state in observation
+        if args.paper_cam_obs and use_cam:
+            cam_obs = torch.stack([
+                cam_fov / env._fov_x_half_tan - 1.0,
+                cam_exposure, cam_iso, cam_focus
+            ], -1)
+            state.append(cam_obs)
         state = torch.cat(state, -1)
 
-        x = 3 / depth.clamp_(0.3, 24) - 0.6
+        if use_cam:
+            x = 3 / depth.clamp(0.3, 24) - 0.6
+        else:
+            x = 3 / depth.clamp_(0.3, 24) - 0.6
         x = F.max_pool2d(x[:, None], 4, 4)
-        act, _, h = model(x, state, h)
+        act, cam_params, h = model(x, state, h)
+
+        # Update camera parameters
+        if args.paper_unified_control and cam_params is not None:
+            delta_fov, delta_exp, delta_iso, delta_focus = cam_params.unbind(-1)
+            scale = args.cam_delta_scale
+            cam_fov = (cam_fov + delta_fov * scale * env._fov_x_half_tan).clamp(
+                env._fov_x_half_tan * 0.3, env._fov_x_half_tan * 2.0)
+            cam_exposure = (cam_exposure + delta_exp * scale).clamp(0.01, 0.99)
+            cam_iso = (cam_iso + delta_iso * scale).clamp(0.01, 0.99)
+            cam_focus = (cam_focus + delta_focus * scale).clamp(0.01, 0.99)
+        elif cam_params is not None:
+            fov_delta, exposure, iso, focus_dist = cam_params.unbind(-1)
+            cam_fov = env._fov_x_half_tan * (0.5 + fov_delta)
+            cam_exposure = exposure
+            cam_iso = iso
+            cam_focus = focus_dist
 
         a_pred, v_pred, *_ = (R @ act.reshape(B, 3, -1)).unbind(-1)
         act_out = (a_pred - v_pred - env.g_std) * env.thr_est_error[:, None] + env.g_std
@@ -100,6 +162,7 @@ def evaluate_batch(env, model, args, device):
     # Compute metrics
     p_history = torch.stack(p_history)  # (T, B, 3)
     distance_history = torch.stack(distance_history)  # (T, sub_steps, B)
+    roll_history = torch.stack(roll_history)  # (T, B)
 
     # Min distance across all timesteps and sub-steps for each drone
     min_dist_per_drone = distance_history.flatten(0, 1).min(0).values - env.margin  # (B,)
@@ -118,6 +181,12 @@ def evaluate_batch(env, model, args, device):
         just_crossed = (p_history[t_idx, :, 0] > env.wall_x) & (cross_time < 0)
         cross_time[just_crossed] = t_idx / 15.0  # convert to seconds
 
+    # Roll angle near wall
+    dx_wall = (p_history[..., 0] - env.wall_x).abs()  # (T, B)
+    near_wall = dx_wall < 1.0
+    roll_at_wall = roll_history[near_wall].mean() if near_wall.any() else torch.tensor(0.0)
+    max_roll = roll_history.max(0).values  # (B,)
+
     results = {
         'no_collision': no_collision.cpu(),
         'crossed': crossed.cpu(),
@@ -126,6 +195,8 @@ def evaluate_batch(env, model, args, device):
         'cross_time': cross_time.cpu(),
         'final_x': final_x.cpu(),
         'wall_x': env.wall_x,
+        'roll_at_wall': roll_at_wall.cpu(),
+        'max_roll': max_roll.cpu(),
     }
 
     if args.save_gif and len(depth_frames) > 0:
@@ -137,6 +208,7 @@ def evaluate_batch(env, model, args, device):
 def main():
     args = parse_args()
     device = torch.device('cuda')
+    use_cam = args.diff_cam or args.paper_unified_control
 
     env = Env(args.batch_size, 64, 48, args.grad_decay, device,
               fov_x_half_tan=args.fov_x_half_tan, single=True,
@@ -145,10 +217,11 @@ def main():
               ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
               ellipsoid_c=args.drone_c if args.ellipsoid_collision else 0.0)
 
-    if args.no_odom:
-        model = Model(7, 6)
-    else:
-        model = Model(7 + 3, 6)
+    obs_dim = 7 if args.no_odom else 10
+    model = Model(obs_dim, 6,
+                  use_diff_cam=args.diff_cam,
+                  use_unified_control=args.paper_unified_control,
+                  use_cam_obs=args.paper_cam_obs)
     model = model.to(device)
 
     state_dict = torch.load(args.resume, map_location=device)
@@ -167,10 +240,17 @@ def main():
     all_passed = []
     all_min_dist = []
     all_cross_time = []
+    all_roll_at_wall = []
+    all_max_roll = []
     gif_frames = None
 
-    print(f"\nEvaluating wall-slit with {total_episodes} episodes "
-          f"({'ellipsoid' if args.ellipsoid_collision else 'point'} collision)...\n")
+    mode_str = 'ellipsoid' if args.ellipsoid_collision else 'point'
+    if args.paper_unified_control:
+        mode_str += '+unified_ctrl'
+    if args.diff_cam:
+        mode_str += '+diff_cam'
+
+    print(f"\nEvaluating wall-slit with {total_episodes} episodes ({mode_str})...\n")
 
     for batch_i in tqdm(range(num_batches), desc='Evaluating'):
         results = evaluate_batch(env, model, args, device)
@@ -179,6 +259,8 @@ def main():
         all_passed.append(results['passed'])
         all_min_dist.append(results['min_dist'])
         all_cross_time.append(results['cross_time'])
+        all_roll_at_wall.append(results['roll_at_wall'])
+        all_max_roll.append(results['max_roll'])
 
         if batch_i == 0 and args.save_gif and 'depth_frames' in results:
             gif_frames = results['depth_frames']
@@ -188,6 +270,7 @@ def main():
     all_passed = torch.cat(all_passed)
     all_min_dist = torch.cat(all_min_dist)
     all_cross_time = torch.cat(all_cross_time)
+    all_max_roll = torch.cat(all_max_roll)
 
     n = len(all_no_collision)
     print(f"\n{'='*60}")
@@ -202,6 +285,9 @@ def main():
         print(f"  Avg crossing time:  {valid_times.mean():.2f}s ± {valid_times.std():.2f}s")
     else:
         print(f"  Avg crossing time:  N/A (no successful crossings)")
+    avg_roll_at_wall = torch.stack(all_roll_at_wall).mean() if len(all_roll_at_wall) > 0 else 0
+    print(f"  Avg roll at wall:   {avg_roll_at_wall:.1f}°")
+    print(f"  Max roll (mean):    {all_max_roll.mean():.1f}° ± {all_max_roll.std():.1f}°")
     print(f"{'='*60}\n")
 
     # Save GIF

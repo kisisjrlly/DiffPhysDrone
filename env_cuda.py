@@ -507,6 +507,32 @@ class Env:
         self.R_old = self.R.clone()
         self.R = quadsim_cuda.update_state_vec(self.R, self.act, v_pred, alpha, 5)
 
+    def save_state(self):
+        """Save a snapshot of the full environment state (for G-DAC inner loop replay)."""
+        return {
+            'p': self.p.clone(),
+            'v': self.v.clone(),
+            'a': self.a.clone(),
+            'act': self.act.clone(),
+            'R': self.R.clone(),
+            'R_old': self.R_old.clone(),
+            'p_old': self.p_old.clone() if isinstance(self.p_old, torch.Tensor) else self.p_old,
+            'dg': self.dg.clone(),
+            'v_wind': self.v_wind.clone(),
+        }
+
+    def restore_state(self, snapshot):
+        """Restore environment state from a snapshot (for G-DAC inner loop replay)."""
+        self.p = snapshot['p'].clone()
+        self.v = snapshot['v'].clone()
+        self.a = snapshot['a'].clone()
+        self.act = snapshot['act'].clone()
+        self.R = snapshot['R'].clone()
+        self.R_old = snapshot['R_old'].clone()
+        self.p_old = snapshot['p_old'].clone() if isinstance(snapshot['p_old'], torch.Tensor) else snapshot['p_old']
+        self.dg = snapshot['dg'].clone()
+        self.v_wind = snapshot['v_wind'].clone()
+
     def _run(self, act_pred, ctl_dt=1/15, v_pred=None):
         alpha = torch.exp(-self.pitch_ctl_delay * ctl_dt)
         self.act = act_pred * (1 - alpha) + self.act * alpha
