@@ -7,3 +7,5 @@ runs
 src/build/
 __pycache__/
 wandb/
+*.log
+logs/
