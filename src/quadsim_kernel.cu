@@ -7,52 +7,71 @@
 
 namespace {
 
+// ============================================================================
+// 深度图渲染 CUDA 内核 (Depth Rendering CUDA Kernel)
+// 
+// 该内核通过光线追踪 (Ray Tracing) 的方式，为每个无人机渲染深度图。
+// 它计算从相机中心发出的光线与场景中各种几何体（地面、其他无人机、球体、圆柱体、体素）的交点，
+// 并记录最近的交点距离作为深度值。
+// ============================================================================
 template <typename scalar_t>
 __global__ void render_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> flow,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R_old,
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos_old,
-    float drone_radius,
-    int n_drones_per_group,
-    float fov_x_half_tan) {
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,      // 输出：深度图画布 (Output: Depth map canvas) [B, H, W]
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> flow,        // 输出：光流图 (Output: Optical flow) [B, H, W, 2] (当前未使用)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,       // 场景中的球体障碍物 (Spherical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,   // 场景中的垂直圆柱体障碍物 (Vertical cylindrical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h, // 场景中的水平圆柱体障碍物 (Horizontal cylindrical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,      // 场景中的体素/长方体障碍物 (Voxel/Box obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,           // 当前相机的旋转矩阵 (Current camera rotation matrix)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R_old,       // 上一帧相机的旋转矩阵 (Previous camera rotation matrix)
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,         // 当前相机的位置 (Current camera position)
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos_old,     // 上一帧相机的位置 (Previous camera position)
+    float drone_radius,                                                                  // 无人机半径 (Drone radius)
+    int n_drones_per_group,                                                              // 每组无人机数量 (Number of drones per group)
+    float fov_x_half_tan) {                                                              // 水平视场角一半的正切值 (Tan of half horizontal FOV)
 
+    // 计算当前线程对应的像素坐标和批次索引 (Calculate pixel coordinates and batch index for current thread)
     const int c = blockIdx.x * blockDim.x + threadIdx.x;
     const int B = canvas.size(0);
     const int H = canvas.size(1);
     const int W = canvas.size(2);
     if (c >= B * H * W) return;
-    const int b = c / (H * W);
-    const int u = (c % (H * W)) / W;
-    const int v = c % W;
+    const int b = c / (H * W);           // 批次索引 (Batch index)
+    const int u = (c % (H * W)) / W;     // 像素行索引 (Pixel row index)
+    const int v = c % W;                 // 像素列索引 (Pixel column index)
+    
+    // 计算相机坐标系下的光线方向 (Calculate ray direction in camera frame)
     const scalar_t fov_y_half_tan = fov_x_half_tan / W * H;
     const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_half_tan - 1e-5;
     const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov_x_half_tan - 1e-5;
+    
+    // 将光线方向转换到世界坐标系 (Transform ray direction to world frame)
     scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
     scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
     scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
+    
+    // 光线起点 (Ray origin)
     const scalar_t ox = pos[b][0];
     const scalar_t oy = pos[b][1];
     const scalar_t oz = pos[b][2];
 
+    // 初始化最小距离为无穷大 (Initialize minimum distance to infinity)
     scalar_t min_dist = 100;
+    
+    // 1. 与地面的交点 (Intersection with ground plane z = -1)
     scalar_t  t = (-1 - oz) / dz;
     if (t > 0) min_dist = t;
 
-    // others
+    // 2. 与其他无人机的交点 (Intersection with other drones in the same group)
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
     for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
-        if (i == b || i >= B) continue;
+        if (i == b || i >= B) continue; // 跳过自己 (Skip self)
         scalar_t cx = pos[i][0];
         scalar_t cy = pos[i][1];
         scalar_t cz = pos[i][2];
-        scalar_t r = 0.15;
+        scalar_t r = 0.15; // 假设其他无人机为半径 0.15 的椭球体 (Assume other drones are ellipsoids)
+        
+        // 解一元二次方程求交点 (Solve quadratic equation for intersection)
         // (ox + t dx)^2 + (oy + t dy)^2 + 4 (oz + t dz)^2 = r^2
         scalar_t a = dx * dx + dy * dy + 4 * dz * dz;
         scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy) + 4 * dz * (oz - cz));
@@ -69,7 +88,7 @@ __global__ void render_cuda_kernel(
         }
     }
 
-    // balls
+    // 3. 与球体障碍物的交点 (Intersection with spherical obstacles)
     for (int i = 0; i < balls.size(1); i++) {
         scalar_t cx = balls[batch_base][i][0];
         scalar_t cy = balls[batch_base][i][1];
@@ -90,7 +109,7 @@ __global__ void render_cuda_kernel(
         }
     }
 
-    // cylinders
+    // 4. 与垂直圆柱体障碍物的交点 (Intersection with vertical cylindrical obstacles)
     for (int i = 0; i < cylinders.size(1); i++) {
         scalar_t cx = cylinders[batch_base][i][0];
         scalar_t cy = cylinders[batch_base][i][1];
@@ -109,6 +128,8 @@ __global__ void render_cuda_kernel(
             }
         }
     }
+    
+    // 5. 与水平圆柱体障碍物的交点 (Intersection with horizontal cylindrical obstacles)
     for (int i = 0; i < cylinders_h.size(1); i++) {
         scalar_t cx = cylinders_h[batch_base][i][0];
         scalar_t cz = cylinders_h[batch_base][i][1];
@@ -128,7 +149,7 @@ __global__ void render_cuda_kernel(
         }
     }
 
-    // balls
+    // 6. 与体素/长方体障碍物的交点 (Intersection with voxel/box obstacles using AABB ray intersection)
     for (int i = 0; i < voxels.size(1); i++) {
         scalar_t cx = voxels[batch_base][i][0];
         scalar_t cy = voxels[batch_base][i][1];
@@ -136,65 +157,83 @@ __global__ void render_cuda_kernel(
         scalar_t rx = voxels[batch_base][i][3];
         scalar_t ry = voxels[batch_base][i][4];
         scalar_t rz = voxels[batch_base][i][5];
+        
+        // 计算与各个面的交点参数 t (Calculate intersection parameters t for each face)
         scalar_t tx1 = (cx - rx - ox) / dx;
         scalar_t tx2 = (cx + rx - ox) / dx;
         scalar_t tx_min = min(tx1, tx2);
         scalar_t tx_max = max(tx1, tx2);
+        
         scalar_t ty1 = (cy - ry - oy) / dy;
         scalar_t ty2 = (cy + ry - oy) / dy;
         scalar_t ty_min = min(ty1, ty2);
         scalar_t ty_max = max(ty1, ty2);
+        
         scalar_t tz1 = (cz - rz - oz) / dz;
         scalar_t tz2 = (cz + rz - oz) / dz;
         scalar_t tz_min = min(tz1, tz2);
         scalar_t tz_max = max(tz1, tz2);
+        
+        // 找到进入和离开长方体的 t 值 (Find entry and exit t values for the box)
         scalar_t t_min = max(max(tx_min, ty_min), tz_min);
         scalar_t t_max = min(min(tx_max, ty_max), tz_max);
+        
+        // 如果光线与长方体相交且在相机前方 (If ray intersects box and is in front of camera)
         if (t_min < min_dist && t_min < t_max && t_min > 0)
             min_dist = t_min;
     }
 
+    // 将最小距离写入深度图画布 (Write minimum distance to depth map canvas)
     canvas[b][u][v] = min_dist;
 }
 
+// ============================================================================
+// 最近点计算 CUDA 内核 (Nearest Point CUDA Kernel)
+// 
+// 该内核用于计算无人机到场景中各个障碍物的最近点，用于碰撞检测和惩罚计算。
+// ============================================================================
 template <typename scalar_t>
 __global__ void nearest_pt_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> nearest_pt,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> pos,
-    float drone_radius,
-    int n_drones_per_group) {
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> nearest_pt, // 输出：最近点坐标 (Output: Nearest point coordinates)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,      // 球体障碍物 (Spherical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,  // 垂直圆柱体障碍物 (Vertical cylindrical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,// 水平圆柱体障碍物 (Horizontal cylindrical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,     // 体素障碍物 (Voxel obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> pos,        // 无人机位置 (Drone positions)
+    float drone_radius,                                                                 // 无人机半径 (Drone radius)
+    int n_drones_per_group) {                                                           // 每组无人机数量 (Number of drones per group)
 
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int B = nearest_pt.size(1);
-    const int j = idx / B;
+    const int j = idx / B; // 时间步索引 (Time step index)
     if (j >= nearest_pt.size(0)) return;
-    const int b = idx % B;
-    // assert(j < pos.size(0));
-    // assert(b < pos.size(1));
+    const int b = idx % B; // 批次索引 (Batch index)
 
+    // 当前无人机位置 (Current drone position)
     const scalar_t ox = pos[j][b][0];
     const scalar_t oy = pos[j][b][1];
     const scalar_t oz = pos[j][b][2];
 
+    // 初始化最小距离为到地面的距离 (Initialize minimum distance to ground distance)
     scalar_t min_dist = max(1e-3f, oz + 1);
     scalar_t nearest_ptx = ox;
     scalar_t nearest_pty = oy;
     scalar_t nearest_ptz = min(-1., oz - 1e-3f);
 
-    // others
+    // 1. 计算到其他无人机的最近点 (Calculate nearest point to other drones)
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
     for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
-        if (i == b || i >= B) continue;
+        if (i == b || i >= B) continue; // 跳过自己 (Skip self)
         scalar_t cx = pos[j][i][0];
         scalar_t cy = pos[j][i][1];
         scalar_t cz = pos[j][i][2];
-        scalar_t r = 0.15;
+        scalar_t r = 0.15; // 假设其他无人机半径为 0.15 (Assume other drones radius is 0.15)
+        
+        // 计算距离 (Calculate distance)
         scalar_t dist = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + 4 * (oz - cz) * (oz - cz);
         dist = max(1e-3f, sqrt(dist) - r);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * (cx - ox);
@@ -203,14 +242,18 @@ __global__ void nearest_pt_cuda_kernel(
         }
     }
 
-    // balls
+    // 2. 计算到球体障碍物的最近点 (Calculate nearest point to spherical obstacles)
     for (int i = 0; i < balls.size(1); i++) {
         scalar_t cx = balls[batch_base][i][0];
         scalar_t cy = balls[batch_base][i][1];
         scalar_t cz = balls[batch_base][i][2];
         scalar_t r = balls[batch_base][i][3];
+        
+        // 计算距离 (Calculate distance)
         scalar_t dist = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + (oz - cz) * (oz - cz);
         dist = max(1e-3f, sqrt(dist) - r);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * (cx - ox);
@@ -219,48 +262,66 @@ __global__ void nearest_pt_cuda_kernel(
         }
     }
 
-    // cylinders
+    // 3. 计算到垂直圆柱体障碍物的最近点 (Calculate nearest point to vertical cylindrical obstacles)
     for (int i = 0; i < cylinders.size(1); i++) {
         scalar_t cx = cylinders[batch_base][i][0];
         scalar_t cy = cylinders[batch_base][i][1];
         scalar_t r = cylinders[batch_base][i][2];
+        
+        // 计算距离 (仅考虑 xy 平面) (Calculate distance in xy plane only)
         scalar_t dist = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy);
         dist = max(1e-3f, sqrt(dist) - r);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * (cx - ox);
             nearest_pty = oy + dist * (cy - oy);
-            nearest_ptz = oz;
+            nearest_ptz = oz; // z 坐标保持不变 (z coordinate remains unchanged)
         }
     }
+    
+    // 4. 计算到水平圆柱体障碍物的最近点 (Calculate nearest point to horizontal cylindrical obstacles)
     for (int i = 0; i < cylinders_h.size(1); i++) {
         scalar_t cx = cylinders_h[batch_base][i][0];
         scalar_t cz = cylinders_h[batch_base][i][1];
         scalar_t r = cylinders_h[batch_base][i][2];
+        
+        // 计算距离 (仅考虑 xz 平面) (Calculate distance in xz plane only)
         scalar_t dist = (ox - cx) * (ox - cx) + (oz - cz) * (oz - cz);
         dist = max(1e-3f, sqrt(dist) - r);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * (cx - ox);
-            nearest_pty = oy;
+            nearest_pty = oy; // y 坐标保持不变 (y coordinate remains unchanged)
             nearest_ptz = oz + dist * (cz - oz);
         }
     }
 
-    // voxels
+    // 5. 计算到体素/长方体障碍物的最近点 (Calculate nearest point to voxel/box obstacles)
     for (int i = 0; i < voxels.size(1); i++) {
         scalar_t cx = voxels[batch_base][i][0];
         scalar_t cy = voxels[batch_base][i][1];
         scalar_t cz = voxels[batch_base][i][2];
+        
+        // 限制最大半径以避免穿透 (Limit max radius to avoid penetration)
         scalar_t max_r = max(abs(ox - cx), max(abs(oy - cy), abs(oz - cz))) - 1e-3;
         scalar_t rx = min(max_r, voxels[batch_base][i][3]);
         scalar_t ry = min(max_r, voxels[batch_base][i][4]);
         scalar_t rz = min(max_r, voxels[batch_base][i][5]);
+        
+        // 计算长方体表面上距离无人机最近的点 (Calculate nearest point on box surface)
         scalar_t ptx = cx + max(-rx, min(rx, ox - cx));
         scalar_t pty = cy + max(-ry, min(ry, oy - cy));
         scalar_t ptz = cz + max(-rz, min(rz, oz - cz));
+        
+        // 计算距离 (Calculate distance)
         scalar_t dist = (ptx - ox) * (ptx - ox) + (pty - oy) * (pty - oy) + (ptz - oz) * (ptz - oz);
         dist = sqrt(dist);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ptx;
@@ -268,86 +329,107 @@ __global__ void nearest_pt_cuda_kernel(
             nearest_ptz = ptz;
         }
     }
+    
+    // 将最近点坐标写入输出张量 (Write nearest point coordinates to output tensor)
     nearest_pt[j][b][0] = nearest_ptx;
     nearest_pt[j][b][1] = nearest_pty;
     nearest_pt[j][b][2] = nearest_ptz;
 }
 
 
-// ==================== Ellipsoid Drone Collision ====================
-// Treats the drone as an oriented ellipsoid with semi-axes (a, a, c) in body frame.
-// R_body[B,3,3] gives the body-to-world rotation (columns = body axes in world).
-// For each obstacle surface point, we compute the effective ellipsoid radius along
-// the contact direction and subtract it from the point-to-obstacle distance.
+// ============================================================================
+// 椭球体无人机碰撞检测 (Ellipsoid Drone Collision)
+// 
+// 将无人机视为机体坐标系下的椭球体，半轴长为 (a, a, c)。
+// R_body[B,3,3] 提供机体到世界的旋转矩阵。
+// 对于每个障碍物表面点，我们计算沿接触方向的有效椭球体半径，
+// 并将其从点到障碍物的距离中减去，以获得更精确的碰撞距离。
+// ============================================================================
 
+// 辅助函数：计算沿给定方向的椭球体有效半径 (Helper: Calculate effective ellipsoid radius along given direction)
 template <typename scalar_t>
 __device__ __forceinline__ scalar_t ellipsoid_radius_along_dir(
-    scalar_t dx, scalar_t dy, scalar_t dz,
-    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t>& R_body,
-    int b, scalar_t ea, scalar_t ec) {
-    // Transform world-frame direction (dx, dy, dz) into body frame via R^T
-    // R_body[b] columns are [fwd, left, up] in world coords
+    scalar_t dx, scalar_t dy, scalar_t dz, // 世界坐标系下的方向向量 (Direction in world frame)
+    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t>& R_body, // 旋转矩阵 (Rotation matrix)
+    int b, scalar_t ea, scalar_t ec) {     // 批次索引和椭球体半轴长 (Batch index and ellipsoid semi-axes)
+    
+    // 将世界坐标系下的方向 (dx, dy, dz) 转换到机体坐标系 (Transform direction to body frame via R^T)
+    // R_body[b] 的列是世界坐标系下的 [前, 左, 上] 向量 (Columns are [fwd, left, up] in world coords)
     scalar_t bx = R_body[b][0][0]*dx + R_body[b][1][0]*dy + R_body[b][2][0]*dz;
     scalar_t by = R_body[b][0][1]*dx + R_body[b][1][1]*dy + R_body[b][2][1]*dz;
     scalar_t bz = R_body[b][0][2]*dx + R_body[b][1][2]*dy + R_body[b][2][2]*dz;
-    // Ellipsoid support distance: 1/sqrt((bx/a)^2+(by/a)^2+(bz/c)^2)
+    
+    // 椭球体支撑距离公式: 1/sqrt((bx/a)^2+(by/a)^2+(bz/c)^2) (Ellipsoid support distance formula)
     scalar_t inv_a2 = 1.0f / (ea * ea);
     scalar_t inv_c2 = 1.0f / (ec * ec);
     scalar_t s = bx*bx*inv_a2 + by*by*inv_a2 + bz*bz*inv_c2;
     return 1.0f / sqrt(max(s, 1e-8f));
 }
 
+// ============================================================================
+// 考虑椭球体形状的最近点计算 CUDA 内核 (Nearest Point Ellipsoid CUDA Kernel)
+// ============================================================================
 template <typename scalar_t>
 __global__ void nearest_pt_ellipsoid_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> nearest_pt,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> pos,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R_body,
-    float drone_radius,
-    int n_drones_per_group,
-    float ellipsoid_a,
-    float ellipsoid_c) {
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> nearest_pt, // 输出：最近点坐标 (Output: Nearest point coordinates)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,      // 球体障碍物 (Spherical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,  // 垂直圆柱体障碍物 (Vertical cylindrical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,// 水平圆柱体障碍物 (Horizontal cylindrical obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,     // 体素障碍物 (Voxel obstacles)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> pos,        // 无人机位置 (Drone positions)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R_body,     // 无人机旋转矩阵 (Drone rotation matrices)
+    float drone_radius,                                                                 // 无人机基础半径 (Base drone radius)
+    int n_drones_per_group,                                                             // 每组无人机数量 (Number of drones per group)
+    float ellipsoid_a,                                                                  // 椭球体水平半轴长 (Ellipsoid horizontal semi-axis)
+    float ellipsoid_c) {                                                                // 椭球体垂直半轴长 (Ellipsoid vertical semi-axis)
 
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int B = nearest_pt.size(1);
-    const int j = idx / B;
+    const int j = idx / B; // 时间步索引 (Time step index)
     if (j >= nearest_pt.size(0)) return;
-    const int b = idx % B;
+    const int b = idx % B; // 批次索引 (Batch index)
 
     const scalar_t ea = (scalar_t)ellipsoid_a;
     const scalar_t ec = (scalar_t)ellipsoid_c;
 
+    // 当前无人机位置 (Current drone position)
     const scalar_t ox = pos[j][b][0];
     const scalar_t oy = pos[j][b][1];
     const scalar_t oz = pos[j][b][2];
 
-    // Ground plane z = -1: direction is (0, 0, -1)
+    // 1. 计算到地面的距离 (Ground plane z = -1: direction is (0, 0, -1))
     scalar_t ground_reff = ellipsoid_radius_along_dir((scalar_t)0, (scalar_t)0, (scalar_t)-1, R_body, b, ea, ec);
     scalar_t min_dist = max(1e-3f, oz + 1 - ground_reff);
     scalar_t nearest_ptx = ox;
     scalar_t nearest_pty = oy;
     scalar_t nearest_ptz = oz - min_dist;
 
-    // other drones
+    // 2. 计算到其他无人机的最近点 (Calculate nearest point to other drones)
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
     for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
-        if (i == b || i >= B) continue;
+        if (i == b || i >= B) continue; // 跳过自己 (Skip self)
         scalar_t cx = pos[j][i][0];
         scalar_t cy = pos[j][i][1];
         scalar_t cz = pos[j][i][2];
-        scalar_t r = 0.15;
+        scalar_t r = 0.15; // 假设其他无人机半径为 0.15 (Assume other drones radius is 0.15)
+        
+        // 计算原始距离 (Calculate raw distance)
         scalar_t raw_dist2 = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + 4*(oz-cz)*(oz-cz);
         scalar_t raw_dist = sqrt(raw_dist2);
         scalar_t point_dist = max(1e-3f, raw_dist - r);
-        // Direction from drone to obstacle (toward center)
+        
+        // 计算从无人机指向障碍物的方向向量 (Direction from drone to obstacle (toward center))
         scalar_t ddx = (cx - ox), ddy = (cy - oy), ddz = (cz - oz);
         scalar_t dd_norm = sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
         if (dd_norm > 1e-6f) { ddx /= dd_norm; ddy /= dd_norm; ddz /= dd_norm; }
+        
+        // 计算沿该方向的有效椭球体半径 (Calculate effective ellipsoid radius along this direction)
         scalar_t reff = ellipsoid_radius_along_dir(ddx, ddy, ddz, R_body, b, ea, ec);
+        
+        // 减去有效半径得到最终距离 (Subtract effective radius to get final distance)
         scalar_t dist = max(1e-3f, point_dist - reff);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * ddx;
@@ -356,7 +438,7 @@ __global__ void nearest_pt_ellipsoid_cuda_kernel(
         }
     }
 
-    // balls
+    // 3. 计算到球体障碍物的最近点 (Calculate nearest point to spherical obstacles)
     for (int i = 0; i < balls.size(1); i++) {
         scalar_t cx = balls[batch_base][i][0];
         scalar_t cy = balls[batch_base][i][1];
@@ -376,19 +458,26 @@ __global__ void nearest_pt_ellipsoid_cuda_kernel(
         }
     }
 
-    // vertical cylinders
+    // 4. 计算到垂直圆柱体障碍物的最近点 (Calculate nearest point to vertical cylindrical obstacles)
     for (int i = 0; i < cylinders.size(1); i++) {
         scalar_t cx = cylinders[batch_base][i][0];
         scalar_t cy = cylinders[batch_base][i][1];
         scalar_t r = cylinders[batch_base][i][2];
+        
+        // 计算水平方向的距离向量 (Calculate horizontal distance vector)
         scalar_t ddx = cx - ox, ddy = cy - oy;
         scalar_t dd_norm = sqrt(ddx*ddx + ddy*ddy);
         scalar_t point_dist = max(1e-3f, dd_norm - r);
+        
+        // 归一化方向向量 (Normalize direction vector)
         if (dd_norm > 1e-6f) { ddx /= dd_norm; ddy /= dd_norm; }
         else { ddx = 0; ddy = 0; }
-        // Direction in world: (ddx, ddy, 0) — horizontal toward cylinder axis
+        
+        // 世界坐标系下的方向: (ddx, ddy, 0) — 水平指向圆柱体轴线 (Direction in world: horizontal toward cylinder axis)
         scalar_t reff = ellipsoid_radius_along_dir(ddx, ddy, (scalar_t)0, R_body, b, ea, ec);
         scalar_t dist = max(1e-3f, point_dist - reff);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * ddx;
@@ -397,18 +486,26 @@ __global__ void nearest_pt_ellipsoid_cuda_kernel(
         }
     }
 
-    // horizontal cylinders (along Y)
+    // 5. 计算到水平圆柱体障碍物的最近点 (沿 Y 轴) (Calculate nearest point to horizontal cylinders (along Y))
     for (int i = 0; i < cylinders_h.size(1); i++) {
         scalar_t cx = cylinders_h[batch_base][i][0];
         scalar_t cz = cylinders_h[batch_base][i][1];
         scalar_t r = cylinders_h[batch_base][i][2];
+        
+        // 计算 xz 平面上的距离向量 (Calculate distance vector in xz plane)
         scalar_t ddx = cx - ox, ddz = cz - oz;
         scalar_t dd_norm = sqrt(ddx*ddx + ddz*ddz);
         scalar_t point_dist = max(1e-3f, dd_norm - r);
+        
+        // 归一化方向向量 (Normalize direction vector)
         if (dd_norm > 1e-6f) { ddx /= dd_norm; ddz /= dd_norm; }
         else { ddx = 0; ddz = 0; }
+        
+        // 计算有效半径 (Calculate effective radius)
         scalar_t reff = ellipsoid_radius_along_dir(ddx, (scalar_t)0, ddz, R_body, b, ea, ec);
         scalar_t dist = max(1e-3f, point_dist - reff);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             nearest_ptx = ox + dist * ddx;
@@ -417,24 +514,36 @@ __global__ void nearest_pt_ellipsoid_cuda_kernel(
         }
     }
 
-    // voxels (AABB)
+    // 6. 计算到体素/长方体障碍物的最近点 (AABB) (Calculate nearest point to voxels (AABB))
     for (int i = 0; i < voxels.size(1); i++) {
         scalar_t cx = voxels[batch_base][i][0];
         scalar_t cy = voxels[batch_base][i][1];
         scalar_t cz = voxels[batch_base][i][2];
+        
+        // 限制最大半径以避免穿透 (Limit max radius to avoid penetration)
         scalar_t max_r = max(abs(ox - cx), max(abs(oy - cy), abs(oz - cz))) - 1e-3;
         scalar_t rx = min(max_r, voxels[batch_base][i][3]);
         scalar_t ry = min(max_r, voxels[batch_base][i][4]);
         scalar_t rz = min(max_r, voxels[batch_base][i][5]);
+        
+        // 计算长方体表面上距离无人机最近的点 (Calculate nearest point on box surface)
         scalar_t ptx = cx + max(-rx, min(rx, ox - cx));
         scalar_t pty = cy + max(-ry, min(ry, oy - cy));
         scalar_t ptz = cz + max(-rz, min(rz, oz - cz));
+        
+        // 计算距离向量 (Calculate distance vector)
         scalar_t ddx = ptx - ox, ddy = pty - oy, ddz = ptz - oz;
         scalar_t point_dist = sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+        
+        // 归一化方向向量 (Normalize direction vector)
         if (point_dist > 1e-6f) { ddx /= point_dist; ddy /= point_dist; ddz /= point_dist; }
+        
+        // 计算有效半径 (Calculate effective radius)
         scalar_t reff = (point_dist > 1e-6f) ?
             ellipsoid_radius_along_dir(ddx, ddy, ddz, R_body, b, ea, ec) : ea;
         scalar_t dist = max(0.0f, point_dist - reff);
+        
+        // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
             if (point_dist > 1e-6f) {
@@ -448,19 +557,26 @@ __global__ void nearest_pt_ellipsoid_cuda_kernel(
             }
         }
     }
+    
+    // 将最近点坐标写入输出张量 (Write nearest point coordinates to output tensor)
     nearest_pt[j][b][0] = nearest_ptx;
     nearest_pt[j][b][1] = nearest_pty;
     nearest_pt[j][b][2] = nearest_ptz;
 }
 
 
-// ==================== Differentiable FOV Rendering ====================
+// ============================================================================
+// 可微视场渲染 (Differentiable FOV Rendering)
+// 
+// 这些函数用于实现可微的深度图渲染，允许梯度从渲染的图像反向传播到相机位姿。
+// ============================================================================
 
-// Device function: trace a single ray through all scene geometry, return min intersection depth
+// 设备函数：追踪单条光线穿过所有场景几何体，返回最小交点深度
+// (Device function: trace a single ray through all scene geometry, return min intersection depth)
 template <typename scalar_t>
 __device__ __forceinline__ scalar_t trace_ray_device(
-    scalar_t dx, scalar_t dy, scalar_t dz,
-    scalar_t ox, scalar_t oy, scalar_t oz,
+    scalar_t dx, scalar_t dy, scalar_t dz, // 光线方向 (Ray direction)
+    scalar_t ox, scalar_t oy, scalar_t oz, // 光线起点 (Ray origin)
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
@@ -468,12 +584,13 @@ __device__ __forceinline__ scalar_t trace_ray_device(
     torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
     int n_drones_per_group, int batch_base, int bi, int B)
 {
-    scalar_t min_dist = 100;
-    // ground plane z = -1
+    scalar_t min_dist = 100; // 初始化为最大距离 (Initialize to max distance)
+    
+    // 1. 与地面的交点 (ground plane z = -1)
     scalar_t gt = (-1 - oz) / dz;
     if (gt > 0) min_dist = gt;
 
-    // other drones (ellipsoid with z scaled by 2)
+    // 2. 与其他无人机的交点 (other drones (ellipsoid with z scaled by 2))
     for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
         if (i == bi || i >= B) continue;
         scalar_t cx = pos[i][0], cy = pos[i][1], cz = pos[i][2];
@@ -489,7 +606,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         }
     }
 
-    // balls (spheres)
+    // 3. 与球体障碍物的交点 (balls (spheres))
     for (int i = 0; i < balls.size(1); i++) {
         scalar_t cx = balls[batch_base][i][0], cy = balls[batch_base][i][1];
         scalar_t cz = balls[batch_base][i][2], rad = balls[batch_base][i][3];
@@ -504,7 +621,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         }
     }
 
-    // vertical cylinders
+    // 4. 与垂直圆柱体障碍物的交点 (vertical cylinders)
     for (int i = 0; i < cylinders.size(1); i++) {
         scalar_t cx = cylinders[batch_base][i][0], cy = cylinders[batch_base][i][1];
         scalar_t rad = cylinders[batch_base][i][2];
@@ -519,7 +636,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         }
     }
 
-    // horizontal cylinders
+    // 5. 与水平圆柱体障碍物的交点 (horizontal cylinders)
     for (int i = 0; i < cylinders_h.size(1); i++) {
         scalar_t cx = cylinders_h[batch_base][i][0], cz = cylinders_h[batch_base][i][1];
         scalar_t rad = cylinders_h[batch_base][i][2];
@@ -534,7 +651,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         }
     }
 
-    // voxels (AABB)
+    // 6. 与体素/长方体障碍物的交点 (voxels (AABB))
     for (int i = 0; i < voxels.size(1); i++) {
         scalar_t cx = voxels[batch_base][i][0], cy = voxels[batch_base][i][1];
         scalar_t cz = voxels[batch_base][i][2];
@@ -556,7 +673,11 @@ __device__ __forceinline__ scalar_t trace_ray_device(
 }
 
 
-// Forward kernel: render with per-batch FOV tensor (differentiable w.r.t. FOV)
+// ============================================================================
+// 可微视场前向渲染 CUDA 内核 (Differentiable FOV Forward Rendering CUDA Kernel)
+// 
+// 使用每个批次独立的 FOV 张量进行渲染，使得渲染过程对 FOV 可微。
+// ============================================================================
 template <typename scalar_t>
 __global__ void render_diff_fov_cuda_kernel(
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
@@ -567,7 +688,7 @@ __global__ void render_diff_fov_cuda_kernel(
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
     torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
     int n_drones_per_group,
-    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
+    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) { // 每个批次的 FOV (Per-batch FOV)
 
     const int c = blockIdx.x * blockDim.x + threadIdx.x;
     const int B = canvas.size(0);
@@ -578,8 +699,11 @@ __global__ void render_diff_fov_cuda_kernel(
     const int u = (c % (H * W)) / W;
     const int v = c % W;
 
+    // 获取当前批次的 FOV (Get FOV for current batch)
     const scalar_t fov = fov_x_half_tan[b];
     const scalar_t fov_y_ht = fov / W * H;
+    
+    // 计算光线方向 (Calculate ray direction)
     const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_ht - 1e-5;
     const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
     scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
@@ -587,6 +711,8 @@ __global__ void render_diff_fov_cuda_kernel(
     scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
 
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+    
+    // 调用设备函数进行光线追踪 (Call device function for ray tracing)
     canvas[b][u][v] = trace_ray_device(dx, dy, dz,
         pos[b][0], pos[b][1], pos[b][2],
         balls, cylinders, cylinders_h, voxels, pos,
@@ -594,12 +720,17 @@ __global__ void render_diff_fov_cuda_kernel(
 }
 
 
-// Backward kernel: compute d(depth)/d(fov) via finite differences, accumulate per-batch with atomicAdd
+// ============================================================================
+// 可微视场反向传播 CUDA 内核 (Differentiable FOV Backward CUDA Kernel)
+// 
+// 通过有限差分法计算深度对 FOV 的梯度: d(depth)/d(fov)，
+// 并使用 atomicAdd 累加每个批次的梯度。
+// ============================================================================
 template <typename scalar_t>
 __global__ void render_backward_fov_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_output,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
-    scalar_t* __restrict__ grad_fov,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_output, // 输入：来自下游的梯度 (Input: gradient from downstream)
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,      // 输入：原始深度图 (Input: original depth map)
+    scalar_t* __restrict__ grad_fov,                                                     // 输出：对 FOV 的梯度 (Output: gradient w.r.t FOV)
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
@@ -619,14 +750,14 @@ __global__ void render_backward_fov_cuda_kernel(
     const int v = c % W;
 
     const scalar_t go = grad_output[b][u][v];
-    if (abs(go) < 1e-8) return;  // skip zero-gradient pixels
+    if (abs(go) < 1e-8) return;  // 跳过零梯度像素以加速 (skip zero-gradient pixels for speed)
 
     const scalar_t fov = fov_x_half_tan[b];
-    const scalar_t eps = (scalar_t)1e-3;
-    const scalar_t fov_p = fov + eps;
+    const scalar_t eps = (scalar_t)1e-3; // 有限差分步长 (Finite difference step size)
+    const scalar_t fov_p = fov + eps;    // 扰动后的 FOV (Perturbed FOV)
     const scalar_t ox = pos[b][0], oy = pos[b][1], oz = pos[b][2];
 
-    // Perturbed ray direction at fov + eps
+    // 计算扰动后的光线方向 (Perturbed ray direction at fov + eps)
     const scalar_t fov_y_p = fov_p / W * H;
     const scalar_t fu_p = (2 * (u + 0.5) / H - 1) * fov_y_p - 1e-5;
     const scalar_t fv_p = (2 * (v + 0.5) / W - 1) * fov_p - 1e-5;
@@ -635,20 +766,27 @@ __global__ void render_backward_fov_cuda_kernel(
     scalar_t dz_p = R[b][2][0] - fu_p * R[b][2][2] - fv_p * R[b][2][1];
 
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+    
+    // 重新追踪扰动后的光线 (Retrace perturbed ray)
     scalar_t depth_p = trace_ray_device(dx_p, dy_p, dz_p, ox, oy, oz,
         balls, cylinders, cylinders_h, voxels, pos,
         n_drones_per_group, batch_base, b, B);
 
+    // 计算局部梯度并累加 (Calculate local gradient and accumulate)
     scalar_t depth_orig = canvas[b][u][v];
     scalar_t local_grad = (depth_p - depth_orig) / eps;
     atomicAdd(&grad_fov[b], go * local_grad);
 }
 
-
+// ============================================================================
+// 深度图重渲染反向传播 CUDA 内核 (Rerender Backward CUDA Kernel)
+// 
+// 计算深度图对相机位姿的导数 (dddp)。
+// ============================================================================
 template <typename scalar_t>
 __global__ void rerender_backward_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> depth,
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> dddp,
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> depth, // 输入：深度图 (Input: depth map)
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> dddp,  // 输出：深度对位姿的导数 (Output: derivative of depth w.r.t pose)
     float fov_x_half_tan) {
 
     const int c = blockIdx.x * blockDim.x + threadIdx.x;
@@ -661,31 +799,28 @@ __global__ void rerender_backward_cuda_kernel(
     const int v = c % W;
 
     const scalar_t unit = fov_x_half_tan / W;
+    
+    // 计算 2x2 像素块的平均深度 (Calculate average depth of 2x2 pixel block)
     const scalar_t d = (depth[b][0][u*2][v*2] + depth[b][0][u*2+1][v*2] + depth[b][0][u*2][v*2+1] + depth[b][0][u*2+1][v*2+1]) / 4 * unit;
+    
+    // 计算深度在 y 和 z 方向的梯度 (Calculate depth gradients in y and z directions)
     const scalar_t dddy = (depth[b][0][u*2][v*2] + depth[b][0][u*2+1][v*2] - depth[b][0][u*2][v*2+1] - depth[b][0][u*2+1][v*2+1]) / 2 / d;
     const scalar_t dddz = (depth[b][0][u*2][v*2] - depth[b][0][u*2+1][v*2] + depth[b][0][u*2][v*2+1] - depth[b][0][u*2+1][v*2+1]) / 2 / d;
-    // if ReRender.diff_kernel is None:
-    //     unit = 0.637 / depth.size(3)
-    //     ReRender.diff_kernel = torch.tensor([
-    //         [[1, -1], [1, -1]],
-    //         [[1, 1], [-1, -1]],
-    //         [[unit, unit], [unit, unit]],
-    //     ], device=device).mul(0.5)[:, None]
-    // ddepthdyz = F.conv2d(depth, ReRender.diff_kernel, None, 2)
-    // depth = ddepthdyz[:, 2:]
-    // ddepthdyz = torch.cat([
-    //     torch.full_like(depth, -1.),
-    //     ddepthdyz[:, :2] / depth,
-    // ], 1)
+    
+    // 归一化梯度向量 (Normalize gradient vector)
     const scalar_t dddp_norm = max(8., sqrt(1 + dddy * dddy + dddz * dddz));
     dddp[b][0][u][v] = -1. / dddp_norm;
     dddp[b][1][u][v] = dddy / dddp_norm;
     dddp[b][2][u][v] = dddz / dddp_norm;
-    // ddepthdyz /= ddepthdyz.norm(2, 1, True).clamp_min(8);
 }
 
 } // namespace
 
+// ============================================================================
+// C++ 接口函数：深度图渲染 (C++ Interface: Depth Rendering)
+// 
+// 负责计算线程块数量并启动 render_cuda_kernel。
+// ============================================================================
 void render_cuda(
     torch::Tensor canvas,
     torch::Tensor flow,
@@ -700,10 +835,12 @@ void render_cuda(
     float drone_radius,
     int n_drones_per_group,
     float fov_x_half_tan) {
-    const int threads = 1024;
-    size_t state_size = canvas.numel();
-    const dim3 blocks((state_size + threads - 1) / threads);
+    
+    const int threads = 1024; // 每个 block 的线程数 (Threads per block)
+    size_t state_size = canvas.numel(); // 总像素数 (Total number of pixels)
+    const dim3 blocks((state_size + threads - 1) / threads); // 计算 block 数量 (Calculate number of blocks)
 
+    // 启动 CUDA 内核 (Launch CUDA kernel)
     AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_cuda", ([&] {
         render_cuda_kernel<scalar_t><<<blocks, threads>>>(
             canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -722,10 +859,14 @@ void render_cuda(
     }));
 }
 
+// ============================================================================
+// C++ 接口函数：深度图重渲染反向传播 (C++ Interface: Rerender Backward)
+// ============================================================================
 void rerender_backward_cuda(
     torch::Tensor depth,
     torch::Tensor dddp,
     float fov_x_half_tan) {
+    
     const int threads = 1024;
     size_t state_size = dddp.numel();
     const dim3 blocks((state_size + threads - 1) / threads);
@@ -738,6 +879,9 @@ void rerender_backward_cuda(
     }));
 }
 
+// ============================================================================
+// C++ 接口函数：寻找最近点 (C++ Interface: Find Nearest Point)
+// ============================================================================
 void find_nearest_pt_cuda(
     torch::Tensor nearest_pt,
     torch::Tensor balls,
@@ -747,9 +891,11 @@ void find_nearest_pt_cuda(
     torch::Tensor pos,
     float drone_radius,
     int n_drones_per_group) {
+    
     const int threads = 1024;
-    size_t state_size = pos.size(0) * pos.size(1);
+    size_t state_size = pos.size(0) * pos.size(1); // 时间步数 * 批次大小 (Time steps * Batch size)
     const dim3 blocks((state_size + threads - 1) / threads);
+    
     AT_DISPATCH_FLOATING_TYPES(pos.type(), "nearest_pt_cuda", ([&] {
         nearest_pt_cuda_kernel<scalar_t><<<blocks, threads>>>(
             nearest_pt.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -763,6 +909,9 @@ void find_nearest_pt_cuda(
     }));
 }
 
+// ============================================================================
+// C++ 接口函数：寻找最近点 (考虑椭球体形状) (C++ Interface: Find Nearest Point Ellipsoid)
+// ============================================================================
 void find_nearest_pt_ellipsoid_cuda(
     torch::Tensor nearest_pt,
     torch::Tensor balls,
@@ -775,9 +924,11 @@ void find_nearest_pt_ellipsoid_cuda(
     int n_drones_per_group,
     float ellipsoid_a,
     float ellipsoid_c) {
+    
     const int threads = 1024;
     size_t state_size = pos.size(0) * pos.size(1);
     const dim3 blocks((state_size + threads - 1) / threads);
+    
     AT_DISPATCH_FLOATING_TYPES(pos.type(), "nearest_pt_ellipsoid_cuda", ([&] {
         nearest_pt_ellipsoid_cuda_kernel<scalar_t><<<blocks, threads>>>(
             nearest_pt.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -794,6 +945,9 @@ void find_nearest_pt_ellipsoid_cuda(
     }));
 }
 
+// ============================================================================
+// C++ 接口函数：可微视场前向渲染 (C++ Interface: Differentiable FOV Forward Rendering)
+// ============================================================================
 void render_diff_fov_cuda(
     torch::Tensor canvas,
     torch::Tensor balls,
@@ -804,6 +958,7 @@ void render_diff_fov_cuda(
     torch::Tensor pos,
     int n_drones_per_group,
     torch::Tensor fov_x_half_tan) {
+    
     const int threads = 1024;
     size_t state_size = canvas.numel();
     const dim3 blocks((state_size + threads - 1) / threads);
@@ -822,6 +977,9 @@ void render_diff_fov_cuda(
     }));
 }
 
+// ============================================================================
+// C++ 接口函数：可微视场反向传播 (C++ Interface: Differentiable FOV Backward)
+// ============================================================================
 void render_backward_fov_cuda(
     torch::Tensor grad_fov,
     torch::Tensor grad_output,
@@ -834,6 +992,7 @@ void render_backward_fov_cuda(
     torch::Tensor pos,
     int n_drones_per_group,
     torch::Tensor fov_x_half_tan) {
+    
     const int threads = 1024;
     size_t state_size = canvas.numel();
     const dim3 blocks((state_size + threads - 1) / threads);
