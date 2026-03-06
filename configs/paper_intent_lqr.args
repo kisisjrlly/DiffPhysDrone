@@ -6,33 +6,37 @@
 --drone_c 0.075
 --speed_mtp 0.5
 
+# Training
+--timesteps 120
+--batch_size 64
+--num_iters 50000
+
 # Core losses
 --coef_collide 10.0
 --coef_obj_avoidance 5.0
-
-# Training
---timesteps 120
 
 # Paper unified + optical setup
 --paper_unified_control
 --paper_cam_obs
 --paper_optical_loss
 
-# G-DAC
---paper_gdac
---gdac_inner_steps 10
---gdac_inner_lr 0.01
---coef_distill 1.0
---gdac_physics_weight 0.3
+# Sensor / control architecture
+--vision_mode=yuv_tof
+--use_dmpc
+--policy_output_intent
+--inject_tof_into_lqr
+--lqr_horizon 5
+--lqr_reg 1e-4
+--tof_safe_dist 0.6
+--tof_repel_gain 1.0
 
 # Optical loss weights
---coef_blur 0.1
---coef_noise 0.05
-
 --coef_cam_smooth 0.01
 --coef_fov_reg 0.005
 --coef_cam_range 0.001
---cam_delta_scale 0.05
+--coef_blur 0.1
+--coef_noise 0.05
+
 
 # Logging
 --wandb_disabled

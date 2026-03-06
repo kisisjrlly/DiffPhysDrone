@@ -1,3 +1,4 @@
+# Environment
 --single
 --speed_mtp 4
 --coef_d_acc 0.01
@@ -5,7 +6,11 @@
 --ground_voxels
 --random_rotation
 --yaw_drift
+
+# Loss weights
 --coef_collide 7.5
 --coef_obj_avoidance 3.0
+
+# Camera
 --cam_angle 20
 --fov_x_half_tan 0.82

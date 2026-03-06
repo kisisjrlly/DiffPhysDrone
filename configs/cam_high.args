@@ -1,0 +1,19 @@
+# ==========================================================
+# Camera Profile: HIGH (推荐默认)
+# 目标：高保真与训练稳定性折中
+# 用法：TASK=paper_final_full CAM_PROFILE=high bash run.sh
+# ==========================================================
+
+--cam_realism_preset high
+--cam_enable_shadow
+--cam_enable_specular
+--cam_enable_distortion
+--cam_enable_flare
+--cam_enable_motion_blur
+--cam_enable_rolling
+
+--cam_noise_scale 1.0
+--cam_blur_scale 1.0
+--cam_fog_scale 1.0
+--cam_lighting_scale 1.0
+--cam_ae_target 0.42

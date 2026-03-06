@@ -1,6 +1,13 @@
+# Environment
 --gate
+
+# Loss weights
 --coef_collide 5.0
 --coef_obj_avoidance 2.0
+
+# Training
 --batch 256
+
+# Camera / rollout
 --fov_x_half_tan 0.82
 --timesteps 180

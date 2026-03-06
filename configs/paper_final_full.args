@@ -1,0 +1,163 @@
+# =========================================================================
+# 论文最终完整配置 (Paper Final Full Config) - 全参数对齐 main_cuda.py parser
+#
+# 设计目标：
+# 1) 参数完整：覆盖 parser 中全部参数（便于查漏/审阅）
+# 2) 论文语义：保留“为什么开这个开关”的实验意图注释
+# 3) 可运行性：默认值偏向你当前实验（TBPTT + unified control + optical loss）
+# =========================================================================
+
+# ----------------- 断点恢复 (Checkpoint Resume) -----------------
+# --resume checkpoint0004.pth      # 从已有权重恢复训练
+
+# ----------------- 训练规模 (Training Scale) -----------------
+--batch_size 32                     # 并行环境数
+--num_iters 50000                   # 总迭代数
+--timesteps 80                     # 每个 rollout 的物理步数
+
+# ----------------- TBPTT + 混合调度 (Long-horizon Training) -----------------
+# 目的：解决长时域 BPTT 显存压力与梯度不稳问题
+--tbptt_enable                      # 开启 TBPTT
+--tbptt_chunk_steps 10              # 每 10 步截断一次图
+--tbptt_chunk_accum 1               # 每 1 个 chunk step 一次优化器
+--hybrid_full_bptt_every 20         # 每 20 iter 做一次完整 BPTT 校准
+--hybrid_full_bptt_batch_size 2     # 完整 BPTT 使用较小 batch 省显存
+
+# ----------------- 优化器与数值稳定 (Optimization & Stability) -----------------
+--lr 1e-3                           # AdamW 学习率
+--grad_decay 0.4                    # 传给环境的梯度衰减因子
+--grad_clip_norm 5.0                # 梯度裁剪阈值（<=0 关闭）
+--max_acc_cmd 20.0                  # 动作/加速度限幅
+--nan_policy failfast               # failfast=遇 NaN 立刻报错；guard=自动清洗继续
+
+# ----------------- 随机性与可复现 (Reproducibility) -----------------
+--seed 42                           # 全局随机种子
+# --deterministic                     # 开启确定性计算
+
+# ----------------- 环境与相机基础参数 (Environment & Camera Base) -----------------
+# 注：墙缝、地形、脚手架等属于任务场景开关，通常一次实验只开其中一类
+--single                            # 单智能体模式
+# --gate                            # 门穿越场景
+# --ground_voxels                   # 复杂地形
+# --scaffold                        # 脚手架障碍
+# --random_rotation                 # 场景随机旋转
+# --yaw_drift                       # 偏航漂移噪声
+# --no_odom                         # 关闭里程计输入
+# --wall_slit                       # 狭缝场景
+
+--ellipsoid_collision               # 椭球碰撞体（更接近真实无人机外形）
+--drone_a 0.15                      # 椭球 a 半轴 (x/y)
+--drone_c 0.075                     # 椭球 c 半轴 (z)
+--coef_tilt 0.0                     # wall_slit 侧倾损失权重（当前实现默认可设 0）
+
+--speed_mtp 0.5                     # 目标速度倍率
+--fov_x_half_tan 0.53               # 基础 FOV 参数 tan(FOV/2)
+--base_control_freq 15.0              # 基础控制频率 (Hz)，对应控制时间步长 ctl_dt = 1/base_control_freq
+--cam_angle 10                      # 初始相机俯仰角（度）
+
+# ----------------- 传感器分辨率 (Sensor Resolutions) -----------------
+--imx_width 320                     # 主相机宽
+--imx_height 240                    # 主相机高
+--tof_width 224                     # ToF 宽
+--tof_height 171                    # ToF 高
+# --tof_downsample 4                # 若不显式给 tof_width/height，可用该倍率
+
+# 已弃用（仅保留对照）：策略融合输入尺寸，当前代码会给 warning
+# --policy_input_width 80
+# --policy_input_height 60
+
+# ----------------- 主损失权重 (Core Physical Losses) -----------------
+# 速度相关区别：
+# - coef_v      : 向量级主目标（方向+大小）
+# - coef_v_pred : 监督网络的速度预测头（表征辅助）
+--coef_v 1.0                        # 速度向量跟踪主损失
+--coef_v_pred 0.0                   # 速度预测头监督损失
+
+--coef_d_acc 0.01                   # 动作能量/加速度正则
+--coef_d_jerk 0.001                 # jerk 正则
+
+--coef_obj_avoidance 5.0            # 避障势能惩罚
+--coef_collide 10.0                 # 碰撞惩罚
+--coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
+
+# ----------------- 可微相机 + 主动感知 (Differentiable Camera) -----------------
+# Paper §2.1 + §2.3
+# 典型组合：paper_unified_control + paper_cam_obs + paper_optical_loss
+# diff_cam 与 paper_unified_control 都会启用相机可导路径
+# 建议论文配置优先用 unified_control
+# --diff_cam                         # 传统绝对参数相机控制
+--paper_unified_control             # 统一控制：相机增量并入动作
+--paper_cam_obs                     # 观测中加入当前相机参数
+--cam_delta_scale 0.05              # 统一控制下相机增量缩放
+
+--coef_cam_smooth 0.01              # 相机参数时域平滑
+--coef_fov_reg 0.005                # FOV 回归中心正则
+--coef_cam_range 0.001              # 相机参数范围正则
+
+# 高保真可微相机渲染档位与开关（7层管线）
+--cam_realism_preset high           # low / medium / high / ultra
+--cam_enable_shadow                 # 阴影近似
+--cam_enable_specular               # 镜面反射
+--cam_enable_distortion             # 镜头径向畸变
+--cam_enable_flare                  # flare 近似
+--cam_enable_motion_blur            # 时序运动模糊
+--cam_enable_rolling                # rolling shutter 混合
+--cam_noise_scale 1.0               # 传感器噪声强度缩放
+--cam_blur_scale 1.0                # 运动模糊强度缩放
+--cam_fog_scale 1.0                 # 大气散射/雾强度缩放
+--cam_lighting_scale 1.0            # 光照强度缩放
+--cam_ae_target 0.42                # 自动曝光目标亮度
+
+# 论文光学势能 (Optical Perception Potentials)
+# - coef_blur: 惩罚高速+长曝光+长焦导致的运动模糊
+# - coef_noise: 惩罚高 ISO / 低曝光条件下的噪声放大
+--paper_optical_loss                # 开启 blur/noise 光学损失
+--coef_blur 0.1                     # 运动模糊损失权重
+--coef_noise 0.05                   # 噪声损失权重
+
+# ----------------- G-DAC 教师-学生 (Paper §3) -----------------
+# 当前代码逻辑：若 tbptt_enable 与 paper_gdac 同时开，会提示复杂度风险并优先完整 BPTT 路径
+# 注意：当前代码中 TBPTT 与 paper_gdac 同时开会触发 warning，优先走完整 BPTT 路径
+# --paper_gdac                       # 是否启用 G-DAC
+--gdac_inner_steps 10               # 教师内循环步数
+--gdac_inner_lr 0.005               # 教师内循环学习率
+--coef_distill 1.0                  # 蒸馏损失权重
+--gdac_physics_weight 0.3           # 蒸馏模式下物理损失权重
+
+# ----------------- 视觉模式 + 控制架构 (Vision & Control) -----------------
+# 当前推荐：vision_mode yuv_tof（主视觉 + ToF）
+--vision_mode yuv_tof               # depth / yuv / yuv_tof
+
+# dMPC/dLQR 相关：
+# 只有 use_dmpc + policy_output_intent 同时开启时，才走意图域 LQR 路径
+# 当前你若只开 policy_output_intent 会回退动作域（代码会 warning）
+# --use_dmpc
+# --policy_direct_action             # 与 policy_output_intent 互斥
+--policy_output_intent              # 策略输出意图向量（速度参考 + 代价权重参数）
+--inject_tof_into_lqr               # ToF 几何项注入 LQR（安全距离不足时增加排斥）
+--lqr_horizon 5                     # dLQR 有限时域长度（前瞻步数）
+--lqr_reg 1e-3                      # Riccati/求解正则项，防止病态矩阵
+--tof_safe_dist 0.6                 # ToF 安全距离阈值（米）
+--tof_repel_gain 1.0                # 安全距离内的排斥增益系数
+
+# ToF 输入通道配置
+# tof_use_conf 开启后，会把 ToF confidence 作为额外输入通道
+--tof_use_conf                      # 默认即开启；显式写出便于审阅
+# --no-tof_use_conf                 # 关闭 ToF confidence 通道
+
+# 已弃用（保留对照）：
+# --dual_encoder                    # 代码会 warning：结构由 vision_mode 自动决定
+
+# ----------------- 可视化与日志 (Visualization & Logging) -----------------
+# 可视化会影响训练吞吐；做长跑实验时可适当降低采样频率
+--vis_enable                        # 开启训练可视化（会降低吞吐）
+--vis_backend rerun                 # 可视化后端（当前支持 rerun）
+--vis_env_idx 0                     # 可视化的环境索引（batch 内第几个）
+--vis_every_iters 10                # 每多少个迭代记录一次可视化
+--vis_every_steps 10                # 单次迭代内每多少步采样一次可视化
+--vis_teacher                       # 在 G-DAC 时显示 Teacher 轨迹
+--vis_student                       # 显示 Student 执行轨迹
+--vis_spawn                         # 自动拉起可视化窗口
+
+# WandB
+# --wandb_disabled                  # 关闭在线日志

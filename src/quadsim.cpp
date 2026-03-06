@@ -121,6 +121,67 @@ void render_backward_fov_cuda(
     int n_drones_per_group,     // 每组无人机数量 (Number of drones per group)
     torch::Tensor fov_x_half_tan); // 相机水平视场角一半的正切值 (tan(FOV_x / 2))
 
+// Y 通道渲染（YUV420 的 Y）(Render luma channel Y from YUV420 pipeline)
+void render_yuv_y_cuda(
+    torch::Tensor canvas,
+    torch::Tensor flow,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor R_old,
+    torch::Tensor pos,
+    torch::Tensor pos_old,
+    float drone_radius,
+    int n_drones_per_group,
+    float fov_x_half_tan);
+
+// 可微 Y 通道渲染接口 (Differentiable Y-channel rendering interface)
+torch::Tensor render_diff_yuv_y_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width);
+
+// 可微 Y 通道渲染前向（返回 y 与几何深度）
+std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width);
+
+// 可微 Y 通道渲染反向（返回 grad_fov, grad_exposure, grad_iso, grad_focus）
+std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
+    torch::Tensor grad_output,
+    torch::Tensor depth_raw,
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group);
+
 // ============================================================================
 // PyBind11 模块绑定 (PyBind11 module binding)
 // 将 C++ 函数暴露给 Python，使得可以在 Python 中通过 quadsim_cuda 模块调用
@@ -135,4 +196,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("rerender_backward", &rerender_backward_cuda, "rerender_backward_cuda (CUDA)");
   m.def("render_diff_fov", &render_diff_fov_cuda, "render_diff_fov (CUDA)");
   m.def("render_backward_fov", &render_backward_fov_cuda, "render_backward_fov (CUDA)");
+    m.def("render_yuv_y", &render_yuv_y_cuda, "render_yuv_y (CUDA)");
+    m.def("render_diff_yuv_y", &render_diff_yuv_y_cuda, "render_diff_yuv_y (CUDA)");
+    m.def("render_diff_yuv_y_forward", &render_diff_yuv_y_forward_cuda, "render_diff_yuv_y_forward (CUDA)");
+    m.def("render_diff_yuv_y_backward", &render_diff_yuv_y_backward_cuda, "render_diff_yuv_y_backward (CUDA)");
 }

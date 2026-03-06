@@ -1,0 +1,19 @@
+# ==========================================================
+# Camera Profile: ULTRA
+# 目标：最大化视觉域差异覆盖（更强噪声/模糊/光照变化）
+# 用法：TASK=paper_final_full CAM_PROFILE=ultra bash run.sh
+# ==========================================================
+
+--cam_realism_preset ultra
+--cam_enable_shadow
+--cam_enable_specular
+--cam_enable_distortion
+--cam_enable_flare
+--cam_enable_motion_blur
+--cam_enable_rolling
+
+--cam_noise_scale 1.25
+--cam_blur_scale 1.2
+--cam_fog_scale 1.15
+--cam_lighting_scale 1.05
+--cam_ae_target 0.40

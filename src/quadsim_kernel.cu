@@ -1012,3 +1012,159 @@ void render_backward_fov_cuda(
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
 }
+
+// ============================================================================
+// C++ 接口函数：Y 通道渲染（非可微相机参数）
+// 目前复用几何深度渲染内核，输出为单通道主传感器观测。
+// ============================================================================
+void render_yuv_y_cuda(
+    torch::Tensor canvas,
+    torch::Tensor flow,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor R_old,
+    torch::Tensor pos,
+    torch::Tensor pos_old,
+    float drone_radius,
+    int n_drones_per_group,
+    float fov_x_half_tan) {
+
+    // 当前实现以几何渲染作为 Y 通道基础，接口保持 YUV 主相机语义。
+    render_cuda(
+        canvas, flow, balls, cylinders, cylinders_h, voxels,
+        R, R_old, pos, pos_old,
+        drone_radius, n_drones_per_group, fov_x_half_tan);
+}
+
+// ============================================================================
+// C++ 接口函数：Y 通道可微渲染（FOV + exposure/iso 输入）
+// 说明：
+// - 几何部分复用 render_diff_fov_cuda（由 Python 侧自定义 autograd 处理 FOV 梯度）
+// - 相机参数部分采用 ATen 张量算子做可微亮度映射
+// ============================================================================
+static torch::Tensor build_y_from_depth(
+    torch::Tensor depth_raw,
+    torch::Tensor exposure,
+    torch::Tensor iso) {
+    auto exposure_sig = torch::sigmoid(exposure).unsqueeze(1).unsqueeze(2);
+    auto iso_sig = torch::sigmoid(iso).unsqueeze(1).unsqueeze(2);
+    auto exposure_scale = 0.75 + 0.5 * exposure_sig;
+    auto iso_scale = 1.0 / (1.0 + 0.5 * iso_sig);
+    return depth_raw * exposure_scale * iso_scale;
+}
+
+std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width);
+
+torch::Tensor render_diff_yuv_y_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width) {
+    auto out = render_diff_yuv_y_forward_cuda(
+        fov_x_half_tan, exposure, iso,
+        R, pos, balls, cylinders, cylinders_h, voxels,
+        n_drones_per_group, height, width);
+    return out[0];
+}
+
+std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width) {
+
+    const auto B = pos.size(0);
+    auto depth_raw = torch::empty({B, height, width}, pos.options());
+    render_diff_fov_cuda(
+        depth_raw, balls, cylinders, cylinders_h, voxels,
+        R, pos, n_drones_per_group, fov_x_half_tan);
+
+    auto y = build_y_from_depth(depth_raw, exposure, iso);
+    return {y, depth_raw};
+}
+
+std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
+    torch::Tensor grad_output,
+    torch::Tensor depth_raw,
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group) {
+
+    auto go = grad_output.contiguous();
+    auto d = depth_raw.contiguous();
+
+    auto exposure_sig = torch::sigmoid(exposure).unsqueeze(1).unsqueeze(2);
+    auto iso_sig = torch::sigmoid(iso).unsqueeze(1).unsqueeze(2);
+    auto exposure_scale = 0.75 + 0.5 * exposure_sig;
+    auto iso_den = 1.0 + 0.5 * iso_sig;
+    auto iso_scale = 1.0 / iso_den;
+
+    // dy/dd
+    auto grad_depth_local = exposure_scale * iso_scale;
+    auto grad_depth = go * grad_depth_local;
+
+    // dy/dexposure
+    auto d_exposure_scale = 0.5 * exposure_sig * (1.0 - exposure_sig);
+    auto grad_exposure_map = go * d * iso_scale * d_exposure_scale;
+    auto grad_exposure = grad_exposure_map.sum({1, 2});
+
+    // dy/diso
+    auto d_iso_scale = -(0.5 * iso_sig * (1.0 - iso_sig)) / torch::pow(iso_den, 2);
+    auto grad_iso_map = go * d * exposure_scale * d_iso_scale;
+    auto grad_iso = grad_iso_map.sum({1, 2});
+
+    // dL/dfov 通过几何反向（带上相机映射后的链式梯度）
+    auto grad_fov = torch::zeros_like(fov_x_half_tan);
+    render_backward_fov_cuda(
+        grad_fov,
+        grad_depth.contiguous(),
+        d,
+        balls,
+        cylinders,
+        cylinders_h,
+        voxels,
+        R,
+        pos,
+        n_drones_per_group,
+        fov_x_half_tan);
+
+    return {grad_fov, grad_exposure, grad_iso};
+}
