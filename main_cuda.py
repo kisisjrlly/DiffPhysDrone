@@ -154,6 +154,12 @@ parser.add_argument('--coef_distill', type=float, default=1.0,
                     help='G-DAC Phase II: 知识蒸馏损失权重')
 parser.add_argument('--gdac_physics_weight', type=float, default=0.3,
                     help='G-DAC Phase II: 蒸馏时保留的物理损失权重 (作为辅助)')
+parser.add_argument('--gdac_distill_final_ratio', type=float, default=0.3,
+                    help='G-DAC: 蒸馏权重退火终点比例（相对 coef_distill，早高晚低）')
+parser.add_argument('--gdac_student_noise_mode', type=str, default='off', choices=['off', 'on'],
+                    help='G-DAC 蒸馏阶段 student 前向是否加噪声：off=关闭, on=开启')
+parser.add_argument('--gdac_teacher_tbptt_chunk_steps', type=int, default=10,
+                    help='G-DAC Teacher 内循环 TBPTT 分段长度')
 
 # ===== Multi-sensor + dLQR training switches =====
 parser.add_argument('--vision_mode', type=str, default='yuv_tof', choices=['depth', 'yuv', 'yuv_tof'],
@@ -277,7 +283,8 @@ if args.use_dmpc and not args.policy_output_intent:
 if args.inject_tof_into_lqr and args.vision_mode != 'yuv_tof':
     print("[warn] --inject_tof_into_lqr 已启用，但 vision_mode 不是 yuv_tof；ToF注入将被忽略")
 if args.paper_gdac and args.policy_output_intent and not args.use_dmpc:
-    raise ValueError("paper_gdac + policy_output_intent 需要同时启用 --use_dmpc")
+    print("[warn] paper_gdac + policy_output_intent 且未启用 --use_dmpc："
+          "G-DAC 将回退到动作域 teacher/蒸馏；intent 头仅作为辅助输出，不参与 teacher 优化")
 if args.dual_encoder:
     print("[warn] --dual_encoder 已弃用：模型结构由 vision_mode 自动决定")
 if args.policy_input_width is not None or args.policy_input_height is not None:
@@ -291,7 +298,7 @@ if args.hybrid_full_bptt_every < 0:
 if args.hybrid_full_bptt_batch_size < 0:
     raise ValueError('--hybrid_full_bptt_batch_size 必须 >= 0')
 if args.tbptt_enable and args.paper_gdac:
-    print('[warn] 当前 TBPTT 与 paper_gdac 内循环同时启用会显著复杂化；将优先使用完整 BPTT 路径')
+    print('[warn] 当前启用 TBPTT 与 paper_gdac：student 按原混合调度；teacher 内循环将使用 TBPTT 路径')
 
 # 视觉模式开关
 use_depth = args.vision_mode == 'depth'
@@ -302,6 +309,26 @@ use_tof = args.vision_mode == 'yuv_tof'
 if (args.diff_cam or args.paper_unified_control) and not use_yuv:
     raise ValueError("depth 模式不支持可微相机参数；请使用 vision_mode=yuv 或 yuv_tof")
 use_cam = (args.diff_cam or args.paper_unified_control) and use_yuv
+
+# 启动模式横幅：明确当前运行实际走哪条训练/控制路径
+policy_head_mode = 'intent_head' if args.policy_output_intent else 'action_head'
+exec_control_mode = 'dmpc' if (args.use_dmpc and args.policy_output_intent) else 'direct_action'
+if args.paper_gdac:
+    gdac_teacher_mode = 'intent_teacher' if (args.policy_output_intent and args.use_dmpc) else 'action_teacher'
+else:
+    gdac_teacher_mode = 'disabled'
+tof_lqr_effective = bool(args.inject_tof_into_lqr and args.use_dmpc and args.policy_output_intent and use_tof)
+
+print("=" * 30 + " Runtime Mode " + "=" * 30)
+print(f"policy_head                : {policy_head_mode}")
+print(f"exec_control               : {exec_control_mode}")
+print(f"paper_gdac                : {args.paper_gdac} ({gdac_teacher_mode})")
+print(f"use_dmpc                  : {args.use_dmpc}")
+print(f"inject_tof_into_lqr       : {args.inject_tof_into_lqr} (effective={tof_lqr_effective})")
+print(f"gdac_teacher_tbptt_chunk  : {args.gdac_teacher_tbptt_chunk_steps}")
+print(f"gdac_student_noise_mode   : {args.gdac_student_noise_mode}")
+print(f"gdac_distill_coef         : {args.coef_distill} -> {args.coef_distill * args.gdac_distill_final_ratio}")
+print("=" * 75)
 
 def build_env(batch_size: int):
     return Env(batch_size, args.imx_width, args.imx_height, args.grad_decay, device,
@@ -473,6 +500,22 @@ def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int
     return F.smooth_l1_loss(delta_v, torch.zeros_like(delta_v))
 
 
+def gdac_distill_coef_at_iter(iter_idx: int) -> float:
+    """G-DAC 蒸馏权重退火：早期高，后期低。"""
+    if args.num_iters <= 1:
+        return float(args.coef_distill)
+    final_ratio = float(min(max(args.gdac_distill_final_ratio, 0.0), 1.0))
+    progress = float(iter_idx) / float(max(args.num_iters - 1, 1))
+    ratio = 1.0 - (1.0 - final_ratio) * progress
+    return float(args.coef_distill) * ratio
+
+
+def teacher_dt_like_student(cam_exposure_mean: float, use_camera: bool) -> float:
+    base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
+    exposure_delay = cam_exposure_mean * 0.030 if use_camera else 0.015
+    return float(base_dt + exposure_delay)
+
+
 pbar = tqdm(range(args.num_iters), ncols=80)
 iter_start_time = time.time()
 
@@ -484,10 +527,11 @@ for i in pbar:
     # - use_hybrid_full=True 的迭代：使用完整 BPTT（通常小 batch，做低频校准）
     # - 其他迭代：若 tbptt_enable=True 则使用 TBPTT（通常大 batch）
     use_hybrid_full = (args.hybrid_full_bptt_every > 0) and ((i + 1) % args.hybrid_full_bptt_every == 0)
-    use_full_bptt_iter = (not args.tbptt_enable) or use_hybrid_full or args.paper_gdac
+    use_full_bptt_iter = (not args.tbptt_enable) or use_hybrid_full
     env = env_full if use_hybrid_full else env_train
     B = env.batch_size
     vid_idx = min(4, B - 1)
+    distill_coef_iter = gdac_distill_coef_at_iter(i) if args.paper_gdac else float(args.coef_distill)
 
     iter_tic = time.time()
     env.reset()   # 重置环境
@@ -504,6 +548,9 @@ for i in pbar:
     u_star_cam = None  # 教师网络优化后的最优相机控制参数序列
     
     if args.paper_gdac:
+        # 仅当启用 dMPC 时，意图域才作为 teacher 优化变量；
+        # 否则回退到动作域 teacher（满足 gdac 可不依赖 dmpc 的需求）。
+        optimize_intent_teacher = bool(args.policy_output_intent and args.use_dmpc)
         env_snapshot = env.save_state() # 1. 保存当前环境的初始状态，以便在内部优化循环中反复重置
         
         # 模拟偏航角漂移 (传感器噪声)
@@ -536,7 +583,7 @@ for i in pbar:
 
             # 展开一个完整的 episode (timesteps)
             for t in range(args.timesteps):
-                dt_tmp = 1 / 15
+                dt_tmp = teacher_dt_like_student(float(cam_exp_tmp.mean().detach()), use_cam)
                 # 传感器渲染（主视觉/ToF）
                 main_obs = None
                 main_depth = None
@@ -593,7 +640,12 @@ for i in pbar:
                             tof_conf=tof_conf,
                             add_noise=False,
                         )
-                    init_intents.append(y_out.clone())
+                    a_out = a_out.float()
+                    y_out = y_out.float()
+                    if c_out is not None:
+                        c_out = c_out.float()
+                    if optimize_intent_teacher:
+                        init_intents.append(y_out.clone())
                 else:
                     with autocast(enabled=use_amp):
                         a_out, c_out, h_tmp = model(
@@ -603,6 +655,9 @@ for i in pbar:
                             tof_conf=tof_conf,
                             add_noise=False,
                         )
+                    a_out = a_out.float()
+                    if c_out is not None:
+                        c_out = c_out.float()
                 if c_out is not None:
                     c_out = sanitize_tensor(c_out, 'teacher_init_cam_out', clamp_min=-1.0, clamp_max=1.0,
                                             nan=0.0, posinf=1.0, neginf=-1.0)
@@ -631,7 +686,7 @@ for i in pbar:
         # 3. 将初始猜测转换为可优化的参数 (requires_grad=True)
         u_guess = None
         y_guess = None
-        if args.policy_output_intent:
+        if optimize_intent_teacher:
             y_guess = [y.clone().requires_grad_(True) for y in init_intents]
         else:
             u_guess = [a.clone().requires_grad_(True) for a in init_acts]
@@ -651,21 +706,28 @@ for i in pbar:
 
         # 4. 内部优化循环 (Inner Optimization Loop)
         # 通过可微物理引擎，直接对动作序列进行梯度下降，最小化物理损失
+        # 这里改为 Teacher 全程 TBPTT（不再走完整 BPTT）
+        teacher_chunk_steps = max(2, args.gdac_teacher_tbptt_chunk_steps)
+        teacher_chunk_count = max(1, math.ceil(args.timesteps / teacher_chunk_steps))
         for k in range(args.gdac_inner_steps):
             inner_optim.zero_grad()
             env.restore_state(env_snapshot) # 每次迭代重置到相同的初始状态
             
-            # 记录轨迹历史用于计算损失
+            # TBPTT 状态缓存
             act_buf_k = [env.act.detach()] * 2
             tv_raw_k = env.p_target - env.p
-            p_hist_k = []
-            v_hist_k = []
-            tv_hist_k = []
-            vtp_hist_k = []
-            cam_exp_k = []
-            cam_iso_k = []
-            cam_fov_k = []
-            speed_k = []
+            prev_act_tail_k = env.act.detach()
+            v_roll_k = []
+            tv_roll_k = []
+            c_p_hist_k = []
+            c_v_hist_k = []
+            c_tv_hist_k = []
+            c_vtp_hist_k = []
+            c_act_hist_k = []
+            c_cam_exp_k = []
+            c_cam_iso_k = []
+            c_cam_fov_k = []
+            c_speed_k = []
             
             cam_fov_k_val = torch.full((B,), env._fov_x_half_tan, device=device)
             cam_exp_k_val = torch.full((B,), 0.5, device=device)
@@ -673,9 +735,10 @@ for i in pbar:
 
             # 展开轨迹 (使用当前优化的动作序列 u_guess)
             for t in range(args.timesteps):
-                dt_k = 1 / 15
-                p_hist_k.append(env.p)
-                vtp_hist_k.append(env.find_vec_to_nearest_pt())
+                dt_k = teacher_dt_like_student(float(cam_exp_k_val.mean().detach()), use_cam)
+                c_p_hist_k.append(env.p)
+                vec_now_k = env.find_vec_to_nearest_pt()
+                c_vtp_hist_k.append(vec_now_k)
                 if args.yaw_drift:
                     tv_raw_k = torch.squeeze(tv_raw_k[:, None] @ yaw_drift_R, 1)
                 else:
@@ -694,7 +757,7 @@ for i in pbar:
                 tv_k = (tv_raw_k / tv_n_k) * torch.minimum(tv_n_k, env.max_speed)
 
                 # 解码可优化的动作
-                if args.use_dmpc and args.policy_output_intent and y_guess is not None:
+                if optimize_intent_teacher and y_guess is not None:
                     yk = y_guess[t]
                     v_ref_local_k = torch.tanh(yk[:, :3]) * env.max_speed
                     q_diag_k = (F.softplus(yk[:, 3:6]) + 1e-3).clamp(1e-3, 20.0)
@@ -711,11 +774,11 @@ for i in pbar:
                     )
                     u_local_k = u_local_k.clamp(-args.max_acc_cmd, args.max_acc_cmd)
 
-                    if args.inject_tof_into_lqr and use_tof and len(vtp_hist_k) > 0:
-                        vec_now_k = vtp_hist_k[-1][0]
-                        dist_now_k = torch.norm(vec_now_k, 2, -1)
+                    if args.inject_tof_into_lqr and use_tof:
+                        vec_now_lqr_k = vec_now_k[0]
+                        dist_now_k = torch.norm(vec_now_lqr_k, 2, -1)
                         repel_mag_k = F.softplus(args.tof_safe_dist - dist_now_k) * args.tof_repel_gain
-                        vec_local_k = torch.squeeze(vec_now_k[:, None] @ R_k, 1)
+                        vec_local_k = torch.squeeze(vec_now_lqr_k[:, None] @ R_k, 1)
                         repel_dir_k = -F.normalize(vec_local_k, 2, -1)
                         u_local_k = u_local_k + repel_dir_k * repel_mag_k[:, None]
 
@@ -742,12 +805,13 @@ for i in pbar:
                         fd, ex, iso_v = u_cam_guess[t].unbind(-1)
                         cam_fov_k_val = env._fov_x_half_tan * 0.08 + fd * env._fov_x_half_tan * 1.42
                         cam_exp_k_val = ex; cam_iso_k_val = iso_v
-                    cam_fov_k.append(cam_fov_k_val)
-                    cam_exp_k.append(cam_exp_k_val)
-                    cam_iso_k.append(cam_iso_k_val)
-                speed_k.append(env.v.norm(2, -1))
-                v_hist_k.append(env.v)
-                tv_hist_k.append(tv_k)
+                    c_cam_fov_k.append(cam_fov_k_val)
+                    c_cam_exp_k.append(cam_exp_k_val)
+                    c_cam_iso_k.append(cam_iso_k_val)
+                c_speed_k.append(env.v.norm(2, -1))
+                c_v_hist_k.append(env.v)
+                c_tv_hist_k.append(tv_k)
+                c_act_hist_k.append(a_k)
 
                 if should_vis_iter and args.vis_teacher and (k == args.gdac_inner_steps - 1) and (t % max(args.vis_every_steps, 1) == 0):
                     j = int(min(max(args.vis_env_idx, 0), B - 1))
@@ -767,62 +831,67 @@ for i in pbar:
                         cam=cam_vals,
                     )
 
-            # 5. 计算教师轨迹的物理损失 (Physics Loss)
-            p_hist_k = torch.stack(p_hist_k)
-            act_buf_k = torch.stack(act_buf_k)
-            v_hist_k = torch.stack(v_hist_k)
-            tv_hist_k = torch.stack(tv_hist_k)
-            vtp_hist_k = torch.stack(vtp_hist_k)
+                # chunk 边界：Teacher 的 TBPTT 反传
+                chunk_end_k = ((t + 1) % teacher_chunk_steps == 0) or (t == args.timesteps - 1)
+                if chunk_end_k and len(c_v_hist_k) > 0:
+                    v_chunk_k = torch.stack(c_v_hist_k)
+                    tv_chunk_k = torch.stack(c_tv_hist_k)
+                    vec_chunk_k = torch.stack(c_vtp_hist_k)
+                    act_chunk_k = torch.stack(c_act_hist_k)
+                    p_chunk_k = torch.stack(c_p_hist_k)
 
-            # 贴地惩罚 (防止飞得太高)
-            l_ga_k = p_hist_k[..., 2].relu().pow(2).mean()
-            
-            # 速度跟踪损失 (平滑的 L1 损失)
-            v_cum_k = v_hist_k.cumsum(0)
-            v_avg_k = (v_cum_k[30:] - v_cum_k[:-30]) / 30
-            d_v_k = torch.norm(v_avg_k - tv_hist_k[1:1-30], 2, -1)
-            l_v_k = F.smooth_l1_loss(d_v_k, torch.zeros_like(d_v_k))
+                    v_for_loss_k = torch.cat(v_roll_k + [v_chunk_k], 0) if len(v_roll_k) > 0 else v_chunk_k
+                    tv_for_loss_k = torch.cat(tv_roll_k + [tv_chunk_k], 0) if len(tv_roll_k) > 0 else tv_chunk_k
+                    l_v_k = velocity_tracking_loss(v_for_loss_k, tv_for_loss_k, win=30)
 
-            # 控制平滑度损失 (加速度和 Jerk)
-            jerk_k = act_buf_k.diff(1, 0).mul(15)
-            l_acc_k = act_buf_k.pow(2).sum(-1).mean()
-            l_jerk_k = jerk_k.pow(2).sum(-1).mean()
+                    act_for_smooth_k = torch.cat([prev_act_tail_k[None], act_chunk_k], 0)
+                    jerk_k = act_for_smooth_k.diff(1, 0).mul(15)
+                    l_acc_k = act_chunk_k.pow(2).sum(-1).mean()
+                    l_jerk_k = jerk_k.pow(2).sum(-1).mean()
 
-            # 避障与碰撞损失 (Obstacle avoidance and collision loss)
-            dist_k = torch.norm(vtp_hist_k, 2, -1) - env.margin
-            with torch.no_grad():
-                # 计算朝向障碍物的速度分量，用于惩罚靠近障碍物的行为
-                v_to_k = (-torch.diff(dist_k, 1, 1) * 135).clamp_min(1)
-            # 障碍物排斥势能 (Barrier potential)
-            l_avoid_k = barrier(dist_k[:, 1:], v_to_k)
-            # 实际碰撞惩罚 (Collision penalty)
-            l_coll_k = F.softplus(dist_k[:, 1:].mul(-32)).mul(v_to_k).mean()
+                    dist_k = torch.norm(vec_chunk_k, 2, -1) - env.margin
+                    with torch.no_grad():
+                        v_to_k = (-torch.diff(dist_k, 1, 1) * 135).clamp_min(1)
+                    l_avoid_k = barrier(dist_k[:, 1:], v_to_k)
+                    l_coll_k = F.softplus(dist_k[:, 1:].mul(-32)).mul(v_to_k).mean()
+                    l_ga_k = p_chunk_k[..., 2].relu().pow(2).mean()
 
-            # 汇总内部损失 (Aggregate inner losses for the Teacher)
-            inner_loss = args.coef_v * l_v_k + \
-                args.coef_obj_avoidance * l_avoid_k + \
-                args.coef_d_acc * l_acc_k + \
-                args.coef_d_jerk * l_jerk_k + \
-                args.coef_collide * l_coll_k + \
-                l_ga_k
+                    chunk_inner_loss = args.coef_v * l_v_k + \
+                        args.coef_obj_avoidance * l_avoid_k + \
+                        args.coef_d_acc * l_acc_k + \
+                        args.coef_d_jerk * l_jerk_k + \
+                        args.coef_collide * l_coll_k + \
+                        l_ga_k
 
-            # 6. 添加光学感知势能损失 (Optical Perception Potentials) 到教师目标中
-            # 论文核心贡献：在物理轨迹优化的同时，优化相机参数以最小化感知退化
-            if args.paper_optical_loss and use_cam and len(cam_exp_k) > 0:
-                sp_k = torch.stack(speed_k)
-                ex_k = torch.stack(cam_exp_k)
-                iso_k = torch.stack(cam_iso_k)
-                fov_k_t = torch.stack(cam_fov_k)
-                exp_phys_k = ex_k * 10 + 0.5
-                eff_focal_k = 1.0 / fov_k_t.clamp(min=0.1)
-                # 运动模糊惩罚 (Motion Blur Penalty): 速度 * 曝光时间 * 焦距
-                inner_loss = inner_loss + args.coef_blur * (sp_k.pow(2) * exp_phys_k.pow(2) * eff_focal_k.pow(2)).mean()
-                # 散斑噪声惩罚 (Shot Noise Penalty): 与ISO正相关，与曝光时间负相关
-                ns_k = 0.03 * (1.0 + 2.0 * iso_k) / (ex_k + 0.3)
-                inner_loss = inner_loss + args.coef_noise * ns_k.pow(2).mean()
+                    if args.paper_optical_loss and use_cam and len(c_cam_exp_k) > 0:
+                        sp_k = torch.stack(c_speed_k)
+                        ex_k = torch.stack(c_cam_exp_k)
+                        iso_k = torch.stack(c_cam_iso_k)
+                        fov_k_t = torch.stack(c_cam_fov_k)
+                        exp_phys_k = ex_k * 10 + 0.5
+                        eff_focal_k = 1.0 / fov_k_t.clamp(min=0.1)
+                        chunk_inner_loss = chunk_inner_loss + args.coef_blur * (sp_k.pow(2) * exp_phys_k.pow(2) * eff_focal_k.pow(2)).mean()
+                        ns_k = 0.03 * (1.0 + 2.0 * iso_k) / (ex_k + 0.3)
+                        chunk_inner_loss = chunk_inner_loss + args.coef_noise * ns_k.pow(2).mean()
 
-            # 反向传播并更新动作序列 (Backpropagate and update the action sequence)
-            inner_loss.backward()
+                    # 按 chunk 数归一，避免总梯度规模随 chunk 数增大
+                    chunk_inner_loss = chunk_inner_loss / teacher_chunk_count
+                    chunk_inner_loss.backward()
+
+                    keep_k = 30
+                    v_roll_k = [v_for_loss_k[-keep_k:].detach()] if v_for_loss_k.shape[0] > 0 else []
+                    tv_roll_k = [tv_for_loss_k[-keep_k:].detach()] if tv_for_loss_k.shape[0] > 0 else []
+                    prev_act_tail_k = act_chunk_k[-1].detach()
+
+                    cam_fov_k_val = cam_fov_k_val.detach()
+                    cam_exp_k_val = cam_exp_k_val.detach()
+                    cam_iso_k_val = cam_iso_k_val.detach()
+                    act_buf_k = [a.detach() for a in act_buf_k]
+                    detach_env_graph(env)
+
+                    c_p_hist_k.clear(); c_v_hist_k.clear(); c_tv_hist_k.clear(); c_vtp_hist_k.clear()
+                    c_act_hist_k.clear(); c_cam_exp_k.clear(); c_cam_iso_k.clear(); c_cam_fov_k.clear(); c_speed_k.clear()
+
             inner_optim.step()
 
             # 数值护栏：内循环参数清洗，避免 NaN/Inf 传播到 teacher 标签
@@ -933,23 +1002,36 @@ for i in pbar:
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq) # 基础控制时间步长，加入少量噪声
         exposure_delay = float(cam_exposure.mean().detach()) * 0.030 if use_cam else 0.015
         ctl_dt = base_dt + exposure_delay
+        student_add_noise = True
+        if args.paper_gdac:
+            student_add_noise = (args.gdac_student_noise_mode == 'on')
 
         # 渲染传感器：主视觉/ToF
+        # 可微主相机路径（render_main_luma_diff）需要保留计算图，
+        # 才能保证从策略损失反传到相机参数与渲染链路。
         main_obs = None
         main_depth = None
         tof_depth = None
-        if use_depth:
-            main_depth, _ = env.render(ctl_dt)
-            main_obs = main_depth
-        elif use_yuv:
-            if use_cam:
-                main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
+        if use_yuv and use_cam:
+            # 可微感知主路径：不要 no_grad
+            main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
+            if use_tof:
+                with torch.no_grad():
+                    tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
             else:
-                main_obs = env.render_main_luma(ctl_dt)
-        if use_tof:
-            tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
+                tof_conf = None
         else:
-            tof_conf = None
+            # 非可微传感器路径保持 no_grad 以节省显存
+            with torch.no_grad():
+                if use_depth:
+                    main_depth, _ = env.render(ctl_dt)
+                    main_obs = main_depth
+                elif use_yuv:
+                    main_obs = env.render_main_luma(ctl_dt)
+                if use_tof:
+                    tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
+                else:
+                    tof_conf = None
 
         # 兼容旧逻辑中的可视化与距离记录
         depth_vis = main_depth if main_depth is not None else main_obs
@@ -967,8 +1049,10 @@ for i in pbar:
             vec_to_pt_history.append(vec_now)
 
         # 保存视频帧
-        if is_save_iter(i):
-            vid.append(depth_vis[vid_idx])
+        # 注意：TBPTT 分支不会在本迭代末尾消费 vid，因此不应缓存；
+        # 非 TBPTT 分支也要立刻 detach+搬到 CPU，避免把整段计算图留在显存中。
+        if is_save_iter(i) and (not tbptt_this_iter):
+            vid.append(depth_vis[vid_idx].detach().to(dtype=torch.float16).cpu())
 
         # 计算目标速度方向
         if args.yaw_drift:
@@ -1013,8 +1097,8 @@ for i in pbar:
         state = torch.cat(state, -1)
 
         # 构造策略输入张量（支持 主视觉/ToF 双模态）
-        # 观测只作为策略输入，不参与对渲染链路的反传，避免长时域持有巨量图
-        main_obs_in = main_obs.detach() if main_obs is not None else None
+        # 对可微主相机路径保留梯度；其他路径按原逻辑 detach。
+        main_obs_in = main_obs if (use_yuv and use_cam) else (main_obs.detach() if main_obs is not None else None)
         tof_depth_in = tof_depth.detach() if tof_depth is not None else None
         tof_conf_in = tof_conf.detach() if tof_conf is not None else None
 
@@ -1026,7 +1110,7 @@ for i in pbar:
                     main_obs=main_obs_in,
                     tof_depth=tof_depth_in,
                     tof_conf=tof_conf_in,
-                    add_noise=True,
+                    add_noise=student_add_noise,
                 )
             act = sanitize_tensor(act, 'student_act_out', clamp_min=-5.0, clamp_max=5.0,
                                   nan=0.0, posinf=5.0, neginf=-5.0, strict=False)
@@ -1034,7 +1118,7 @@ for i in pbar:
                                      nan=0.0, posinf=10.0, neginf=-10.0, strict=False)
             act = act.float()
             intent = intent.float()
-            if args.paper_gdac:
+            if args.paper_gdac and args.use_dmpc:
                 raw_intent_history.append(intent)
         else:
             with autocast(enabled=use_amp):
@@ -1043,7 +1127,7 @@ for i in pbar:
                     main_obs=main_obs_in,
                     tof_depth=tof_depth_in,
                     tof_conf=tof_conf_in,
-                    add_noise=True,
+                    add_noise=student_add_noise,
                 )
             act = sanitize_tensor(act, 'student_act_out', clamp_min=-5.0, clamp_max=5.0,
                                   nan=0.0, posinf=5.0, neginf=-5.0, strict=False)
@@ -1243,7 +1327,7 @@ for i in pbar:
                     args.coef_noise * loss_noise_c
 
                 if args.paper_gdac:
-                    chunk_loss = args.coef_distill * loss_distill_c + args.gdac_physics_weight * chunk_loss
+                    chunk_loss = distill_coef_iter * loss_distill_c + args.gdac_physics_weight * chunk_loss
 
                 if not torch.isfinite(chunk_loss):
                     raise FloatingPointError('TBPTT chunk_loss is nan/inf')
@@ -1627,7 +1711,7 @@ for i in pbar:
             loss_distill = loss_distill + safe_distill_mse(student_cam, teacher_cam)
         # 在 G-DAC 模式下：总损失 = 蒸馏损失 + 降低权重的物理损失 (用于课程学习)
         # In G-DAC mode: primarily distillation + reduced-weight physics for curriculum
-        loss = args.coef_distill * loss_distill + args.gdac_physics_weight * loss
+        loss = distill_coef_iter * loss_distill + args.gdac_physics_weight * loss
 
 
     # 更新进度条显示 (Update progress bar)

@@ -15,7 +15,9 @@ task=${TASK:-paper_final_full}
 #   CAM_PROFILE=low|high|ultra
 # 示例：
 #   TASK=paper_final_full CAM_PROFILE=ultra bash run.sh
-cam_profile=${CAM_PROFILE:-ultra}
+# 默认不叠加相机档位，避免覆盖任务配置文件中的相机设置。
+cam_profile=${CAM_PROFILE:-}
+# cam_profile=${CAM_PROFILE:-low}
 
 # 日志输出模式:
 # - LOG_TO_FILE=1 (默认): 输出到 logs/<task>-<time>.log
@@ -23,7 +25,7 @@ cam_profile=${CAM_PROFILE:-ultra}
 # 示例:
 #   LOG_TO_FILE=1 bash run.sh
 #   LOG_TO_FILE=0 bash run.sh
-log_to_file=${LOG_TO_FILE:-1}
+log_to_file=${LOG_TO_FILE:-0}
 
 cfg_file="configs/${task}.args"
 if [ ! -f "$cfg_file" ]; then
