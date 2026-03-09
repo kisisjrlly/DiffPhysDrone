@@ -21,10 +21,59 @@ class RerunVis:
             import rerun as rr  # type: ignore
             self._rr = rr
             rr.init(app_id, spawn=spawn)
+            self._send_default_blueprint()
         except Exception as e:
             print(f"[warn] rerun unavailable, visualization disabled: {e}")
             self.enabled = False
             self._rr = None
+
+    def _send_default_blueprint(self):
+        """Send a deterministic dashboard layout so key metrics are always visible."""
+        if not self.enabled or self._rr is None:
+            return
+        rr = self._rr
+        try:
+            import rerun.blueprint as rrb  # type: ignore
+
+            bp = rrb.Blueprint(
+                rrb.Vertical(
+                    rrb.Horizontal(
+                        rrb.Spatial3DView(
+                            origin="/student",
+                            contents=[
+                                "/student/drone/**",
+                                "/student/target/**",
+                                "/student/world/**",
+                            ],
+                            name="student_3d",
+                        ),
+                        rrb.Vertical(
+                            rrb.Spatial2DView(origin="/student/camera/main", contents=["/student/camera/main"], name="main_y"),
+                            rrb.Spatial2DView(origin="/student/camera/tof_depth", contents=["/student/camera/tof_depth"], name="tof_depth"),
+                            name="cameras",
+                        ),
+                        rrb.Vertical(
+                            rrb.TimeSeriesView(origin="/student/camera/fov", contents=["/student/camera/fov"], name="fov"),
+                            rrb.TimeSeriesView(origin="/student/camera/exposure", contents=["/student/camera/exposure"], name="exposure"),
+                            rrb.TimeSeriesView(origin="/student/camera/iso", contents=["/student/camera/iso"], name="iso"),
+                            name="camera_params",
+                        ),
+                        name="top_row",
+                    ),
+                    rrb.Horizontal(
+                        rrb.TimeSeriesView(origin="/train/loss", contents=["/train/loss"], name="loss"),
+                        rrb.TimeSeriesView(origin="/train/loss_distill", contents=["/train/loss_distill"], name="loss_distill"),
+                        rrb.TimeSeriesView(origin="/train/sim_fps", contents=["/train/sim_fps"], name="sim_fps"),
+                        rrb.TimeSeriesView(origin="/train/iter_per_sec", contents=["/train/iter_per_sec"], name="iter_per_sec"),
+                        name="train_metrics",
+                    ),
+                ),
+                auto_layout=False,
+                auto_views=False,
+            )
+            rr.send_blueprint(bp)
+        except Exception as e:
+            print(f"[warn] failed to send rerun blueprint, fallback to auto layout: {e}")
 
     def begin_iter(self, iter_idx: int):
         if not self.enabled:
@@ -33,6 +82,323 @@ class RerunVis:
         self._paths["student"].clear()
         self._rr.set_time_sequence("iter", int(iter_idx))
 
+    def log_environment(self, phase: str,
+                        balls=None, voxels=None, cyl=None, cyl_h=None,
+                        start=None, target=None):
+        """Log one environment snapshot for global 3D inspection.
+
+        All arrays should already be numpy arrays for a single env index:
+          balls:  (N,4) [x,y,z,r]
+          voxels: (M,6) [x,y,z,rx,ry,rz]
+          cyl:    (K,3) [x,y,r]      (approx rendered as points)
+          cyl_h:  (L,3) [x,z,r]      (approx rendered as points)
+          start/target: (3,)
+        """
+        if not self.enabled:
+            return
+        rr = self._rr
+        # Use a deterministic step for static scene entities in current iter.
+        rr.set_time_sequence("step", 0)
+
+        # Estimate scene scale for readable world axes.
+        axis_len = 3.0
+        scene_min = np.array([-2.0, -2.0, -1.0], dtype=np.float32)
+        scene_max = np.array([8.0, 8.0, 2.0], dtype=np.float32)
+
+        def _expand_bounds(lo, hi):
+            nonlocal scene_min, scene_max
+            scene_min = np.minimum(scene_min, lo)
+            scene_max = np.maximum(scene_max, hi)
+
+        if voxels is not None:
+            v = np.asarray(voxels, dtype=np.float32)
+            if v.size > 0:
+                _expand_bounds((v[:, :3] - v[:, 3:6]).min(0), (v[:, :3] + v[:, 3:6]).max(0))
+        if balls is not None:
+            b = np.asarray(balls, dtype=np.float32)
+            if b.size > 0:
+                r = b[:, 3:4]
+                _expand_bounds((b[:, :3] - r).min(0), (b[:, :3] + r).max(0))
+        if cyl is not None:
+            c = np.asarray(cyl, dtype=np.float32)
+            if c.size > 0:
+                c_lo = np.stack([c[:, 0] - c[:, 2], c[:, 1] - c[:, 2], np.full_like(c[:, 0], -1.0)], -1).min(0)
+                c_hi = np.stack([c[:, 0] + c[:, 2], c[:, 1] + c[:, 2], np.full_like(c[:, 0], 2.0)], -1).max(0)
+                _expand_bounds(c_lo, c_hi)
+        if cyl_h is not None:
+            ch = np.asarray(cyl_h, dtype=np.float32)
+            if ch.size > 0:
+                ch_lo = np.stack([ch[:, 0] - ch[:, 2], np.full_like(ch[:, 0], -1.0), ch[:, 1] - ch[:, 2]], -1).min(0)
+                ch_hi = np.stack([ch[:, 0] + ch[:, 2], np.full_like(ch[:, 0], 1.0), ch[:, 1] + ch[:, 2]], -1).max(0)
+                _expand_bounds(ch_lo, ch_hi)
+
+        span = scene_max - scene_min
+        axis_len = float(max(3.0, 0.25 * np.max(span)))
+        scene_diag = float(np.linalg.norm(span))
+        # 线宽按场景尺度自适应，但保持上限较小，避免“线框淹没实体面”。
+        base_r = float(np.clip(0.00045 * scene_diag, 0.002, 0.008))
+        box_r = float(max(0.0015, base_r * 0.8))
+        voxel_edge_r = float(max(0.0018, base_r * 0.95))
+        aabb_edge_r = float(max(0.0022, base_r * 1.2))
+
+        # 有限长度可视化（真实物理里 cyl / cyl_h 为无限圆柱，这里按当前场景 AABB 截断展示）
+        z_lo, z_hi = float(scene_min[2]), float(scene_max[2])
+        y_lo, y_hi = float(scene_min[1]), float(scene_max[1])
+
+        def _build_circle(center_xyz, ex_xyz, ey_xyz, radius, n_seg=24):
+            c = np.asarray(center_xyz, dtype=np.float32)
+            ex = np.asarray(ex_xyz, dtype=np.float32)
+            ey = np.asarray(ey_xyz, dtype=np.float32)
+            th = np.linspace(0.0, 2.0 * np.pi, int(n_seg) + 1, dtype=np.float32)
+            pts = c[None, :] + radius * (np.cos(th)[:, None] * ex[None, :] + np.sin(th)[:, None] * ey[None, :])
+            return pts.tolist()
+
+        # reference world axes
+        rr.log(
+            f"{phase}/world/axes",
+            rr.Arrows3D(
+                vectors=[[axis_len, 0.0, 0.0], [0.0, axis_len, 0.0], [0.0, 0.0, axis_len]],
+                origins=[[0.0, 0.0, 0.0]] * 3,
+                colors=[[255, 80, 80], [80, 255, 80], [80, 160, 255]],
+                radii=[0.02, 0.02, 0.02],
+                labels=["+X", "+Y", "+Z"],
+                show_labels=True,
+            ),
+        )
+        rr.log(
+            f"{phase}/world/axis_tips",
+            rr.Points3D(
+                [[axis_len, 0.0, 0.0], [0.0, axis_len, 0.0], [0.0, 0.0, axis_len]],
+                radii=[0.05, 0.05, 0.05],
+                colors=[[255, 80, 80], [80, 255, 80], [80, 160, 255]],
+                labels=["X+", "Y+", "Z+"],
+                show_labels=True,
+            ),
+        )
+
+        # World AABB overlay for map extent awareness.
+        center = ((scene_min + scene_max) * 0.5).astype(np.float32)
+        half = ((scene_max - scene_min) * 0.5).astype(np.float32)
+        rr.log(
+            f"{phase}/world/aabb",
+            rr.Boxes3D(
+                centers=[center.tolist()],
+                half_sizes=[half.tolist()],
+                # 降低填充透明度，主要依赖高对比线框强调边界。
+                colors=[[255, 240, 120, 24]],
+                radii=[box_r],
+                labels=["MAP_AABB"],
+                show_labels=True,
+            ),
+        )
+
+        cx, cy, cz = center.tolist()
+        hx, hy, hz = half.tolist()
+        corners = np.array([
+            [cx - hx, cy - hy, cz - hz],
+            [cx + hx, cy - hy, cz - hz],
+            [cx + hx, cy + hy, cz - hz],
+            [cx - hx, cy + hy, cz - hz],
+            [cx - hx, cy - hy, cz + hz],
+            [cx + hx, cy - hy, cz + hz],
+            [cx + hx, cy + hy, cz + hz],
+            [cx - hx, cy + hy, cz + hz],
+        ], dtype=np.float32)
+        edge_idx = [(0, 1), (1, 2), (2, 3), (3, 0),
+                    (4, 5), (5, 6), (6, 7), (7, 4),
+                    (0, 4), (1, 5), (2, 6), (3, 7)]
+        aabb_edges = [[corners[a].tolist(), corners[b].tolist()] for a, b in edge_idx]
+        rr.log(
+            f"{phase}/world/aabb_edges",
+            rr.LineStrips3D(
+                aabb_edges,
+                colors=[[255, 245, 120, 255]] * len(aabb_edges),
+                radii=[aabb_edge_r] * len(aabb_edges),
+            ),
+        )
+        rr.log(
+            f"{phase}/world/aabb_corners",
+            rr.Points3D(
+                corners,
+                colors=[[255, 245, 120]] * corners.shape[0],
+                radii=[aabb_edge_r * 1.15] * corners.shape[0],
+            ),
+        )
+
+        if voxels is not None:
+            v = np.asarray(voxels, dtype=np.float32)
+            if v.size > 0:
+                rr.log(
+                    f"{phase}/world/voxels",
+                    rr.Boxes3D(
+                        centers=v[:, :3],
+                        half_sizes=v[:, 3:6],
+                        # 以“实体面”为主：提高填充不透明度，减少空心观感。
+                        colors=[[60, 200, 255, 170]] * v.shape[0],
+                        radii=[box_r] * v.shape[0],
+                    ),
+                )
+
+                # Add wireframe edges to make box obstacles stand out.
+                edges = []
+                for row in v:
+                    cx, cy, cz, hx, hy, hz = row.tolist()
+                    corners = np.array([
+                        [cx - hx, cy - hy, cz - hz],
+                        [cx + hx, cy - hy, cz - hz],
+                        [cx + hx, cy + hy, cz - hz],
+                        [cx - hx, cy + hy, cz - hz],
+                        [cx - hx, cy - hy, cz + hz],
+                        [cx + hx, cy - hy, cz + hz],
+                        [cx + hx, cy + hy, cz + hz],
+                        [cx - hx, cy + hy, cz + hz],
+                    ], dtype=np.float32)
+                    idx = [(0, 1), (1, 2), (2, 3), (3, 0),
+                           (4, 5), (5, 6), (6, 7), (7, 4),
+                           (0, 4), (1, 5), (2, 6), (3, 7)]
+                    for a, b in idx:
+                        edges.append([corners[a].tolist(), corners[b].tolist()])
+                rr.log(
+                    f"{phase}/world/voxels_edges",
+                    rr.LineStrips3D(
+                        edges,
+                        colors=[[20, 170, 255, 255]] * len(edges),
+                        radii=[voxel_edge_r] * len(edges),
+                    ),
+                )
+
+        if balls is not None:
+            b = np.asarray(balls, dtype=np.float32)
+            if b.size > 0:
+                rr.log(
+                    f"{phase}/world/balls",
+                    rr.Points3D(
+                        b[:, :3],
+                        radii=b[:, 3],
+                        colors=[[255, 180, 80]] * b.shape[0],
+                    ),
+                )
+
+        # Cylinders are logged as center points + radius proxy for global context.
+        if cyl is not None:
+            c = np.asarray(cyl, dtype=np.float32)
+            if c.size > 0:
+                c_pos = np.stack([c[:, 0], c[:, 1], np.full_like(c[:, 0], (z_lo + z_hi) * 0.5)], -1)
+                rr.log(
+                    f"{phase}/world/cyl",
+                    rr.Points3D(c_pos, radii=np.maximum(c[:, 2], 0.02), colors=[[120, 200, 255]] * c.shape[0]),
+                )
+
+                cyl_wire = []
+                for row in c:
+                    cx, cy, rad = [float(x) for x in row.tolist()]
+                    z_mid = 0.5 * (z_lo + z_hi)
+                    ring_lo = _build_circle([cx, cy, z_lo], [1, 0, 0], [0, 1, 0], rad)
+                    ring_hi = _build_circle([cx, cy, z_hi], [1, 0, 0], [0, 1, 0], rad)
+                    cyl_wire.append(ring_lo)
+                    cyl_wire.append(ring_hi)
+                    for a in (0.0, 0.5 * np.pi, np.pi, 1.5 * np.pi):
+                        dx = rad * float(np.cos(a))
+                        dy = rad * float(np.sin(a))
+                        cyl_wire.append([[cx + dx, cy + dy, z_lo], [cx + dx, cy + dy, z_hi]])
+                    # 轴线，便于识别“这是沿 z 方向的竖直圆柱”
+                    cyl_wire.append([[cx, cy, z_lo], [cx, cy, z_hi]])
+                    cyl_wire.append([[cx - rad, cy, z_mid], [cx + rad, cy, z_mid]])
+                rr.log(
+                    f"{phase}/world/cyl_wire",
+                    rr.LineStrips3D(
+                        cyl_wire,
+                        colors=[[120, 200, 255, 255]] * len(cyl_wire),
+                        radii=[voxel_edge_r * 0.9] * len(cyl_wire),
+                    ),
+                )
+
+        if cyl_h is not None:
+            ch = np.asarray(cyl_h, dtype=np.float32)
+            if ch.size > 0:
+                ch_pos = np.stack([ch[:, 0], np.full_like(ch[:, 0], (y_lo + y_hi) * 0.5), ch[:, 1]], -1)
+                rr.log(
+                    f"{phase}/world/cyl_h",
+                    rr.Points3D(ch_pos, radii=np.maximum(ch[:, 2], 0.02), colors=[[180, 120, 255]] * ch.shape[0]),
+                )
+
+                cyl_h_wire = []
+                for row in ch:
+                    cx, cz, rad = [float(x) for x in row.tolist()]
+                    y_mid = 0.5 * (y_lo + y_hi)
+                    ring_lo = _build_circle([cx, y_lo, cz], [1, 0, 0], [0, 0, 1], rad)
+                    ring_hi = _build_circle([cx, y_hi, cz], [1, 0, 0], [0, 0, 1], rad)
+                    cyl_h_wire.append(ring_lo)
+                    cyl_h_wire.append(ring_hi)
+                    for a in (0.0, 0.5 * np.pi, np.pi, 1.5 * np.pi):
+                        dx = rad * float(np.cos(a))
+                        dz = rad * float(np.sin(a))
+                        cyl_h_wire.append([[cx + dx, y_lo, cz + dz], [cx + dx, y_hi, cz + dz]])
+                    # 轴线，便于识别“这是沿 y 方向的水平圆柱”
+                    cyl_h_wire.append([[cx, y_lo, cz], [cx, y_hi, cz]])
+                    cyl_h_wire.append([[cx - rad, y_mid, cz], [cx + rad, y_mid, cz]])
+                rr.log(
+                    f"{phase}/world/cyl_h_wire",
+                    rr.LineStrips3D(
+                        cyl_h_wire,
+                        colors=[[180, 120, 255, 255]] * len(cyl_h_wire),
+                        radii=[voxel_edge_r * 0.9] * len(cyl_h_wire),
+                    ),
+                )
+
+        if start is not None:
+            s = np.asarray(start, dtype=np.float32).reshape(3)
+            rr.log(
+                f"{phase}/world/start",
+                rr.Points3D(
+                    [s],
+                    radii=[0.14],
+                    colors=[[30, 255, 120]],
+                    labels=["START"],
+                    show_labels=True,
+                ),
+            )
+        if target is not None:
+            t = np.asarray(target, dtype=np.float32).reshape(3)
+            rr.log(
+                f"{phase}/world/goal",
+                rr.Points3D(
+                    [t],
+                    radii=[0.16],
+                    colors=[[255, 70, 70]],
+                    labels=["GOAL"],
+                    show_labels=True,
+                ),
+            )
+
+        # Start-goal numeric distance overlay (3D label + scalar).
+        if (start is not None) and (target is not None):
+            s = np.asarray(start, dtype=np.float32).reshape(3)
+            t = np.asarray(target, dtype=np.float32).reshape(3)
+            dist = float(np.linalg.norm(t - s))
+            mid = ((s + t) * 0.5).astype(np.float32)
+            rr.log(
+                f"{phase}/world/start_goal_line",
+                rr.LineStrips3D(
+                    [[s.tolist(), t.tolist()]],
+                    colors=[[255, 255, 120, 255]],
+                    radii=[0.01],
+                    labels=[f"START↔GOAL {dist:.2f}m"],
+                    show_labels=True,
+                ),
+            )
+            rr.log(
+                f"{phase}/world/start_goal_distance_label",
+                rr.Points3D(
+                    [mid.tolist()],
+                    radii=[0.05],
+                    colors=[[255, 255, 120]],
+                    labels=[f"D={dist:.2f} m"],
+                    show_labels=True,
+                ),
+            )
+            rr.log(f"{phase}/world/start_goal_distance_m", self._scalar_msg(dist))
+
     def _scalar_msg(self, v: float):
         """API compatibility: rerun-sdk uses Scalars, older variants may expose Scalar."""
         rr = self._rr
@@ -40,7 +406,154 @@ class RerunVis:
             return rr.Scalar(float(v))
         return rr.Scalars(float(v))
 
-    def log_step(self, phase: str, step_idx: int, pos, target, depth=None, cam=None, scalars=None):
+    def _img_u8(self, img, mode: str = "depth"):
+        """Convert image to uint8 for rerun logging.
+
+        mode:
+          - depth: expects metric depth in meters, maps [0.05, 10.0] -> [0, 255]
+          - luma:  expects [0, 1] brightness, maps directly to [0, 255]
+        """
+        x = np.asarray(img, dtype=np.float32)
+        if mode == "luma":
+            x = np.clip(x, 0.0, 1.0)
+            return (x * 255.0).astype(np.uint8)
+        # depth by default
+        x = np.clip(x, 0.05, 10.0)
+        x = (x - 0.05) / (10.0 - 0.05)
+        return (x * 255.0).astype(np.uint8)
+
+    def _log_drone_rig(self, phase: str, pos, drone_R=None, cam_R=None,
+                       main_fov_half_tan: float = 0.53,
+                       main_hw=(240, 320), tof_hw=(60, 80)):
+        """Log drone body size/orientation and dual-camera frustums in 3D."""
+        if not self.enabled:
+            return
+        rr = self._rr
+
+        o = np.asarray(pos, dtype=np.float32).reshape(3)
+        Rw = np.eye(3, dtype=np.float32)
+        Rc = np.eye(3, dtype=np.float32)
+        if drone_R is not None:
+            Rw = np.asarray(drone_R, dtype=np.float32).reshape(3, 3)
+        if cam_R is not None:
+            Rc = np.asarray(cam_R, dtype=np.float32).reshape(3, 3)
+
+        # Body pose (world)
+        rr.log(
+            f"{phase}/drone/body",
+            rr.Transform3D(translation=o.tolist(), mat3x3=Rw.tolist(), axis_length=0.22),
+        )
+
+        # Cinematic body model: chassis + cross arms (local/body coordinates)
+        rr.log(
+            f"{phase}/drone/body/chassis",
+            rr.Boxes3D(
+                centers=[[0.0, 0.0, 0.0]],
+                sizes=[[0.34, 0.18, 0.08]],
+                colors=[[0, 230, 170, 210]],
+                radii=[0.01],
+                labels=["DRONE BODY"],
+                show_labels=True,
+            ),
+        )
+        rr.log(
+            f"{phase}/drone/body/arms",
+            rr.LineStrips3D(
+                [
+                    [[-0.20, -0.20, 0.0], [0.20, 0.20, 0.0]],
+                    [[-0.20, 0.20, 0.0], [0.20, -0.20, 0.0]],
+                ],
+                colors=[[100, 255, 255], [100, 255, 255]],
+                radii=[0.014, 0.014],
+            ),
+        )
+        rr.log(
+            f"{phase}/drone/body/axes",
+            rr.Arrows3D(
+                origins=[[0.0, 0.0, 0.0]] * 3,
+                vectors=[[0.35, 0.0, 0.0], [0.0, 0.35, 0.0], [0.0, 0.0, 0.25]],
+                colors=[[255, 90, 90], [90, 255, 90], [90, 160, 255]],
+                radii=[0.01, 0.01, 0.01],
+                labels=["body+x", "body+y", "body+z"],
+            ),
+        )
+
+        # Camera rig (both main + ToF share simulator extrinsics in this project)
+        Rcw = Rw @ Rc
+
+        def _frustum_lines_local(tan_half_x, h, w, near, far):
+            tan_half_y = float(tan_half_x) * float(h) / float(max(w, 1))
+            c_near = np.array([
+                [near, -near * tan_half_x, -near * tan_half_y],
+                [near, near * tan_half_x, -near * tan_half_y],
+                [near, near * tan_half_x, near * tan_half_y],
+                [near, -near * tan_half_x, near * tan_half_y],
+            ], dtype=np.float32)
+            c_far = np.array([
+                [far, -far * tan_half_x, -far * tan_half_y],
+                [far, far * tan_half_x, -far * tan_half_y],
+                [far, far * tan_half_x, far * tan_half_y],
+                [far, -far * tan_half_x, far * tan_half_y],
+            ], dtype=np.float32)
+            strips = []
+            for k in range(4):
+                strips.append([[0.0, 0.0, 0.0], c_far[k].tolist()])
+                strips.append([c_near[k].tolist(), c_far[k].tolist()])
+            strips.append([c_near[0].tolist(), c_near[1].tolist(), c_near[2].tolist(), c_near[3].tolist(), c_near[0].tolist()])
+            strips.append([c_far[0].tolist(), c_far[1].tolist(), c_far[2].tolist(), c_far[3].tolist(), c_far[0].tolist()])
+            return strips
+
+        # Main camera frustum
+        rr.log(
+            f"{phase}/drone/cameras/main",
+            rr.Transform3D(translation=o.tolist(), mat3x3=Rcw.tolist(), axis_length=0.14),
+        )
+        main_strips = _frustum_lines_local(float(main_fov_half_tan), int(main_hw[0]), int(main_hw[1]), near=0.12, far=1.05)
+        rr.log(
+            f"{phase}/drone/cameras/main/frustum",
+            rr.LineStrips3D(main_strips, colors=[[255, 240, 70]] * len(main_strips), radii=[0.004] * len(main_strips)),
+        )
+        rr.log(
+            f"{phase}/drone/cameras/main/look",
+            rr.Arrows3D(
+                origins=[[0.0, 0.0, 0.0]],
+                vectors=[[0.9, 0.0, 0.0]],
+                colors=[[255, 235, 80]],
+                radii=[0.009],
+                labels=["MAIN_CAM"],
+            ),
+        )
+
+        # ToF frustum (same extrinsics in simulator; separate style for readability)
+        rr.log(
+            f"{phase}/drone/cameras/tof",
+            rr.Transform3D(translation=o.tolist(), mat3x3=Rcw.tolist(), axis_length=0.12),
+        )
+        tof_strips = _frustum_lines_local(float(main_fov_half_tan), int(tof_hw[0]), int(tof_hw[1]), near=0.10, far=0.90)
+        rr.log(
+            f"{phase}/drone/cameras/tof/frustum",
+            rr.LineStrips3D(tof_strips, colors=[[80, 200, 255]] * len(tof_strips), radii=[0.003] * len(tof_strips)),
+        )
+        rr.log(
+            f"{phase}/drone/cameras/tof/look",
+            rr.Arrows3D(
+                origins=[[0.0, 0.0, 0.0]],
+                vectors=[[0.75, 0.0, 0.0]],
+                colors=[[80, 210, 255]],
+                radii=[0.008],
+                labels=["TOF_CAM"],
+            ),
+        )
+
+    def log_step(self, phase: str, step_idx: int, pos, target,
+                 depth=None, cam=None, scalars=None,
+                 main_img=None, main_img_mode: str = "depth",
+                 tof_img=None,
+                 drone_R=None,
+                 cam_R=None,
+                 main_fov_half_tan: float = 0.53,
+                 main_hw=(240, 320),
+                 tof_hw=(60, 80)):
         if not self.enabled:
             return
         rr = self._rr
@@ -51,16 +564,47 @@ class RerunVis:
 
         self._paths[phase].append(p.tolist())
 
-        rr.log(f"{phase}/drone/pos", rr.Points3D([p], colors=[[0, 255, 0]], radii=[0.03]))
-        rr.log(f"{phase}/target/pos", rr.Points3D([t], colors=[[255, 64, 64]], radii=[0.04]))
-        rr.log(f"{phase}/drone/path", rr.LineStrips3D([self._paths[phase]], colors=[[64, 200, 255]]))
+        rr.log(
+            f"{phase}/drone/pos",
+            rr.Points3D([p], colors=[[0, 255, 120]], radii=[0.08], labels=["DRONE"], show_labels=True),
+        )
+        rr.log(
+            f"{phase}/target/pos",
+            rr.Points3D([t], colors=[[255, 64, 64]], radii=[0.10], labels=["TARGET"], show_labels=True),
+        )
+        rr.log(
+            f"{phase}/drone/path",
+            rr.LineStrips3D([self._paths[phase]], colors=[[0, 240, 255]], radii=[0.014]),
+        )
+        rr.log(
+            f"{phase}/drone/path_points",
+            rr.Points3D(
+                self._paths[phase],
+                colors=[[180, 255, 255]] * len(self._paths[phase]),
+                radii=[0.012] * len(self._paths[phase]),
+            ),
+        )
 
-        if depth is not None:
-            d = np.asarray(depth, dtype=np.float32)
-            d = np.clip(d, 0.05, 10.0)
-            d = (d - 0.05) / (10.0 - 0.05)
-            img = (d * 255.0).astype(np.uint8)
-            rr.log(f"{phase}/camera/depth", rr.Image(img))
+        # Render drone physical size/orientation + camera rig pose/frustums
+        self._log_drone_rig(
+            phase=phase,
+            pos=p,
+            drone_R=drone_R,
+            cam_R=cam_R,
+            main_fov_half_tan=main_fov_half_tan,
+            main_hw=main_hw,
+            tof_hw=tof_hw,
+        )
+
+        # 新接口：分别记录主相机和ToF
+        if main_img is not None:
+            rr.log(f"{phase}/camera/main", rr.Image(self._img_u8(main_img, mode=main_img_mode)))
+        if tof_img is not None:
+            rr.log(f"{phase}/camera/tof_depth", rr.Image(self._img_u8(tof_img, mode="depth")))
+
+        # 兼容旧接口
+        if (main_img is None) and (depth is not None):
+            rr.log(f"{phase}/camera/depth", rr.Image(self._img_u8(depth, mode="depth")))
 
         if cam is not None:
             fov, exp, iso = [float(x) for x in cam]
@@ -72,9 +616,17 @@ class RerunVis:
             for k, v in scalars.items():
                 rr.log(f"{phase}/metrics/{k}", self._scalar_msg(float(v)))
 
-    def log_train_scalars(self, scalars: dict):
+    def log_train_scalars(self, scalars: dict, iter_idx=None):
         if not self.enabled:
             return
         rr = self._rr
+        # 避免继承 student/teacher 的 step 时间轴。
+        # 否则 train 标量会全部堆在同一个 step（例如 70）上，看起来像“没有曲线”。
+        try:
+            rr.disable_timeline("step")
+        except Exception:
+            pass
+        if iter_idx is not None:
+            rr.set_time_sequence("iter", int(iter_idx))
         for k, v in scalars.items():
             rr.log(f"train/{k}", self._scalar_msg(float(v)))

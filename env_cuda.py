@@ -636,7 +636,7 @@ class Env:
         electrons = electrons * iso_gain[:, None, None]
 
         # Shot noise（泊松高斯近似）
-        shot_std = torch.sqrt(torch.clamp(electrons, min=1e-6))
+        shot_std = torch.sqrt(torch.clamp(electrons, min=1e-6)) * 0.03 * self.cam_noise_scale
         # Read noise
         read_std = self.cam_read_noise * (1.0 + 2.5 * iso01)
 
@@ -752,6 +752,7 @@ class Env:
         rd = torch.rand((B // self.n_drones_per_group, 1), device=device).repeat_interleave(self.n_drones_per_group, 0)
         self.max_speed = (0.75 + 2.5 * rd) * self.speed_mtp
         scale = (self.max_speed - 0.5).clamp_min(1) # 根据速度缩放场景大小
+        y_stretch = (self.max_speed + 4) / scale   # Y 轴拉伸系数（用于障碍物与起终点保持一致）
 
         # 推力估计误差 (模拟真实世界中电机推力的不确定性)
         self.thr_est_error = 1 + torch.randn(B, device=device) * 0.01
@@ -793,9 +794,9 @@ class Env:
             self.voxels = torch.cat([self.voxels, ground_voxels], 1)
 
         # 根据最大速度拉伸场景的 Y 轴 (速度越快，场景越长)
-        self.voxels[:, :, 1] *= (self.max_speed + 4) / scale
-        self.balls[:, :, 1] *= (self.max_speed + 4) / scale
-        self.cyl[:, :, 1] *= (self.max_speed + 4) / scale
+        self.voxels[:, :, 1] *= y_stretch
+        self.balls[:, :, 1] *= y_stretch
+        self.cyl[:, :, 1] *= y_stretch
 
         # 5. 场景变体：穿越门 (Gates)
         if self.gate:
@@ -833,10 +834,9 @@ class Env:
         self.yaw_ctl_delay = 6 + 0.6 * torch.randn((B, 1), device=device)
 
         # 7. 初始化无人机位置 (p) 和目标位置 (p_target)
-        rd = torch.rand((B // self.n_drones_per_group, 1), device=device).repeat_interleave(self.n_drones_per_group, 0)
         scale = torch.cat([
             scale,
-            rd + 0.5,
+            y_stretch,
             torch.rand_like(scale) - 0.5], -1)
         self.p = self.p_init * scale + torch.randn_like(scale) * 0.1
         self.p_target = self.p_end * scale + torch.randn_like(scale) * 0.1

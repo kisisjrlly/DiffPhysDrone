@@ -16,7 +16,7 @@ task=${TASK:-paper_final_full}
 # 示例：
 #   TASK=paper_final_full CAM_PROFILE=ultra bash run.sh
 # 默认不叠加相机档位，避免覆盖任务配置文件中的相机设置。
-cam_profile=${CAM_PROFILE:-}
+cam_profile=${CAM_PROFILE:-ultra}
 # cam_profile=${CAM_PROFILE:-low}
 
 # 日志输出模式:

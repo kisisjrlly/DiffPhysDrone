@@ -539,6 +539,16 @@ for i in pbar:
     should_vis_iter = args.vis_enable and (i % max(args.vis_every_iters, 1) == 0)
     if should_vis_iter:
         vis.begin_iter(i)
+        j = int(min(max(args.vis_env_idx, 0), B - 1))
+        vis.log_environment(
+            phase='student',
+            balls=env.balls[j].detach().cpu().numpy(),
+            voxels=env.voxels[j].detach().cpu().numpy(),
+            cyl=env.cyl[j].detach().cpu().numpy(),
+            cyl_h=env.cyl_h[j].detach().cpu().numpy(),
+            start=env.p[j].detach().cpu().numpy(),
+            target=env.p_target[j].detach().cpu().numpy(),
+        )
 
     # ===== Paper §3: G-DAC Phase I — Teacher / Solver (教师网络内部优化) =====
     # G-DAC (Guided Differentiable Actor-Critic) 算法的第一阶段。
@@ -829,6 +839,11 @@ for i in pbar:
                         target=env.p_target[j].detach().cpu().numpy(),
                         depth=None,
                         cam=cam_vals,
+                        drone_R=env.R[j].detach().cpu().numpy(),
+                        cam_R=env.R_cam[j].detach().cpu().numpy(),
+                        main_fov_half_tan=float(cam_fov_k_val[j].detach().cpu()) if use_cam else float(env._fov_x_half_tan),
+                        main_hw=(int(env.height), int(env.width)),
+                        tof_hw=(int(env.tof_height), int(env.tof_width)),
                     )
 
                 # chunk 边界：Teacher 的 TBPTT 反传
@@ -1398,6 +1413,14 @@ for i in pbar:
                     float(cam_exposure[j].detach().cpu()),
                     float(cam_iso[j].detach().cpu())
                 )
+            main_img_np = None
+            main_img_mode = 'depth'
+            if main_obs is not None:
+                main_img_np = main_obs[j].detach().cpu().numpy()
+                main_img_mode = 'luma' if use_yuv else 'depth'
+            tof_img_np = None
+            if tof_depth is not None:
+                tof_img_np = tof_depth[j].detach().cpu().numpy()
             vis.log_step(
                 phase='student',
                 step_idx=t,
@@ -1405,6 +1428,14 @@ for i in pbar:
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=depth_vis[j].detach().cpu().numpy(),
                 cam=cam_vals,
+                main_img=main_img_np,
+                main_img_mode=main_img_mode,
+                tof_img=tof_img_np,
+                drone_R=env.R[j].detach().cpu().numpy(),
+                cam_R=env.R_cam[j].detach().cpu().numpy(),
+                main_fov_half_tan=float(cam_fov[j].detach().cpu()) if use_cam else float(env._fov_x_half_tan),
+                main_hw=(int(env.height), int(env.width)),
+                tof_hw=(int(env.tof_height), int(env.tof_width)),
             )
 
     if tbptt_this_iter:
@@ -1534,13 +1565,13 @@ for i in pbar:
                     'slit_pass_rate': slit_pass_rate,
                 })
 
-            if should_vis_iter:
+            if args.vis_enable:
                 vis.log_train_scalars({
                     'loss': float(loss.detach().cpu()),
                     'loss_distill': float(loss_distill.detach().cpu()),
                     'iter_per_sec': float(iter_per_sec),
                     'sim_fps': float(sim_fps),
-                })
+                }, iter_idx=i)
 
             if (i + 1) % 10000 == 0:
                 torch.save(model.state_dict(), f'checkpoint{i//10000:04d}.pth')
@@ -1753,13 +1784,13 @@ for i in pbar:
             'sim_fps': sim_fps,
             'iter_time_ms': iter_time * 1000,
         })
-        if should_vis_iter:
+        if args.vis_enable:
             vis.log_train_scalars({
                 'loss': float(loss.detach().cpu()),
                 'loss_distill': float(loss_distill.detach().cpu()),
                 'iter_per_sec': float(iter_per_sec),
                 'sim_fps': float(sim_fps),
-            })
+            }, iter_idx=i)
         # 记录各项损失和训练指标 (Log all losses and training metrics)
         smooth_dict({
             'loss': loss,

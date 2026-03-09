@@ -11,7 +11,7 @@
 # --resume checkpoint0004.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 32                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 24                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
 --timesteps 80                     # 每个 rollout 的物理步数
 
@@ -56,8 +56,8 @@
 --cam_angle 10                      # 初始相机俯仰角（度）
 
 # ----------------- 传感器分辨率 (Sensor Resolutions) -----------------
---imx_width 256                     # 主相机宽（降低显存峰值，优先保证可运行）
---imx_height 192                    # 主相机高（降低显存峰值，优先保证可运行）
+--imx_width 320                     # 主相机宽（降低显存峰值，优先保证可运行）
+--imx_height 240                    # 主相机高（降低显存峰值，优先保证可运行）
 --tof_width 160                     # ToF 宽（与主相机比例协调）
 --tof_height 120                    # ToF 高（与主相机比例协调）
 # --tof_downsample 4                # 若不显式给 tof_width/height，可用该倍率
@@ -70,13 +70,13 @@
 # 速度相关区别：
 # - coef_v      : 向量级主目标（方向+大小）
 # - coef_v_pred : 监督网络的速度预测头（表征辅助）
---coef_v 1.0                        # 速度向量跟踪主损失
+--coef_v 1.3                        # 速度向量跟踪主损失
 --coef_v_pred 0.0                   # 速度预测头监督损失
 
 --coef_d_acc 0.01                   # 动作能量/加速度正则
 --coef_d_jerk 0.001                 # jerk 正则
 
---coef_obj_avoidance 5.0            # 避障势能惩罚
+--coef_obj_avoidance 3.0            # 避障势能惩罚
 --coef_collide 10.0                 # 碰撞惩罚
 --coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
 
@@ -88,7 +88,7 @@
 # --diff_cam                         # 传统绝对参数相机控制
 --paper_unified_control             # 统一控制：相机增量并入动作
 --paper_cam_obs                     # 观测中加入当前相机参数
---cam_delta_scale 0.05              # 统一控制下相机增量缩放
+--cam_delta_scale 0.03              # 统一控制下相机增量缩放
 
 --coef_cam_smooth 0.01              # 相机参数时域平滑
 --coef_fov_reg 0.005                # FOV 回归中心正则
@@ -106,14 +106,14 @@
 --cam_blur_scale 1.0                # 运动模糊强度缩放
 --cam_fog_scale 1.0                 # 大气散射/雾强度缩放
 --cam_lighting_scale 1.0            # 光照强度缩放
---cam_ae_target 0.42                # 自动曝光目标亮度
+--cam_ae_target 0.36                # 自动曝光目标亮度
 
 # 论文光学势能 (Optical Perception Potentials)
 # - coef_blur: 惩罚高速+长曝光+长焦导致的运动模糊
 # - coef_noise: 惩罚高 ISO / 低曝光条件下的噪声放大
 --paper_optical_loss                # 开启 blur/noise 光学损失
---coef_blur 0.1                     # 运动模糊损失权重
---coef_noise 0.05                   # 噪声损失权重
+--coef_blur 0.03                     # 运动模糊损失权重
+--coef_noise 0.02                   # 噪声损失权重
 
 # ----------------- G-DAC 教师-学生 (Paper §3) -----------------
 # 当前代码逻辑：若 tbptt_enable 与 paper_gdac 同时开，会提示复杂度风险并优先完整 BPTT 路径
@@ -122,9 +122,9 @@
 --gdac_inner_steps 10               # 教师内循环步数
 --gdac_inner_lr 0.005               # 教师内循环学习率
 --coef_distill 1.0                  # 蒸馏损失权重
---gdac_physics_weight 0.3           # 蒸馏模式下物理损失权重
+--gdac_physics_weight 0.6           # 蒸馏模式下物理损失权重
 --gdac_teacher_tbptt_chunk_steps 10   # G-DAC 教师 TBPTT 截断步数（当前实现默认与主训练一致）
---gdac_distill_final_ratio 0.3      #G-DAC: 蒸馏权重退火终点比例（相对 coef_distill，早高晚低）
+--gdac_distill_final_ratio 0.5      #G-DAC: 蒸馏权重退火终点比例（相对 coef_distill，早高晚低）
 --gdac_student_noise_mode off      # G-DAC 蒸馏阶段 student 前向是否加噪声：off=关闭, on=开启
 
 # ----------------- 视觉模式 + 控制架构 (Vision & Control) -----------------
@@ -153,7 +153,7 @@
 
 # ----------------- 可视化与日志 (Visualization & Logging) -----------------
 # 可视化会影响训练吞吐；做长跑实验时可适当降低采样频率
-# --vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
+--vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
 --vis_backend rerun                 # 可视化后端（当前支持 rerun）
 --vis_env_idx 0                     # 可视化的环境索引（batch 内第几个）
 --vis_every_iters 10                # 每多少个迭代记录一次可视化
