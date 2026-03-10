@@ -14,6 +14,9 @@ class Model(nn.Module):
                  in_channels=1, use_policy_intent=False, intent_dim=9,
                  main_in_channels=1,
                  use_tof_conf=False,
+                 tof_nn_width=16,
+                 tof_nn_height=12,
+                 active_tof_use_pipeline=True,
                  vision_mode='depth') -> None:
         """
         初始化无人机的策略网络模型 (Policy Network)。
@@ -33,6 +36,9 @@ class Model(nn.Module):
         self.intent_dim = intent_dim
         self.main_in_channels = main_in_channels
         self.use_tof_conf = use_tof_conf
+        self.tof_nn_width = max(int(tof_nn_width), 1)
+        self.tof_nn_height = max(int(tof_nn_height), 1)
+        self.active_tof_use_pipeline = bool(active_tof_use_pipeline)
         self.vision_mode = vision_mode
 
         def make_stem(cin: int, feat_dim: int):
@@ -55,6 +61,7 @@ class Model(nn.Module):
         # 按 vision_mode 固定网络结构：
         #   depth/yuv: 单分支
         #   yuv_tof  : 双分支 + 特征融合
+        #   active_tof: 单分支（只用ToF Depth和Conf）
         if self.vision_mode == 'yuv_tof':
             self.main_feat_dim = 96
             self.tof_feat_dim = 96
@@ -63,8 +70,12 @@ class Model(nn.Module):
             self.stem_tof = make_stem(tof_in, self.tof_feat_dim)
             self.fuse = nn.Linear(self.main_feat_dim + self.tof_feat_dim, 192, bias=False)
             self.fuse.weight.data.mul_(0.5)
-        elif self.vision_mode in ('depth', 'yuv'):
-            self.stem = make_stem(in_channels, 192)
+        elif self.vision_mode in ('depth', 'yuv', 'active_tof'):
+            stem_in_channels = in_channels
+            if self.vision_mode == 'active_tof':
+                # For active ToF, we input depth (1) and maybe confidence (1)
+                stem_in_channels = 1 + (1 if self.use_tof_conf else 0)
+            self.stem = make_stem(stem_in_channels, 192)
         else:
             raise ValueError(f'unsupported vision_mode: {self.vision_mode}')
 
@@ -124,6 +135,39 @@ class Model(nn.Module):
     def _finite(x: torch.Tensor, nan=0.0, pos=1.0, neg=-1.0):
         return torch.nan_to_num(x, nan=nan, posinf=pos, neginf=neg)
 
+    def _active_tof_pipeline(self, depth_like: torch.Tensor):
+        """
+        active_tof 输入流水线：
+        1) 深度反转并归一化（近处值更大）
+        2) 最近邻下采样到 (2*H_nn, 2*W_nn)
+        3) 2x2 最大池化到 (H_nn, W_nn)
+        """
+        # 支持 (B,H,W) 或 (B,1,H,W)
+        d = depth_like
+        if d.dim() == 4 and d.shape[1] == 1:
+            d = d[:, 0]
+        elif d.dim() != 3:
+            raise ValueError(f'active_tof pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
+
+        # 反转 + 归一化：把 0.05~24m 映射到 [0,1]，近处更亮
+        d = d.clamp(0.05, 24.0)
+        inv = 1.0 / d
+        inv_min = 1.0 / 24.0
+        inv_max = 1.0 / 0.05
+        x = (inv - inv_min) / (inv_max - inv_min)
+        x = x.clamp(0.0, 1.0)
+
+        # 先最近邻到 2x 目标尺寸，再 max-pooling 到最终输入尺寸
+        h2 = max(self.tof_nn_height * 2, 2)
+        w2 = max(self.tof_nn_width * 2, 2)
+        x = torch.nn.functional.interpolate(
+            x[:, None],
+            size=(h2, w2),
+            mode='nearest',
+        )
+        x = torch.nn.functional.max_pool2d(x, kernel_size=2, stride=2)
+        return x
+
     def preprocess_sensor_inputs(self, main_obs=None, tof_depth=None, tof_conf=None,
                                  add_noise=False):
         """
@@ -159,35 +203,64 @@ class Model(nn.Module):
                 x_main = x_main * 2.0 - 1.0
             # 统一为 B,C,H,W
             x_main = self._as_bchw(x_main)
+        elif self.vision_mode == 'active_tof':
+            pass
         else:
             raise ValueError(f"unsupported vision_mode: {self.vision_mode}")
 
-        if self.vision_mode == 'yuv_tof':
+        if self.vision_mode in ('yuv_tof', 'active_tof'):
             if tof_depth is None:
-                raise ValueError("vision_mode=yuv_tof 需要 tof_depth 输入")
-            # ToF 深度同样做非线性映射，突出近场几何变化
-            x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
-            if add_noise:
-                x_tof = x_tof + torch.randn_like(x_tof) * 0.01
-            x_tof = self._as_bchw(x_tof)
+                raise ValueError(f"vision_mode={self.vision_mode} 需要 tof_depth 输入")
+            if self.vision_mode == 'active_tof':
+                if self.active_tof_use_pipeline:
+                    # active_tof（流水线模式）：逆深度 -> nearest -> maxpool
+                    x_tof = self._active_tof_pipeline(tof_depth)
+                    if add_noise:
+                        x_tof = (x_tof + torch.randn_like(x_tof) * 0.01).clamp(0.0, 1.0)
+                    # 归一化到 [-1,1]
+                    x_tof = x_tof * 2.0 - 1.0
+                else:
+                    # active_tof（直输模式）：回退到原逻辑，不做分辨率流水线处理
+                    x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
+                    if add_noise:
+                        x_tof = x_tof + torch.randn_like(x_tof) * 0.01
+                    x_tof = self._as_bchw(x_tof)
+            else:
+                # yuv_tof: 保持现有 ToF 非线性映射
+                x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
+                if add_noise:
+                    x_tof = x_tof + torch.randn_like(x_tof) * 0.01
+                x_tof = self._as_bchw(x_tof)
         else:
-            # 非 yuv_tof 模式不允许 ToF 输入，避免模式语义漂移
+            # 非 yuv_tof/active_tof 模式不允许 ToF 输入，避免模式语义漂移
             if tof_depth is not None or tof_conf is not None:
                 raise ValueError(f"vision_mode={self.vision_mode} 不应提供 ToF 输入")
 
         x_tof_pack = x_tof
-        if self.vision_mode == 'yuv_tof' and self.use_tof_conf and tof_conf is not None:
+        if self.vision_mode in ('yuv_tof', 'active_tof') and self.use_tof_conf and tof_conf is not None:
             # 可选 ToF 置信度分支：映射到 [-1,1] 后与 ToF depth 在通道维拼接
             c = tof_conf
-            if add_noise:
-                c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
-            c = self._as_bchw(c * 2.0 - 1.0)
+            if self.vision_mode == 'active_tof':
+                if self.active_tof_use_pipeline:
+                    c = self._active_tof_pipeline(c)
+                    if add_noise:
+                        c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
+                    c = c * 2.0 - 1.0
+                else:
+                    if add_noise:
+                        c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
+                    c = self._as_bchw(c * 2.0 - 1.0)
+            else:
+                if add_noise:
+                    c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
+                c = self._as_bchw(c * 2.0 - 1.0)
+            assert c is not None
             if x_tof_pack is not None and (x_tof_pack.shape[-2:] != c.shape[-2:]):
                 raise ValueError('tof_depth 与 tof_conf 尺寸必须一致')
             x_tof_pack = c if x_tof_pack is None else torch.cat([x_tof_pack, c], 1)
 
-        if self.vision_mode == 'yuv_tof' and self.use_tof_conf and tof_conf is None:
-            raise ValueError("vision_mode=yuv_tof 且 use_tof_conf=True 时必须提供 tof_conf")
+        if self.vision_mode in ('yuv_tof', 'active_tof') and self.use_tof_conf and tof_conf is None:
+            raise ValueError(f"vision_mode={self.vision_mode} 且 use_tof_conf=True 时必须提供 tof_conf")
 
         channels = []
         if x_main is not None:

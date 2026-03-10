@@ -141,9 +141,47 @@ class RerunVis:
         voxel_edge_r = float(max(0.0018, base_r * 0.95))
         aabb_edge_r = float(max(0.0022, base_r * 1.2))
 
-        # 有限长度可视化（真实物理里 cyl / cyl_h 为无限圆柱，这里按当前场景 AABB 截断展示）
-        z_lo, z_hi = float(scene_min[2]), float(scene_max[2])
-        y_lo, y_hi = float(scene_min[1]), float(scene_max[1])
+        # 有限长度可视化（真实物理里 cyl / cyl_h 为无限圆柱）。
+        # 这里改为“稳健范围估计”，不再直接跟随全局 AABB，
+        # 避免存在超大体素时，圆柱显示高度/长度被异常拉长。
+        def _robust_axis_range(samples, fallback=(-2.5, 4.5), min_span=4.0, max_span=18.0):
+            s = np.asarray(samples, dtype=np.float32).reshape(-1)
+            s = s[np.isfinite(s)]
+            if s.size < 4:
+                return float(fallback[0]), float(fallback[1])
+            q25, q50, q75 = np.percentile(s, [25.0, 50.0, 75.0])
+            iqr = max(float(q75 - q25), 1e-3)
+            span = float(np.clip(4.0 * iqr + 2.0, min_span, max_span))
+            lo = float(q50 - 0.5 * span)
+            hi = float(q50 + 0.5 * span)
+            return lo, hi
+
+        z_samples = []
+        y_samples = []
+        if start is not None:
+            s = np.asarray(start, dtype=np.float32).reshape(3)
+            y_samples.append(float(s[1]))
+            z_samples.append(float(s[2]))
+        if target is not None:
+            t = np.asarray(target, dtype=np.float32).reshape(3)
+            y_samples.append(float(t[1]))
+            z_samples.append(float(t[2]))
+        if balls is not None:
+            b = np.asarray(balls, dtype=np.float32)
+            if b.size > 0:
+                y_samples.extend(b[:, 1].tolist())
+                z_samples.extend((b[:, 2] - b[:, 3]).tolist())
+                z_samples.extend((b[:, 2] + b[:, 3]).tolist())
+        if voxels is not None:
+            v = np.asarray(voxels, dtype=np.float32)
+            if v.size > 0:
+                y_samples.extend((v[:, 1] - v[:, 4]).tolist())
+                y_samples.extend((v[:, 1] + v[:, 4]).tolist())
+                z_samples.extend((v[:, 2] - v[:, 5]).tolist())
+                z_samples.extend((v[:, 2] + v[:, 5]).tolist())
+
+        z_lo, z_hi = _robust_axis_range(z_samples, fallback=(-2.5, 4.5), min_span=4.0, max_span=14.0)
+        y_lo, y_hi = _robust_axis_range(y_samples, fallback=(-12.0, 12.0), min_span=8.0, max_span=30.0)
 
         def _build_circle(center_xyz, ex_xyz, ey_xyz, radius, n_seg=24):
             c = np.asarray(center_xyz, dtype=np.float32)

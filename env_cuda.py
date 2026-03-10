@@ -149,6 +149,97 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
 diff_render_yuv_y = DiffRenderYuvYFunction.apply
 
 
+class DiffRenderActiveTofFunction(torch.autograd.Function):
+    """
+    Active ToF 可微渲染（CUDA 路径）。
+    forward 调用 quadsim_cuda.render_active_tof_forward，
+    backward 调用 quadsim_cuda.render_active_tof_backward。
+    """
+    @staticmethod
+    def forward(ctx, fov_x_half_tan, power, exposure, gain, v,
+                R_cam, pos, balls, cyl, cyl_h, voxels,
+                n_drones_per_group, height, width, max_range):
+        out = quadsim_cuda.render_active_tof_forward(
+            fov_x_half_tan.contiguous(),
+            power.contiguous(),
+            exposure.contiguous(),
+            gain.contiguous(),
+            v.contiguous(),
+            R_cam.contiguous(),
+            pos.contiguous(),
+            balls,
+            cyl,
+            cyl_h,
+            voxels,
+            int(n_drones_per_group),
+            int(height),
+            int(width),
+            float(max_range),
+        )
+        noisy_depth, conf = out[0], out[1]
+        ctx.save_for_backward(
+            noisy_depth, conf,
+            fov_x_half_tan, power, exposure, gain, v,
+            R_cam, pos, balls, cyl, cyl_h, voxels)
+        ctx.n_drones_per_group = int(n_drones_per_group)
+        ctx.height = int(height)
+        ctx.width = int(width)
+        ctx.max_range = float(max_range)
+        return noisy_depth, conf
+
+    @staticmethod
+    def backward(ctx, grad_noisy_depth, grad_conf):
+        (noisy_depth, conf,
+         fov_x_half_tan, power, exposure, gain, v,
+         R_cam, pos, balls, cyl, cyl_h, voxels) = ctx.saved_tensors
+
+        grad_noisy_depth = grad_noisy_depth.contiguous()
+        grad_conf = grad_conf.contiguous()
+
+        grad_fov, grad_power, grad_exposure, grad_gain = quadsim_cuda.render_active_tof_backward(
+            grad_noisy_depth,
+            grad_conf,
+            noisy_depth,
+            conf,
+            fov_x_half_tan,
+            power,
+            exposure,
+            gain,
+            v,
+            R_cam,
+            pos,
+            balls,
+            cyl,
+            cyl_h,
+            voxels,
+            int(ctx.n_drones_per_group),
+            int(ctx.height),
+            int(ctx.width),
+            float(ctx.max_range),
+        )
+
+        return (
+            grad_fov,
+            grad_power,
+            grad_exposure,
+            grad_gain,
+            None,  # v
+            None,  # R_cam
+            None,  # pos
+            None,  # balls
+            None,  # cyl
+            None,  # cyl_h
+            None,  # voxels
+            None,  # n_drones_per_group
+            None,  # height
+            None,  # width
+            None,  # max_range
+        )
+
+
+diff_render_active_tof = DiffRenderActiveTofFunction.apply
+
+
 # =============================================================================
 # 2. 论文 §2.3 提出的可微相机传感器效应 (Optical Perception Potentials)
 # =============================================================================
@@ -241,7 +332,8 @@ class Env:
                  cam_blur_scale=1.0,
                  cam_fog_scale=1.0,
                  cam_lighting_scale=1.0,
-                 cam_ae_target=0.42) -> None:
+                 cam_ae_target=0.42,
+                 diff_sensor_impl=None) -> None:
         self.device = device
         self.batch_size = batch_size
         self.width = width      # 主相机渲染宽度
@@ -297,6 +389,10 @@ class Env:
         self.random_rotation = random_rotation # 是否随机旋转整个场景
         self.cam_angle = cam_angle       # 相机俯仰角
         self.fov_x_half_tan = fov_x_half_tan # 基础视场角 (tan(FOV/2))
+        _impl = {'yuv': 'python', 'active_tof': 'python'}
+        if diff_sensor_impl is not None:
+            _impl.update({str(k): str(v).lower() for k, v in dict(diff_sensor_impl).items()})
+        self.diff_sensor_impl = _impl
         self.tof_downsample = max(int(tof_downsample), 1)
         if tof_width is None:
             self.tof_width = max(int(self.width) // self.tof_downsample, 1)
@@ -1098,6 +1194,28 @@ class Env:
         返回:
             y: (B, H, W)
         """
+        impl = self.diff_sensor_impl.get('yuv', 'python')
+        if impl == 'cuda':
+            if not hasattr(quadsim_cuda, 'render_diff_yuv_y_forward') or not hasattr(quadsim_cuda, 'render_diff_yuv_y_backward'):
+                raise RuntimeError("diff_sensor_impl[yuv]=cuda 但 quadsim_cuda 未实现 render_diff_yuv_y_forward/backward")
+            y = diff_render_yuv_y(
+                fov_tensor.contiguous(),
+                exposure.contiguous(),
+                iso.contiguous(),
+                (self.R @ self.R_cam).contiguous(),
+                self.p.contiguous(),
+                self.balls,
+                self.cyl,
+                self.cyl_h,
+                self.voxels,
+                self.n_drones_per_group,
+                self.height,
+                self.width,
+            )
+            return torch.clamp(y, 0.0, 1.0)
+        if impl != 'python':
+            raise ValueError(f"不支持的 diff_sensor_impl[yuv]={impl}，仅支持 python/cuda")
+
         # ==================== 1) 几何层：深度 + 近似法线 + 材质先验 ====================
         fov_tensor = fov_tensor.contiguous()
         exposure = exposure.contiguous()
@@ -1164,6 +1282,121 @@ class Env:
         self._update_ae_state(y)
         y = self._apply_motion_blur(y)
         return torch.clamp(y, 0.0, 1.0)
+
+
+    def render_active_tof_diff(self, power, exposure, gain, max_range=6.0):
+        """
+        可微主动深度相机渲染（Active ToF Sensor）。
+        优先使用 CUDA 扩展高性能路径；失败时回退到 Python 实现。
+        """
+        impl = self.diff_sensor_impl.get('active_tof', 'python')
+        if impl == 'cuda':
+            if (not hasattr(quadsim_cuda, 'render_active_tof_forward')) or (not hasattr(quadsim_cuda, 'render_active_tof_backward')):
+                raise RuntimeError(
+                    "diff_sensor_impl[active_tof]=cuda 但 quadsim_cuda 未实现 render_active_tof_forward/backward"
+                )
+            B = power.shape[0]
+            device = power.device
+            fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
+            R_cam_world = (self.R @ self.R_cam).contiguous()
+            pos = self.p.contiguous()
+            noisy_depth, conf = diff_render_active_tof(
+                fov_tensor,
+                power,
+                exposure,
+                gain,
+                self.v,
+                R_cam_world,
+                pos,
+                self.balls,
+                self.cyl,
+                self.cyl_h,
+                self.voxels,
+                self.n_drones_per_group,
+                int(self.tof_height),
+                int(self.tof_width),
+                float(max_range),
+            )
+            return noisy_depth, conf
+        if impl == 'python':
+            return self._render_active_tof_diff_python(power, exposure, gain, max_range=max_range)
+        raise ValueError(f"不支持的 diff_sensor_impl[active_tof]={impl}，仅支持 python/cuda")
+
+    def _render_active_tof_diff_python(self, power, exposure, gain, max_range=6.0):
+        """
+        可微主动深度相机渲染（Active ToF Sensor）。
+        输入:
+            power: 激光发射功率 [0, 1] 标量 (内部可缩放至物理数值如 0~360)
+            exposure: 曝光时间 [0, 1] 标量 (控制运动模糊，反比于速率限制)
+            gain: 接收增益 [0, 1] 标量 (在暗处放大信号，但增加噪声)
+        输出:
+            tof_depth: 包含可微噪声的深度图 (B, H_tof, W_tof)
+            confidence: 深度置信度 (B, H_tof, W_tof)
+        """
+        B = power.shape[0]
+        device = power.device
+        
+        # 1. 基础几何渲染
+        fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
+        R_cam_world = (self.R @ self.R_cam).contiguous()
+        pos = self.p.contiguous()
+        
+        depth = diff_render(
+            fov_tensor,
+            R_cam_world,
+            pos,
+            self.balls,
+            self.cyl,
+            self.cyl_h,
+            self.voxels,
+            self.n_drones_per_group,
+            self.tof_height,
+            self.tof_width,
+        )
+        depth = torch.clamp(depth, min=0.03, max=120.0)
+            
+        # 2. 物理衰减模型 (Inverse Square Law)
+        # E_recv ∝ (Power * Exposure) / z^2
+        # 我们假设一个基准缩放系数，使得 power=0.5, exp=0.5 在 3米处能得到勉强满意的能量
+        power_scaled = 0.01 + power * 0.99
+        exp_scaled = 0.05 + exposure * 0.95
+        gain_scaled = 1.0 + gain * 9.0  # Gain from 1 to 10
+        
+        energy_recv = (power_scaled[:, None, None] * exp_scaled[:, None, None]) / (depth ** 2 + 0.1)
+        energy_recv = energy_recv * gain_scaled[:, None, None] * 100.0
+        
+        # 3. 置信度计算
+        # 如果接收能量低于阈值，则 conf 接近 0
+        conf_raw = torch.tanh(energy_recv * 0.5)
+        
+        # 4. 运动模糊惩罚 (Flying Pixels)
+        # 如果速度快且曝光长，置信度下降，深度被“拉长”平均（用均值滤波模拟拖尾）
+        speed = torch.norm(self.v, 2, -1)
+        motion_blur_factor = (speed * exp_scaled * 0.1).clamp(0.0, 1.0)
+        
+        # # 如果速度过快，我们施加一些空间模糊表示 Flying Pixels
+        # # _separable_gaussian_blur(depth, sigma=1.0)
+        # if hasattr(self, '_apply_motion_blur_tof'):
+        #     depth_blurred = self._apply_motion_blur_tof(depth, motion_blur_factor)
+        # else:
+        # 简化版：直接加上与速度和曝光成正比的随机拉伸或利用 pooling 混合
+        blur_kernel = F.avg_pool2d(depth[:, None], 3, stride=1, padding=1)[:, 0]
+        depth_blurred = depth * (1 - motion_blur_factor[:, None, None]) + blur_kernel * motion_blur_factor[:, None, None]
+            
+        # 同时运动模糊会降低置信度
+        conf = conf_raw * (1.0 - motion_blur_factor[:, None, None] * 0.8)
+        
+        # 5. 可微噪声注入 (Reparameterization Trick)
+        # 噪声幅度与信号强度成反比，与 Gain 成正比
+        noise_std_base = 0.05
+        # 能量越大，std 越小；gain 越大，std 越大
+        noise_std = noise_std_base * gain_scaled[:, None, None] / (energy_recv + 1e-3)
+        noise_std = noise_std.clamp(0.01, 1.0) # 最大允许 1 米的标准差
+        
+        noisy_depth = depth_blurred + torch.randn_like(depth_blurred) * noise_std
+        noisy_depth = noisy_depth.clamp(min=0.05, max=max_range)
+        
+        return noisy_depth, conf
 
     @torch.no_grad()
     def render_tof(self, ctl_dt, max_range=6.0, noise_std=0.01, return_meta=False):

@@ -81,6 +81,14 @@ parser.add_argument('--imx_height', type=int, default=240, help='IMX477 主相�
 parser.add_argument('--tof_downsample', type=int, default=4, help='ToF 相对主相机的下采样倍率（仅辅助，不可微）')
 parser.add_argument('--tof_width', type=int, default=None, help='ToF 输入分辨率宽（默认: imx_width/tof_downsample）')
 parser.add_argument('--tof_height', type=int, default=None, help='ToF 输入分辨率高（默认: imx_height/tof_downsample）')
+parser.add_argument('--tof_nn_width', type=int, default=16,
+                    help='active_tof: 输入策略网络前的 ToF 特征宽（处理流水线最终尺寸）')
+parser.add_argument('--tof_nn_height', type=int, default=12,
+                    help='active_tof: 输入策略网络前的 ToF 特征高（处理流水线最终尺寸）')
+parser.add_argument('--active_tof_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
+                    help='active_tof: 是否启用图像处理流水线（逆深度+nearest+maxpool）后再输入网络')
+parser.add_argument('--diff_sensor_impl', nargs='*', default=['yuv=python', 'active_tof=python'],
+                    help='可微传感实现后端列表，格式: yuv=python|cuda active_tof=python|cuda')
 parser.add_argument('--policy_input_width', type=int, default=None, help='策略网络融合输入宽（默认: imx_width/4）')
 parser.add_argument('--policy_input_height', type=int, default=None, help='策略网络融合输入高（默认: imx_height/4）')
 
@@ -162,8 +170,10 @@ parser.add_argument('--gdac_teacher_tbptt_chunk_steps', type=int, default=10,
                     help='G-DAC Teacher 内循环 TBPTT 分段长度')
 
 # ===== Multi-sensor + dLQR training switches =====
-parser.add_argument('--vision_mode', type=str, default='yuv_tof', choices=['depth', 'yuv', 'yuv_tof'],
-                    help='视觉输入方案: depth=仅深度, yuv=仅YUV420亮度Y, yuv_tof=YUV420亮度Y+ToF')
+parser.add_argument('--vision_mode', type=str, default='yuv_tof', choices=['depth', 'yuv', 'yuv_tof', 'active_tof'],
+                    help='视觉输入方案: depth=仅深度, yuv=仅YUV420亮度Y, yuv_tof=YUV420亮度Y+ToF, active_tof=可微主动深度相机')
+parser.add_argument('--coef_tof_power', type=float, default=0.01, help='active_tof: 节电惩罚权重')
+parser.add_argument('--coef_tof_blur', type=float, default=0.01, help='active_tof: 运动模糊惩罚权重')
 parser.add_argument('--use_dmpc', default=False, action='store_true',
                     help='启用 dLQR/dMPC 控制路径（训练侧）')
 parser.add_argument('--policy_direct_action', default=False, action='store_true',
@@ -212,6 +222,38 @@ parser.add_argument('--vis_spawn', default=True, action=argparse.BooleanOptional
                     help='是否自动拉起可视化窗口')
 
 args = parser.parse_args()
+
+
+def parse_diff_sensor_impl(items):
+    """将命令行列表解析为 {'yuv': 'python|cuda', 'active_tof': 'python|cuda'}。"""
+    impl = {
+        'yuv': 'python',
+        'active_tof': 'python',
+    }
+    if items is None:
+        return impl
+    allowed_keys = set(impl.keys())
+    allowed_vals = {'python', 'cuda'}
+    for raw in items:
+        if raw is None:
+            continue
+        item = str(raw).strip().lower()
+        if not item:
+            continue
+        if '=' not in item:
+            raise ValueError(f"--diff_sensor_impl 条目格式错误: '{raw}'，应为 key=value")
+        key, val = item.split('=', 1)
+        key = key.strip()
+        val = val.strip()
+        if key not in allowed_keys:
+            raise ValueError(f"--diff_sensor_impl 不支持 key='{key}'，仅支持: {sorted(allowed_keys)}")
+        if val not in allowed_vals:
+            raise ValueError(f"--diff_sensor_impl 不支持 value='{val}'，仅支持: {sorted(allowed_vals)}")
+        impl[key] = val
+    return impl
+
+
+args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
 
 
 def set_global_seed(seed: int, deterministic: bool = True):
@@ -303,12 +345,16 @@ if args.tbptt_enable and args.paper_gdac:
 # 视觉模式开关
 use_depth = args.vision_mode == 'depth'
 use_yuv = args.vision_mode in ('yuv', 'yuv_tof')
-use_tof = args.vision_mode == 'yuv_tof'
+use_tof = args.vision_mode in ('yuv_tof', 'active_tof')
+use_active_tof = args.vision_mode == 'active_tof'
 
-# 仅 YUV 方案支持可微相机参数学习
-if (args.diff_cam or args.paper_unified_control) and not use_yuv:
-    raise ValueError("depth 模式不支持可微相机参数；请使用 vision_mode=yuv 或 yuv_tof")
-use_cam = (args.diff_cam or args.paper_unified_control) and use_yuv
+# 在 active_tof 方案中，我们依然利用 --paper_unified_control 或者类似的 flags 启用状态联合控制，
+# 即使我们目前没有 YUV。我们让 active_tof 借用可微相机参数的管道，只是换成了 ToF 的三个参数。
+if (args.diff_cam or args.paper_unified_control) and not (use_yuv or use_active_tof):
+    raise ValueError("仅在包含 yuv 或 active_tof 模式时才支持可微相机参数学习")
+use_cam = (args.diff_cam or args.paper_unified_control) and (use_yuv or use_active_tof)
+if use_active_tof and not use_cam:
+    raise ValueError("vision_mode=active_tof 需要启用 --diff_cam 或 --paper_unified_control")
 
 # 启动模式横幅：明确当前运行实际走哪条训练/控制路径
 policy_head_mode = 'intent_head' if args.policy_output_intent else 'action_head'
@@ -328,6 +374,7 @@ print(f"inject_tof_into_lqr       : {args.inject_tof_into_lqr} (effective={tof_l
 print(f"gdac_teacher_tbptt_chunk  : {args.gdac_teacher_tbptt_chunk_steps}")
 print(f"gdac_student_noise_mode   : {args.gdac_student_noise_mode}")
 print(f"gdac_distill_coef         : {args.coef_distill} -> {args.coef_distill * args.gdac_distill_final_ratio}")
+print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
 print("=" * 75)
 
 def build_env(batch_size: int):
@@ -353,7 +400,8 @@ def build_env(batch_size: int):
                cam_blur_scale=args.cam_blur_scale,
                cam_fog_scale=args.cam_fog_scale,
                cam_lighting_scale=args.cam_lighting_scale,
-               cam_ae_target=args.cam_ae_target)
+               cam_ae_target=args.cam_ae_target,
+               diff_sensor_impl=args.diff_sensor_impl)
 
 
 # 初始化物理仿真环境（主训练环境 + 可选完整BPTT校准环境）
@@ -377,6 +425,9 @@ model = Model(obs_dim, 6,
               intent_dim=9,
               main_in_channels=main_channels,
               use_tof_conf=(use_tof and args.tof_use_conf),
+              tof_nn_width=args.tof_nn_width,
+              tof_nn_height=args.tof_nn_height,
+              active_tof_use_pipeline=args.active_tof_use_pipeline,
               vision_mode=args.vision_mode)
 model = model.to(device)
 use_amp = bool(args.amp and device.type == 'cuda')
@@ -598,6 +649,7 @@ for i in pbar:
                 main_obs = None
                 main_depth = None
                 tof_depth = None
+                tof_conf = None
                 if use_depth:
                     main_depth, _ = env.render(dt_tmp)
                     main_obs = main_depth
@@ -606,8 +658,13 @@ for i in pbar:
                         main_obs = env.render_main_luma_diff(cam_fov_tmp, cam_exp_tmp, cam_iso_tmp)
                     else:
                         main_obs = env.render_main_luma(dt_tmp)
-                tof_conf = None
-                if use_tof:
+                elif use_active_tof:
+                    if use_cam:
+                        tof_depth, tof_conf = env.render_active_tof_diff(cam_fov_tmp, cam_exp_tmp, cam_iso_tmp)
+                    else:
+                        raise NotImplementedError("active_tof requires use_cam=True")
+
+                if use_tof and not use_active_tof:
                     tof_depth, tof_conf, _, _ = env.render_tof(dt_tmp, return_meta=True)
                     
                 # 计算目标方向向量
@@ -878,16 +935,24 @@ for i in pbar:
                         args.coef_collide * l_coll_k + \
                         l_ga_k
 
-                    if args.paper_optical_loss and use_cam and len(c_cam_exp_k) > 0:
+                    if use_cam and len(c_cam_exp_k) > 0:
                         sp_k = torch.stack(c_speed_k)
                         ex_k = torch.stack(c_cam_exp_k)
                         iso_k = torch.stack(c_cam_iso_k)
                         fov_k_t = torch.stack(c_cam_fov_k)
-                        exp_phys_k = ex_k * 10 + 0.5
-                        eff_focal_k = 1.0 / fov_k_t.clamp(min=0.1)
-                        chunk_inner_loss = chunk_inner_loss + args.coef_blur * (sp_k.pow(2) * exp_phys_k.pow(2) * eff_focal_k.pow(2)).mean()
-                        ns_k = 0.03 * (1.0 + 2.0 * iso_k) / (ex_k + 0.3)
-                        chunk_inner_loss = chunk_inner_loss + args.coef_noise * ns_k.pow(2).mean()
+                        
+                        if use_active_tof:
+                            # 替换惩罚模型：fov当做power
+                            loss_power = fov_k_t.pow(2).mean()
+                            loss_tof_blur = (sp_k * ex_k).mean()
+                            chunk_inner_loss = chunk_inner_loss + args.coef_tof_power * loss_power
+                            chunk_inner_loss = chunk_inner_loss + args.coef_tof_blur * loss_tof_blur
+                        elif args.paper_optical_loss:
+                            exp_phys_k = ex_k * 10 + 0.5
+                            eff_focal_k = 1.0 / fov_k_t.clamp(min=0.1)
+                            chunk_inner_loss = chunk_inner_loss + args.coef_blur * (sp_k.pow(2) * exp_phys_k.pow(2) * eff_focal_k.pow(2)).mean()
+                            ns_k = 0.03 * (1.0 + 2.0 * iso_k) / (ex_k + 0.3)
+                            chunk_inner_loss = chunk_inner_loss + args.coef_noise * ns_k.pow(2).mean()
 
                     # 按 chunk 数归一，避免总梯度规模随 chunk 数增大
                     chunk_inner_loss = chunk_inner_loss / teacher_chunk_count
@@ -1027,6 +1092,7 @@ for i in pbar:
         main_obs = None
         main_depth = None
         tof_depth = None
+        tof_conf = None
         if use_yuv and use_cam:
             # 可微感知主路径：不要 no_grad
             main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
@@ -1035,6 +1101,10 @@ for i in pbar:
                     tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
             else:
                 tof_conf = None
+        elif use_active_tof and use_cam:
+            # active_tof 路径：可微 ToF 算子，不要 no_grad
+            main_obs = None
+            tof_depth, tof_conf = env.render_active_tof_diff(cam_fov, cam_exposure, cam_iso)
         else:
             # 非可微传感器路径保持 no_grad 以节省显存
             with torch.no_grad():
@@ -1043,9 +1113,9 @@ for i in pbar:
                     main_obs = main_depth
                 elif use_yuv:
                     main_obs = env.render_main_luma(ctl_dt)
-                if use_tof:
+                if use_tof and not use_active_tof:
                     tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
-                else:
+                elif not use_active_tof:
                     tof_conf = None
 
         # 兼容旧逻辑中的可视化与距离记录
@@ -1313,16 +1383,23 @@ for i in pbar:
 
                 loss_blur_c = torch.zeros((), device=device)
                 loss_noise_c = torch.zeros((), device=device)
-                if args.paper_optical_loss and use_cam and len(c_cam_exp) > 0:
+                loss_tof_power_c = torch.zeros((), device=device)
+                loss_tof_blur_c = torch.zeros((), device=device)
+                if use_cam and len(c_cam_exp) > 0:
                     speed_h = torch.stack(c_speed)
                     exp_h = torch.stack(c_cam_exp)
                     iso_h = torch.stack(c_cam_iso)
                     fov_h = torch.stack(c_cam_fov)
-                    exp_phys = exp_h * 10 + 0.5
-                    eff_f = 1.0 / fov_h.clamp(min=0.1)
-                    loss_blur_c = (speed_h.pow(2) * exp_phys.pow(2) * eff_f.pow(2)).mean()
-                    noise_sigma_c = 0.03 * (1.0 + 2.0 * iso_h) / (exp_h + 0.3).clamp_min(1e-3)
-                    loss_noise_c = noise_sigma_c.pow(2).mean()
+                    
+                    if use_active_tof:
+                        loss_tof_power_c = fov_h.pow(2).mean()
+                        loss_tof_blur_c = (speed_h * exp_h).mean()
+                    elif args.paper_optical_loss:
+                        exp_phys = exp_h * 10 + 0.5
+                        eff_f = 1.0 / fov_h.clamp(min=0.1)
+                        loss_blur_c = (speed_h.pow(2) * exp_phys.pow(2) * eff_f.pow(2)).mean()
+                        noise_sigma_c = 0.03 * (1.0 + 2.0 * iso_h) / (exp_h + 0.3).clamp_min(1e-3)
+                        loss_noise_c = noise_sigma_c.pow(2).mean()
 
                 loss_tilt_c = torch.zeros((), device=device)
                 loss_distill_c = torch.zeros((), device=device)
@@ -1339,7 +1416,9 @@ for i in pbar:
                     args.coef_cam_range * loss_cam_range_c + \
                     args.coef_tilt * loss_tilt_c + \
                     args.coef_blur * loss_blur_c + \
-                    args.coef_noise * loss_noise_c
+                    args.coef_noise * loss_noise_c + \
+                    args.coef_tof_power * loss_tof_power_c + \
+                    args.coef_tof_blur * loss_tof_blur_c
 
                 if args.paper_gdac:
                     chunk_loss = distill_coef_iter * loss_distill_c + args.gdac_physics_weight * chunk_loss
@@ -1651,7 +1730,9 @@ for i in pbar:
     # These losses penalize motion blur and sensor noise when using camera
     loss_blur = torch.tensor(0.0, device=device)
     loss_noise = torch.tensor(0.0, device=device)
-    if args.paper_optical_loss and use_cam and len(cam_exposure_history) > 0:
+    loss_tof_power = torch.tensor(0.0, device=device)
+    loss_tof_blur = torch.tensor(0.0, device=device)
+    if use_cam and len(cam_exposure_history) > 0:
         speed_hist = sanitize_tensor(torch.stack(speed_for_cam_history), 'speed_hist',
                                      nan=0.0, posinf=50.0, neginf=0.0)  # (T, B)
         exp_hist = sanitize_tensor(torch.stack(cam_exposure_history), 'exp_hist',
@@ -1667,20 +1748,27 @@ for i in pbar:
                                    posinf=env._fov_x_half_tan * 1.5,
                                    neginf=env._fov_x_half_tan * 0.08)  # (T, B)
 
-        # A. 运动模糊势能 (Motion Blur Potential): V_blur = ||v||^2 * t_exp^2 / fov^2
-        #    较小的 FOV (较长的焦距) 会放大运动模糊 (Smaller FOV amplifies motion blur)
-        exposure_phys = exp_hist * 10 + 0.5   # 映射到物理曝光时间 [0.5, 10.5] ms
-        effective_focal = 1.0 / fov_hist.clamp(min=0.1)  # 焦距与 FOV 成反比 (focal ∝ 1/fov)
-        loss_blur = (speed_hist.pow(2) * exposure_phys.pow(2) * effective_focal.pow(2)).mean()
+        if use_active_tof:
+            # active_tof: fov变量在该模式下语义上对应power
+            loss_tof_power = fov_hist.pow(2).mean()
+            loss_tof_blur = (speed_hist * exp_hist).mean()
+            loss_tof_power = sanitize_tensor(loss_tof_power, 'loss_tof_power', nan=0.0, posinf=1e4, neginf=0.0)
+            loss_tof_blur = sanitize_tensor(loss_tof_blur, 'loss_tof_blur', nan=0.0, posinf=1e4, neginf=0.0)
+        elif args.paper_optical_loss:
+            # A. 运动模糊势能 (Motion Blur Potential): V_blur = ||v||^2 * t_exp^2 / fov^2
+            #    较小的 FOV (较长的焦距) 会放大运动模糊 (Smaller FOV amplifies motion blur)
+            exposure_phys = exp_hist * 10 + 0.5   # 映射到物理曝光时间 [0.5, 10.5] ms
+            effective_focal = 1.0 / fov_hist.clamp(min=0.1)  # 焦距与 FOV 成反比 (focal ∝ 1/fov)
+            loss_blur = (speed_hist.pow(2) * exposure_phys.pow(2) * effective_focal.pow(2)).mean()
 
-        # B. 散斑噪声势能 (Shot Noise Potential): V_noise ∝ noise_sigma^2
-        #    噪声标准差与 ISO 正相关，与曝光时间负相关
-        #    noise_sigma = 0.03 * (1 + 2*iso) / (exposure + 0.3)
-        noise_sigma = 0.03 * (1.0 + 2.0 * iso_hist) / (exp_hist + 0.3).clamp_min(1e-3)
-        loss_noise = noise_sigma.pow(2).mean()
+            # B. 散斑噪声势能 (Shot Noise Potential): V_noise ∝ noise_sigma^2
+            #    噪声标准差与 ISO 正相关，与曝光时间负相关
+            #    noise_sigma = 0.03 * (1 + 2*iso) / (exposure + 0.3)
+            noise_sigma = 0.03 * (1.0 + 2.0 * iso_hist) / (exp_hist + 0.3).clamp_min(1e-3)
+            loss_noise = noise_sigma.pow(2).mean()
 
-        loss_blur = sanitize_tensor(loss_blur, 'loss_blur', nan=0.0, posinf=1e4, neginf=0.0)
-        loss_noise = sanitize_tensor(loss_noise, 'loss_noise', nan=0.0, posinf=1e4, neginf=0.0)
+            loss_blur = sanitize_tensor(loss_blur, 'loss_blur', nan=0.0, posinf=1e4, neginf=0.0)
+            loss_noise = sanitize_tensor(loss_noise, 'loss_noise', nan=0.0, posinf=1e4, neginf=0.0)
 
     # 墙缝倾斜损失：鼓励无人机在靠近墙壁时侧倾机身以穿过狭窄缝隙
     # Wall-slit tilt loss: encourage the drone to roll sideways near the wall
@@ -1721,7 +1809,9 @@ for i in pbar:
         args.coef_cam_range * loss_cam_range + \
         args.coef_tilt * loss_tilt + \
         args.coef_blur * loss_blur + \
-        args.coef_noise * loss_noise
+        args.coef_noise * loss_noise + \
+        args.coef_tof_power * loss_tof_power + \
+        args.coef_tof_blur * loss_tof_blur
 
     # ===== 论文 §3: G-DAC Phase II — 蒸馏损失 (G-DAC Phase II — Distillation Loss) =====
     loss_distill = torch.tensor(0.0, device=device)

@@ -11,7 +11,7 @@
 # --resume checkpoint0004.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 24                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 64                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
 --timesteps 80                     # 每个 rollout 的物理步数
 
@@ -58,8 +58,16 @@
 # ----------------- 传感器分辨率 (Sensor Resolutions) -----------------
 --imx_width 320                     # 主相机宽（降低显存峰值，优先保证可运行）
 --imx_height 240                    # 主相机高（降低显存峰值，优先保证可运行）
---tof_width 160                     # ToF 宽（与主相机比例协调）
---tof_height 120                    # ToF 高（与主相机比例协调）
+# --tof_width 480                     # ToF 原始渲染宽（可微深度相机原始分辨率） D455 最小分辨率
+# --tof_height 270                    # ToF 原始渲染高（可微深度相机原始分辨率）
+--tof_width 64                      # ToF 原始渲染宽（可微深度相机原始分辨率） D455 最小分辨率
+--tof_height 48                    # ToF 原始渲染高（可微深度相机原始分辨率）
+--tof_nn_width 16                   # 输入策略网络的 ToF 宽（流水线最终尺寸）
+--tof_nn_height 12                  # 输入策略网络的 ToF 高（流水线最终尺寸）
+# --active_tof_use_pipeline           # active_tof: 启用图像处理流水线（逆深度+nearest+maxpool）
+--no-active_tof_use_pipeline      # active_tof: 关闭流水线，直接将渲染图按原逻辑输入网络
+# --diff_sensor_impl yuv=cuda active_tof=cuda   # 列表参数：按传感器选择后端（若选 cuda 但该传感器未实现，会直接报错）
+--diff_sensor_impl yuv=python active_tof=cuda # 推荐默认：确保全流程可微（active_tof 当前仅 python 路径有反向）
 # --tof_downsample 4                # 若不显式给 tof_width/height，可用该倍率
 
 # 已弃用（仅保留对照）：策略融合输入尺寸，当前代码会给 warning
@@ -118,7 +126,7 @@
 # ----------------- G-DAC 教师-学生 (Paper §3) -----------------
 # 当前代码逻辑：若 tbptt_enable 与 paper_gdac 同时开，会提示复杂度风险并优先完整 BPTT 路径
 # 注意：当前代码中 TBPTT 与 paper_gdac 同时开会触发 warning，优先走完整 BPTT 路径
---paper_gdac                       # 是否启用 G-DAC
+# --paper_gdac                       # 是否启用 G-DAC
 --gdac_inner_steps 10               # 教师内循环步数
 --gdac_inner_lr 0.005               # 教师内循环学习率
 --coef_distill 1.0                  # 蒸馏损失权重
@@ -129,7 +137,7 @@
 
 # ----------------- 视觉模式 + 控制架构 (Vision & Control) -----------------
 # 当前推荐：vision_mode yuv_tof（主视觉 + ToF）
---vision_mode yuv_tof               # depth / yuv / yuv_tof
+--vision_mode active_tof               # depth / yuv / yuv_tof / active_tof
 
 # dMPC/dLQR 相关：
 # 只有 use_dmpc + policy_output_intent 同时开启时，才走意图域 LQR 路径

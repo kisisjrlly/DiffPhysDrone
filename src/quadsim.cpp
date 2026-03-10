@@ -182,6 +182,46 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
     torch::Tensor voxels,
     int n_drones_per_group);
 
+// Active ToF 可微前向（CUDA实现，返回 noisy_depth/conf）
+std::vector<torch::Tensor> render_active_tof_forward_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    torch::Tensor v,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width,
+    double max_range);
+
+// Active ToF 可微反向（CUDA实现，返回 grad_fov/grad_power/grad_exposure/grad_gain）
+std::vector<torch::Tensor> render_active_tof_backward_cuda(
+    torch::Tensor grad_noisy_depth,
+    torch::Tensor grad_conf,
+    torch::Tensor noisy_depth,
+    torch::Tensor conf,
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    torch::Tensor v,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width,
+    double max_range);
+
 // ============================================================================
 // PyBind11 模块绑定 (PyBind11 module binding)
 // 将 C++ 函数暴露给 Python，使得可以在 Python 中通过 quadsim_cuda 模块调用
@@ -200,4 +240,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("render_diff_yuv_y", &render_diff_yuv_y_cuda, "render_diff_yuv_y (CUDA)");
     m.def("render_diff_yuv_y_forward", &render_diff_yuv_y_forward_cuda, "render_diff_yuv_y_forward (CUDA)");
     m.def("render_diff_yuv_y_backward", &render_diff_yuv_y_backward_cuda, "render_diff_yuv_y_backward (CUDA)");
+    m.def("render_active_tof_forward", &render_active_tof_forward_cuda, "render_active_tof_forward (CUDA)");
+    m.def("render_active_tof_backward", &render_active_tof_backward_cuda, "render_active_tof_backward (CUDA)");
 }

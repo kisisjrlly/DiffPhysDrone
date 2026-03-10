@@ -1168,3 +1168,221 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
 
     return {grad_fov, grad_exposure, grad_iso};
 }
+
+// ============================================================================
+// C++ 接口函数：Active ToF 可微前向（CUDA高性能路径）
+// 说明：
+// - 几何深度：复用 render_diff_fov_cuda（CUDA）
+// - 传感器与噪声：使用 ATen 张量算子（GPU 上执行）
+// - 返回：noisy_depth, confidence
+// ============================================================================
+std::vector<torch::Tensor> render_active_tof_forward_cuda(
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    torch::Tensor v,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width,
+    double max_range) {
+
+    const auto B = pos.size(0);
+    auto depth = torch::empty({B, height, width}, pos.options());
+    render_diff_fov_cuda(
+        depth, balls, cylinders, cylinders_h, voxels,
+        R, pos, n_drones_per_group, fov_x_half_tan);
+
+    depth = torch::clamp(depth, 0.03, 120.0);
+
+    auto power_scaled = (0.01 + power * 0.99).unsqueeze(1).unsqueeze(2);
+    auto exp_scaled = (0.05 + exposure * 0.95).unsqueeze(1).unsqueeze(2);
+    auto gain_scaled = (1.0 + gain * 9.0).unsqueeze(1).unsqueeze(2);
+
+    auto energy_recv = (power_scaled * exp_scaled) / (depth * depth + 0.1);
+    energy_recv = energy_recv * gain_scaled * 100.0;
+
+    auto conf_raw = torch::tanh(energy_recv * 0.5);
+
+    auto speed = v.norm(2, -1);
+    auto motion_blur_factor = (speed * exp_scaled.squeeze(2).squeeze(1) * 0.1).clamp(0.0, 1.0);
+    auto mbf = motion_blur_factor.unsqueeze(1).unsqueeze(2);
+
+    auto blur_kernel = at::avg_pool2d(
+        depth.unsqueeze(1),
+        {3, 3},
+        {1, 1},
+        {1, 1},
+        false,
+        true,
+        c10::nullopt).squeeze(1);
+    auto depth_blurred = depth * (1.0 - mbf) + blur_kernel * mbf;
+
+    auto conf = conf_raw * (1.0 - mbf * 0.8);
+
+    auto noise_std = (0.05 * gain_scaled) / (energy_recv + 1e-3);
+    noise_std = noise_std.clamp(0.01, 1.0);
+
+    auto noisy_depth = depth_blurred + torch::randn_like(depth_blurred) * noise_std;
+    noisy_depth = noisy_depth.clamp(0.05, max_range);
+
+    return {noisy_depth, conf};
+}
+
+std::vector<torch::Tensor> render_active_tof_backward_cuda(
+    torch::Tensor grad_noisy_depth,
+    torch::Tensor grad_conf,
+    torch::Tensor noisy_depth,
+    torch::Tensor conf,
+    torch::Tensor fov_x_half_tan,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    torch::Tensor v,
+    torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width,
+    double max_range) {
+
+    const auto B = pos.size(0);
+    auto opts = pos.options();
+
+    auto go_depth = grad_noisy_depth.contiguous();
+    auto go_conf = grad_conf.contiguous();
+
+    // 重新计算几何深度与中间量（与 forward 路径一致）
+    auto depth = torch::empty({B, height, width}, opts);
+    render_diff_fov_cuda(
+        depth, balls, cylinders, cylinders_h, voxels,
+        R, pos, n_drones_per_group, fov_x_half_tan);
+    depth = torch::clamp(depth, 0.03, 120.0);
+
+    auto ps = (0.01 + power * 0.99).unsqueeze(1).unsqueeze(2);   // power_scaled
+    auto es = (0.05 + exposure * 0.95).unsqueeze(1).unsqueeze(2); // exp_scaled
+    auto gs = (1.0 + gain * 9.0).unsqueeze(1).unsqueeze(2);       // gain_scaled
+
+    auto d2 = depth * depth;
+    auto energy_recv = (ps * es) / (d2 + 0.1);
+    energy_recv = energy_recv * gs * 100.0;
+
+    auto conf_raw = torch::tanh(energy_recv * 0.5);
+
+    auto speed = v.norm(2, -1); // (B,)
+    auto mbf0 = speed * es.squeeze(2).squeeze(1) * 0.1; // unclamped motion blur factor
+    auto mbf = mbf0.clamp(0.0, 1.0);
+    auto m = mbf.unsqueeze(1).unsqueeze(2); // (B,1,1)
+
+    auto blur_kernel = at::avg_pool2d(
+        depth.unsqueeze(1),
+        {3, 3},
+        {1, 1},
+        {1, 1},
+        false,
+        true,
+        c10::nullopt).squeeze(1);
+    auto depth_blurred = depth * (1.0 - m) + blur_kernel * m;
+
+    auto noise_std0 = (0.05 * gs) / (energy_recv + 1e-3);
+    auto noise_std = noise_std0.clamp(0.01, 1.0);
+
+    // 由输出近似恢复噪声样本 epsilon（用于重参数化反向）
+    auto eps = (noisy_depth - depth_blurred) / noise_std.clamp_min(1e-6);
+
+    // clamp 的有效梯度掩码
+    auto mask_depth = ((noisy_depth > 0.05 + 1e-6) & (noisy_depth < (double)max_range - 1e-6)).to(go_depth.scalar_type());
+    auto g_noisy = go_depth * mask_depth;
+
+    // noisy_depth = depth_blurred + eps * noise_std
+    auto g_depth_blurred = g_noisy;
+    auto g_noise_std = g_noisy * eps;
+
+    // conf = conf_raw * (1 - 0.8 m)
+    auto g_conf_raw = go_conf * (1.0 - 0.8 * m);
+    auto g_m_from_conf = go_conf * (-0.8 * conf_raw);
+
+    // depth_blurred = depth*(1-m) + blur*m
+    auto g_m_from_blur = g_depth_blurred * (blur_kernel - depth);
+    auto g_m_total = g_m_from_conf + g_m_from_blur;
+
+    auto g_depth = g_depth_blurred * (1.0 - m);
+    auto g_blur = g_depth_blurred * m;
+
+    // 近似传播 blur 对 depth 的梯度（与 forward 的 avg_pool 匹配的近似）
+    auto g_blur_to_depth = at::avg_pool2d(
+        g_blur.unsqueeze(1),
+        {3, 3},
+        {1, 1},
+        {1, 1},
+        false,
+        true,
+        c10::nullopt).squeeze(1);
+    g_depth = g_depth + g_blur_to_depth;
+
+    // m = clamp(m0,0,1), m0 = speed * es_scalar * 0.1
+    auto mask_m = ((mbf0 > 0.0) & (mbf0 < 1.0)).to(go_depth.scalar_type()); // (B,)
+    auto g_m_sum = g_m_total.sum({1, 2}); // (B,)
+    auto g_m0 = g_m_sum * mask_m; // (B,)
+
+    // noise_std = clamp(noise_std0, 0.01, 1.0)
+    auto mask_ns = ((noise_std0 > 0.01) & (noise_std0 < 1.0)).to(go_depth.scalar_type());
+    auto g_noise_std0 = g_noise_std * mask_ns;
+
+    // noise_std0 = 0.05 * gs / (E + 1e-3)
+    auto denomE = (energy_recv + 1e-3);
+    auto g_gs_from_ns = (g_noise_std0 * (0.05 / denomE)).sum({1, 2});
+    auto g_E_from_ns = g_noise_std0 * (-0.05 * gs / (denomE * denomE));
+
+    // conf_raw = tanh(0.5E)
+    auto g_E_from_conf = g_conf_raw * (0.5 * (1.0 - conf_raw * conf_raw));
+    auto g_E = g_E_from_conf + g_E_from_ns;
+
+    // E = 100 * ps * es * gs / (d^2 + 0.1)
+    auto inv_den = 1.0 / (d2 + 0.1);
+    auto g_ps = (g_E * (100.0 * es * gs * inv_den)).sum({1, 2});
+    auto g_es_from_E = (g_E * (100.0 * ps * gs * inv_den)).sum({1, 2});
+    auto g_gs_from_E = (g_E * (100.0 * ps * es * inv_den)).sum({1, 2});
+
+    auto g_depth_from_E = g_E * (-200.0 * ps * es * gs * depth / ((d2 + 0.1) * (d2 + 0.1)));
+    g_depth = g_depth + g_depth_from_E;
+
+    // es = 0.05 + 0.95 * exposure;  m0 对 es 的额外依赖
+    auto g_es_from_m = g_m0 * (speed * 0.1);
+    auto g_es_total = g_es_from_E + g_es_from_m;
+
+    // gs 合并两路
+    auto g_gs_total = g_gs_from_E + g_gs_from_ns;
+
+    // 回到原始输入尺度
+    auto grad_power = g_ps * 0.99;
+    auto grad_exposure = g_es_total * 0.95;
+    auto grad_gain = g_gs_total * 9.0;
+
+    // 几何链路回传到 fov（供未来扩展；当前 active_tof 调用里 fov 通常不需梯度）
+    auto grad_fov = torch::zeros_like(fov_x_half_tan);
+    render_backward_fov_cuda(
+        grad_fov,
+        g_depth.contiguous(),
+        depth.contiguous(),
+        balls,
+        cylinders,
+        cylinders_h,
+        voxels,
+        R,
+        pos,
+        n_drones_per_group,
+        fov_x_half_tan);
+
+    return {grad_fov, grad_power, grad_exposure, grad_gain};
+}
