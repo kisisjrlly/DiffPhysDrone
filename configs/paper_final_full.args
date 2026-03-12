@@ -18,7 +18,7 @@
 # ----------------- TBPTT + 混合调度 (Long-horizon Training) -----------------
 # 目的：解决长时域 BPTT 显存压力与梯度不稳问题
 --tbptt_enable                      # 开启 TBPTT
---tbptt_chunk_steps 10              # 每 xx 步截断一次图
+--tbptt_chunk_steps 15              # 每 xx 步截断一次图
 --tbptt_chunk_accum 1               # 每 1 个 chunk step 一次优化器
 --hybrid_full_bptt_every 0         # 每 20 iter 做一次完整 BPTT 校准
 --hybrid_full_bptt_batch_size 64     # 完整 BPTT 使用较小 batch 省显存
@@ -37,10 +37,10 @@
 --single                            # 单智能体模式
 # --gate                            # 门穿越场景
 --ground_voxels                     # 对齐原始 single_agent：复杂地形
-# --scaffold                        # 脚手架障碍
+--scaffold                        # 脚手架障碍
 --random_rotation                   # 对齐原始 single_agent：场景随机旋转
 --yaw_drift                         # 对齐原始 single_agent：偏航漂移噪声
-# --no_odom                         # 关闭里程计输入
+--no_odom                         # 关闭里程计输入
 # --wall_slit                       # 狭缝场景
 
 # --ellipsoid_collision               # 椭球碰撞体（更接近真实无人机外形）
@@ -105,7 +105,12 @@
 --cam_enable_shadow                 # 阴影近似
 --cam_enable_specular               # 镜面反射
 --cam_enable_distortion             # 镜头径向畸变
---cam_enable_flare                  # flare 近似
+--cam_enable_flare                # 光照强度缩放
+--cam_ae_target 0.36                # 自动曝光目标亮度
+
+# 论文光学势能 (Optical Perception Potentials)
+# - coef_blur: 惩罚高速+长曝光+长焦导致的运动模糊
+# - coef_noise: 惩罚高 ISO /          # flare 近似
 --cam_enable_motion_blur            # 时序运动模糊
 --cam_enable_rolling                # rolling shutter 混合
 --cam_noise_scale 1.0               # 传感器噪声强度缩放
@@ -135,7 +140,7 @@
 
 # ----------------- 传感模式 + 控制架构 (Sensor & Control) -----------------
 # 当前推荐：sensor_mode camera_luma_plus_passive_depth（主视觉 + 被动深度）
---sensor_mode camera_luma_plus_passive_depth  # passive_depth / camera_luma / camera_luma_plus_passive_depth / active_depth
+--sensor_mode camera_luma  # passive_depth / camera_luma / camera_luma_plus_passive_depth / active_depth
 
 # dMPC/dLQR 相关：
 # 只有 use_dmpc + policy_output_intent 同时开启时，才走意图域 LQR 路径
@@ -145,7 +150,7 @@
 # --policy_output_intent              # 策略输出意图向量（速度参考 + 代价权重参数）
 # --inject_tof_into_lqr             # 仅 use_dmpc 时生效；当前 direct_action 配置下关闭以避免歧义
 --lqr_horizon 5                     # dLQR 有限时域长度（前瞻步数）
---lqr_reg 1e-3                      # Riccati/求解正则项，防止病态矩阵
+--lqr_reg 1e-3                      # Riccaticamera_luma_plus_passive_depth/求解正则项，防止病态矩阵
 --tof_safe_dist 0.6                 # ToF 安全距离阈值（米）
 --tof_repel_gain 1.0                # 安全距离内的排斥增益系数
 
@@ -169,5 +174,5 @@
 --vis_spawn                         # 自动拉起可视化窗口
 
 # WandB
---wandb_disabled                  # 关闭在线日志
+# --wandb_disabled                  # 关闭在线日志
 # --no-amp                           # 对齐原始项目：关闭混合精度

@@ -69,7 +69,7 @@ def _teacher_initial_guess(env, model, args, sensor_flags, B, device,
             sf['use_passive_depth'], sf['use_camera_luma'],
             sf['use_active_depth'], sf['use_depth_channel'],
             use_camera_control, differentiable=False)
-
+        torch.cuda.synchronize() 
         if args.yaw_drift and yaw_drift_R is not None:
             tv_raw = torch.squeeze(tv_raw[:, None] @ yaw_drift_R, 1)
         else:
@@ -396,7 +396,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
             use_passive_depth, use_camera_luma, use_active_depth,
             use_depth_channel, use_camera_control,
             differentiable=diff_cam)
-
+        torch.cuda.synchronize() 
         depth_vis = main_obs if main_obs is not None else tof_depth
         assert depth_vis is not None
 
