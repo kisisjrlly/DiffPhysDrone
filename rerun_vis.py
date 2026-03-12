@@ -491,7 +491,7 @@ class RerunVis:
                 colors=[[0, 230, 170, 210]],
                 radii=[0.01],
                 labels=["DRONE BODY"],
-                show_labels=True,
+                show_labels=False,
             ),
         )
         rr.log(
@@ -512,7 +512,7 @@ class RerunVis:
                 vectors=[[0.35, 0.0, 0.0], [0.0, 0.35, 0.0], [0.0, 0.0, 0.25]],
                 colors=[[255, 90, 90], [90, 255, 90], [90, 160, 255]],
                 radii=[0.01, 0.01, 0.01],
-                labels=["body+x", "body+y", "body+z"],
+                # labels=["body+x", "body+y", "body+z"],
             ),
         )
 
@@ -559,6 +559,7 @@ class RerunVis:
                 colors=[[255, 235, 80]],
                 radii=[0.009],
                 labels=["MAIN_CAM"],
+                show_labels=False,
             ),
         )
 
@@ -580,6 +581,7 @@ class RerunVis:
                 colors=[[80, 210, 255]],
                 radii=[0.008],
                 labels=["TOF_CAM"],
+                show_labels=False,
             ),
         )
 
@@ -604,7 +606,7 @@ class RerunVis:
 
         rr.log(
             f"{phase}/drone/pos",
-            rr.Points3D([p], colors=[[0, 255, 120]], radii=[0.08], labels=["DRONE"], show_labels=True),
+            rr.Points3D([p], colors=[[0, 255, 120]], radii=[0.08], labels=["DRONE"], show_labels=False),
         )
         rr.log(
             f"{phase}/target/pos",

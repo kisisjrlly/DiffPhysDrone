@@ -82,13 +82,13 @@ parser.add_argument('--tof_downsample', type=int, default=4, help='ToF 相对主
 parser.add_argument('--tof_width', type=int, default=None, help='ToF 输入分辨率宽（默认: imx_width/tof_downsample）')
 parser.add_argument('--tof_height', type=int, default=None, help='ToF 输入分辨率高（默认: imx_height/tof_downsample）')
 parser.add_argument('--tof_nn_width', type=int, default=16,
-                    help='active_tof: 输入策略网络前的 ToF 特征宽（处理流水线最终尺寸）')
+                    help='active_depth: 输入策略网络前的主动深度特征宽（处理流水线最终尺寸）')
 parser.add_argument('--tof_nn_height', type=int, default=12,
-                    help='active_tof: 输入策略网络前的 ToF 特征高（处理流水线最终尺寸）')
-parser.add_argument('--active_tof_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
-                    help='active_tof: 是否启用图像处理流水线（逆深度+nearest+maxpool）后再输入网络')
-parser.add_argument('--diff_sensor_impl', nargs='*', default=['yuv=python', 'active_tof=python'],
-                    help='可微传感实现后端列表，格式: yuv=python|cuda active_tof=python|cuda')
+                    help='active_depth: 输入策略网络前的主动深度特征高（处理流水线最终尺寸）')
+parser.add_argument('--active_depth_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
+                    help='active_depth: 是否启用图像处理流水线（逆深度+nearest+maxpool）后再输入网络')
+parser.add_argument('--diff_sensor_impl', nargs='*', default=['camera_luma=python', 'active_depth=python'],
+                    help='可微传感实现后端列表，格式: camera_luma=python|cuda active_depth=python|cuda')
 parser.add_argument('--policy_input_width', type=int, default=None, help='策略网络融合输入宽（默认: imx_width/4）')
 parser.add_argument('--policy_input_height', type=int, default=None, help='策略网络融合输入高（默认: imx_height/4）')
 
@@ -107,7 +107,10 @@ parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z �
 parser.add_argument('--coef_tilt', type=float, default=0.0, help='狭缝穿越时的侧倾对齐损失权重')
 
 # --- 可微相机与主动感知 (Active Perception) ---
-parser.add_argument('--diff_cam', default=False, action='store_true', help='启用可微感知 (输出绝对相机参数)')
+parser.add_argument('--camera_action_mode', type=str, default='off', choices=['off', 'absolute', 'incremental'],
+                    help='相机控制模式：off=无相机动作, absolute=输出相机绝对参数, incremental=输出相机增量动作')
+parser.add_argument('--include_camera_state_in_obs', default=False, action=argparse.BooleanOptionalAction,
+                    help='是否将当前相机状态拼接到观测向量')
 parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
 parser.add_argument('--coef_fov_reg', type=float, default=0.005, help='FOV 偏离默认值的正则化权重')
 parser.add_argument('--coef_cam_range', type=float, default=0.001, help='相机参数范围正则化权重 (鼓励保持在中间值)')
@@ -139,41 +142,38 @@ parser.add_argument('--cam_lighting_scale', type=float, default=1.0,
 parser.add_argument('--cam_ae_target', type=float, default=0.42,
                     help='自动曝光目标亮度（0~1）')
 
-# ===== Paper.md: 统一控制空间, 光学损失, G-DAC 算法 =====
-parser.add_argument('--paper_unified_control', default=False, action='store_true',
-                    help='Paper §2.1: 统一控制空间 (相机增量作为动作的一部分输出)')
-parser.add_argument('--paper_cam_obs', default=False, action='store_true',
-                    help='Paper §2.1: 将当前相机状态加入到观测向量中')
-parser.add_argument('--paper_optical_loss', default=False, action='store_true',
-                    help='Paper §2.3: 启用光学感知势能损失 (运动模糊/散斑噪声)')
+# ===== Camera loss + Teacher-Student training =====
+parser.add_argument('--enable_camera_quality_loss', default=False, action='store_true',
+                    help='启用相机质量损失 (运动模糊/散斑噪声)')
 parser.add_argument('--coef_blur', type=float, default=0.1,
-                    help='Paper §2.3A: 运动模糊损失权重')
+                    help='运动模糊损失权重')
 parser.add_argument('--coef_noise', type=float, default=0.05,
-                    help='Paper §2.3B: 散斑噪声损失权重')
+                    help='散斑噪声损失权重')
 parser.add_argument('--cam_delta_scale', type=float, default=0.05,
-                    help='统一控制模式下，每步相机参数增量的缩放系数')
-parser.add_argument('--paper_gdac', default=False, action='store_true',
-                    help='Paper §3: 启用 G-DAC (Teacher-Student) 两阶段训练算法')
-parser.add_argument('--gdac_inner_steps', type=int, default=10,
-                    help='G-DAC Phase I: 教师网络内部优化步数')
-parser.add_argument('--gdac_inner_lr', type=float, default=0.01,
-                    help='G-DAC Phase I: 教师网络内部优化学习率')
-parser.add_argument('--coef_distill', type=float, default=1.0,
-                    help='G-DAC Phase II: 知识蒸馏损失权重')
-parser.add_argument('--gdac_physics_weight', type=float, default=0.3,
-                    help='G-DAC Phase II: 蒸馏时保留的物理损失权重 (作为辅助)')
-parser.add_argument('--gdac_distill_final_ratio', type=float, default=0.3,
-                    help='G-DAC: 蒸馏权重退火终点比例（相对 coef_distill，早高晚低）')
-parser.add_argument('--gdac_student_noise_mode', type=str, default='off', choices=['off', 'on'],
-                    help='G-DAC 蒸馏阶段 student 前向是否加噪声：off=关闭, on=开启')
-parser.add_argument('--gdac_teacher_tbptt_chunk_steps', type=int, default=10,
-                    help='G-DAC Teacher 内循环 TBPTT 分段长度')
+                    help='incremental 相机控制模式下，每步相机参数增量的缩放系数')
+parser.add_argument('--enable_teacher_student_training', default=False, action='store_true',
+                    help='启用教师-学生两阶段训练')
+parser.add_argument('--teacher_inner_steps', type=int, default=10,
+                    help='教师阶段内部优化步数')
+parser.add_argument('--teacher_inner_lr', type=float, default=0.01,
+                    help='教师阶段内部优化学习率')
+parser.add_argument('--distill_coef', type=float, default=1.0,
+                    help='学生阶段蒸馏损失权重')
+parser.add_argument('--student_physics_coef', type=float, default=0.3,
+                    help='蒸馏训练中保留的物理损失权重')
+parser.add_argument('--distill_final_ratio', type=float, default=0.3,
+                    help='蒸馏权重退火终点比例（相对 distill_coef）')
+parser.add_argument('--student_noise_mode', type=str, default='off', choices=['off', 'on'],
+                    help='学生阶段前向是否加噪声：off=关闭, on=开启')
+parser.add_argument('--teacher_tbptt_chunk_steps', type=int, default=10,
+                    help='教师阶段 TBPTT 分段长度')
 
 # ===== Multi-sensor + dLQR training switches =====
-parser.add_argument('--vision_mode', type=str, default='yuv_tof', choices=['depth', 'yuv', 'yuv_tof', 'active_tof'],
-                    help='视觉输入方案: depth=仅深度, yuv=仅YUV420亮度Y, yuv_tof=YUV420亮度Y+ToF, active_tof=可微主动深度相机')
-parser.add_argument('--coef_tof_power', type=float, default=0.01, help='active_tof: 节电惩罚权重')
-parser.add_argument('--coef_tof_blur', type=float, default=0.01, help='active_tof: 运动模糊惩罚权重')
+parser.add_argument('--sensor_mode', type=str, default='camera_luma_plus_passive_depth',
+                    choices=['passive_depth', 'camera_luma', 'camera_luma_plus_passive_depth', 'active_depth'],
+                    help='传感输入模式')
+parser.add_argument('--coef_active_depth_power', type=float, default=0.01, help='active_depth: 发射功率惩罚权重')
+parser.add_argument('--coef_active_depth_blur', type=float, default=0.01, help='active_depth: 运动模糊惩罚权重')
 parser.add_argument('--use_dmpc', default=False, action='store_true',
                     help='启用 dLQR/dMPC 控制路径（训练侧）')
 parser.add_argument('--policy_direct_action', default=False, action='store_true',
@@ -196,10 +196,6 @@ parser.add_argument('--dual_encoder', default=False, action='store_true',
                     help='启用双分支编码器（主视觉 stem / ToF stem）')
 parser.add_argument('--max_acc_cmd', type=float, default=20.0,
                     help='动作/加速度命令限幅，提升数值稳定性')
-parser.add_argument('--grad_clip_norm', type=float, default=5.0,
-                    help='梯度裁剪阈值，<=0 表示关闭')
-parser.add_argument('--nan_policy', type=str, default='guard', choices=['guard', 'failfast'],
-                    help='NaN处理策略: guard=数值护栏继续训练, failfast=立即报错定位根因')
 parser.add_argument('--amp', default=True, action=argparse.BooleanOptionalAction,
                     help='启用AMP混合精度训练（同配置下更省显存、更快）')
 
@@ -215,7 +211,7 @@ parser.add_argument('--vis_every_iters', type=int, default=10,
 parser.add_argument('--vis_every_steps', type=int, default=10,
                     help='在一次迭代内，每隔多少step记录一次可视化')
 parser.add_argument('--vis_teacher', default=True, action=argparse.BooleanOptionalAction,
-                    help='是否可视化 Teacher（G-DAC 阶段I，默认仅最后一轮内循环）')
+                    help='是否可视化 Teacher（教师阶段I，默认仅最后一轮内循环）')
 parser.add_argument('--vis_student', default=True, action=argparse.BooleanOptionalAction,
                     help='是否可视化 Student（阶段II rollout）')
 parser.add_argument('--vis_spawn', default=True, action=argparse.BooleanOptionalAction,
@@ -225,10 +221,10 @@ args = parser.parse_args()
 
 
 def parse_diff_sensor_impl(items):
-    """将命令行列表解析为 {'yuv': 'python|cuda', 'active_tof': 'python|cuda'}。"""
+    """将命令行列表解析为 {'camera_luma': 'python|cuda', 'active_depth': 'python|cuda'}。"""
     impl = {
-        'yuv': 'python',
-        'active_tof': 'python',
+        'camera_luma': 'python',
+        'active_depth': 'python',
     }
     if items is None:
         return impl
@@ -288,6 +284,9 @@ set_global_seed(args.seed, args.deterministic)
 # =============================================================================
 # 生成基于时间的唯一运行名称
 run_name = f"run_{time.strftime('%Y%m%d_%H%M%S')}"
+ckpt_timestamp = time.strftime('%Y-%m-%d-%H-%M-%S')
+checkpoint_dir = os.path.join('checkpoint', ckpt_timestamp)
+os.makedirs(checkpoint_dir, exist_ok=True)
 
 wandb.init(
     project="diff-simulation", 
@@ -309,6 +308,7 @@ wandb.save("*.sh")
 print("\n" + "="*30 + " Configuration " + "="*30)
 for k, v in vars(args).items():
     print(f"{k:<30}: {v}")
+print(f"{'checkpoint_dir':<30}: {checkpoint_dir}")
 print("="*75 + "\n")
 
 device = torch.device('cuda')
@@ -322,13 +322,13 @@ if args.policy_direct_action and args.policy_output_intent:
     raise ValueError("--policy_direct_action 与 --policy_output_intent 互斥，请二选一")
 if args.use_dmpc and not args.policy_output_intent:
     print("[warn] --use_dmpc 已启用，但 --policy_output_intent 未启用；将回退到动作域控制")
-if args.inject_tof_into_lqr and args.vision_mode != 'yuv_tof':
-    print("[warn] --inject_tof_into_lqr 已启用，但 vision_mode 不是 yuv_tof；ToF注入将被忽略")
-if args.paper_gdac and args.policy_output_intent and not args.use_dmpc:
-    print("[warn] paper_gdac + policy_output_intent 且未启用 --use_dmpc："
-          "G-DAC 将回退到动作域 teacher/蒸馏；intent 头仅作为辅助输出，不参与 teacher 优化")
+if args.inject_tof_into_lqr and args.sensor_mode != 'camera_luma_plus_passive_depth':
+    print("[warn] --inject_tof_into_lqr 已启用，但 sensor_mode 不是 camera_luma_plus_passive_depth；深度注入将被忽略")
+if args.enable_teacher_student_training and args.policy_output_intent and not args.use_dmpc:
+        print("[warn] enable_teacher_student_training + policy_output_intent 且未启用 --use_dmpc："
+            "将回退到动作域 teacher/蒸馏；intent 头仅作为辅助输出，不参与 teacher 优化")
 if args.dual_encoder:
-    print("[warn] --dual_encoder 已弃用：模型结构由 vision_mode 自动决定")
+    print("[warn] --dual_encoder 已弃用：模型结构由 sensor_mode 自动决定")
 if args.policy_input_width is not None or args.policy_input_height is not None:
     print("[warn] --policy_input_width/height 已弃用：当前模型不再做跨传感器强制尺寸对齐")
 if args.tbptt_enable and args.tbptt_chunk_steps < 2:
@@ -339,46 +339,59 @@ if args.hybrid_full_bptt_every < 0:
     raise ValueError('--hybrid_full_bptt_every 必须 >= 0')
 if args.hybrid_full_bptt_batch_size < 0:
     raise ValueError('--hybrid_full_bptt_batch_size 必须 >= 0')
-if args.tbptt_enable and args.paper_gdac:
-    print('[warn] 当前启用 TBPTT 与 paper_gdac：student 按原混合调度；teacher 内循环将使用 TBPTT 路径')
+if args.tbptt_enable and args.enable_teacher_student_training:
+    print('[warn] 当前启用 TBPTT 与教师-学生训练：student 按原混合调度；teacher 内循环将使用 TBPTT 路径')
 
-# 视觉模式开关
-use_depth = args.vision_mode == 'depth'
-use_yuv = args.vision_mode in ('yuv', 'yuv_tof')
-use_tof = args.vision_mode in ('yuv_tof', 'active_tof')
-use_active_tof = args.vision_mode == 'active_tof'
+# 传感模式开关
+use_passive_depth = args.sensor_mode == 'passive_depth'
+use_camera_luma = args.sensor_mode in ('camera_luma', 'camera_luma_plus_passive_depth')
+use_depth_channel = args.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth')
+use_active_depth = args.sensor_mode == 'active_depth'
 
-# 在 active_tof 方案中，我们依然利用 --paper_unified_control 或者类似的 flags 启用状态联合控制，
-# 即使我们目前没有 YUV。我们让 active_tof 借用可微相机参数的管道，只是换成了 ToF 的三个参数。
-if (args.diff_cam or args.paper_unified_control) and not (use_yuv or use_active_tof):
-    raise ValueError("仅在包含 yuv 或 active_tof 模式时才支持可微相机参数学习")
-use_cam = (args.diff_cam or args.paper_unified_control) and (use_yuv or use_active_tof)
-if use_active_tof and not use_cam:
-    raise ValueError("vision_mode=active_tof 需要启用 --diff_cam 或 --paper_unified_control")
+if args.camera_action_mode != 'off' and not (use_camera_luma or use_active_depth):
+    raise ValueError("仅在 camera_luma / camera_luma_plus_passive_depth / active_depth 模式下支持相机参数控制")
+use_camera_control = (args.camera_action_mode != 'off') and (use_camera_luma or use_active_depth)
+if use_active_depth and not use_camera_control:
+    raise ValueError("sensor_mode=active_depth 需要开启 camera_action_mode=absolute 或 incremental")
+effective_include_camera_state = bool(args.include_camera_state_in_obs and use_camera_control)
+if args.include_camera_state_in_obs and not use_camera_control:
+    print(f"[warn] --include_camera_state_in_obs 已启用，但当前 sensor_mode={args.sensor_mode} 且 camera_action_mode=off；将自动忽略相机状态拼接")
 
 # 启动模式横幅：明确当前运行实际走哪条训练/控制路径
 policy_head_mode = 'intent_head' if args.policy_output_intent else 'action_head'
 exec_control_mode = 'dmpc' if (args.use_dmpc and args.policy_output_intent) else 'direct_action'
-if args.paper_gdac:
-    gdac_teacher_mode = 'intent_teacher' if (args.policy_output_intent and args.use_dmpc) else 'action_teacher'
+if args.enable_teacher_student_training:
+    teacher_mode = 'intent_teacher' if (args.policy_output_intent and args.use_dmpc) else 'action_teacher'
 else:
-    gdac_teacher_mode = 'disabled'
-tof_lqr_effective = bool(args.inject_tof_into_lqr and args.use_dmpc and args.policy_output_intent and use_tof)
+    teacher_mode = 'disabled'
+tof_lqr_effective = bool(args.inject_tof_into_lqr and args.use_dmpc and args.policy_output_intent and use_depth_channel)
 
 print("=" * 30 + " Runtime Mode " + "=" * 30)
 print(f"policy_head                : {policy_head_mode}")
 print(f"exec_control               : {exec_control_mode}")
-print(f"paper_gdac                : {args.paper_gdac} ({gdac_teacher_mode})")
+print(f"teacher_student_training  : {args.enable_teacher_student_training} ({teacher_mode})")
 print(f"use_dmpc                  : {args.use_dmpc}")
 print(f"inject_tof_into_lqr       : {args.inject_tof_into_lqr} (effective={tof_lqr_effective})")
-print(f"gdac_teacher_tbptt_chunk  : {args.gdac_teacher_tbptt_chunk_steps}")
-print(f"gdac_student_noise_mode   : {args.gdac_student_noise_mode}")
-print(f"gdac_distill_coef         : {args.coef_distill} -> {args.coef_distill * args.gdac_distill_final_ratio}")
+print(f"teacher_tbptt_chunk       : {args.teacher_tbptt_chunk_steps}")
+print(f"student_noise_mode        : {args.student_noise_mode}")
+print(f"distill_coef              : {args.distill_coef} -> {args.distill_coef * args.distill_final_ratio}")
 print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
+print(f"sensor_mode               : {args.sensor_mode}")
+print(f"camera_action_mode        : {args.camera_action_mode}")
+print(f"sensor_control_semantics  : {'power/exposure/gain' if use_active_depth else 'fov/exposure/iso'}")
 print("=" * 75)
 
+
+def resolve_tof_size():
+    tw = args.tof_width if args.tof_width is not None else max(args.imx_width // max(args.tof_downsample, 1), 1)
+    th = args.tof_height if args.tof_height is not None else max(args.imx_height // max(args.tof_downsample, 1), 1)
+    return int(tw), int(th)
+
 def build_env(batch_size: int):
-    return Env(batch_size, args.imx_width, args.imx_height, args.grad_decay, device,
+    tof_w, tof_h = resolve_tof_size()
+    render_w = tof_w if use_passive_depth else args.imx_width
+    render_h = tof_h if use_passive_depth else args.imx_height
+    return Env(batch_size, render_w, render_h, args.grad_decay, device,
                fov_x_half_tan=args.fov_x_half_tan, single=args.single,
                gate=args.gate, ground_voxels=args.ground_voxels,
                scaffold=args.scaffold, speed_mtp=args.speed_mtp,
@@ -387,8 +400,8 @@ def build_env(batch_size: int):
                ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
                ellipsoid_c=args.drone_c if args.ellipsoid_collision else 0.0,
                tof_downsample=args.tof_downsample,
-               tof_width=args.tof_width,
-               tof_height=args.tof_height,
+               tof_width=tof_w,
+               tof_height=tof_h,
                camera_preset=args.cam_realism_preset,
                cam_enable_shadow=args.cam_enable_shadow,
                cam_enable_specular=args.cam_enable_specular,
@@ -407,28 +420,29 @@ def build_env(batch_size: int):
 # 初始化物理仿真环境（主训练环境 + 可选完整BPTT校准环境）
 env_train = build_env(args.batch_size)
 env_full = env_train
-if args.hybrid_full_bptt_every > 0 and args.hybrid_full_bptt_batch_size > 0 and args.hybrid_full_bptt_batch_size != args.batch_size:
+if args.tbptt_enable and args.hybrid_full_bptt_every > 0 and args.hybrid_full_bptt_batch_size > 0 and args.hybrid_full_bptt_batch_size != args.batch_size:
     env_full = build_env(args.hybrid_full_bptt_batch_size)
     print(f"[info] 混合调度启用：完整BPTT每 {args.hybrid_full_bptt_every} 轮一次，batch={args.hybrid_full_bptt_batch_size}")
+if use_passive_depth:
+    print(f"[info] passive_depth render size: {int(env_train.width)}x{int(env_train.height)}")
 
 # 初始化策略网络模型
 # 观测维度：无里程计模式为 7 (目标方向, 姿态Z轴, 距离边距)，有里程计模式为 10 (+自身速度)
 obs_dim = 7 if args.no_odom else 10
 main_channels = 1
-in_channels = main_channels + (1 if use_tof else 0) + (1 if (use_tof and args.tof_use_conf) else 0)
+in_channels = main_channels + (1 if use_depth_channel else 0) + (1 if (use_depth_channel and args.tof_use_conf) else 0)
 model = Model(obs_dim, 6,
-              use_diff_cam=args.diff_cam,
-              use_unified_control=args.paper_unified_control,
-              use_cam_obs=args.paper_cam_obs,
+              camera_action_mode=args.camera_action_mode,
+              include_camera_state_in_obs=effective_include_camera_state,
               in_channels=in_channels,
               use_policy_intent=args.policy_output_intent,
               intent_dim=9,
               main_in_channels=main_channels,
-              use_tof_conf=(use_tof and args.tof_use_conf),
+              use_tof_conf=(use_depth_channel and args.tof_use_conf),
               tof_nn_width=args.tof_nn_width,
               tof_nn_height=args.tof_nn_height,
-              active_tof_use_pipeline=args.active_tof_use_pipeline,
-              vision_mode=args.vision_mode)
+              active_depth_use_pipeline=args.active_depth_use_pipeline,
+              sensor_mode=args.sensor_mode)
 model = model.to(device)
 use_amp = bool(args.amp and device.type == 'cuda')
 scaler = GradScaler(enabled=use_amp)
@@ -441,6 +455,7 @@ vis = RerunVis(
 
 # 恢复预训练权重 (如果提供)
 if args.resume:
+    print(f"[info] 从 {args.resume} 恢复训练")
     state_dict = torch.load(args.resume, map_location=device)
     missing_keys, unexpected_keys = model.load_state_dict(state_dict, False)
     if missing_keys:
@@ -454,7 +469,7 @@ optim = AdamW(model.parameters(), args.lr)
 def estimate_optimizer_steps() -> int:
     # 调度器步数要尽量贴近“真实 optimizer.step() 次数”，
     # 否则 LR 余弦衰减会出现时间轴错位（太快或太慢）。
-    if not args.tbptt_enable or args.paper_gdac:
+    if not args.tbptt_enable:
         return max(1, args.num_iters)
     n_chunks = max(1, math.ceil(args.timesteps / max(args.tbptt_chunk_steps, 1)))
     steps_per_tbptt_iter = max(1, math.ceil(n_chunks / max(args.tbptt_chunk_accum, 1)))
@@ -476,6 +491,76 @@ def smooth_dict(ori_dict):
     for k, v in ori_dict.items():
         scaler_q[k].append(float(v))
 
+
+def _filter_metrics_by_mode(log_data: dict) -> dict:
+    """按 sensor_mode/use_camera_control 过滤并规范化 WandB 指标，减少无效零值噪声。"""
+    out = dict(log_data)
+
+    cam_keys = {
+        'loss_cam_smooth', 'loss_fov_reg', 'loss_cam_range',
+        'speed_exposure_corr', 'fov_obstacle_corr', 'power_obstacle_corr',
+    }
+    optical_keys = {'loss_blur', 'loss_noise'}
+    active_depth_keys = {'loss_active_depth_power', 'loss_active_depth_blur'}
+    wall_slit_keys = {'slit_crossed', 'slit_pass_rate', 'roll_at_wall_deg'}
+
+    if not use_camera_control:
+        for k in cam_keys | optical_keys | active_depth_keys:
+            out.pop(k, None)
+    else:
+        if use_active_depth:
+            # active_depth 下不记录 camera_luma 光学势能项（语义不匹配）
+            for k in optical_keys:
+                out.pop(k, None)
+            # fov 在 active_depth 语义上对应发射功率
+            if 'fov_obstacle_corr' in out and 'power_obstacle_corr' not in out:
+                out['power_obstacle_corr'] = out['fov_obstacle_corr']
+                out.pop('fov_obstacle_corr', None)
+        else:
+            for k in active_depth_keys:
+                out.pop(k, None)
+            if not args.enable_camera_quality_loss:
+                for k in optical_keys:
+                    out.pop(k, None)
+
+    if not args.wall_slit:
+        for k in wall_slit_keys:
+            out.pop(k, None)
+
+    # 轻量模式标签，方便跨 run 聚合筛选
+    out['mode/is_passive_depth'] = float(use_passive_depth)
+    out['mode/is_camera_luma'] = float(use_camera_luma)
+    out['mode/has_depth_channel'] = float(use_depth_channel)
+    out['mode/is_active_depth'] = float(use_active_depth)
+    out['mode/use_camera_control'] = float(use_camera_control)
+
+    return out
+
+
+def _flush_smoothed_metrics(step: int):
+    if len(scaler_q) == 0:
+        return
+    log_data = {}
+    for k, v in scaler_q.items():
+        if len(v) > 0:
+            log_data[k] = sum(v) / len(v)
+    log_data = _filter_metrics_by_mode(log_data)
+    wandb.log(log_data, step=step)
+    scaler_q.clear()
+
+
+def _periodic_tail_ops(iter_idx: int):
+    """分支无关的周期任务：checkpoint 保存 + 平滑标量上报。"""
+    if (iter_idx + 1) % 1000 == 0:
+        ckpt_path = os.path.join(checkpoint_dir, f'checkpoint{iter_idx//1000:04d}.pth')
+        print("save checkpoint to:", ckpt_path)
+        torch.save(model.state_dict(), ckpt_path)
+        # 可选：将检查点同步到 wandb (Optionally log checkpoint to wandb)
+        wandb.save(ckpt_path)
+
+    if (iter_idx + 1) % 25 == 0:
+        _flush_smoothed_metrics(iter_idx + 1)
+
 # 障碍物避让的屏障函数 (Barrier Function)
 # 当距离小于安全边距时，产生巨大的惩罚梯度
 def barrier(x: torch.Tensor, v_to_pt):
@@ -486,38 +571,6 @@ def is_save_iter(i):
     if i < 2000:
         return (i + 1) % 250 == 0
     return (i + 1) % 1000 == 0
-
-
-def _tensor_is_bad(x: torch.Tensor):
-    return (not torch.isfinite(x).all())
-
-
-def sanitize_tensor(x: torch.Tensor, name: str,
-                    clamp_min=None, clamp_max=None,
-                    nan=0.0, posinf=1.0, neginf=-1.0,
-                    strict=True):
-    """根据 nan_policy 执行 failfast 或 guard 清洗。"""
-    if strict and args.nan_policy == 'failfast':
-        if not torch.isfinite(x).all():
-            bad = (~torch.isfinite(x)).sum().item()
-            raise FloatingPointError(f"non-finite detected in {name}: {bad} elements")
-        y = x
-    else:
-        y = torch.nan_to_num(x, nan=nan, posinf=posinf, neginf=neginf)
-    if (clamp_min is not None) or (clamp_max is not None):
-        y = y.clamp(min=clamp_min, max=clamp_max)
-    return y
-
-
-def safe_distill_mse(student: torch.Tensor, teacher: torch.Tensor):
-    """仅在有限值样本上计算蒸馏 MSE，避免 NaN/Inf 污染总损失。"""
-    # student/teacher: (..., D)
-    finite_mask = torch.isfinite(student).all(-1) & torch.isfinite(teacher).all(-1)
-    if finite_mask.any():
-        s = student[finite_mask]
-        t = teacher[finite_mask]
-        return F.mse_loss(s, t)
-    return torch.zeros((), device=student.device, dtype=student.dtype)
 
 
 def detach_env_graph(_env: Env):
@@ -551,14 +604,14 @@ def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int
     return F.smooth_l1_loss(delta_v, torch.zeros_like(delta_v))
 
 
-def gdac_distill_coef_at_iter(iter_idx: int) -> float:
-    """G-DAC 蒸馏权重退火：早期高，后期低。"""
+def distill_coef_at_iter(iter_idx: int) -> float:
+    """蒸馏权重退火：早期高，后期低。"""
     if args.num_iters <= 1:
-        return float(args.coef_distill)
-    final_ratio = float(min(max(args.gdac_distill_final_ratio, 0.0), 1.0))
+        return float(args.distill_coef)
+    final_ratio = float(min(max(args.distill_final_ratio, 0.0), 1.0))
     progress = float(iter_idx) / float(max(args.num_iters - 1, 1))
     ratio = 1.0 - (1.0 - final_ratio) * progress
-    return float(args.coef_distill) * ratio
+    return float(args.distill_coef) * ratio
 
 
 def teacher_dt_like_student(cam_exposure_mean: float, use_camera: bool) -> float:
@@ -582,7 +635,7 @@ for i in pbar:
     env = env_full if use_hybrid_full else env_train
     B = env.batch_size
     vid_idx = min(4, B - 1)
-    distill_coef_iter = gdac_distill_coef_at_iter(i) if args.paper_gdac else float(args.coef_distill)
+    distill_coef_iter = distill_coef_at_iter(i) if args.enable_teacher_student_training else float(args.distill_coef)
 
     iter_tic = time.time()
     env.reset()   # 重置环境
@@ -601,16 +654,16 @@ for i in pbar:
             target=env.p_target[j].detach().cpu().numpy(),
         )
 
-    # ===== Paper §3: G-DAC Phase I — Teacher / Solver (教师网络内部优化) =====
-    # G-DAC (Guided Differentiable Actor-Critic) 算法的第一阶段。
+    # ===== Teacher-Student Phase I — Teacher / Solver (教师网络内部优化) =====
+    # 教师-学生训练的第一阶段。
     # 在这一阶段，我们利用环境的可微性，直接对动作序列进行梯度下降，寻找当前环境下的最优轨迹 (Teacher)。
     u_star = None  # 教师网络优化后的最优飞行控制动作序列
     y_star = None  # 教师网络优化后的最优意图序列
     u_star_cam = None  # 教师网络优化后的最优相机控制参数序列
     
-    if args.paper_gdac:
+    if args.enable_teacher_student_training:
         # 仅当启用 dMPC 时，意图域才作为 teacher 优化变量；
-        # 否则回退到动作域 teacher（满足 gdac 可不依赖 dmpc 的需求）。
+        # 否则回退到动作域 teacher（无需依赖 dmpc）。
         optimize_intent_teacher = bool(args.policy_output_intent and args.use_dmpc)
         env_snapshot = env.save_state() # 1. 保存当前环境的初始状态，以便在内部优化循环中反复重置
         
@@ -644,27 +697,29 @@ for i in pbar:
 
             # 展开一个完整的 episode (timesteps)
             for t in range(args.timesteps):
-                dt_tmp = teacher_dt_like_student(float(cam_exp_tmp.mean().detach()), use_cam)
+                dt_tmp = teacher_dt_like_student(float(cam_exp_tmp.mean().detach()), use_camera_control)
                 # 传感器渲染（主视觉/ToF）
                 main_obs = None
                 main_depth = None
                 tof_depth = None
                 tof_conf = None
-                if use_depth:
+                if use_passive_depth:
                     main_depth, _ = env.render(dt_tmp)
                     main_obs = main_depth
-                elif use_yuv:
-                    if use_cam:
+                elif use_camera_luma:
+                    if use_camera_control:
                         main_obs = env.render_main_luma_diff(cam_fov_tmp, cam_exp_tmp, cam_iso_tmp)
                     else:
                         main_obs = env.render_main_luma(dt_tmp)
-                elif use_active_tof:
-                    if use_cam:
-                        tof_depth, tof_conf = env.render_active_tof_diff(cam_fov_tmp, cam_exp_tmp, cam_iso_tmp)
+                elif use_active_depth:
+                    if use_camera_control:
+                        # active_depth: (power, exposure, gain)
+                        active_power, active_exposure, active_gain = cam_fov_tmp, cam_exp_tmp, cam_iso_tmp
+                        tof_depth, tof_conf = env.render_active_tof_diff(active_power, active_exposure, active_gain)
                     else:
-                        raise NotImplementedError("active_tof requires use_cam=True")
+                        raise NotImplementedError("active_depth requires camera_action_mode != off")
 
-                if use_tof and not use_active_tof:
+                if use_depth_channel and not use_active_depth:
                     tof_depth, tof_conf, _, _ = env.render_tof(dt_tmp, return_meta=True)
                     
                 # 计算目标方向向量
@@ -690,7 +745,8 @@ for i in pbar:
                 lv = torch.squeeze(env.v[:, None] @ R_t, 1)
                 if not args.no_odom:
                     st.insert(0, lv)
-                if args.paper_cam_obs and use_cam:
+                if args.include_camera_state_in_obs and use_camera_control:
+                    # 第1通道在 active_depth 下语义为发射功率（沿用历史变量 cam_fov 的数值范围）
                     co = torch.stack([cam_fov_tmp / env._fov_x_half_tan - 1.0,
                                       cam_exp_tmp, cam_iso_tmp], -1)
                     st.append(co)
@@ -725,9 +781,6 @@ for i in pbar:
                     a_out = a_out.float()
                     if c_out is not None:
                         c_out = c_out.float()
-                if c_out is not None:
-                    c_out = sanitize_tensor(c_out, 'teacher_init_cam_out', clamp_min=-1.0, clamp_max=1.0,
-                                            nan=0.0, posinf=1.0, neginf=-1.0)
                 init_acts.append(a_out.clone())
                 if c_out is not None:
                     init_cam_deltas.append(c_out.clone())
@@ -738,7 +791,7 @@ for i in pbar:
                 a_final = a_final.clamp(-args.max_acc_cmd, args.max_acc_cmd)
                 act_buf_tmp.append(a_final)
                 
-                if args.paper_unified_control and c_out is not None:
+                if args.camera_action_mode == 'incremental' and c_out is not None:
                     df, de, di = c_out.unbind(-1)
                     sc = args.cam_delta_scale
                     cam_fov_tmp = (cam_fov_tmp + df * sc * env._fov_x_half_tan).clamp(
@@ -758,7 +811,7 @@ for i in pbar:
         else:
             u_guess = [a.clone().requires_grad_(True) for a in init_acts]
         u_cam_guess = None
-        if use_cam and len(init_cam_deltas) > 0:
+        if use_camera_control and len(init_cam_deltas) > 0:
             u_cam_guess = [c.clone().requires_grad_(True) for c in init_cam_deltas]
             base_params = y_guess if y_guess is not None else u_guess
             assert base_params is not None
@@ -769,14 +822,14 @@ for i in pbar:
             inner_params = base_params
             
         # 内部优化器 (仅优化动作序列，不优化网络权重)
-        inner_optim = torch.optim.Adam(inner_params, lr=args.gdac_inner_lr)
+        inner_optim = torch.optim.Adam(inner_params, lr=args.teacher_inner_lr)
 
         # 4. 内部优化循环 (Inner Optimization Loop)
         # 通过可微物理引擎，直接对动作序列进行梯度下降，最小化物理损失
         # 这里改为 Teacher 全程 TBPTT（不再走完整 BPTT）
-        teacher_chunk_steps = max(2, args.gdac_teacher_tbptt_chunk_steps)
+        teacher_chunk_steps = max(2, args.teacher_tbptt_chunk_steps)
         teacher_chunk_count = max(1, math.ceil(args.timesteps / teacher_chunk_steps))
-        for k in range(args.gdac_inner_steps):
+        for k in range(args.teacher_inner_steps):
             inner_optim.zero_grad()
             env.restore_state(env_snapshot) # 每次迭代重置到相同的初始状态
             
@@ -802,7 +855,7 @@ for i in pbar:
 
             # 展开轨迹 (使用当前优化的动作序列 u_guess)
             for t in range(args.timesteps):
-                dt_k = teacher_dt_like_student(float(cam_exp_k_val.mean().detach()), use_cam)
+                dt_k = teacher_dt_like_student(float(cam_exp_k_val.mean().detach()), use_camera_control)
                 c_p_hist_k.append(env.p)
                 vec_now_k = env.find_vec_to_nearest_pt()
                 c_vtp_hist_k.append(vec_now_k)
@@ -841,7 +894,7 @@ for i in pbar:
                     )
                     u_local_k = u_local_k.clamp(-args.max_acc_cmd, args.max_acc_cmd)
 
-                    if args.inject_tof_into_lqr and use_tof:
+                    if args.inject_tof_into_lqr and use_depth_channel:
                         vec_now_lqr_k = vec_now_k[0]
                         dist_now_k = torch.norm(vec_now_lqr_k, 2, -1)
                         repel_mag_k = F.softplus(args.tof_safe_dist - dist_now_k) * args.tof_repel_gain
@@ -855,13 +908,14 @@ for i in pbar:
                     assert u_guess is not None
                     ap_k, vp_k, *_ = (R_k @ u_guess[t].reshape(B, 3, -1)).unbind(-1)
 
-                a_k = (ap_k - vp_k - env.g_std) * env.thr_est_error[:, None] + env.g_std
+                # 与 Student 动作解码保持一致：不减去 vp_k（vp_k 仅用于辅助监督）
+                a_k = (ap_k - env.g_std) * env.thr_est_error[:, None] + env.g_std
                 a_k = a_k.clamp(-args.max_acc_cmd, args.max_acc_cmd)
                 act_buf_k.append(a_k)
 
                 # 更新相机参数
-                if use_cam and u_cam_guess is not None:
-                    if args.paper_unified_control:
+                if use_camera_control and u_cam_guess is not None:
+                    if args.camera_action_mode == 'incremental':
                         df, de, di = u_cam_guess[t].unbind(-1)
                         sc = args.cam_delta_scale
                         cam_fov_k_val = (cam_fov_k_val + df * sc * env._fov_x_half_tan).clamp(
@@ -880,10 +934,10 @@ for i in pbar:
                 c_tv_hist_k.append(tv_k)
                 c_act_hist_k.append(a_k)
 
-                if should_vis_iter and args.vis_teacher and (k == args.gdac_inner_steps - 1) and (t % max(args.vis_every_steps, 1) == 0):
+                if should_vis_iter and args.vis_teacher and (k == args.teacher_inner_steps - 1) and (t % max(args.vis_every_steps, 1) == 0):
                     j = int(min(max(args.vis_env_idx, 0), B - 1))
                     cam_vals = None
-                    if use_cam:
+                    if use_camera_control:
                         cam_vals = (
                             float(cam_fov_k_val[j].detach().cpu()),
                             float(cam_exp_k_val[j].detach().cpu()),
@@ -898,7 +952,7 @@ for i in pbar:
                         cam=cam_vals,
                         drone_R=env.R[j].detach().cpu().numpy(),
                         cam_R=env.R_cam[j].detach().cpu().numpy(),
-                        main_fov_half_tan=float(cam_fov_k_val[j].detach().cpu()) if use_cam else float(env._fov_x_half_tan),
+                        main_fov_half_tan=float(cam_fov_k_val[j].detach().cpu()) if use_camera_control else float(env._fov_x_half_tan),
                         main_hw=(int(env.height), int(env.width)),
                         tof_hw=(int(env.tof_height), int(env.tof_width)),
                     )
@@ -933,21 +987,21 @@ for i in pbar:
                         args.coef_d_acc * l_acc_k + \
                         args.coef_d_jerk * l_jerk_k + \
                         args.coef_collide * l_coll_k + \
-                        l_ga_k
+                        args.coef_ground_affinity * l_ga_k
 
-                    if use_cam and len(c_cam_exp_k) > 0:
+                    if use_camera_control and len(c_cam_exp_k) > 0:
                         sp_k = torch.stack(c_speed_k)
                         ex_k = torch.stack(c_cam_exp_k)
                         iso_k = torch.stack(c_cam_iso_k)
                         fov_k_t = torch.stack(c_cam_fov_k)
                         
-                        if use_active_tof:
+                        if use_active_depth:
                             # 替换惩罚模型：fov当做power
                             loss_power = fov_k_t.pow(2).mean()
-                            loss_tof_blur = (sp_k * ex_k).mean()
-                            chunk_inner_loss = chunk_inner_loss + args.coef_tof_power * loss_power
-                            chunk_inner_loss = chunk_inner_loss + args.coef_tof_blur * loss_tof_blur
-                        elif args.paper_optical_loss:
+                            loss_active_depth_blur = (sp_k * ex_k).mean()
+                            chunk_inner_loss = chunk_inner_loss + args.coef_active_depth_power * loss_power
+                            chunk_inner_loss = chunk_inner_loss + args.coef_active_depth_blur * loss_active_depth_blur
+                        elif args.enable_camera_quality_loss:
                             exp_phys_k = ex_k * 10 + 0.5
                             eff_focal_k = 1.0 / fov_k_t.clamp(min=0.1)
                             chunk_inner_loss = chunk_inner_loss + args.coef_blur * (sp_k.pow(2) * exp_phys_k.pow(2) * eff_focal_k.pow(2)).mean()
@@ -974,22 +1028,6 @@ for i in pbar:
 
             inner_optim.step()
 
-            # 数值护栏：内循环参数清洗，避免 NaN/Inf 传播到 teacher 标签
-            with torch.no_grad():
-                if y_guess is not None:
-                    for y in y_guess:
-                        y.data = torch.nan_to_num(y.data, nan=0.0, posinf=10.0, neginf=-10.0)
-                        y.data[:, :3] = y.data[:, :3].clamp(-2.0, 2.0)
-                        y.data[:, 3:9] = y.data[:, 3:9].clamp(-5.0, 5.0)
-                if u_guess is not None:
-                    for u in u_guess:
-                        u.data = torch.nan_to_num(u.data, nan=0.0, posinf=args.max_acc_cmd, neginf=-args.max_acc_cmd)
-                        u.data = u.data.clamp(-args.max_acc_cmd, args.max_acc_cmd)
-                if u_cam_guess is not None:
-                    for c in u_cam_guess:
-                        c.data = torch.nan_to_num(c.data, nan=0.0, posinf=1.0, neginf=-1.0)
-                        c.data = c.data.clamp(-1.0, 1.0)
-
         # 7. 提取优化后的最优动作序列 (Teacher's optimal actions)
         # 这些动作将作为 Phase II 中 Student 网络的蒸馏目标
         if y_guess is not None:
@@ -1002,18 +1040,18 @@ for i in pbar:
         # 恢复环境状态，准备进行 Student 网络的 rollout (Restore environment for student rollout)
         env.restore_state(env_snapshot)
 
-    # ===== Standard / G-DAC Phase II: Student rollout =====
+    # ===== Standard / Teacher-Student Phase II: Student rollout =====
     # 这一阶段使用当前的策略网络 (Student) 在环境中进行实际的 rollout，
-    # 收集数据用于计算强化学习损失和 G-DAC 蒸馏损失。
+    # 收集数据用于计算强化学习损失和蒸馏损失。
     p_history = []
     v_history = []
     target_v_history = []
     vec_to_pt_history = []
     v_preds = []
     vid = []
-    raw_act_history = []  # 用于 G-DAC 蒸馏的原始飞行控制动作 (for G-DAC distillation)
+    raw_act_history = []  # 用于蒸馏的原始飞行控制动作
     raw_intent_history = []
-    raw_cam_history = []  # 用于 G-DAC 蒸馏的原始相机控制动作 (for G-DAC distillation (camera deltas))
+    raw_cam_history = []  # 用于蒸馏的原始相机控制动作
     h = None # GRU 隐藏状态
 
     # TBPTT 配置：主训练走 chunk 反传；混合调度的校准轮走完整 BPTT
@@ -1080,11 +1118,11 @@ for i in pbar:
     # 开始 Student 网络的 Rollout 循环
     for t in range(args.timesteps):
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq) # 基础控制时间步长，加入少量噪声
-        exposure_delay = float(cam_exposure.mean().detach()) * 0.030 if use_cam else 0.015
+        exposure_delay = float(cam_exposure.mean().detach()) * 0.030 if use_camera_control else 0.015
         ctl_dt = base_dt + exposure_delay
         student_add_noise = True
-        if args.paper_gdac:
-            student_add_noise = (args.gdac_student_noise_mode == 'on')
+        if args.enable_teacher_student_training:
+            student_add_noise = (args.student_noise_mode == 'on')
 
         # 渲染传感器：主视觉/ToF
         # 可微主相机路径（render_main_luma_diff）需要保留计算图，
@@ -1093,29 +1131,30 @@ for i in pbar:
         main_depth = None
         tof_depth = None
         tof_conf = None
-        if use_yuv and use_cam:
+        if use_camera_luma and use_camera_control:
             # 可微感知主路径：不要 no_grad
             main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
-            if use_tof:
+            if use_depth_channel:
                 with torch.no_grad():
                     tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
             else:
                 tof_conf = None
-        elif use_active_tof and use_cam:
-            # active_tof 路径：可微 ToF 算子，不要 no_grad
+        elif use_active_depth and use_camera_control:
+            # active_depth 路径：可微主动深度算子，不要 no_grad
             main_obs = None
-            tof_depth, tof_conf = env.render_active_tof_diff(cam_fov, cam_exposure, cam_iso)
+            active_power, active_exposure, active_gain = cam_fov, cam_exposure, cam_iso
+            tof_depth, tof_conf = env.render_active_tof_diff(active_power, active_exposure, active_gain)
         else:
             # 非可微传感器路径保持 no_grad 以节省显存
             with torch.no_grad():
-                if use_depth:
+                if use_passive_depth:
                     main_depth, _ = env.render(ctl_dt)
                     main_obs = main_depth
-                elif use_yuv:
+                elif use_camera_luma:
                     main_obs = env.render_main_luma(ctl_dt)
-                if use_tof and not use_active_tof:
+                if use_depth_channel and not use_active_depth:
                     tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
-                elif not use_active_tof:
+                elif not use_active_depth:
                     tof_conf = None
 
         # 兼容旧逻辑中的可视化与距离记录
@@ -1172,7 +1211,8 @@ for i in pbar:
             state.insert(0, local_v)
             
         # 论文 §2.1：将当前相机状态包含在观测中 (Paper §2.1: include current camera state in observation)
-        if args.paper_cam_obs and use_cam:
+        if effective_include_camera_state:
+            # 第1通道在 active_depth 下语义为 power_norm，在 camera_luma* 下语义为 fov_norm
             cam_obs = torch.stack([
                 cam_fov / env._fov_x_half_tan - 1.0,  # 归一化的 FOV 偏差 (normalized FOV deviation)
                 cam_exposure,
@@ -1183,7 +1223,7 @@ for i in pbar:
 
         # 构造策略输入张量（支持 主视觉/ToF 双模态）
         # 对可微主相机路径保留梯度；其他路径按原逻辑 detach。
-        main_obs_in = main_obs if (use_yuv and use_cam) else (main_obs.detach() if main_obs is not None else None)
+        main_obs_in = main_obs if (use_camera_luma and use_camera_control) else (main_obs.detach() if main_obs is not None else None)
         tof_depth_in = tof_depth.detach() if tof_depth is not None else None
         tof_conf_in = tof_conf.detach() if tof_conf is not None else None
 
@@ -1197,13 +1237,9 @@ for i in pbar:
                     tof_conf=tof_conf_in,
                     add_noise=student_add_noise,
                 )
-            act = sanitize_tensor(act, 'student_act_out', clamp_min=-5.0, clamp_max=5.0,
-                                  nan=0.0, posinf=5.0, neginf=-5.0, strict=False)
-            intent = sanitize_tensor(intent, 'student_intent_out', clamp_min=-10.0, clamp_max=10.0,
-                                     nan=0.0, posinf=10.0, neginf=-10.0, strict=False)
             act = act.float()
             intent = intent.float()
-            if args.paper_gdac and args.use_dmpc:
+            if args.enable_teacher_student_training and args.use_dmpc:
                 raw_intent_history.append(intent)
         else:
             with autocast(enabled=use_amp):
@@ -1214,25 +1250,18 @@ for i in pbar:
                     tof_conf=tof_conf_in,
                     add_noise=student_add_noise,
                 )
-            act = sanitize_tensor(act, 'student_act_out', clamp_min=-5.0, clamp_max=5.0,
-                                  nan=0.0, posinf=5.0, neginf=-5.0, strict=False)
             act = act.float()
             intent = None
         if cam_params is not None:
-            cam_params = sanitize_tensor(cam_params, 'student_cam_out', nan=0.0, posinf=1.0, neginf=-1.0, strict=False)
             cam_params = cam_params.float()
-            if args.paper_unified_control:
-                cam_params = cam_params.clamp(-1.0, 1.0)
-            else:
-                cam_params = cam_params.clamp(0.0, 1.0)
-        if args.paper_gdac:
+        if args.enable_teacher_student_training:
             raw_act_history.append(act)
         if cam_params is not None:
-            if args.paper_gdac:
+            if args.enable_teacher_student_training:
                 raw_cam_history.append(cam_params)
 
         # 更新下一时间步渲染的相机参数 (Update camera parameters for next timestep's render)
-        if args.paper_unified_control and cam_params is not None:
+        if args.camera_action_mode == 'incremental' and cam_params is not None:
             # 统一控制：cam_params 是 [-1, 1] 范围内的 tanh 增量
             # Unified control: cam_params are tanh deltas in [-1, 1]
             delta_fov, delta_exp, delta_iso = cam_params.unbind(-1)
@@ -1246,7 +1275,7 @@ for i in pbar:
                 cam_fov / env._fov_x_half_tan,  # 存储为归一化的 FOV (store as normalized FOV)
                 cam_exposure, cam_iso], -1))
         elif cam_params is not None:
-            # 传统的 diff_cam：绝对的 sigmoid 参数 (Legacy diff_cam: absolute sigmoid params)
+            # absolute 相机控制：输出绝对参数（sigmoid 域）
             fov_delta, exposure, iso = cam_params.unbind(-1)
             # fov_delta 在 [0,1] 之间 (通过 sigmoid)
             cam_fov = (env._fov_x_half_tan * 0.08) + fov_delta * (env._fov_x_half_tan * 1.42)
@@ -1256,7 +1285,7 @@ for i in pbar:
 
         # 记录相机和速度历史，用于计算光学损失和指标
         # Track camera & speed histories for optical losses and metrics
-        if use_cam:
+        if use_camera_control:
             if tbptt_this_iter:
                 cam_fov_history.append(cam_fov.detach())
                 cam_exposure_history.append(cam_exposure.detach())
@@ -1287,7 +1316,7 @@ for i in pbar:
             )
             u_local = u_local.clamp(-args.max_acc_cmd, args.max_acc_cmd)
 
-            if args.inject_tof_into_lqr and use_tof:
+            if args.inject_tof_into_lqr and use_depth_channel:
                 vec_now_lqr = vec_now[0]  # (B, 3)
                 dist_now = torch.norm(vec_now_lqr, 2, -1)
                 repel_mag = F.softplus(args.tof_safe_dist - dist_now) * args.tof_repel_gain
@@ -1323,12 +1352,12 @@ for i in pbar:
             c_act_hist.append(act)
             c_p_hist.append(env.p)
             c_speed.append(env.v.norm(2, -1))
-            if use_cam and len(cam_params_history) > 0:
+            if use_camera_control and len(cam_params_history) > 0:
                 c_cam_hist.append(cam_params_history[-1])
                 c_cam_exp.append(cam_exposure)
                 c_cam_iso.append(cam_iso)
                 c_cam_fov.append(cam_fov)
-            if args.paper_gdac and len(raw_cam_history) > 0:
+            if args.enable_teacher_student_training and len(raw_cam_history) > 0:
                 c_distill.append(raw_cam_history[-1])
 
             # chunk 边界：计算 chunk loss、反向传播、可选 step，并在边界截断图
@@ -1371,11 +1400,11 @@ for i in pbar:
                 loss_cam_smooth_c = torch.zeros((), device=device)
                 loss_fov_reg_c = torch.zeros((), device=device)
                 loss_cam_range_c = torch.zeros((), device=device)
-                if use_cam and len(c_cam_hist) > 1:
+                if use_camera_control and len(c_cam_hist) > 1:
                     cam_hist_c = torch.stack(c_cam_hist)
                     cam_diff_c = cam_hist_c.diff(1, 0)
                     loss_cam_smooth_c = cam_diff_c.pow(2).mean()
-                    if args.paper_unified_control:
+                    if args.camera_action_mode == 'incremental':
                         loss_fov_reg_c = (cam_hist_c[:, :, 0] - 1.0).pow(2).mean()
                     else:
                         loss_fov_reg_c = (cam_hist_c[:, :, 0] - 0.5).pow(2).mean()
@@ -1383,20 +1412,20 @@ for i in pbar:
 
                 loss_blur_c = torch.zeros((), device=device)
                 loss_noise_c = torch.zeros((), device=device)
-                loss_tof_power_c = torch.zeros((), device=device)
-                loss_tof_blur_c = torch.zeros((), device=device)
-                if use_cam and len(c_cam_exp) > 0:
+                loss_active_depth_power_c = torch.zeros((), device=device)
+                loss_active_depth_blur_c = torch.zeros((), device=device)
+                if use_camera_control and len(c_cam_exp) > 0:
                     speed_h = torch.stack(c_speed)
                     exp_h = torch.stack(c_cam_exp)
                     iso_h = torch.stack(c_cam_iso)
-                    fov_h = torch.stack(c_cam_fov)
+                    first_param_h = torch.stack(c_cam_fov)
                     
-                    if use_active_tof:
-                        loss_tof_power_c = fov_h.pow(2).mean()
-                        loss_tof_blur_c = (speed_h * exp_h).mean()
-                    elif args.paper_optical_loss:
+                    if use_active_depth:
+                        loss_active_depth_power_c = first_param_h.pow(2).mean()
+                        loss_active_depth_blur_c = (speed_h * exp_h).mean()
+                    elif args.enable_camera_quality_loss:
                         exp_phys = exp_h * 10 + 0.5
-                        eff_f = 1.0 / fov_h.clamp(min=0.1)
+                        eff_f = 1.0 / first_param_h.clamp(min=0.1)
                         loss_blur_c = (speed_h.pow(2) * exp_phys.pow(2) * eff_f.pow(2)).mean()
                         noise_sigma_c = 0.03 * (1.0 + 2.0 * iso_h) / (exp_h + 0.3).clamp_min(1e-3)
                         loss_noise_c = noise_sigma_c.pow(2).mean()
@@ -1404,27 +1433,43 @@ for i in pbar:
                 loss_tilt_c = torch.zeros((), device=device)
                 loss_distill_c = torch.zeros((), device=device)
 
+                if args.enable_teacher_student_training and (u_star is not None or y_star is not None):
+                    chunk_len = int(act_chunk.shape[0])
+                    start_idx = int(t + 1 - chunk_len)
+                    end_idx = int(t + 1)
+
+                    if y_star is not None and len(raw_intent_history) >= end_idx:
+                        student_intent_c = torch.stack(raw_intent_history[start_idx:end_idx])
+                        teacher_intent_c = torch.stack(y_star[start_idx:end_idx])
+                        loss_distill_c = loss_distill_c + F.mse_loss(student_intent_c, teacher_intent_c)
+                    elif u_star is not None and len(raw_act_history) >= end_idx:
+                        student_acts_c = torch.stack(raw_act_history[start_idx:end_idx])
+                        teacher_acts_c = torch.stack(u_star[start_idx:end_idx])
+                        loss_distill_c = loss_distill_c + F.mse_loss(student_acts_c, teacher_acts_c)
+
+                    if u_star_cam is not None and len(raw_cam_history) >= end_idx:
+                        student_cam_c = torch.stack(raw_cam_history[start_idx:end_idx])
+                        teacher_cam_c = torch.stack(u_star_cam[start_idx:end_idx])
+                        loss_distill_c = loss_distill_c + F.mse_loss(student_cam_c, teacher_cam_c)
+
                 chunk_loss = args.coef_v * loss_v_c + \
                     args.coef_obj_avoidance * loss_avoid_c + \
                     args.coef_d_acc * loss_d_acc_c + \
                     args.coef_d_jerk * loss_d_jerk_c + \
                     args.coef_v_pred * loss_v_pred_c + \
                     args.coef_collide * loss_collide_c + \
-                    args.coef_ground_affinity + loss_ground_c + \
+                    args.coef_ground_affinity * loss_ground_c + \
                     args.coef_cam_smooth * loss_cam_smooth_c + \
                     args.coef_fov_reg * loss_fov_reg_c + \
                     args.coef_cam_range * loss_cam_range_c + \
                     args.coef_tilt * loss_tilt_c + \
                     args.coef_blur * loss_blur_c + \
                     args.coef_noise * loss_noise_c + \
-                    args.coef_tof_power * loss_tof_power_c + \
-                    args.coef_tof_blur * loss_tof_blur_c
+                    args.coef_active_depth_power * loss_active_depth_power_c + \
+                    args.coef_active_depth_blur * loss_active_depth_blur_c
 
-                if args.paper_gdac:
-                    chunk_loss = distill_coef_iter * loss_distill_c + args.gdac_physics_weight * chunk_loss
-
-                if not torch.isfinite(chunk_loss):
-                    raise FloatingPointError('TBPTT chunk_loss is nan/inf')
+                if args.enable_teacher_student_training:
+                    chunk_loss = distill_coef_iter * loss_distill_c + args.student_physics_coef * chunk_loss
 
                 if use_amp:
                     scaler.scale(chunk_loss).backward()
@@ -1435,8 +1480,6 @@ for i in pbar:
                 if do_step:
                     if use_amp:
                         scaler.unscale_(optim)
-                    if args.grad_clip_norm > 0:
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm)
                     if use_amp:
                         scaler.step(optim)
                         scaler.update()
@@ -1460,6 +1503,8 @@ for i in pbar:
                 tbptt_stats['loss_tilt'] += float(loss_tilt_c.detach())
                 tbptt_stats['loss_blur'] += float(loss_blur_c.detach())
                 tbptt_stats['loss_noise'] += float(loss_noise_c.detach())
+                tbptt_stats['loss_active_depth_power'] += float(loss_active_depth_power_c.detach())
+                tbptt_stats['loss_active_depth_blur'] += float(loss_active_depth_blur_c.detach())
                 tbptt_stats['loss_distill'] += float(loss_distill_c.detach())
                 tbptt_chunk_n += 1
 
@@ -1486,7 +1531,7 @@ for i in pbar:
         if should_vis_iter and args.vis_student and (t % max(args.vis_every_steps, 1) == 0):
             j = int(min(max(args.vis_env_idx, 0), B - 1))
             cam_vals = None
-            if use_cam:
+            if use_camera_control:
                 cam_vals = (
                     float(cam_fov[j].detach().cpu()),
                     float(cam_exposure[j].detach().cpu()),
@@ -1496,7 +1541,7 @@ for i in pbar:
             main_img_mode = 'depth'
             if main_obs is not None:
                 main_img_np = main_obs[j].detach().cpu().numpy()
-                main_img_mode = 'luma' if use_yuv else 'depth'
+                main_img_mode = 'luma' if use_camera_luma else 'depth'
             tof_img_np = None
             if tof_depth is not None:
                 tof_img_np = tof_depth[j].detach().cpu().numpy()
@@ -1512,7 +1557,7 @@ for i in pbar:
                 tof_img=tof_img_np,
                 drone_R=env.R[j].detach().cpu().numpy(),
                 cam_R=env.R_cam[j].detach().cpu().numpy(),
-                main_fov_half_tan=float(cam_fov[j].detach().cpu()) if use_cam else float(env._fov_x_half_tan),
+                main_fov_half_tan=float(cam_fov[j].detach().cpu()) if use_camera_control else float(env._fov_x_half_tan),
                 main_hw=(int(env.height), int(env.width)),
                 tof_hw=(int(env.tof_height), int(env.tof_width)),
             )
@@ -1534,6 +1579,8 @@ for i in pbar:
         loss_tilt = torch.tensor(tbptt_stats['loss_tilt'] / denom, device=device)
         loss_blur = torch.tensor(tbptt_stats['loss_blur'] / denom, device=device)
         loss_noise = torch.tensor(tbptt_stats['loss_noise'] / denom, device=device)
+        loss_active_depth_power = torch.tensor(tbptt_stats['loss_active_depth_power'] / denom, device=device)
+        loss_active_depth_blur = torch.tensor(tbptt_stats['loss_active_depth_blur'] / denom, device=device)
         loss_distill = torch.tensor(tbptt_stats['loss_distill'] / denom, device=device)
 
         # 统计成功率（基于 detached 轨迹）
@@ -1566,8 +1613,8 @@ for i in pbar:
             roll_at_wall_deg = None
 
         speed_exposure_corr = None
-        fov_obstacle_corr = None
-        if use_cam and len(cam_exposure_history) > 0:
+        first_param_obstacle_corr = None
+        if use_camera_control and len(cam_exposure_history) > 0:
             _sp = torch.stack([x.detach() for x in speed_for_cam_history])
             _ex = torch.stack([x.detach() for x in cam_exposure_history])
             sp_mean = _sp.mean(0, keepdim=True)
@@ -1584,7 +1631,7 @@ for i in pbar:
             cov_fd = ((_fv - fv_mean) * (_dn - dn_mean)).mean(0)
             fv_std = (_fv - fv_mean).pow(2).mean(0).sqrt().clamp(min=1e-6)
             dn_std = (_dn - dn_mean).pow(2).mean(0).sqrt().clamp(min=1e-6)
-            fov_obstacle_corr = (cov_fd / (fv_std * dn_std)).mean().item()
+            first_param_obstacle_corr = (cov_fd / (fv_std * dn_std)).mean().item()
 
         slit_crossed = None
         slit_pass_rate = None
@@ -1622,6 +1669,8 @@ for i in pbar:
                 'loss_tilt': loss_tilt,
                 'loss_blur': loss_blur,
                 'loss_noise': loss_noise,
+                'loss_active_depth_power': loss_active_depth_power,
+                'loss_active_depth_blur': loss_active_depth_blur,
                 'loss_distill': loss_distill,
                 'success': _success,
                 'max_speed': speed_history.max(0).values.mean(),
@@ -1636,8 +1685,9 @@ for i in pbar:
                 smooth_dict({'roll_at_wall_deg': roll_at_wall_deg})
             if speed_exposure_corr is not None:
                 smooth_dict({'speed_exposure_corr': speed_exposure_corr})
-            if fov_obstacle_corr is not None:
-                smooth_dict({'fov_obstacle_corr': fov_obstacle_corr})
+            if first_param_obstacle_corr is not None:
+                corr_key = 'power_obstacle_corr' if use_active_depth else 'fov_obstacle_corr'
+                smooth_dict({corr_key: first_param_obstacle_corr})
             if slit_crossed is not None and slit_pass_rate is not None:
                 smooth_dict({
                     'slit_crossed': slit_crossed,
@@ -1652,16 +1702,7 @@ for i in pbar:
                     'sim_fps': float(sim_fps),
                 }, iter_idx=i)
 
-            if (i + 1) % 10000 == 0:
-                torch.save(model.state_dict(), f'checkpoint{i//10000:04d}.pth')
-                wandb.save(f'checkpoint{i//10000:04d}.pth')
-
-            if (i + 1) % 25 == 0:
-                log_data = {}
-                for k, v in scaler_q.items():
-                    log_data[k] = sum(v) / len(v)
-                wandb.log(log_data, step=i + 1)
-                scaler_q.clear()
+            _periodic_tail_ops(i)
         continue
 
     # ===== 计算 Student 网络的各项损失 (Calculate Student network losses) =====
@@ -1708,19 +1749,19 @@ for i in pbar:
     loss_cam_smooth = torch.tensor(0.0, device=device)
     loss_fov_reg = torch.tensor(0.0, device=device)
     loss_cam_range = torch.tensor(0.0, device=device)
-    if use_cam and len(cam_params_history) > 1:
+    if use_camera_control and len(cam_params_history) > 1:
         cam_hist = torch.stack(cam_params_history)  # (T, B, 4)
         # 平滑度：惩罚相邻时间步相机参数的剧烈变化 (Smoothness: penalize rapid camera parameter changes)
         cam_diff = cam_hist.diff(1, 0)  # (T-1, B, 4)
         loss_cam_smooth = cam_diff.pow(2).mean()
         # FOV 正则化：鼓励 FOV 保持在默认值附近 (FOV regularization: keep FOV near default)
-        if args.paper_unified_control:
+        if args.camera_action_mode == 'incremental':
             # 在统一控制模式下，cam_hist[:,:,0] 是归一化的 FOV (1.0 = 默认值)
             # In unified mode, cam_hist[:,:,0] is normalized FOV (1.0 = default)
             fov_vals = cam_hist[:, :, 0]
             loss_fov_reg = (fov_vals - 1.0).pow(2).mean()
         else:
-            # 传统模式：fov_delta=0.5 对应默认 FOV (Legacy: fov_delta=0.5 → default FOV)
+            # absolute 模式：fov_delta=0.5 对应默认 FOV
             fov_deltas = cam_hist[:, :, 0]
             loss_fov_reg = (fov_deltas - 0.5).pow(2).mean()
         # 范围正则化：鼓励所有参数保持在中心值附近，避免极端值 (Range regularization)
@@ -1730,35 +1771,23 @@ for i in pbar:
     # These losses penalize motion blur and sensor noise when using camera
     loss_blur = torch.tensor(0.0, device=device)
     loss_noise = torch.tensor(0.0, device=device)
-    loss_tof_power = torch.tensor(0.0, device=device)
-    loss_tof_blur = torch.tensor(0.0, device=device)
-    if use_cam and len(cam_exposure_history) > 0:
-        speed_hist = sanitize_tensor(torch.stack(speed_for_cam_history), 'speed_hist',
-                                     nan=0.0, posinf=50.0, neginf=0.0)  # (T, B)
-        exp_hist = sanitize_tensor(torch.stack(cam_exposure_history), 'exp_hist',
-                                   clamp_min=0.01, clamp_max=0.99,
-                                   nan=0.5, posinf=0.99, neginf=0.01)  # (T, B)
-        iso_hist = sanitize_tensor(torch.stack(cam_iso_history), 'iso_hist',
-                                   clamp_min=0.01, clamp_max=0.99,
-                                   nan=0.5, posinf=0.99, neginf=0.01)  # (T, B)
-        fov_hist = sanitize_tensor(torch.stack(cam_fov_history), 'fov_hist',
-                                   clamp_min=env._fov_x_half_tan * 0.08,
-                                   clamp_max=env._fov_x_half_tan * 1.5,
-                                   nan=env._fov_x_half_tan,
-                                   posinf=env._fov_x_half_tan * 1.5,
-                                   neginf=env._fov_x_half_tan * 0.08)  # (T, B)
+    loss_active_depth_power = torch.tensor(0.0, device=device)
+    loss_active_depth_blur = torch.tensor(0.0, device=device)
+    if use_camera_control and len(cam_exposure_history) > 0:
+        speed_hist = torch.stack(speed_for_cam_history)  # (T, B)
+        exp_hist = torch.stack(cam_exposure_history)  # (T, B)
+        iso_hist = torch.stack(cam_iso_history)  # (T, B)
+        first_param_hist = torch.stack(cam_fov_history)  # (T, B)
 
-        if use_active_tof:
-            # active_tof: fov变量在该模式下语义上对应power
-            loss_tof_power = fov_hist.pow(2).mean()
-            loss_tof_blur = (speed_hist * exp_hist).mean()
-            loss_tof_power = sanitize_tensor(loss_tof_power, 'loss_tof_power', nan=0.0, posinf=1e4, neginf=0.0)
-            loss_tof_blur = sanitize_tensor(loss_tof_blur, 'loss_tof_blur', nan=0.0, posinf=1e4, neginf=0.0)
-        elif args.paper_optical_loss:
+        if use_active_depth:
+            # active_depth: 第1参数语义为发射功率（power）
+            loss_active_depth_power = first_param_hist.pow(2).mean()
+            loss_active_depth_blur = (speed_hist * exp_hist).mean()
+        elif args.enable_camera_quality_loss:
             # A. 运动模糊势能 (Motion Blur Potential): V_blur = ||v||^2 * t_exp^2 / fov^2
             #    较小的 FOV (较长的焦距) 会放大运动模糊 (Smaller FOV amplifies motion blur)
             exposure_phys = exp_hist * 10 + 0.5   # 映射到物理曝光时间 [0.5, 10.5] ms
-            effective_focal = 1.0 / fov_hist.clamp(min=0.1)  # 焦距与 FOV 成反比 (focal ∝ 1/fov)
+            effective_focal = 1.0 / first_param_hist.clamp(min=0.1)  # 焦距与 FOV 成反比 (focal ∝ 1/fov)
             loss_blur = (speed_hist.pow(2) * exposure_phys.pow(2) * effective_focal.pow(2)).mean()
 
             # B. 散斑噪声势能 (Shot Noise Potential): V_noise ∝ noise_sigma^2
@@ -1766,9 +1795,6 @@ for i in pbar:
             #    noise_sigma = 0.03 * (1 + 2*iso) / (exposure + 0.3)
             noise_sigma = 0.03 * (1.0 + 2.0 * iso_hist) / (exp_hist + 0.3).clamp_min(1e-3)
             loss_noise = noise_sigma.pow(2).mean()
-
-            loss_blur = sanitize_tensor(loss_blur, 'loss_blur', nan=0.0, posinf=1e4, neginf=0.0)
-            loss_noise = sanitize_tensor(loss_noise, 'loss_noise', nan=0.0, posinf=1e4, neginf=0.0)
 
     # 墙缝倾斜损失：鼓励无人机在靠近墙壁时侧倾机身以穿过狭窄缝隙
     # Wall-slit tilt loss: encourage the drone to roll sideways near the wall
@@ -1803,36 +1829,35 @@ for i in pbar:
         args.coef_d_jerk * loss_d_jerk + \
         args.coef_v_pred * loss_v_pred + \
         args.coef_collide * loss_collide + \
-        args.coef_ground_affinity + loss_ground_affinity + \
+        args.coef_ground_affinity * loss_ground_affinity + \
         args.coef_cam_smooth * loss_cam_smooth + \
         args.coef_fov_reg * loss_fov_reg + \
         args.coef_cam_range * loss_cam_range + \
         args.coef_tilt * loss_tilt + \
         args.coef_blur * loss_blur + \
         args.coef_noise * loss_noise + \
-        args.coef_tof_power * loss_tof_power + \
-        args.coef_tof_blur * loss_tof_blur
+        args.coef_active_depth_power * loss_active_depth_power + \
+        args.coef_active_depth_blur * loss_active_depth_blur
 
-    # ===== 论文 §3: G-DAC Phase II — 蒸馏损失 (G-DAC Phase II — Distillation Loss) =====
+    # ===== 论文 §3: Teacher-Student Phase II — 蒸馏损失 =====
     loss_distill = torch.tensor(0.0, device=device)
-    if args.paper_gdac and (u_star is not None or y_star is not None):
+    if args.enable_teacher_student_training and (u_star is not None or y_star is not None):
         if y_star is not None and len(raw_intent_history) > 0:
             student_intent = torch.stack(raw_intent_history)
             teacher_intent = torch.stack(y_star)
-            loss_distill = loss_distill + safe_distill_mse(student_intent, teacher_intent)
+            loss_distill = loss_distill + F.mse_loss(student_intent, teacher_intent)
         elif u_star is not None:
             # 将 Teacher 优化后的动作蒸馏到 Student 策略中 (Distill teacher's optimized actions into student policy)
             student_acts = torch.stack(raw_act_history)   # (T, B, 6)
             teacher_acts = torch.stack(u_star)             # (T, B, 6)
-            loss_distill = loss_distill + safe_distill_mse(student_acts, teacher_acts)
+            loss_distill = loss_distill + F.mse_loss(student_acts, teacher_acts)
         # 如果启用了统一控制，同时蒸馏相机控制动作
         if u_star_cam is not None and len(raw_cam_history) > 0:
             student_cam = torch.stack(raw_cam_history)  # (T, B, 4)
             teacher_cam = torch.stack(u_star_cam)        # (T, B, 4)
-            loss_distill = loss_distill + safe_distill_mse(student_cam, teacher_cam)
-        # 在 G-DAC 模式下：总损失 = 蒸馏损失 + 降低权重的物理损失 (用于课程学习)
-        # In G-DAC mode: primarily distillation + reduced-weight physics for curriculum
-        loss = distill_coef_iter * loss_distill + args.gdac_physics_weight * loss
+            loss_distill = loss_distill + F.mse_loss(student_cam, teacher_cam)
+        # 教师-学生模式：总损失 = 蒸馏损失 + 降低权重的物理损失（用于课程学习）
+        loss = distill_coef_iter * loss_distill + args.student_physics_coef * loss
 
 
     # 更新进度条显示 (Update progress bar)
@@ -1845,8 +1870,6 @@ for i in pbar:
         scaler.unscale_(optim)
     else:
         loss.backward()
-    if args.grad_clip_norm > 0:
-        torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm)
     if use_amp:
         scaler.step(optim)
         scaler.update()
@@ -1897,6 +1920,8 @@ for i in pbar:
             'loss_tilt': loss_tilt,
             'loss_blur': loss_blur,
             'loss_noise': loss_noise,
+            'loss_active_depth_power': loss_active_depth_power,
+            'loss_active_depth_blur': loss_active_depth_blur,
             'loss_distill': loss_distill,
             'success': _success,
             'max_speed': speed_history.max(0).values.mean(),
@@ -1925,7 +1950,7 @@ for i in pbar:
                     })
 
         # 视觉-运动耦合：速度与曝光时间的负相关性 (Visuo-motor coupling: speed-exposure correlation)
-        if use_cam and len(cam_exposure_history) > 0:
+        if use_camera_control and len(cam_exposure_history) > 0:
             _sp = torch.stack(speed_for_cam_history)  # (T, B)
             _ex = torch.stack(cam_exposure_history)    # (T, B)
             # 计算每个 batch 的皮尔逊相关系数，然后求平均 (Per-batch Pearson correlation, then average)
@@ -1937,7 +1962,7 @@ for i in pbar:
             speed_exposure_corr = (cov / (sp_std * ex_std)).mean()
             smooth_dict({'speed_exposure_corr': speed_exposure_corr.item()})
 
-            # 光学呼吸效应：FOV 与障碍物距离的正相关性 (Optical breathing: FOV-obstacle distance correlation)
+            # 第1相机参数与障碍物距离相关性（camera_luma*: FOV, active_depth: power）
             _fv = torch.stack(cam_fov_history)  # (T, B)
             _dn = torch.norm(vec_to_pt_history, 2, -1).min(1).values  # (T, B)
             fv_mean = _fv.mean(0, keepdim=True)
@@ -1945,8 +1970,9 @@ for i in pbar:
             cov_fd = ((_fv - fv_mean) * (_dn - dn_mean)).mean(0)
             fv_std = (_fv - fv_mean).pow(2).mean(0).sqrt().clamp(min=1e-6)
             dn_std = (_dn - dn_mean).pow(2).mean(0).sqrt().clamp(min=1e-6)
-            fov_obstacle_corr = (cov_fd / (fv_std * dn_std)).mean()
-            smooth_dict({'fov_obstacle_corr': fov_obstacle_corr.item()})
+            first_param_obstacle_corr = (cov_fd / (fv_std * dn_std)).mean()
+            corr_key = 'power_obstacle_corr' if use_active_depth else 'fov_obstacle_corr'
+            smooth_dict({corr_key: first_param_obstacle_corr.item()})
 
         # 墙缝场景特定指标 (Wall-slit specific metrics)
         if args.wall_slit:
@@ -2025,17 +2051,17 @@ for i in pbar:
                 plt.close(fig_a)
 
             # 绘制相机参数变化图 (Plot camera parameter history)
-            if MATPLOTLIB_AVAILABLE and use_cam and len(cam_params_history) > 0:
+            if MATPLOTLIB_AVAILABLE and use_camera_control and len(cam_params_history) > 0:
                 cam_hist = torch.stack(cam_params_history)[:, vid_idx].cpu()
                 fig_cam, axes = plt.subplots(1, 3, figsize=(12, 3)) # 修改为 1x3 布局
-                if args.paper_unified_control:
-                    labels = ['FOV (norm)', 'Exposure', 'ISO']
+                if use_active_depth:
+                    labels = ['Power (norm)', 'Exposure', 'Gain'] if args.camera_action_mode == 'incremental' else ['Power', 'Exposure', 'Gain']
                 else:
-                    labels = ['FOV delta', 'Exposure', 'ISO']
+                    labels = ['FOV (norm)', 'Exposure', 'ISO'] if args.camera_action_mode == 'incremental' else ['FOV delta', 'Exposure', 'ISO']
                 for ci, (ax_c, lb) in enumerate(zip(axes.flatten(), labels)):
                     ax_c.plot(cam_hist[:, ci].numpy(), label=lb)
                     ax_c.set_title(lb)
-                    if not args.paper_unified_control:
+                    if args.camera_action_mode != 'incremental':
                         ax_c.set_ylim(-0.05, 1.05)
                 fig_cam.tight_layout()
                 wandb.log({'cam_params': wandb.Image(fig_cam)}, step=i + 1)
@@ -2050,7 +2076,7 @@ for i in pbar:
                 ax_roll.plot(roll_deg_plot.numpy(), label='Roll angle (deg)')
                 ax_roll.set_ylabel('Roll (deg)')
                 ax_roll.set_xlabel('Timestep')
-                if use_cam and len(cam_exposure_history) > 0:
+                if use_camera_control and len(cam_exposure_history) > 0:
                     ax2 = ax_roll.twinx()
                     sp_plot = torch.stack(speed_for_cam_history)[:, vid_idx].cpu()
                     ex_plot = torch.stack(cam_exposure_history)[:, vid_idx].cpu()
@@ -2065,16 +2091,4 @@ for i in pbar:
             elif not MATPLOTLIB_AVAILABLE:
                 print('[warn] matplotlib not installed: skip figure logging, video logging remains enabled.')
                 
-        # ===== 定期保存模型权重 (Periodically save model weights) =====
-        if (i + 1) % 10000 == 0:
-            torch.save(model.state_dict(), f'checkpoint{i//10000:04d}.pth')
-            # 可选：将检查点同步到 wandb (Optionally log checkpoint to wandb)
-            wandb.save(f'checkpoint{i//10000:04d}.pth')
-            
-        # ===== 定期上传平滑后的标量指标到 WandB (Periodically log smoothed scalar metrics to WandB) =====
-        if (i + 1) % 25 == 0:
-            log_data = {}
-            for k, v in scaler_q.items():
-                log_data[k] = sum(v) / len(v) # 计算队列中的平均值 (Calculate average in queue)
-            wandb.log(log_data, step=i + 1)
-            scaler_q.clear() # 清空队列 (Clear queue)
+        _periodic_tail_ops(i)

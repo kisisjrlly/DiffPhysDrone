@@ -54,10 +54,6 @@ def solve_batched_dlqr(
     # 1. 确保 Q/R 半正定 + 正定（通过显式对称化 + 增加对角正则）
     Q = 0.5 * (Q + Q.transpose(-1, -2))
     R = 0.5 * (R + R.transpose(-1, -2))
-    
-    # 为防止某些边缘情况下出现无效值，使用 nan_to_num 截断
-    Q = torch.nan_to_num(Q, nan=1.0, posinf=1e3, neginf=1e-3)
-    R = torch.nan_to_num(R, nan=1.0, posinf=1e3, neginf=1e-3)
 
     eye_x = torch.eye(nx, device=A.device, dtype=A.dtype).unsqueeze(0).expand(Bn, -1, -1)
     eye_u = torch.eye(nu, device=A.device, dtype=A.dtype).unsqueeze(0).expand(Bn, -1, -1)
@@ -80,7 +76,6 @@ def solve_batched_dlqr(
 
         # K_t = S^{-1} (B^T P_{t+1} A) 计算反馈增益矩阵
         K = torch.linalg.solve(S, BtP @ A)
-        K = torch.nan_to_num(K, nan=0.0, posinf=0.0, neginf=0.0)
         Ks.append(K)
 
         # 黎卡提迭代: P_t = Q + A^T P_{t+1} A - A^T P_{t+1} B K_t
@@ -101,7 +96,6 @@ def solve_batched_dlqr(
         dx = (x - x_ref)
         # u = -K * (x - x_ref)
         u = -torch.squeeze(Ks[t] @ dx.unsqueeze(-1), -1)
-        u = torch.nan_to_num(u, nan=0.0, posinf=0.0, neginf=0.0)
         u_seq.append(u)
         x = torch.squeeze(A @ x.unsqueeze(-1), -1) + torch.squeeze(B @ u.unsqueeze(-1), -1)
         x_seq.append(x)

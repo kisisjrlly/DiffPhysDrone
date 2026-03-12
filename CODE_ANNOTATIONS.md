@@ -36,14 +36,19 @@
   - `--tbptt_chunk_accum`
   - `--hybrid_full_bptt_every`
   - `--hybrid_full_bptt_batch_size`
-- **视觉模式**：`--vision_mode in {depth, yuv, yuv_tof}`
-- **相机主动感知**：`--paper_unified_control`, `--paper_cam_obs`, `--paper_optical_loss`
+- **传感模式**：`--sensor_mode in {passive_depth, camera_luma, camera_luma_plus_passive_depth, active_depth}`
+- **相机主动感知**：`--camera_action_mode`, `--include_camera_state_in_obs`, `--enable_camera_quality_loss`
+
+补充：传感器控制头是 3 通道，语义按 `sensor_mode` 切换：
+
+- `camera_luma` / `camera_luma_plus_passive_depth`：`(FOV, Exposure, ISO)`
+- `active_depth`：`(Power, Exposure, Gain)`
 
 ### 2.2 环境与模型初始化
 
 - `build_env(batch_size)`：构建环境实例
 - `env_train` / `env_full`：分别用于 TBPTT 主训练和低频完整 BPTT 校准
-- `Model(...)`：根据 `vision_mode` 构建单分支或双分支编码器
+- `Model(...)`：根据 `sensor_mode` 构建单分支或双分支编码器
 
 ### 2.3 调度器步数估计
 
@@ -106,15 +111,15 @@ chunk 边界会做：
 `Model` 由三部分组成：
 
 1. **视觉编码器**
-   - `depth/yuv`：单分支 `stem`
-   - `yuv_tof`：`stem_main + stem_tof + fuse`
+   - `passive_depth/camera_luma`：单分支 `stem`
+   - `camera_luma_plus_passive_depth`：`stem_main + stem_tof + fuse`
 2. **状态融合**
    - `v_proj(state)` 与视觉特征相加
 3. **时序与输出**
    - `GRUCell`
    - 动作头 `fc`
    - 可选意图头 `fc_intent`
-   - 可选相机头（统一控制或 diff_cam）
+   - 可选相机头（incremental 或 absolute）
 
 传感器预处理在 `preprocess_sensor_inputs`：
 
@@ -141,7 +146,7 @@ chunk 边界会做：
   - `render_tof()` ToF 近似
 - 物理步进 `run(...)`
 - 最近障碍查询 `find_vec_to_nearest_pt()`
-- 状态快照 `save_state/restore_state()`（G-DAC 与 TBPTT 都会用）
+- 状态快照 `save_state/restore_state()`（教师-学生训练与 TBPTT 都会用）
 
 ---
 

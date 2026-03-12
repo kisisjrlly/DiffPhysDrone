@@ -389,7 +389,7 @@ class Env:
         self.random_rotation = random_rotation # 是否随机旋转整个场景
         self.cam_angle = cam_angle       # 相机俯仰角
         self.fov_x_half_tan = fov_x_half_tan # 基础视场角 (tan(FOV/2))
-        _impl = {'yuv': 'python', 'active_tof': 'python'}
+        _impl = {'camera_luma': 'python', 'active_depth': 'python'}
         if diff_sensor_impl is not None:
             _impl.update({str(k): str(v).lower() for k, v in dict(diff_sensor_impl).items()})
         self.diff_sensor_impl = _impl
@@ -614,13 +614,24 @@ class Env:
 
     def _estimate_normals_from_depth(self, depth):
         """
-        从深度图估计近似法线（相机坐标系），再由外部变换到世界系。
+        改进版：从深度图估计近似法线，并处理边缘深度突变，防止梯度爆炸。
         """
         x = depth[:, None]
+        # Sobel 算子计算 X 和 Y 方向的梯度
         sobel_x = torch.tensor([[1., 0., -1.], [2., 0., -2.], [1., 0., -1.]], device=depth.device, dtype=depth.dtype) / 8.0
         sobel_y = torch.tensor([[1., 2., 1.], [0., 0., 0.], [-1., -2., -1.]], device=depth.device, dtype=depth.dtype) / 8.0
+        
         dx = F.conv2d(F.pad(x, (1, 1, 1, 1), mode='replicate'), sobel_x.view(1, 1, 3, 3))[:, 0]
         dy = F.conv2d(F.pad(x, (1, 1, 1, 1), mode='replicate'), sobel_y.view(1, 1, 3, 3))[:, 0]
+        
+        # 【核心修改点】：限制深度梯度的最大幅值 (比如最大允许斜率为 1.0)
+        # 这意味着我们假设场景中极其陡峭的表面（视线几乎平行于表面）是不反光的，
+        # 从而避免在断崖边缘产生无穷大的梯度。
+        max_grad = 1.0 
+        dx = torch.clamp(dx, min=-max_grad, max=max_grad)
+        dy = torch.clamp(dy, min=-max_grad, max=max_grad)
+        
+        # 组装法线并归一化
         n = torch.stack([-dx, -dy, torch.ones_like(depth)], -1)
         return _safe_normalize(n, -1)
 
@@ -635,10 +646,12 @@ class Env:
         w_ground = torch.clamp(near_ground * flatness, 0.0, 1.0)
 
         w_obs = 1.0 - w_ground
+        # 变量 albedo (反照率/固有色)：物体在没有任何光照影响下，原本的明暗程度。
         albedo = (
             w_ground * self._cam_mat_ground[:, None, None]
             + w_obs * self._cam_mat_obstacle[:, None, None]
         )
+        # 变量 spec (Specular, 镜面反射系数)：决定了这个物体反不反光。
         spec = w_obs * self._cam_mat_spec[:, None, None]
         return albedo, spec
 
@@ -1194,10 +1207,10 @@ class Env:
         返回:
             y: (B, H, W)
         """
-        impl = self.diff_sensor_impl.get('yuv', 'python')
+        impl = self.diff_sensor_impl.get('camera_luma', 'python')
         if impl == 'cuda':
             if not hasattr(quadsim_cuda, 'render_diff_yuv_y_forward') or not hasattr(quadsim_cuda, 'render_diff_yuv_y_backward'):
-                raise RuntimeError("diff_sensor_impl[yuv]=cuda 但 quadsim_cuda 未实现 render_diff_yuv_y_forward/backward")
+                raise RuntimeError("diff_sensor_impl[camera_luma]=cuda 但 quadsim_cuda 未实现 render_diff_yuv_y_forward/backward")
             y = diff_render_yuv_y(
                 fov_tensor.contiguous(),
                 exposure.contiguous(),
@@ -1214,7 +1227,7 @@ class Env:
             )
             return torch.clamp(y, 0.0, 1.0)
         if impl != 'python':
-            raise ValueError(f"不支持的 diff_sensor_impl[yuv]={impl}，仅支持 python/cuda")
+            raise ValueError(f"不支持的 diff_sensor_impl[camera_luma]={impl}，仅支持 python/cuda")
 
         # ==================== 1) 几何层：深度 + 近似法线 + 材质先验 ====================
         fov_tensor = fov_tensor.contiguous()
@@ -1236,6 +1249,13 @@ class Env:
             self.width,
         )
         depth = torch.clamp(depth, min=0.03, max=120.0)
+
+        
+        # 【核心修改点】：注册反向传播钩子
+        # 无论后面的光照、镜头、ISP 怎么搞出爆炸的梯度，
+        # 只要传回到 depth 这里，强行限制在 [-1.0, 1.0] 之间。
+        # if depth.requires_grad:
+        #     depth.register_hook(lambda grad: torch.clamp(grad, min=-1.0, max=1.0))
 
         dir_world, _ = self._build_camera_rays(fov_tensor, R_cam_world)
         points_world = pos[:, None, None, :] + depth[..., None] * dir_world
@@ -1289,11 +1309,11 @@ class Env:
         可微主动深度相机渲染（Active ToF Sensor）。
         优先使用 CUDA 扩展高性能路径；失败时回退到 Python 实现。
         """
-        impl = self.diff_sensor_impl.get('active_tof', 'python')
+        impl = self.diff_sensor_impl.get('active_depth', 'python')
         if impl == 'cuda':
             if (not hasattr(quadsim_cuda, 'render_active_tof_forward')) or (not hasattr(quadsim_cuda, 'render_active_tof_backward')):
                 raise RuntimeError(
-                    "diff_sensor_impl[active_tof]=cuda 但 quadsim_cuda 未实现 render_active_tof_forward/backward"
+                    "diff_sensor_impl[active_depth]=cuda 但 quadsim_cuda 未实现 render_active_tof_forward/backward"
                 )
             B = power.shape[0]
             device = power.device
@@ -1320,7 +1340,7 @@ class Env:
             return noisy_depth, conf
         if impl == 'python':
             return self._render_active_tof_diff_python(power, exposure, gain, max_range=max_range)
-        raise ValueError(f"不支持的 diff_sensor_impl[active_tof]={impl}，仅支持 python/cuda")
+        raise ValueError(f"不支持的 diff_sensor_impl[active_depth]={impl}，仅支持 python/cuda")
 
     def _render_active_tof_diff_python(self, power, exposure, gain, max_range=6.0):
         """
@@ -1488,7 +1508,7 @@ class Env:
     def save_state(self):
         """
         保存当前环境的完整状态快照。
-        用于 G-DAC (Guided Differentiable Actor-Critic) 算法的内部优化循环 (Inner Loop)。
+        用于教师-学生训练的内部优化循环 (Inner Loop)。
         在教师网络进行多次梯度下降寻找最优轨迹时，需要反复重置到同一个初始状态。
         """
         return {
@@ -1506,7 +1526,7 @@ class Env:
     def restore_state(self, snapshot):
         """
         从快照中恢复环境状态。
-        用于 G-DAC 算法的内部优化循环。
+        用于教师-学生训练的内部优化循环。
         """
         self.p = snapshot['p'].clone()
         self.v = snapshot['v'].clone()

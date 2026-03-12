@@ -8,14 +8,392 @@
 这些字段通过 `writer.add_scalar` 记录，主要用于监控损失函数项和性能指标。它们在 `smooth_dict` 函数中被收集。
 
 #### Loss 相关 (用于优化)
-*   **`loss`**: 总损失值。这是所有子项 loss 加权求和后的结果，优化器直接优化此目标。
-*   **`loss_v`**: 速度跟踪误差。计算平均速度与目标速度之间的 Smooth L1 Loss。
-*   **`loss_v_pred`**: 速度估计误差。模型预测的速度 (IMU/VIO 模拟) 与真实速度之间的 MSE Loss。
-*   **`loss_obj_avoidance`**: 避障损失。基于障碍物向量场计算的 Barrier Loss，当接近安全边界时急剧增加。
-*   **`loss_d_acc`**: 加速度平滑正则化。控制输出 (加速度) 的平方和，鼓励更平滑、更低能耗的动作。
-*   **`loss_d_jerk`**: 加速度变化率 (Jerk) 正则化。惩罚加速度的剧烈变化，使飞行更平稳。
-*   **`loss_collide`**: 碰撞惩罚。当距离小于 0 时产生的 Softplus 惩罚，接近障碍物时数值很大。
-*   **`loss_ground_affinity`**: (Legacy) 地面吸附/高度限制损失。惩罚 `Z > 0` 的高度 (假设 Z 轴向上)，默认权重为 0。
+# DiffPhysDrone 训练目标设计（Loss 计算全量说明）
+
+> 本文档严格对齐当前 `main_cuda.py` 的实现逻辑（含 Full-BPTT / TBPTT / G-DAC 分支）。
+> 
+> 重点回答：
+> 1. 每个 loss 的数学公式与物理含义
+> 2. 不同 `vision_mode` 下到底启用了哪些 loss、为什么
+> 3. Full-BPTT 与 TBPTT 的 loss 计算差异
+
+---
+
+## 1. 符号与记号
+
+- 时间步：$t=1,\dots,T$
+- batch 维：$b=1,\dots,B$
+- 无人机速度：$v_t^b \in \mathbb{R}^3$
+- 目标速度（经过归一化与限幅）：$v_{\text{tar},t}^b \in \mathbb{R}^3$
+- 控制输出（最终加速度命令）：$a_t^b \in \mathbb{R}^3$
+- 最近障碍物向量：$\Delta p_t^b \in \mathbb{R}^3$
+- 安全边距：$m_t^b$
+- 与障碍物的“净距离”：
+  $$
+  d_t^b = \|\Delta p_t^b\|_2 - m_t^b
+  $$
+- 相机参数（若启用可微相机路径）：
+  - $f_t^b$：FOV（或 active_tof 模式下语义映射为 power）
+  - $e_t^b$：exposure
+  - $i_t^b$：ISO
+
+默认将平均算子记为 $\mathbb{E}[\cdot]$（在实现里对应 `.mean()`）。
+
+---
+
+## 2. 总损失（主训练路径，Full-BPTT）
+
+主训练总损失（未考虑 G-DAC 蒸馏重加权前）为：
+
+$$
+\mathcal{L}_{\text{base}}=
+\lambda_v\mathcal{L}_v+
+\lambda_{\text{avoid}}\mathcal{L}_{\text{avoid}}+
+\lambda_{\text{acc}}\mathcal{L}_{\text{acc}}+
+\lambda_{\text{jerk}}\mathcal{L}_{\text{jerk}}+
+\lambda_{v\_pred}\mathcal{L}_{v\_pred}+
+\lambda_{\text{col}}\mathcal{L}_{\text{col}}+
+\mathcal{L}_{\text{ground\_impl}}+
+\lambda_{\text{cam\_sm}}\mathcal{L}_{\text{cam\_sm}}+
+\lambda_{\text{fov}}\mathcal{L}_{\text{fov}}+
+\lambda_{\text{cam\_range}}\mathcal{L}_{\text{cam\_range}}+
+\lambda_{\text{tilt}}\mathcal{L}_{\text{tilt}}+
+\lambda_{\text{blur}}\mathcal{L}_{\text{blur}}+
+\lambda_{\text{noise}}\mathcal{L}_{\text{noise}}+
+\lambda_{\text{tof\_p}}\mathcal{L}_{\text{tof\_power}}+
+\lambda_{\text{tof\_b}}\mathcal{L}_{\text{tof\_blur}}
+$$
+
+其中系数对应命令行参数：
+- $\lambda_v=\texttt{coef\_v}$
+- $\lambda_{\text{avoid}}=\texttt{coef\_obj\_avoidance}$
+- $\lambda_{\text{acc}}=\texttt{coef\_d\_acc}$
+- $\lambda_{\text{jerk}}=\texttt{coef\_d\_jerk}$
+- $\lambda_{v\_pred}=\texttt{coef\_v\_pred}$
+- $\lambda_{\text{col}}=\texttt{coef\_collide}$
+- $\lambda_{\text{cam\_sm}}=\texttt{coef\_cam\_smooth}$
+- $\lambda_{\text{fov}}=\texttt{coef\_fov\_reg}$
+- $\lambda_{\text{cam\_range}}=\texttt{coef\_cam\_range}$
+- $\lambda_{\text{tilt}}=\texttt{coef\_tilt}$
+- $\lambda_{\text{blur}}=\texttt{coef\_blur}$
+- $\lambda_{\text{noise}}=\texttt{coef\_noise}$
+- $\lambda_{\text{tof\_p}}=\texttt{coef\_tof\_power}$
+- $\lambda_{\text{tof\_b}}=\texttt{coef\_tof\_blur}$
+
+> 注意（实现细节）：当前代码中地面项写法是
+> `args.coef_ground_affinity + loss_ground_affinity`
+> ，即
+> $$
+> \mathcal{L}_{\text{ground\_impl}} = \texttt{coef\_ground\_affinity} + \mathcal{L}_{\text{ground}}
+> $$
+> 是“常数偏置 + 未乘权重的地面loss”，并非传统的 $\lambda\mathcal{L}$ 形式。本文按**代码现状**描述。
+
+---
+
+## 3. 子损失逐项公式与含义
+
+### 3.1 速度主任务损失 $\mathcal{L}_v$
+
+代码先做 30-step 时间窗口均值：
+
+$$
+\bar v_t^b = \frac{1}{30}\sum_{k=t-29}^{t}v_k^b
+$$
+
+然后与目标速度向量比较：
+
+$$
+\delta_t^b = \|\bar v_t^b - v_{\text{tar},t}^b\|_2
+$$
+
+最终采用 Smooth L1：
+
+$$
+\mathcal{L}_v = \text{SmoothL1}(\delta_t^b, 0)
+$$
+
+**含义**：既约束方向也约束速度幅值，且通过滑窗抑制短时抖动。
+
+---
+
+### 3.2 速度预测辅助损失 $\mathcal{L}_{v\_pred}$
+
+策略网络内部有速度预测分支 $\hat v_t^b$：
+
+$$
+\mathcal{L}_{v\_pred} = \|\hat v_t^b - v_t^b\|_2^2
+$$
+
+实现中目标端通常 `detach`，避免梯度回灌到环境动力学图。
+
+**含义**：提升可观测性和状态表征质量，尤其在噪声/缺失观测条件下更稳。
+
+---
+
+### 3.3 控制平滑正则
+
+1) 加速度能量：
+$$
+\mathcal{L}_{\text{acc}} = \mathbb{E}[\|a_t^b\|_2^2]
+$$
+
+2) Jerk（离散一阶差分乘控制频率缩放）：
+$$
+j_t^b = (a_t^b-a_{t-1}^b)\cdot 15
+$$
+$$
+\mathcal{L}_{\text{jerk}} = \mathbb{E}[\|j_t^b\|_2^2]
+$$
+
+**含义**：抑制剧烈控制，提升可执行性与飞行平顺性。
+
+---
+
+### 3.4 避障屏障损失 $\mathcal{L}_{\text{avoid}}$
+
+定义距离变化“接近速度”权重：
+$$
+\nu_t^b = \max\left(1,\,-135\cdot(d_t^b-d_{t-1}^b)\right)
+$$
+
+Barrier 函数：
+$$
+\mathcal{L}_{\text{avoid}} = \mathbb{E}\left[\nu_t^b\cdot\max(0,1-d_t^b)^2\right]
+$$
+
+**含义**：离障碍越近、且朝障碍逼近越快，惩罚越大。
+
+---
+
+### 3.5 碰撞惩罚 $\mathcal{L}_{\text{col}}$
+
+$$
+\mathcal{L}_{\text{col}} = \mathbb{E}\left[\nu_t^b\cdot\text{softplus}(-32\,d_t^b)\right]
+$$
+
+**含义**：对 $d_t^b<0$（穿入安全边界）给出陡峭惩罚，强化“硬安全”趋势。
+
+---
+
+### 3.6 地面项 $\mathcal{L}_{\text{ground}}$
+
+$$
+\mathcal{L}_{\text{ground}} = \mathbb{E}[\text{ReLU}(p_{z,t}^b)^2]
+$$
+
+实现并入总损失时按 2 节所述使用 `coef_ground_affinity + loss_ground_affinity`。
+
+---
+
+### 3.7 相机参数正则（只要 `use_cam=True` 且历史长度>1 就会生效）
+
+设相机历史向量为 $c_t^b$：
+
+1) 平滑项：
+$$
+\mathcal{L}_{\text{cam\_sm}} = \mathbb{E}[\|c_t^b-c_{t-1}^b\|_2^2]
+$$
+
+2) FOV 正则：
+- 若 `paper_unified_control=True`，历史中 FOV 用归一化形式（默认值为 1.0）：
+  $$
+  \mathcal{L}_{\text{fov}}=\mathbb{E}[(f_t^b-1)^2]
+  $$
+- 否则（传统 absolute 参数）默认中心为 0.5：
+  $$
+  \mathcal{L}_{\text{fov}}=\mathbb{E}[(f_t^b-0.5)^2]
+  $$
+
+3) 范围中心化：
+$$
+\mathcal{L}_{\text{cam\_range}}=\mathbb{E}[\|c_t^b-0.5\|_2^2]
+$$
+
+**含义**：防突变、防长期极端参数、保障梯度与控制可执行性。
+
+---
+
+### 3.8 光学质量项（YUV路径）
+
+仅当：
+- `use_cam=True`
+- 且 `vision_mode` 非 `active_tof`
+- 且 `paper_optical_loss=True`
+
+才计算以下两项：
+
+1) 运动模糊势能
+$$
+\mathcal{L}_{\text{blur}} = \mathbb{E}\left[\|v_t^b\|_2^2\cdot t_{\text{exp},t}^{2}\cdot f_{\text{eff},t}^{2}\right]
+$$
+
+其中（按实现）：
+$$
+t_{\text{exp},t}=10e_t^b+0.5,\quad f_{\text{eff},t}=\frac{1}{\max(f_t^b,0.1)}
+$$
+
+2) 噪声势能
+$$
+\sigma_t^b = 0.03\cdot\frac{1+2i_t^b}{e_t^b+0.3}
+$$
+$$
+\mathcal{L}_{\text{noise}}=\mathbb{E}[(\sigma_t^b)^2]
+$$
+
+**含义**：鼓励策略在速度、曝光、焦距/视场之间做“清晰度-感知质量”权衡。
+
+---
+
+### 3.9 Active ToF 专用项（`vision_mode=active_tof`）
+
+在 active_tof 模式下，代码走专门分支，不用 `paper_optical_loss` 的 blur/noise 公式，而是：
+
+1) 功耗惩罚（实现语义：fov变量在该模式下映射为 power）
+$$
+\mathcal{L}_{\text{tof\_power}}=\mathbb{E}[(f_t^b)^2]
+$$
+
+2) ToF 运动模糊代理惩罚
+$$
+\mathcal{L}_{\text{tof\_blur}}=\mathbb{E}[\|v_t^b\|_2\cdot e_t^b]
+$$
+
+**含义**：鼓励低功耗、并在高速时避免过长曝光导致深度质量下降。
+
+---
+
+### 3.10 墙缝倾斜项 $\mathcal{L}_{\text{tilt}}$
+
+当前实现中默认保持 0（占位符）；若后续填充可作为 wall-slit 课程引导项。
+
+---
+
+## 4. G-DAC 分支下的总损失
+
+若 `paper_gdac=True` 且 teacher 标签存在：
+
+- 蒸馏损失（按条件）
+  - 意图蒸馏：$\text{MSE}(y_{\text{student}},y_{\text{teacher}})$
+  - 或动作蒸馏：$\text{MSE}(u_{\text{student}},u_{\text{teacher}})$
+  - 若有相机动作标签，再加相机蒸馏项
+
+记为 $\mathcal{L}_{\text{distill}}$，则最终：
+
+$$
+\mathcal{L}_{\text{gdac}} = \alpha_i\,\mathcal{L}_{\text{distill}} + \beta\,\mathcal{L}_{\text{base}}
+$$
+
+其中：
+- $\alpha_i = \texttt{gdac\_distill\_coef\_at\_iter}(i)$（退火）
+- $\beta = \texttt{gdac\_physics\_weight}$
+
+---
+
+## 5. TBPTT 与 Full-BPTT 的 loss 差异
+
+### 5.1 共同点
+- 绝大多数子损失定义一致（速度、预测、避障、碰撞、控制平滑、相机正则、active_tof 专用项）。
+- 都在每次优化前后进行 NaN/Inf 防护。
+
+### 5.2 不同点（重要）
+1. **计算粒度**
+   - Full-BPTT：整段 rollout 后一次性组装全局损失再反传。
+   - TBPTT：按 chunk 组装 `chunk_loss`，在 chunk 边界反传并截断图。
+
+2. **蒸馏项在 TBPTT 中当前为 0**
+   - `loss_distill_c` 在 TBPTT chunk 路径中当前置零（实现现状）。
+
+3. **日志聚合方式不同**
+   - TBPTT 记录 chunk 平均统计后再汇总。
+
+---
+
+## 6. `vision_mode` 对 loss 的影响（最关键）
+
+### 6.1 模式开关定义（代码层）
+
+- `use_depth = (vision_mode == 'depth')`
+- `use_yuv = (vision_mode in {'yuv','yuv_tof'})`
+- `use_tof = (vision_mode in {'yuv_tof','active_tof'})`
+- `use_active_tof = (vision_mode == 'active_tof')`
+- `use_cam = (diff_cam or paper_unified_control) and (use_yuv or use_active_tof)`
+
+并且：若 `vision_mode=active_tof` 且未启用 `use_cam`，代码会直接报错。
+
+---
+
+### 6.2 四种 `vision_mode` 的 loss 对照
+
+| loss项 | depth | yuv | yuv_tof | active_tof |
+|---|---:|---:|---:|---:|
+| $\mathcal{L}_v,\mathcal{L}_{v\_pred},\mathcal{L}_{\text{avoid}},\mathcal{L}_{\text{col}},\mathcal{L}_{\text{acc}},\mathcal{L}_{\text{jerk}},\mathcal{L}_{\text{ground}}$ | ✅ | ✅ | ✅ | ✅ |
+| 相机正则 $\mathcal{L}_{\text{cam\_sm}},\mathcal{L}_{\text{fov}},\mathcal{L}_{\text{cam\_range}}$ | ❌（`use_cam`不成立） | ✅（若 `use_cam`） | ✅（若 `use_cam`） | ✅（强制 `use_cam`） |
+| 光学项 $\mathcal{L}_{\text{blur}},\mathcal{L}_{\text{noise}}$ | ❌ | ✅（需 `paper_optical_loss`） | ✅（需 `paper_optical_loss`） | ❌（被 active_tof 分支替代） |
+| active_tof项 $\mathcal{L}_{\text{tof\_power}},\mathcal{L}_{\text{tof\_blur}}$ | ❌ | ❌ | ❌ | ✅ |
+
+---
+
+### 6.3 各模式详细解释
+
+#### A) `vision_mode=depth`
+- 观测走深度渲染，不走可微相机参数链路。
+- 因 `use_cam=False`，相机正则、光学项、active_tof项都不启用。
+- 总损失主要由动力学/安全/平滑项组成。
+
+#### B) `vision_mode=yuv`
+- 可使用可微主相机（当 `use_cam=True`）。
+- 启用相机参数正则。
+- 若 `paper_optical_loss=True`，启用 blur/noise 光学势能。
+- 不含 ToF 观测相关专用损失。
+
+#### C) `vision_mode=yuv_tof`
+- 主相机 + ToF 双模态输入。
+- loss 侧与 `yuv` 基本一致（相机正则 + 可选 blur/noise）。
+- 额外 ToF 主要体现在控制路径（如 dLQR 注入）而非新增专用 loss。
+
+#### D) `vision_mode=active_tof`
+- 使用可微 active_tof 渲染链，且要求 `use_cam=True`。
+- 相机正则仍会生效（因为参数仍由策略输出并时序更新）。
+- 不走 `paper_optical_loss` 的 blur/noise 公式。
+- 改用 active_tof 专用的 $\mathcal{L}_{\text{tof\_power}}$ 与 $\mathcal{L}_{\text{tof\_blur}}$。
+
+---
+
+## 7. 实践建议（配置层）
+
+1. 若目标是“先学安全稳定飞行”：
+   - 先提高 $\lambda_{\text{avoid}}$ 与 $\lambda_{\text{col}}$，降低光学项权重。
+
+2. 若目标是“学习主动感知耦合策略”：
+   - `yuv/yuv_tof`：开启 `paper_optical_loss`，逐步提升 `coef_blur/coef_noise`。
+   - `active_tof`：重点调 `coef_tof_power/coef_tof_blur`，观察功耗-清晰度-速度三者平衡。
+
+3. 若显存紧张且时域长：
+   - 开 TBPTT；但需知 TBPTT 当前 chunk 路径下蒸馏项未启用（实现现状）。
+
+---
+
+## 8. 与日志字段的映射
+
+训练日志中的典型标量：
+- 总损失：`loss`
+- 子项：`loss_v`, `loss_v_pred`, `loss_obj_avoidance`, `loss_collide`, `loss_d_acc`, `loss_d_jerk`, `loss_cam_smooth`, `loss_fov_reg`, `loss_cam_range`, `loss_blur`, `loss_noise`, `loss_distill` 等
+- 指标：`success`, `avg_speed`, `max_speed`, `ar`，以及滚转/耦合相关统计
+
+这些字段是分析各损失权重是否平衡、以及不同 `vision_mode` 学习行为差异的直接依据。
+
+---
+
+## 9. 一句话总结
+
+当前项目的 loss 结构是“**动力学安全主目标 + 感知质量正则 + 模式特定项（active_tof 或 optical）+ 可选蒸馏重加权**”。
+
+- `depth`：偏控制与安全
+- `yuv / yuv_tof`：偏视觉主动感知（可加 blur/noise 势能）
+- `active_tof`：偏主动深度感知（power/blur 直接约束）
+
+如果你只看一个结论：**`vision_mode` 的差异，不在主干控制损失，而在“感知相关损失”分支的激活方式。**
+
 
 #### Differentiable Camera 相关 (仅在 `--diff_cam` 开启时有效)
 *   **`loss_cam_smooth`**: 相机参数平滑度。惩罚相机参数 (FOV, Exposure 等) 随时间的剧烈波动。
@@ -42,52 +420,6 @@
 *   **`cam_params`** (如果开启 `diff_cam`): 相机参数变化图。
     *   包含 4 个子图：FOV delta (视场角变化), Exposure (曝光), ISO (感光度), Focus (对焦距离)。
 
-### 总结
-*   **最核心指标**: `loss` (收敛情况), `success` (存活率), `avg_speed` (飞行效率), `ar` (综合表现)。
-*   **调试用**: `demo` 视频看视觉输入，`p_history`看轨迹平滑度。
-
-这三个 loss 项都是针对 **可微分相机参数 (Differentiable Camera Parameters)** 的正则化项，只有在开启 `--diff_cam` 参数时才会生效。
-
-它们在代码中的计算逻辑如下（main_cuda.py 约第 283 行起）：
-
-```python
-# Camera parameter losses (differentiable perception)
-if args.diff_cam and len(cam_params_history) > 1:
-    cam_hist = torch.stack(cam_params_history)  # (T, B, 4)
-    
-    # Smoothness: penalize rapid camera parameter changes between timesteps
-    cam_diff = cam_hist.diff(1, 0)
-    loss_cam_smooth = cam_diff.pow(2).mean()
-
-    # FOV regularization: keep FOV near default (fov_delta=0.5 → default FOV)
-    fov_deltas = cam_hist[:, :, 0]
-    loss_fov_reg = (fov_deltas - 0.5).pow(2).mean()
-
-    # Range regularization: keep all params near center to avoid extreme values
-    loss_cam_range = (cam_hist - 0.5).pow(2).mean()
-```
-
-具体的含义和作用如下：
-
-### 1. `loss_cam_smooth` (相机参数平滑损失)
-*   **含义**: 计算所有相机参数（FOV, 曝光, ISO, 对焦距离）在**连续时间步之间的变化量**的均方误差。
-*   **作用**: **防止参数突变**。物理相机的变焦、光圈调整或对焦都需要时间，不可能在 1/15 秒内瞬间大幅改变。此损失强制模型预测出随时间平滑变化的参数曲线，使仿真更符合物理现实，也有助于训练稳定。
-
-### 2. `loss_fov_reg` (视场角正则化损失)
-*   **含义**: 计算预测的 FOV 调节因子 (`fov_delta`) 与 **0.5** 之间的差异。
-*   **背景**: 代码中 FOV 的计算公式是 `cam_fov = base_fov * (0.5 + fov_delta)`。当 `fov_delta = 0.5` 时，相机的视场角等于默认的基础视场角 (`base_fov`)。
-*   **作用**: **鼓励使用默认视场角**。它作为一个“软约束”，告诉模型除非有必要（例如为了看清远处物体而变焦），否则应该保持在标准的视场角附近，防止模型学习到一直使用极端的广角或长焦这种奇怪的策略。
-
-### 3. `loss_cam_range` (参数范围正则化损失)
-*   **含义**: 计算**所有**相机参数与 **0.5** 的均方误差。
-*   **作用**: **防止参数饱和/极端化**。
-    *   这些参数通常是由神经网络的 `Sigmoid` 激活函数输出的（范围 0~1）。
-    *   如果参数长时间处于 0 或 1 的极端值，梯度会消失，导致网络难以继续学习。
-    *   这个损失项鼓励参数保持在 0.5 的中间区域（即 Sigmoid 的线性敏感区），保证梯度流动的顺畅，防止数值溢出或死锁。
-
-    Read [](file:///home/zhaoguodong/work/code/DiffPhysDrone/env_cuda.py#100-100), lines 100 to 300
-
-Read [](file:///home/zhaoguodong/work/code/DiffPhysDrone/env_cuda.py#301-301), lines 301 to 403
 
 `env.render` 和 `env.render_diff` 都是用于生成仿真环境的视觉观测（深度图），但它们的实现机制和用途有显著不同：
 
@@ -645,6 +977,8 @@ Created 9 todos
 - 几何意义：相机中心 + 深度 × 光线方向。
 
 `n_cam = self._estimate_normals_from_depth(depth)`
+
+- 方案三：解析法线 (Analytical Normals)（最完美，需修改 CUDA）其实用 Sobel 算子算深度图是图形学里的“权宜之计”（Screen Space Approach）。你的底层既然是用 CUDA 写的（quadsim_cuda），而且场景是由完美的几何体（球、圆柱、方块）构成的。这就意味着，当一根光线打在球体表面时，这个点的法线在数学上是绝对精确已知且平滑的！假设球心坐标是 $C$，光线击中球面的点是 $P$，那么这个点的法线向量 $N$ 就是极其简单的数学公式：$$N = \frac{P - C}{\|P - C\|}$$如果你有 C++ / CUDA 层面的修改权限，最完美的做法是：让 quadsim_cuda.render_diff 这个前向传播函数，除了返回 depth 张量，顺便把在这个像素点计算出的真实数学法线 (Analytical Normals) 也作为一个张量返回。如果是这样，你的 Python 代码就不需要 _estimate_normals_from_depth 这个罪魁祸首了，直接使用完美的法线，边缘处不仅没有任何光照瑕疵，梯度也如丝般顺滑。优点：一劳永逸，物理最准确，彻底消灭由于屏幕空间差分带来的 Artifacts（瑕疵）。缺点：需要改写底层的 CUDA Kernel，工作量稍大。
 
 - 用 Sobel 在图像平面估计法线，输出 `(B,H,W,3)`（相机系）。
 
@@ -1793,3 +2127,5 @@ yr = y * (1.0 - a_roll) + prev * a_roll  # Rolling Shutter 融合
 **最后，它的输出是什么？**
 是一个 `y` 张量，形状为 `(Batch, H, W)`，数值在 0.0 到 1.0 之间。
 它代表了 YUV 图像格式中的 **Y通道（Luma，明亮度/灰度）**。这个极其逼真、带有畸变、可能曝光不足、可能充满雪花噪点且带运动模糊的单色画面，最终丢给无人机的神经网络，让它在这样残酷的视觉中依然能找准方向，实现完美的 Sim2Real 跃迁！
+
+

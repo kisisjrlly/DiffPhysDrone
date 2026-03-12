@@ -13,17 +13,17 @@
 # Training
 --timesteps 120
 
-# Paper unified + optical setup
---paper_unified_control
---paper_cam_obs
---paper_optical_loss
+# Camera incremental control + camera-quality setup
+--camera_action_mode incremental
+--include_camera_state_in_obs
+--enable_camera_quality_loss
 
-# G-DAC
---paper_gdac
---gdac_inner_steps 10
---gdac_inner_lr 0.01
---coef_distill 1.0
---gdac_physics_weight 0.3
+# Teacher-student training
+--enable_teacher_student_training
+--teacher_inner_steps 10
+--teacher_inner_lr 0.01
+--distill_coef 1.0
+--student_physics_coef 0.3
 
 # Optical loss weights
 --coef_blur 0.1

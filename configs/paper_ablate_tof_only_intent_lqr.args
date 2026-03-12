@@ -15,13 +15,13 @@
 --coef_collide 10.0
 --coef_obj_avoidance 5.0
 
-# Paper setup
---paper_unified_control
---paper_cam_obs
---paper_optical_loss
+# Camera incremental control + camera-quality setup
+--camera_action_mode incremental
+--include_camera_state_in_obs
+--enable_camera_quality_loss
 
-# Ablation: ToF only + intent dLQR
---vision_mode=depth
+# Ablation: passive_depth only + intent dLQR
+--sensor_mode=passive_depth
 --use_dmpc
 --policy_output_intent
 --inject_tof_into_lqr

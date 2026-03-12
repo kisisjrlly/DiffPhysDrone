@@ -4,42 +4,42 @@ from torch import nn
 # 这是一个自定义的梯度衰减函数。
 # 它的作用是在反向传播时，将梯度乘以一个衰减系数 alpha。
 # 前向传播时，它的值就是 x 本身 (x * alpha + x * (1 - alpha) = x)。
-# 这在长序列的 RNN/GRU 训练中常用于缓解梯度爆炸，或者在 G-DAC 算法中控制梯度流。
+# 这在长序列的 RNN/GRU 训练中常用于缓解梯度爆炸，或在教师-学生训练中控制梯度流。
 def g_decay(x, alpha):
     return x * alpha + x.detach() * (1 - alpha)
 
 class Model(nn.Module):
-    def __init__(self, dim_obs=9, dim_action=4, use_diff_cam=False,
-                 use_unified_control=False, use_cam_obs=False,
+    def __init__(self, dim_obs=9, dim_action=4,
+                 camera_action_mode='off', include_camera_state_in_obs=False,
                  in_channels=1, use_policy_intent=False, intent_dim=9,
                  main_in_channels=1,
                  use_tof_conf=False,
                  tof_nn_width=16,
                  tof_nn_height=12,
-                 active_tof_use_pipeline=True,
-                 vision_mode='depth') -> None:
+                 active_depth_use_pipeline=True,
+                 sensor_mode='camera_luma_plus_passive_depth') -> None:
         """
         初始化无人机的策略网络模型 (Policy Network)。
         Args:
             dim_obs: 基础物理观测维度（通常是7维无里程计，或10维带里程计）。
             dim_action: 飞行控制动作维度（默认6维：3维加速度 + 3维速度预测）。
-            use_diff_cam: 是否使用传统的独立可微相机头（输出绝对的 sigmoid 参数）。
-            use_unified_control: 论文 §2.1 提出的统一控制空间。相机增量作为动作输出的一部分。
-            use_cam_obs: 论文 §2.1 提出的将当前相机状态加入到观测向量中。
+            camera_action_mode: 相机动作模式，off|absolute|incremental。
+            include_camera_state_in_obs: 是否将当前相机状态加入到观测向量中。
         """
         super().__init__()
         # 保存配置标志，用于在 forward 中决定走哪条计算路径
-        self.use_diff_cam = use_diff_cam
-        self.use_unified_control = use_unified_control
-        self.use_cam_obs = use_cam_obs
+        self.camera_action_mode = str(camera_action_mode).strip().lower()
+        if self.camera_action_mode not in ('off', 'absolute', 'incremental'):
+            raise ValueError(f"camera_action_mode must be one of off|absolute|incremental, got: {camera_action_mode}")
+        self.include_camera_state_in_obs = bool(include_camera_state_in_obs)
         self.use_policy_intent = use_policy_intent
         self.intent_dim = intent_dim
         self.main_in_channels = main_in_channels
         self.use_tof_conf = use_tof_conf
         self.tof_nn_width = max(int(tof_nn_width), 1)
         self.tof_nn_height = max(int(tof_nn_height), 1)
-        self.active_tof_use_pipeline = bool(active_tof_use_pipeline)
-        self.vision_mode = vision_mode
+        self.active_depth_use_pipeline = bool(active_depth_use_pipeline)
+        self.sensor_mode = self._normalize_sensor_mode(sensor_mode)
 
         def make_stem(cin: int, feat_dim: int):
             return nn.Sequential(
@@ -55,14 +55,15 @@ class Model(nn.Module):
             )
 
         # 如果启用了相机状态观测，物理观测维度需要增加 3 维（FOV, 曝光, ISO）
-        actual_obs_dim = dim_obs + (3 if use_cam_obs else 0)
+        actual_obs_dim = dim_obs + (3 if self.include_camera_state_in_obs else 0)
 
         # 视觉特征提取主干网络 (CNN Stem)
-        # 按 vision_mode 固定网络结构：
-        #   depth/yuv: 单分支
-        #   yuv_tof  : 双分支 + 特征融合
-        #   active_tof: 单分支（只用ToF Depth和Conf）
-        if self.vision_mode == 'yuv_tof':
+        # 按 sensor_mode 固定网络结构：
+        #   passive_depth: 单分支
+        #   camera_luma: 单分支
+        #   camera_luma_plus_passive_depth: 双分支 + 特征融合
+        #   active_depth: 单分支（只用主动深度/置信度）
+        if self.sensor_mode == 'camera_luma_plus_passive_depth':
             self.main_feat_dim = 96
             self.tof_feat_dim = 96
             self.stem_main = make_stem(self.main_in_channels, self.main_feat_dim)
@@ -70,14 +71,13 @@ class Model(nn.Module):
             self.stem_tof = make_stem(tof_in, self.tof_feat_dim)
             self.fuse = nn.Linear(self.main_feat_dim + self.tof_feat_dim, 192, bias=False)
             self.fuse.weight.data.mul_(0.5)
-        elif self.vision_mode in ('depth', 'yuv', 'active_tof'):
+        elif self.sensor_mode in ('passive_depth', 'camera_luma', 'active_depth'):
             stem_in_channels = in_channels
-            if self.vision_mode == 'active_tof':
-                # For active ToF, we input depth (1) and maybe confidence (1)
+            if self.sensor_mode == 'active_depth':
                 stem_in_channels = 1 + (1 if self.use_tof_conf else 0)
             self.stem = make_stem(stem_in_channels, 192)
         else:
-            raise ValueError(f'unsupported vision_mode: {self.vision_mode}')
+            raise ValueError(f'unsupported sensor_mode: {self.sensor_mode}')
 
         # 状态向量投影层：将无人机的物理状态（速度、姿态、目标距离等）映射到 192 维
         self.v_proj = nn.Linear(actual_obs_dim, 192)
@@ -89,7 +89,7 @@ class Model(nn.Module):
         self.gru = nn.GRUCell(192, 192)
 
         # 动作输出头 (Action Head)
-        if use_unified_control:
+        if self.camera_action_mode == 'incremental':
             # 统一控制模式：动作维度 = 飞行控制维度 + 3维相机增量控制(FOV, Exposure, ISO)
             total_action_dim = dim_action + 3
             self.fc = nn.Linear(192, total_action_dim, bias=False)
@@ -108,7 +108,7 @@ class Model(nn.Module):
             self.fc_intent.bias.data.zero_()
 
         # 传统的独立可微相机头（如果启用且未启用统一控制）
-        if use_diff_cam and not use_unified_control:
+        if self.camera_action_mode == 'absolute':
             # 输出 3 个相机参数的绝对值: FOV, Exposure, ISO
             self.fc_cam = nn.Linear(192, 3, bias=True)
             self.fc_cam.weight.data.mul_(0.01)
@@ -117,6 +117,22 @@ class Model(nn.Module):
 
         # 全局使用的激活函数
         self.act = nn.LeakyReLU(0.05)
+
+    @staticmethod
+    def _normalize_sensor_mode(raw_mode: str) -> str:
+        key = str(raw_mode).strip().lower()
+        allowed = {
+            'passive_depth',
+            'camera_luma',
+            'camera_luma_plus_passive_depth',
+            'active_depth',
+        }
+        if key not in allowed:
+            raise ValueError(
+                f"unsupported sensor_mode: {raw_mode}. "
+                f"allowed={sorted(list(allowed))}"
+            )
+        return key
 
     def reset(self):
         # 重置函数，当前为空。
@@ -131,13 +147,9 @@ class Model(nn.Module):
             return x[:, None]
         return x
 
-    @staticmethod
-    def _finite(x: torch.Tensor, nan=0.0, pos=1.0, neg=-1.0):
-        return torch.nan_to_num(x, nan=nan, posinf=pos, neginf=neg)
-
-    def _active_tof_pipeline(self, depth_like: torch.Tensor):
+    def _active_depth_pipeline(self, depth_like: torch.Tensor):
         """
-        active_tof 输入流水线：
+        active_depth 输入流水线：
         1) 深度反转并归一化（近处值更大）
         2) 最近邻下采样到 (2*H_nn, 2*W_nn)
         3) 2x2 最大池化到 (H_nn, W_nn)
@@ -147,7 +159,7 @@ class Model(nn.Module):
         if d.dim() == 4 and d.shape[1] == 1:
             d = d[:, 0]
         elif d.dim() != 3:
-            raise ValueError(f'active_tof pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
+            raise ValueError(f'active_depth pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
 
         # 反转 + 归一化：把 0.05~24m 映射到 [0,1]，近处更亮
         d = d.clamp(0.05, 24.0)
@@ -185,39 +197,32 @@ class Model(nn.Module):
         x_main = None
         x_tof = None
 
-        if self.vision_mode in ('depth', 'yuv', 'yuv_tof'):
+        if self.sensor_mode in ('passive_depth', 'camera_luma', 'camera_luma_plus_passive_depth'):
             if main_obs is None:
-                raise ValueError(f"vision_mode={self.vision_mode} 需要 main_obs 输入")
-            if self.vision_mode == 'depth':
-                # depth 模式：把深度值映射到一个更紧凑的数值范围，增强近距离分辨能力
+                raise ValueError(f"sensor_mode={self.sensor_mode} 需要 main_obs 输入")
+            if self.sensor_mode == 'passive_depth':
                 x_main = 3 / main_obs.clamp(0.3, 24) - 0.6
                 if add_noise:
-                    # 训练时可注入小噪声，提升鲁棒性
                     x_main = x_main + torch.randn_like(x_main) * 0.02
             else:
-                # yuv / y 模式：主输入被视为亮度图，先裁剪到 [0,1]
                 x_main = main_obs.clamp(0.0, 1.0)
                 if add_noise:
                     x_main = (x_main + torch.randn_like(x_main) * 0.01).clamp(0.0, 1.0)
-                # 再映射到 [-1, 1]，更符合后续网络初始化分布
                 x_main = x_main * 2.0 - 1.0
-            # 统一为 B,C,H,W
             x_main = self._as_bchw(x_main)
-        elif self.vision_mode == 'active_tof':
+        elif self.sensor_mode == 'active_depth':
             pass
         else:
-            raise ValueError(f"unsupported vision_mode: {self.vision_mode}")
+            raise ValueError(f"unsupported sensor_mode: {self.sensor_mode}")
 
-        if self.vision_mode in ('yuv_tof', 'active_tof'):
+        if self.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth'):
             if tof_depth is None:
-                raise ValueError(f"vision_mode={self.vision_mode} 需要 tof_depth 输入")
-            if self.vision_mode == 'active_tof':
-                if self.active_tof_use_pipeline:
-                    # active_tof（流水线模式）：逆深度 -> nearest -> maxpool
-                    x_tof = self._active_tof_pipeline(tof_depth)
+                raise ValueError(f"sensor_mode={self.sensor_mode} 需要 tof_depth 输入")
+            if self.sensor_mode == 'active_depth':
+                if self.active_depth_use_pipeline:
+                    x_tof = self._active_depth_pipeline(tof_depth)
                     if add_noise:
                         x_tof = (x_tof + torch.randn_like(x_tof) * 0.01).clamp(0.0, 1.0)
-                    # 归一化到 [-1,1]
                     x_tof = x_tof * 2.0 - 1.0
                 else:
                     # active_tof（直输模式）：回退到原逻辑，不做分辨率流水线处理
@@ -226,23 +231,27 @@ class Model(nn.Module):
                         x_tof = x_tof + torch.randn_like(x_tof) * 0.01
                     x_tof = self._as_bchw(x_tof)
             else:
-                # yuv_tof: 保持现有 ToF 非线性映射
-                x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
+                # x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
+
+                # 依然使用倒数深度保留对近处物体的敏感性
+                inv_depth = 3 / tof_depth.clamp(0.05, 24) - 0.6
+
+                # 【修改点1】：使用 Tanh 进行软截断，将无穷大的突变平滑压缩到 [-1.0, 1.0] 附近
+                # 除以 3.0 是为了让 1 米 (算出来是 2.4) 的距离刚好在 tanh(0.8) 左右，处于敏感区
+                x_tof = torch.tanh(inv_depth / 3.0)
                 if add_noise:
                     x_tof = x_tof + torch.randn_like(x_tof) * 0.01
                 x_tof = self._as_bchw(x_tof)
         else:
-            # 非 yuv_tof/active_tof 模式不允许 ToF 输入，避免模式语义漂移
             if tof_depth is not None or tof_conf is not None:
-                raise ValueError(f"vision_mode={self.vision_mode} 不应提供 ToF 输入")
+                raise ValueError(f"sensor_mode={self.sensor_mode} 不应提供 ToF 输入")
 
         x_tof_pack = x_tof
-        if self.vision_mode in ('yuv_tof', 'active_tof') and self.use_tof_conf and tof_conf is not None:
-            # 可选 ToF 置信度分支：映射到 [-1,1] 后与 ToF depth 在通道维拼接
+        if self.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth') and self.use_tof_conf and tof_conf is not None:
             c = tof_conf
-            if self.vision_mode == 'active_tof':
-                if self.active_tof_use_pipeline:
-                    c = self._active_tof_pipeline(c)
+            if self.sensor_mode == 'active_depth':
+                if self.active_depth_use_pipeline:
+                    c = self._active_depth_pipeline(c)
                     if add_noise:
                         c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
                     c = c * 2.0 - 1.0
@@ -259,8 +268,8 @@ class Model(nn.Module):
                 raise ValueError('tof_depth 与 tof_conf 尺寸必须一致')
             x_tof_pack = c if x_tof_pack is None else torch.cat([x_tof_pack, c], 1)
 
-        if self.vision_mode in ('yuv_tof', 'active_tof') and self.use_tof_conf and tof_conf is None:
-            raise ValueError(f"vision_mode={self.vision_mode} 且 use_tof_conf=True 时必须提供 tof_conf")
+        if self.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth') and self.use_tof_conf and tof_conf is None:
+            raise ValueError(f"sensor_mode={self.sensor_mode} 且 use_tof_conf=True 时必须提供 tof_conf")
 
         channels = []
         if x_main is not None:
@@ -270,10 +279,7 @@ class Model(nn.Module):
         if len(channels) == 0:
             raise ValueError("preprocess_sensor_inputs 需要至少一种传感器输入")
 
-        # depth/yuv 为单分支输入，可直接使用通道拼接结果（通常只有1路）
-        # yuv_tof 模式下主/ToF 分辨率允许不同，不能强制拼接；
-        # 这里返回 x_main 作为占位 fused 输入（forward 在该模式不会消费 x_fused）
-        if self.vision_mode == 'yuv_tof':
+        if self.sensor_mode == 'camera_luma_plus_passive_depth':
             x_fused = x_main
         else:
             x_fused = torch.cat(channels, 1)
@@ -302,70 +308,46 @@ class Model(nn.Module):
             add_noise=add_noise,
         )
 
-        if x is not None:
-            x = self._finite(x, nan=0.0, pos=5.0, neg=-5.0)
-        if x_main is not None:
-            x_main = self._finite(x_main, nan=0.0, pos=5.0, neg=-5.0)
-        if x_tof is not None:
-            x_tof = self._finite(x_tof, nan=0.0, pos=5.0, neg=-5.0)
-        v = self._finite(v, nan=0.0, pos=50.0, neg=-50.0)
-        if hx is not None:
-            hx = self._finite(hx, nan=0.0, pos=10.0, neg=-10.0)
-
         # ==========================
         # B. 视觉特征提取
         # ==========================
-        if self.vision_mode == 'yuv_tof':
-            # 固定双输入结构：main/tof 两路特征后融合
+        if self.sensor_mode == 'camera_luma_plus_passive_depth':
             if x_main is None or x_tof is None:
-                raise ValueError('vision_mode=yuv_tof 需要同时提供 main 与 tof 输入')
+                raise ValueError('sensor_mode=camera_luma_plus_passive_depth 需要同时提供 main 与 tof 输入')
             feat_main = self.stem_main(x_main)
             feat_tof = self.stem_tof(x_tof)
             img_feat = self.fuse(torch.cat([feat_main, feat_tof], -1))
         else:
-            # depth/yuv 固定单输入结构
             img_feat = self.stem(x)
-        img_feat = self._finite(img_feat, nan=0.0, pos=10.0, neg=-10.0)
         
         # ==========================
         # C. 多模态融合 + 时序建模
         # ==========================
         # 视觉特征 + 状态向量投影后做非线性激活
         x = self.act(img_feat + self.v_proj(v))
-        x = self._finite(x, nan=0.0, pos=10.0, neg=-10.0)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）
         hx = self.gru(x, hx)
-        hx = self._finite(hx, nan=0.0, pos=10.0, neg=-10.0)
         
         # 输出动作头原始值
         raw = self.fc(self.act(hx))
-        raw = self._finite(raw, nan=0.0, pos=10.0, neg=-10.0)
 
-        if self.use_unified_control:
-            # 统一控制：输出 = 飞行动作 + 相机增量动作
+        if self.camera_action_mode == 'incremental':
             flight_act = raw[:, :self._flight_dim]
-            # 相机增量限制到 [-1,1]
             cam_deltas = torch.tanh(raw[:, self._flight_dim:])  # (Batch, 3)
-            cam_deltas = self._finite(cam_deltas, nan=0.0, pos=1.0, neg=-1.0)
             if return_intent and self.use_policy_intent:
                 # 可选意图头（给 dLQR/dMPC 使用）
                 intent_raw = self.fc_intent(self.act(hx))
-                intent_raw = self._finite(intent_raw, nan=0.0, pos=10.0, neg=-10.0)
                 return flight_act, cam_deltas, hx, intent_raw
             return flight_act, cam_deltas, hx
 
-        # 传统模式：只输出飞行动作；若启用 diff_cam 再给一组绝对相机参数
         act = raw
         cam_params = None
-        if self.use_diff_cam:
-            # 独立相机头输出绝对值参数，范围 [0,1]
+        if self.camera_action_mode == 'absolute':
             cam_raw = self.fc_cam(self.act(hx))
-            cam_raw = self._finite(cam_raw, nan=0.0, pos=10.0, neg=-10.0)
             cam_params = torch.sigmoid(cam_raw)  # (Batch, 3)
         if return_intent and self.use_policy_intent:
             intent_raw = self.fc_intent(self.act(hx))
-            intent_raw = self._finite(intent_raw, nan=0.0, pos=10.0, neg=-10.0)
             return act, cam_params, hx, intent_raw
         return act, cam_params, hx
 

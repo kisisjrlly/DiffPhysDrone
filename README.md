@@ -13,8 +13,15 @@ Currently implemented differentiable sensors:
 
 | Sensor | Parameters Differentiable via Backprop |
 |---|---|
-| **Differentiable RGB Camera** (可微普通相机) | FOV, Exposure, ISO/Gain, Focus distance |
+| **Differentiable RGB Camera** (可微普通相机) | FOV, Exposure, ISO/Gain |
 | **Differentiable Active ToF Camera** (可微深度相机) | Transmit Power, Exposure time, Receiver Gain |
+
+Policy-controlled sensor parameters are **3D** in current code (no focus head):
+
+| `sensor_mode` | Policy output channels (1,2,3) | Physical meaning |
+|---|---|---|
+| `camera_luma_plus_passive_depth` / `camera_luma` | `(fov, exposure, iso)` | 主相机视场、曝光、增益 |
+| `active_depth` | `(power, exposure, gain)` | 主动深度发射功率、曝光、接收增益 |
 
 More sensor types and models are planned for future releases.
 
@@ -44,21 +51,24 @@ The passive camera renders a grayscale luminance image (`Y` channel) through a *
 6. **ISP** — black-level correction, gain, tone-mapping (Reinhard / softplus), gamma, optional sharpening
 7. **Temporal AE** — auto-exposure state-machine with PI controller tracking a target luminance
 
-Camera parameters `(fov_delta, exposure, iso, focus)` are output by the policy network via `sigmoid` and can be predicted with a dedicated head (`--diff_cam`) or as part of the **unified control space** (`--paper_unified_control`), where camera increments are appended to the action vector.
+Camera/sensor control parameters are 3D and are predicted with `--camera_action_mode absolute` or `--camera_action_mode incremental`:
+
+- `absolute`: 输出绝对值（`[0,1]` 域）
+- `incremental`: 输出增量（`[-1,1]` 域），按 `--cam_delta_scale` 累积更新
 
 CUDA-backed differentiable FOV rendering is provided via `DiffRenderFunction` (wrapping `quadsim_cuda.render_diff_fov`).
 
-**Camera-related loss terms** (active when `--diff_cam` or `--paper_unified_control` is set):
+**Camera-related loss terms** (active when `--camera_action_mode` is not `off`):
 
 | Loss | Purpose |
 |---|---|
 | `loss_cam_smooth` | Penalises rapid parameter changes between time-steps |
-| `loss_fov_reg` | Soft-anchors FOV delta near the default value (0.5) |
+| `loss_fov_reg` | Soft-anchors the first control channel near default (`camera_luma*`: FOV; `active_depth`: power) |
 | `loss_cam_range` | Keeps all parameters near the sigmoid centre to prevent gradient vanishing |
 | `loss_blur` | Penalises motion blur: $\mathcal{L}_{blur} \propto \|v\| \cdot t_{exp}$ |
 | `loss_noise` | Penalises sensor noise amplification at high ISO / low exposure |
 
-Enable the full optical-loss set with `--paper_optical_loss`.
+Enable the full optical-loss set with `--enable_camera_quality_loss`.
 
 ---
 
@@ -86,7 +96,7 @@ Additional physical effects modelled:
 - **Reparameterised noise injection**: gradients flow through the stochastic depth noise via a Gaussian reparameterisation of the Poisson process.
 - **Confidence channel**: the confidence map $C$ is optionally fed to the policy (`--tof_use_conf`), letting it reason about sensing quality.
 
-Both a pure **PyTorch backend** (`active_tof=python`) and a custom **CUDA kernel** (`active_tof=cuda`) are available, selectable per-sensor via `--diff_sensor_impl`.
+Both a pure **PyTorch backend** (`active_depth=python`) and a custom **CUDA kernel** (`active_depth=cuda`) are available, selectable per-sensor via `--diff_sensor_impl`.
 
 ---
 
@@ -155,14 +165,14 @@ python main_cuda.py $(cat configs/single_agent.args)
 
 | Flag | Description |
 |---|---|
-| `--vision_mode active_tof` | Use differentiable Active ToF sensor only |
-| `--vision_mode yuv_tof` | Dual-encoder: RGB camera + ToF |
-| `--vision_mode yuv` | RGB camera only |
-| `--vision_mode depth` | Raw depth (no differentiable sensor pipeline) |
-| `--paper_unified_control` | Camera parameters as part of the action space |
-| `--paper_optical_loss` | Enable blur & noise perception losses |
+| `--sensor_mode active_depth` | Use differentiable active-depth sensor only |
+| `--sensor_mode camera_luma_plus_passive_depth` | Dual-encoder: camera luma + passive depth |
+| `--sensor_mode camera_luma` | Camera luma only |
+| `--sensor_mode passive_depth` | Passive depth only |
+| `--camera_action_mode incremental` | Camera parameters as part of the action space |
+| `--enable_camera_quality_loss` | Enable blur & noise perception losses |
 | `--tof_use_conf` | Feed ToF confidence map to the policy |
-| `--diff_sensor_impl yuv=python active_tof=cuda` | Per-sensor backend selection |
+| `--diff_sensor_impl camera_luma=python active_depth=cuda` | Per-sensor backend selection |
 | `--cam_realism_preset high` | Photometric pipeline quality (`low/medium/high/ultra`) |
 | `--tbptt_enable` | Truncated BPTT for long-horizon training |
 | `--hybrid_full_bptt_every N` | Interleave full BPTT every N iters for long-range calibration |
@@ -241,8 +251,8 @@ python eval.py --resume <path to checkpoint> --target_speed 2.5
 │                          #   DiffRenderActiveTofFunction — differentiable Active ToF
 │                          #   render_active_tof_diff  — Python / CUDA dispatch
 ├── model.py               # Policy network (CNN stem + GRU + multi-head output)
-│                          #   vision_mode: depth / yuv / yuv_tof / active_tof
-├── main_cuda.py           # Training loop (BPTT / TBPTT / hybrid + G-DAC)
+│                          #   sensor_mode: passive_depth / camera_luma / camera_luma_plus_passive_depth / active_depth
+├── main_cuda.py           # Training loop (BPTT / TBPTT / hybrid + teacher-student)
 ├── lqr.py                 # Differentiable LQR / dMPC solver
 ├── rerun_vis.py           # Rerun visualisation helper
 ├── configs/

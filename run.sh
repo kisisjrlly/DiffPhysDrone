@@ -25,7 +25,7 @@ cam_profile=${CAM_PROFILE:-ultra}
 # 示例:
 #   LOG_TO_FILE=1 bash run.sh
 #   LOG_TO_FILE=0 bash run.sh
-log_to_file=${LOG_TO_FILE:-0}
+log_to_file=${LOG_TO_FILE:-1}
 
 cfg_file="configs/${task}.args"
 if [ ! -f "$cfg_file" ]; then

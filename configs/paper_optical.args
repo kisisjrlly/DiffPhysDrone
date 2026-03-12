@@ -12,10 +12,10 @@
 # Camera
 --cam_angle 20
 --fov_x_half_tan 0.82
---diff_cam
+--camera_action_mode absolute
 
-# Paper optical losses
---paper_optical_loss
+# Camera quality losses
+--enable_camera_quality_loss
 --coef_blur 0.1
 --coef_noise 0.05
 
