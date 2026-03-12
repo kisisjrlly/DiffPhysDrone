@@ -1,12 +1,7 @@
 import torch
 from torch import nn
 
-# 这是一个自定义的梯度衰减函数。
-# 它的作用是在反向传播时，将梯度乘以一个衰减系数 alpha。
-# 前向传播时，它的值就是 x 本身 (x * alpha + x * (1 - alpha) = x)。
-# 这在长序列的 RNN/GRU 训练中常用于缓解梯度爆炸，或在教师-学生训练中控制梯度流。
-def g_decay(x, alpha):
-    return x * alpha + x.detach() * (1 - alpha)
+from utils import g_decay
 
 class Model(nn.Module):
     def __init__(self, dim_obs=9, dim_action=4,

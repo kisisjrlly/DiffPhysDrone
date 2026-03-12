@@ -169,5 +169,5 @@
 --vis_spawn                         # 自动拉起可视化窗口
 
 # WandB
-# --wandb_disabled                  # 关闭在线日志
+--wandb_disabled                  # 关闭在线日志
 # --no-amp                           # 对齐原始项目：关闭混合精度
