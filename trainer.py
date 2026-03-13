@@ -32,7 +32,7 @@ from losses import velocity_tracking_loss, barrier
 from rollout_ops import (
     render_sensors, build_local_frame, build_state_vector,
     compute_target_velocity, decode_action_direct, decode_action_lqr,
-    update_camera_params,
+    update_camera_params, camera_exposure_to_time,
 )
 from train_utils import (
     MetricSmoother, periodic_tail_ops, is_save_iter,
@@ -63,13 +63,13 @@ def _teacher_initial_guess(env, model, args, sensor_flags, B, device,
 
     for t in range(args.timesteps):
         dt = teacher_dt_like_student(float(cam_exp.mean()), use_camera_control,
-                                     args.base_control_freq)
+                                     args.base_control_freq, env.cam_sem)
         main_obs, tof_depth, tof_conf = render_sensors(
             env, dt, cam_fov, cam_exp, cam_iso,
             sf['use_passive_depth'], sf['use_camera_luma'],
             sf['use_active_depth'], sf['use_depth_channel'],
             use_camera_control, differentiable=False)
-        torch.cuda.synchronize() 
+        # torch.cuda.synchronize() 
         if args.yaw_drift and yaw_drift_R is not None:
             tv_raw = torch.squeeze(tv_raw[:, None] @ yaw_drift_R, 1)
         else:
@@ -111,8 +111,7 @@ def _teacher_initial_guess(env, model, args, sensor_flags, B, device,
         act_buf_tmp.append(a_final)
 
         cam_fov, cam_exp, cam_iso, _ = update_camera_params(
-            c_out, cam_fov, cam_exp, cam_iso,
-            args.camera_action_mode, args.cam_delta_scale, env)
+            c_out, cam_fov, cam_exp, cam_iso, env)
 
     return init_acts, init_intents, init_cam_deltas
 
@@ -139,6 +138,7 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
         u_cam_guess = [c.clone().requires_grad_(True) for c in init_cam_deltas]
 
     base_params = y_guess if y_guess is not None else u_guess
+    assert base_params is not None
     inner_params = list(base_params) + (list(u_cam_guess) if u_cam_guess else [])
     inner_optim = torch.optim.Adam(inner_params, lr=args.teacher_inner_lr)
 
@@ -163,7 +163,7 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
 
         for t in range(args.timesteps):
             dt_k = teacher_dt_like_student(float(cam_exp_k.mean().detach()),
-                                           use_camera_control, args.base_control_freq)
+                                           use_camera_control, args.base_control_freq, env.cam_sem)
             c_p.append(env.p)
             vec_now_k = env.find_vec_to_nearest_pt()
             c_vtp.append(vec_now_k)
@@ -189,6 +189,7 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
                     args.inject_tof_into_lqr, args.tof_safe_dist, args.tof_repel_gain,
                     use_depth_channel, vec_now_k, solve_batched_dlqr)
             else:
+                assert u_guess is not None
                 a_final_k, _ = decode_action_direct(
                     u_guess[t], R_k, env, B, args.max_acc_cmd)
 
@@ -197,8 +198,7 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
             # Camera update
             if use_camera_control and u_cam_guess is not None:
                 cam_fov_k, cam_exp_k, cam_iso_k, _ = update_camera_params(
-                    u_cam_guess[t], cam_fov_k, cam_exp_k, cam_iso_k,
-                    args.camera_action_mode, args.cam_delta_scale, env)
+                    u_cam_guess[t], cam_fov_k, cam_exp_k, cam_iso_k, env)
                 c_cam_fov.append(cam_fov_k)
                 c_cam_exp.append(cam_exp_k)
                 c_cam_iso.append(cam_iso_k)
@@ -269,10 +269,11 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
                         chunk_loss = chunk_loss + args.coef_active_depth_power * fov_t.pow(2).mean()
                         chunk_loss = chunk_loss + args.coef_active_depth_blur * (sp * ex).mean()
                     elif args.enable_camera_quality_loss:
-                        ep = ex * 10 + 0.5
+                        ep = env.cam_sem.exposure_to_time(ex)
                         ef = 1.0 / fov_t.clamp(min=0.1)
                         chunk_loss = chunk_loss + args.coef_blur * (sp.pow(2) * ep.pow(2) * ef.pow(2)).mean()
-                        ns = 0.03 * (1.0 + 2.0 * iso_t) / (ex + 0.3)
+                        iso_gain = env.cam_sem.iso_to_gain(iso_t)
+                        ns = env.cam_sem.shot_noise_base * iso_gain / ep.clamp_min(1e-3)
                         chunk_loss = chunk_loss + args.coef_noise * ns.pow(2).mean()
 
                 (chunk_loss / teacher_chunk_count).backward()
@@ -296,6 +297,7 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
     if y_guess is not None:
         y_star = [y.detach() for y in y_guess]
     else:
+        assert u_guess is not None
         u_star = [u.detach() for u in u_guess]
     if u_cam_guess is not None:
         u_star_cam = [c.detach() for c in u_cam_guess]
@@ -385,7 +387,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
     # ── Main rollout loop ──
     for t in range(args.timesteps):
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
-        exposure_delay = float(cam_exposure.mean().detach()) * 0.030 if use_camera_control else 0.015
+        exposure_delay = float(env.cam_sem.exposure_to_time(cam_exposure.mean().detach())) * 0.01 if use_camera_control else 0.015
         ctl_dt = base_dt + exposure_delay
         student_add_noise = (args.student_noise_mode == 'on') if args.enable_teacher_student_training else True
 
@@ -396,7 +398,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
             use_passive_depth, use_camera_luma, use_active_depth,
             use_depth_channel, use_camera_control,
             differentiable=diff_cam)
-        torch.cuda.synchronize() 
+        # torch.cuda.synchronize() 
         depth_vis = main_obs if main_obs is not None else tof_depth
         assert depth_vis is not None
 
@@ -457,8 +459,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
 
         # Camera update
         cam_fov, cam_exposure, cam_iso, cam_hist_entry = update_camera_params(
-            cam_params, cam_fov, cam_exposure, cam_iso,
-            args.camera_action_mode, args.cam_delta_scale, env)
+            cam_params, cam_fov, cam_exposure, cam_iso, env)
         if cam_hist_entry is not None:
             cam_params_history.append(cam_hist_entry)
 
@@ -540,10 +541,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                 if use_camera_control and len(c_cam_hist) > 1:
                     ch = torch.stack(c_cam_hist)
                     loss_cam_smooth_c = ch.diff(1, 0).pow(2).mean()
-                    if args.camera_action_mode == 'incremental':
-                        loss_fov_reg_c = (ch[:, :, 0] - 1.0).pow(2).mean()
-                    else:
-                        loss_fov_reg_c = (ch[:, :, 0] - 0.5).pow(2).mean()
+                    loss_fov_reg_c = (ch[:, :, 0] - 0.5).pow(2).mean()
                     loss_cam_range_c = (ch - 0.5).pow(2).mean()
 
                 loss_blur_c = torch.zeros((), device=device)
@@ -557,9 +555,10 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                         loss_adp_c = fov_h.pow(2).mean()
                         loss_adb_c = (sp * ex).mean()
                     elif args.enable_camera_quality_loss:
-                        ep = ex * 10 + 0.5; ef = 1.0 / fov_h.clamp(min=0.1)
+                        ep = env.cam_sem.exposure_to_time(ex); ef = 1.0 / fov_h.clamp(min=0.1)
                         loss_blur_c = (sp.pow(2) * ep.pow(2) * ef.pow(2)).mean()
-                        ns = 0.03 * (1.0 + 2.0 * iso_h) / (ex + 0.3).clamp_min(1e-3)
+                        iso_gain = env.cam_sem.iso_to_gain(iso_h)
+                        ns = env.cam_sem.shot_noise_base * iso_gain / ep.clamp_min(1e-3)
                         loss_noise_c = ns.pow(2).mean()
 
                 loss_distill_c = torch.zeros((), device=device)
@@ -741,10 +740,7 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
     if use_camera_control and len(cam_params_history) > 1:
         cam_hist = torch.stack(cam_params_history)
         loss_cam_smooth = cam_hist.diff(1, 0).pow(2).mean()
-        if args.camera_action_mode == 'incremental':
-            loss_fov_reg = (cam_hist[:, :, 0] - 1.0).pow(2).mean()
-        else:
-            loss_fov_reg = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
+        loss_fov_reg = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
         loss_cam_range = (cam_hist - 0.5).pow(2).mean()
 
     # Optical losses
@@ -761,10 +757,11 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
             loss_adp = fov_h.pow(2).mean()
             loss_adb = (sp * ex).mean()
         elif args.enable_camera_quality_loss:
-            ep = ex * 10 + 0.5
+            ep = env.cam_sem.exposure_to_time(ex)
             ef = 1.0 / fov_h.clamp(min=0.1)
             loss_blur = (sp.pow(2) * ep.pow(2) * ef.pow(2)).mean()
-            ns = 0.03 * (1.0 + 2.0 * iso_h) / (ex + 0.3).clamp_min(1e-3)
+            iso_gain = env.cam_sem.iso_to_gain(iso_h)
+            ns = env.cam_sem.shot_noise_base * iso_gain / ep.clamp_min(1e-3)
             loss_noise = ns.pow(2).mean()
 
     loss_tilt = torch.tensor(0.0, device=device)
@@ -877,6 +874,57 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, sensor_flags, smoot
         })
 
 
+def _build_loss_share_metrics(loss_scalars: dict, args, distill_coef_iter: float) -> dict:
+    """Build weighted loss contribution and share metrics for WandB.
+
+    Returns keys like:
+      - loss_contrib/<name>
+      - loss_share/<name>
+            - loss_share/physics_total
+    """
+    coeff_map = {
+        'v': ('loss_v', float(args.coef_v)),
+        'obj_avoidance': ('loss_obj_avoidance', float(args.coef_obj_avoidance)),
+        'd_acc': ('loss_d_acc', float(args.coef_d_acc)),
+        'd_jerk': ('loss_d_jerk', float(args.coef_d_jerk)),
+        'v_pred': ('loss_v_pred', float(args.coef_v_pred)),
+        'collide': ('loss_collide', float(args.coef_collide)),
+        'ground_affinity': ('loss_ground_affinity', float(args.coef_ground_affinity)),
+        'cam_smooth': ('loss_cam_smooth', float(args.coef_cam_smooth)),
+        'fov_reg': ('loss_fov_reg', float(args.coef_fov_reg)),
+        'cam_range': ('loss_cam_range', float(args.coef_cam_range)),
+        'tilt': ('loss_tilt', float(args.coef_tilt)),
+        'blur': ('loss_blur', float(args.coef_blur)),
+        'noise': ('loss_noise', float(args.coef_noise)),
+        'active_depth_power': ('loss_active_depth_power', float(args.coef_active_depth_power)),
+        'active_depth_blur': ('loss_active_depth_blur', float(args.coef_active_depth_blur)),
+    }
+
+    physics_scale = float(args.student_physics_coef) if args.enable_teacher_student_training else 1.0
+    contrib = {}
+    for name, (loss_key, coef) in coeff_map.items():
+        raw_v = float(loss_scalars.get(loss_key, 0.0))
+        contrib[name] = physics_scale * coef * raw_v
+
+    distill_contrib = 0.0
+    if args.enable_teacher_student_training:
+        distill_contrib = float(distill_coef_iter) * float(loss_scalars.get('loss_distill', 0.0))
+    contrib['distill'] = distill_contrib
+
+    total = sum(contrib.values())
+    eps = 1e-12
+    if abs(total) < eps:
+        total = eps
+
+    physics_total = sum(v for k, v in contrib.items() if k != 'distill')
+    out = {}
+    for name, val in contrib.items():
+        out[f'loss_contrib/{name}'] = float(val)
+        out[f'loss_share/{name}'] = float(val / total)
+    out['loss_share/physics_total'] = float(physics_total / total)
+    return out
+
+
 def _log_save_iter(rollout, loss_dict, env, args, sensor_flags, i):
     """Save videos and plots to WandB on checkpoint iterations."""
     if not MATPLOTLIB_AVAILABLE:
@@ -938,13 +986,12 @@ def _log_save_iter(rollout, loss_dict, env, args, sensor_flags, i):
         ch = torch.stack(rollout['cam_params_history'])[:, vid_idx].detach().cpu()
         fig_cam, axes = plt.subplots(1, 3, figsize=(12, 3))
         if use_active_depth:
-            labels = ['Power (norm)', 'Exposure', 'Gain'] if args.camera_action_mode == 'incremental' else ['Power', 'Exposure', 'Gain']
+            labels = ['Power', 'Exposure', 'Gain']
         else:
-            labels = ['FOV (norm)', 'Exposure', 'ISO'] if args.camera_action_mode == 'incremental' else ['FOV delta', 'Exposure', 'ISO']
+            labels = ['FOV delta', 'Exposure', 'ISO']
         for ci, (ax_c, lb) in enumerate(zip(axes.flatten(), labels)):
             ax_c.plot(ch[:, ci].numpy(), label=lb); ax_c.set_title(lb)
-            if args.camera_action_mode != 'incremental':
-                ax_c.set_ylim(-0.05, 1.05)
+            ax_c.set_ylim(-0.05, 1.05)
         fig_cam.tight_layout()
         wandb.log({'cam_params': wandb.Image(fig_cam)}, step=i + 1)
         plt.close(fig_cam)
@@ -1084,10 +1131,13 @@ def train(args, sensor_flags, model, env_train, env_full,
             if tbptt_this_iter:
                 stats = rollout['tbptt_stats']
                 dn = max(rollout['tbptt_chunk_n'], 1)
-                smoother.add({k: stats[k] / dn for k in stats})
+                loss_scalars = {k: stats[k] / dn for k in stats}
             else:
-                smoother.add({k: float(v.detach()) for k, v in loss_dict.items()
-                              if isinstance(v, torch.Tensor) and v.dim() == 0})
+                loss_scalars = {k: float(v.detach()) for k, v in loss_dict.items()
+                                if isinstance(v, torch.Tensor) and v.dim() == 0}
+
+            # Weighted loss composition (contribution + share)
+            smoother.add(_build_loss_share_metrics(loss_scalars, args, dc_iter))
 
             smoother.add({
                 'loss': float(loss.detach()),

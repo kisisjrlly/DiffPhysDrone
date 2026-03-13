@@ -67,7 +67,9 @@ echo "using config files: ${cfg_files[*]}"
 
 # CUDA 显存分配器：降低碎片导致的 OOM 概率（不改变训练配置/模型）
 # 注：某些 PyTorch/CUDA 组合下 expandable_segments 可能触发内部断言，默认不开启。
-export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"max_split_size_mb:128,garbage_collection_threshold:0.8"}
+# export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"max_split_size_mb:128,garbage_collection_threshold:0.8"}
+
+export WGPU_BACKEND_SAFE=1
 
 if [ "$log_to_file" = "1" ]; then
 	python -u main_cuda.py $cfg_args > "$log_file" 2>&1

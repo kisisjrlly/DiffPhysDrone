@@ -1,4 +1,5 @@
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -842,7 +843,7 @@ void render_cuda(
 
     // 启动 CUDA 内核 (Launch CUDA kernel)
     AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_cuda", ([&] {
-        render_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        render_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             flow.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -872,7 +873,7 @@ void rerender_backward_cuda(
     const dim3 blocks((state_size + threads - 1) / threads);
 
     AT_DISPATCH_FLOATING_TYPES(depth.type(), "rerender_backward_cuda", ([&] {
-        rerender_backward_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        rerender_backward_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             depth.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             dddp.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             fov_x_half_tan);
@@ -897,7 +898,7 @@ void find_nearest_pt_cuda(
     const dim3 blocks((state_size + threads - 1) / threads);
     
     AT_DISPATCH_FLOATING_TYPES(pos.type(), "nearest_pt_cuda", ([&] {
-        nearest_pt_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        nearest_pt_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             nearest_pt.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -930,7 +931,7 @@ void find_nearest_pt_ellipsoid_cuda(
     const dim3 blocks((state_size + threads - 1) / threads);
     
     AT_DISPATCH_FLOATING_TYPES(pos.type(), "nearest_pt_ellipsoid_cuda", ([&] {
-        nearest_pt_ellipsoid_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        nearest_pt_ellipsoid_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             nearest_pt.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -964,7 +965,7 @@ void render_diff_fov_cuda(
     const dim3 blocks((state_size + threads - 1) / threads);
 
     AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_diff_fov_cuda", ([&] {
-        render_diff_fov_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        render_diff_fov_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -998,7 +999,7 @@ void render_backward_fov_cuda(
     const dim3 blocks((state_size + threads - 1) / threads);
 
     AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_backward_fov_cuda", ([&] {
-        render_backward_fov_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        render_backward_fov_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             grad_output.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             grad_fov.data_ptr<scalar_t>(),
@@ -1049,11 +1050,16 @@ static torch::Tensor build_y_from_depth(
     torch::Tensor depth_raw,
     torch::Tensor exposure,
     torch::Tensor iso) {
-    auto exposure_sig = torch::sigmoid(exposure).unsqueeze(1).unsqueeze(2);
-    auto iso_sig = torch::sigmoid(iso).unsqueeze(1).unsqueeze(2);
-    auto exposure_scale = 0.75 + 0.5 * exposure_sig;
-    auto iso_scale = 1.0 / (1.0 + 0.5 * iso_sig);
-    return depth_raw * exposure_scale * iso_scale;
+    // 与 Python 路径保持一致：exposure/iso 视为归一化后的 [0,1] 参数
+    auto exposure01 = exposure.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
+    auto iso01 = iso.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
+
+    // t_cmd = 0.25 + 2.75 * exposure01
+    auto exposure_scale = 0.25 + 2.75 * exposure01;
+    // iso_gain = 1.0 + 10.0 * (iso01 ^ 1.2)
+    auto iso_gain = 1.0 + 10.0 * torch::pow(iso01, 1.2);
+
+    return depth_raw * exposure_scale * iso_gain;
 }
 
 std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
@@ -1131,24 +1137,29 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
     auto go = grad_output.contiguous();
     auto d = depth_raw.contiguous();
 
-    auto exposure_sig = torch::sigmoid(exposure).unsqueeze(1).unsqueeze(2);
-    auto iso_sig = torch::sigmoid(iso).unsqueeze(1).unsqueeze(2);
-    auto exposure_scale = 0.75 + 0.5 * exposure_sig;
-    auto iso_den = 1.0 + 0.5 * iso_sig;
-    auto iso_scale = 1.0 / iso_den;
+    auto exposure01 = exposure.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
+    auto iso01 = iso.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
+
+    auto exposure_scale = 0.25 + 2.75 * exposure01;
+    auto iso_gain = 1.0 + 10.0 * torch::pow(iso01, 1.2);
+
+    auto exposure_mask = ((exposure > 0.0) & (exposure < 1.0))
+        .to(exposure.scalar_type()).unsqueeze(1).unsqueeze(2);
+    auto iso_mask = ((iso > 0.0) & (iso < 1.0))
+        .to(iso.scalar_type()).unsqueeze(1).unsqueeze(2);
 
     // dy/dd
-    auto grad_depth_local = exposure_scale * iso_scale;
+    auto grad_depth_local = exposure_scale * iso_gain;
     auto grad_depth = go * grad_depth_local;
 
     // dy/dexposure
-    auto d_exposure_scale = 0.5 * exposure_sig * (1.0 - exposure_sig);
-    auto grad_exposure_map = go * d * iso_scale * d_exposure_scale;
+    auto d_exposure_scale = 2.75 * exposure_mask;
+    auto grad_exposure_map = go * d * iso_gain * d_exposure_scale;
     auto grad_exposure = grad_exposure_map.sum({1, 2});
 
     // dy/diso
-    auto d_iso_scale = -(0.5 * iso_sig * (1.0 - iso_sig)) / torch::pow(iso_den, 2);
-    auto grad_iso_map = go * d * exposure_scale * d_iso_scale;
+    auto d_iso_gain = 12.0 * torch::pow(iso01, 0.2) * iso_mask;
+    auto grad_iso_map = go * d * exposure_scale * d_iso_gain;
     auto grad_iso = grad_iso_map.sum({1, 2});
 
     // dL/dfov 通过几何反向（带上相机映射后的链式梯度）

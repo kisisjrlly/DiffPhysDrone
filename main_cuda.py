@@ -74,12 +74,12 @@ def main():
                    + (1 if (sf['use_depth_channel'] and args.tof_use_conf) else 0))
     model = Model(
         obs_dim, 6,
-        camera_action_mode=args.camera_action_mode,
         include_camera_state_in_obs=sf['effective_include_camera_state'],
         in_channels=in_channels,
         use_policy_intent=args.policy_output_intent,
         intent_dim=9,
         main_in_channels=main_channels,
+        enable_camera_head=sf['use_camera_control'],
         use_tof_conf=(sf['use_depth_channel'] and args.tof_use_conf),
         tof_nn_width=args.tof_nn_width,
         tof_nn_height=args.tof_nn_height,

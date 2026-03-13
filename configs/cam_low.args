@@ -17,3 +17,13 @@
 --cam_fog_scale 0.7
 --cam_lighting_scale 0.9
 --cam_ae_target 0.45
+
+# Camera semantic mapping constants
+--cam_exposure_t_min 0.25
+--cam_exposure_t_span 2.75
+--cam_exposure_eff_min 0.15
+--cam_exposure_eff_max 4.0
+--cam_iso_gain_base 1.0
+--cam_iso_gain_scale 10.0
+--cam_iso_gain_gamma 1.2
+--cam_shot_noise_base 0.03

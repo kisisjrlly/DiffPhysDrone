@@ -13,8 +13,7 @@
 # Training
 --timesteps 120
 
-# Camera incremental control + camera-quality setup
---camera_action_mode incremental
+# Camera control + camera-quality setup
 --include_camera_state_in_obs
 --enable_camera_quality_loss
 
@@ -32,7 +31,16 @@
 --coef_cam_smooth 0.01
 --coef_fov_reg 0.005
 --coef_cam_range 0.001
---cam_delta_scale 0.05
+
+# Camera semantic mapping constants
+--cam_exposure_t_min 0.25
+--cam_exposure_t_span 2.75
+--cam_exposure_eff_min 0.15
+--cam_exposure_eff_max 4.0
+--cam_iso_gain_base 1.0
+--cam_iso_gain_scale 10.0
+--cam_iso_gain_gamma 1.2
+--cam_shot_noise_base 0.03
 
 # Logging
 --wandb_disabled

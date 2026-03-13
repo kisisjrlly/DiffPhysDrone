@@ -2,8 +2,12 @@
 统一的损失函数模块。
 消除 Teacher 阶段、Student TBPTT chunk、Student 完整 BPTT 之间的重复代码。
 """
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
+
+from camera_semantics import CameraSemantics
 
 
 def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int = 30):
@@ -80,7 +84,7 @@ def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
 
 def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed_seq,
                           use_active_depth, enable_camera_quality_loss,
-                          camera_action_mode):
+                          cam_sem: Optional[CameraSemantics] = None):
     """计算所有与 相机控制/光学 相关的损失项。
 
     Returns:
@@ -102,10 +106,7 @@ def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed
     if cam_hist is not None and cam_hist.shape[0] > 1:
         cam_diff = cam_hist.diff(1, 0)
         result['loss_cam_smooth'] = cam_diff.pow(2).mean()
-        if camera_action_mode == 'incremental':
-            result['loss_fov_reg'] = (cam_hist[:, :, 0] - 1.0).pow(2).mean()
-        else:
-            result['loss_fov_reg'] = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
+        result['loss_fov_reg'] = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
         result['loss_cam_range'] = (cam_hist - 0.5).pow(2).mean()
 
     # 光学损失
@@ -114,10 +115,20 @@ def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed
             result['loss_active_depth_power'] = cam_fov_seq.pow(2).mean()
             result['loss_active_depth_blur'] = (speed_seq * cam_exp_seq).mean()
         elif enable_camera_quality_loss:
-            exp_phys = cam_exp_seq * 10 + 0.5
+            sem = cam_sem if cam_sem is not None else CameraSemantics()
+            exp_phys = torch.as_tensor(
+                sem.exposure_to_time(cam_exp_seq),
+                device=cam_exp_seq.device,
+                dtype=cam_exp_seq.dtype,
+            )
             eff_f = 1.0 / cam_fov_seq.clamp(min=0.1)
             result['loss_blur'] = (speed_seq.pow(2) * exp_phys.pow(2) * eff_f.pow(2)).mean()
-            noise_sigma = 0.03 * (1.0 + 2.0 * cam_iso_seq) / (cam_exp_seq + 0.3).clamp_min(1e-3)
+            iso_gain = torch.as_tensor(
+                sem.iso_to_gain(cam_iso_seq),
+                device=cam_iso_seq.device,
+                dtype=cam_iso_seq.dtype,
+            )
+            noise_sigma = sem.shot_noise_base * iso_gain / exp_phys.clamp_min(1e-3)
             result['loss_noise'] = noise_sigma.pow(2).mean()
 
     return result

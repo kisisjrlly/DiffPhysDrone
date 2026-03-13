@@ -5,6 +5,20 @@ All functions are stateless / pure, taking explicit arguments.
 """
 import torch
 import torch.nn.functional as F
+from camera_semantics import CameraSemantics
+
+
+_DEFAULT_CAM_SEM = CameraSemantics()
+
+
+def camera_exposure_to_time(exposure01, cam_sem: CameraSemantics = _DEFAULT_CAM_SEM):
+    """Map normalized exposure [0,1] to the same t_cmd used by Env."""
+    return cam_sem.exposure_to_time(exposure01)
+
+
+def camera_iso_to_gain(iso01, cam_sem: CameraSemantics = _DEFAULT_CAM_SEM):
+    """Map normalized ISO [0,1] to the same iso_gain used by Env."""
+    return cam_sem.iso_to_gain(iso01)
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +68,7 @@ def render_sensors(env, ctl_dt, cam_fov, cam_exposure, cam_iso,
                 active_power, active_exposure, active_gain = cam_fov, cam_exposure, cam_iso
                 tof_depth, tof_conf = env.render_active_tof_diff(active_power, active_exposure, active_gain)
             else:
-                raise NotImplementedError("active_depth requires camera_action_mode != off")
+                raise NotImplementedError("active_depth requires camera control to be enabled")
 
         if use_depth_channel and not use_active_depth:
             tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
@@ -170,7 +184,7 @@ def decode_action_lqr(intent, R, env, local_v, B,
 # 5. Camera parameter update
 # ---------------------------------------------------------------------------
 def update_camera_params(cam_params, cam_fov, cam_exposure, cam_iso,
-                         camera_action_mode, cam_delta_scale, env):
+                         env):
     """Apply policy camera output and return updated params + history entry.
 
     Returns:
@@ -179,19 +193,10 @@ def update_camera_params(cam_params, cam_fov, cam_exposure, cam_iso,
     if cam_params is None:
         return cam_fov, cam_exposure, cam_iso, None
 
-    if camera_action_mode == 'incremental':
-        df, de, di = cam_params.unbind(-1)
-        sc = cam_delta_scale
-        cam_fov = (cam_fov + df * sc * env._fov_x_half_tan).clamp(
-            env._fov_x_half_tan * 0.08, env._fov_x_half_tan * 1.5)
-        cam_exposure = (cam_exposure + de * sc).clamp(0.01, 0.99)
-        cam_iso = (cam_iso + di * sc).clamp(0.01, 0.99)
-        hist = torch.stack([cam_fov / env._fov_x_half_tan, cam_exposure, cam_iso], -1)
-    else:
-        fd, ex, iso_v = cam_params.unbind(-1)
-        cam_fov = env._fov_x_half_tan * 0.08 + fd * env._fov_x_half_tan * 1.42
-        cam_exposure = ex
-        cam_iso = iso_v
-        hist = cam_params
+    fd, ex, iso_v = cam_params.unbind(-1)
+    cam_fov = env._fov_x_half_tan * 0.08 + fd * env._fov_x_half_tan * 1.42
+    cam_exposure = ex.clamp(0.0, 1.0)
+    cam_iso = iso_v.clamp(0.0, 1.0)
+    hist = cam_params
 
     return cam_fov, cam_exposure, cam_iso, hist

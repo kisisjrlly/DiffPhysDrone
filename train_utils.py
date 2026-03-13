@@ -9,12 +9,14 @@ from collections import defaultdict
 import math
 import os
 from random import normalvariate
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
 import wandb
 
 from env_cuda import Env
+from camera_semantics import CameraSemantics
 
 
 # ── Smoothed metric logging ──────────────────────────────────────────────
@@ -120,9 +122,11 @@ def distill_coef_at_iter(iter_idx: int, args) -> float:
 
 
 def teacher_dt_like_student(cam_exposure_mean: float, use_camera: bool,
-                            base_control_freq: float) -> float:
+                            base_control_freq: float,
+                            cam_sem: Optional[CameraSemantics] = None) -> float:
     base_dt = normalvariate(1 / base_control_freq, 0.1 / base_control_freq)
-    exposure_delay = cam_exposure_mean * 0.030 if use_camera else 0.015
+    sem = cam_sem if cam_sem is not None else CameraSemantics()
+    exposure_delay = (sem.exposure_to_time(cam_exposure_mean) * 0.01) if use_camera else 0.015
     return float(base_dt + exposure_delay)
 
 
@@ -176,6 +180,14 @@ def build_env(batch_size: int, args, sensor_flags: dict, device) -> Env:
         cam_fog_scale=args.cam_fog_scale,
         cam_lighting_scale=args.cam_lighting_scale,
         cam_ae_target=args.cam_ae_target,
+        cam_exposure_t_min=args.cam_exposure_t_min,
+        cam_exposure_t_span=args.cam_exposure_t_span,
+        cam_exposure_eff_min=args.cam_exposure_eff_min,
+        cam_exposure_eff_max=args.cam_exposure_eff_max,
+        cam_iso_gain_base=args.cam_iso_gain_base,
+        cam_iso_gain_scale=args.cam_iso_gain_scale,
+        cam_iso_gain_gamma=args.cam_iso_gain_gamma,
+        cam_shot_noise_base=args.cam_shot_noise_base,
         diff_sensor_impl=args.diff_sensor_impl,
     )
 

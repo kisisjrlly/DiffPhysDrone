@@ -5,9 +5,10 @@ from utils import g_decay
 
 class Model(nn.Module):
     def __init__(self, dim_obs=9, dim_action=4,
-                 camera_action_mode='off', include_camera_state_in_obs=False,
+                 include_camera_state_in_obs=False,
                  in_channels=1, use_policy_intent=False, intent_dim=9,
                  main_in_channels=1,
+                 enable_camera_head=True,
                  use_tof_conf=False,
                  tof_nn_width=16,
                  tof_nn_height=12,
@@ -18,18 +19,14 @@ class Model(nn.Module):
         Args:
             dim_obs: 基础物理观测维度（通常是7维无里程计，或10维带里程计）。
             dim_action: 飞行控制动作维度（默认6维：3维加速度 + 3维速度预测）。
-            camera_action_mode: 相机动作模式，off|absolute|incremental。
             include_camera_state_in_obs: 是否将当前相机状态加入到观测向量中。
         """
         super().__init__()
-        # 保存配置标志，用于在 forward 中决定走哪条计算路径
-        self.camera_action_mode = str(camera_action_mode).strip().lower()
-        if self.camera_action_mode not in ('off', 'absolute', 'incremental'):
-            raise ValueError(f"camera_action_mode must be one of off|absolute|incremental, got: {camera_action_mode}")
         self.include_camera_state_in_obs = bool(include_camera_state_in_obs)
         self.use_policy_intent = use_policy_intent
         self.intent_dim = intent_dim
         self.main_in_channels = main_in_channels
+        self.enable_camera_head = bool(enable_camera_head)
         self.use_tof_conf = use_tof_conf
         self.tof_nn_width = max(int(tof_nn_width), 1)
         self.tof_nn_height = max(int(tof_nn_height), 1)
@@ -84,17 +81,9 @@ class Model(nn.Module):
         self.gru = nn.GRUCell(192, 192)
 
         # 动作输出头 (Action Head)
-        if self.camera_action_mode == 'incremental':
-            # 统一控制模式：动作维度 = 飞行控制维度 + 3维相机增量控制(FOV, Exposure, ISO)
-            total_action_dim = dim_action + 3
-            self.fc = nn.Linear(192, total_action_dim, bias=False)
-            self.fc.weight.data.mul_(0.01) # 权重初始化极小，防止初始动作过大导致无人机直接坠毁
-            self._flight_dim = dim_action  # 记录飞行控制占用的维度索引
-        else:
-            # 普通模式：只输出飞行控制动作
-            self.fc = nn.Linear(192, dim_action, bias=False)
-            self.fc.weight.data.mul_(0.01)
-            self._flight_dim = dim_action
+        self.fc = nn.Linear(192, dim_action, bias=False)
+        self.fc.weight.data.mul_(0.01)
+        self._flight_dim = dim_action
 
         # 可选的意图输出头（用于意图域训练 + dLQR）
         if self.use_policy_intent:
@@ -102,8 +91,8 @@ class Model(nn.Module):
             self.fc_intent.weight.data.mul_(0.01)
             self.fc_intent.bias.data.zero_()
 
-        # 传统的独立可微相机头（如果启用且未启用统一控制）
-        if self.camera_action_mode == 'absolute':
+        # 可微相机头（绝对参数）
+        if self.enable_camera_head:
             # 输出 3 个相机参数的绝对值: FOV, Exposure, ISO
             self.fc_cam = nn.Linear(192, 3, bias=True)
             self.fc_cam.weight.data.mul_(0.01)
@@ -327,18 +316,9 @@ class Model(nn.Module):
         # 输出动作头原始值
         raw = self.fc(self.act(hx))
 
-        if self.camera_action_mode == 'incremental':
-            flight_act = raw[:, :self._flight_dim]
-            cam_deltas = torch.tanh(raw[:, self._flight_dim:])  # (Batch, 3)
-            if return_intent and self.use_policy_intent:
-                # 可选意图头（给 dLQR/dMPC 使用）
-                intent_raw = self.fc_intent(self.act(hx))
-                return flight_act, cam_deltas, hx, intent_raw
-            return flight_act, cam_deltas, hx
-
         act = raw
         cam_params = None
-        if self.camera_action_mode == 'absolute':
+        if self.enable_camera_head:
             cam_raw = self.fc_cam(self.act(hx))
             cam_params = torch.sigmoid(cam_raw)  # (Batch, 3)
         if return_intent and self.use_policy_intent:

@@ -8,6 +8,7 @@ import quadsim_cuda
 from utils import g_decay
 from autograd_ops import run, diff_render, diff_render_yuv_y, diff_render_active_tof
 from camera_utils import apply_camera_effects, _safe_normalize, _make_separable_gaussian_kernel1d, _separable_gaussian_blur
+from camera_semantics import CameraSemantics
 
 
 class Env:
@@ -33,6 +34,14 @@ class Env:
                  cam_fog_scale=1.0,
                  cam_lighting_scale=1.0,
                  cam_ae_target=0.42,
+                 cam_exposure_t_min=0.25,
+                 cam_exposure_t_span=2.75,
+                 cam_exposure_eff_min=0.15,
+                 cam_exposure_eff_max=4.0,
+                 cam_iso_gain_base=1.0,
+                 cam_iso_gain_scale=10.0,
+                 cam_iso_gain_gamma=1.2,
+                 cam_shot_noise_base=0.03,
                  diff_sensor_impl=None) -> None:
         self.device = device
         self.batch_size = batch_size
@@ -160,6 +169,18 @@ class Env:
         self.cam_ae_log_t_max = math.log(3.0)
         self.cam_motion_blur_gain = 0.09
         self.cam_rolling_blur_prob = 0.5
+
+        # 统一相机语义常数（曝光/ISO/噪声映射）
+        self.cam_sem = CameraSemantics(
+            exposure_t_min=float(cam_exposure_t_min),
+            exposure_t_span=float(cam_exposure_t_span),
+            exposure_eff_min=float(cam_exposure_eff_min),
+            exposure_eff_max=float(cam_exposure_eff_max),
+            iso_gain_base=float(cam_iso_gain_base),
+            iso_gain_scale=float(cam_iso_gain_scale),
+            iso_gain_gamma=float(cam_iso_gain_gamma),
+            shot_noise_base=float(cam_shot_noise_base),
+        )
 
         self._configure_camera_preset(self.camera_preset)
 
@@ -429,23 +450,23 @@ class Env:
 
     def _apply_sensor_model(self, irradiance, exposure, iso):
         """传感器层：曝光积分 + shot/read noise + PRNU/DSNU。"""
-        exposure01 = torch.sigmoid(exposure)
-        iso01 = torch.sigmoid(iso)
+        exposure01 = exposure.clamp(0.0, 1.0)
+        iso01 = iso.clamp(0.0, 1.0)
 
         # 命令曝光（ms 标度化到比例）+ AE 动态乘子
-        t_cmd = 0.25 + 2.75 * exposure01
+        t_cmd = self.cam_sem.exposure_to_time(exposure01)
         t_ae = torch.exp(self._cam_ae_log_t)
-        t_eff = torch.clamp(t_cmd * t_ae, 0.15, 4.0)
+        t_eff = torch.clamp(t_cmd * t_ae, self.cam_sem.exposure_eff_min, self.cam_sem.exposure_eff_max)
 
         # 基础电子计数
         electrons = irradiance * t_eff[:, None, None] * self.cam_base_gain
 
         # ISO 提升（模拟模拟/数字增益）
-        iso_gain = 1.0 + 10.0 * (iso01 ** 1.2)
+        iso_gain = self.cam_sem.iso_to_gain(iso01)
         electrons = electrons * iso_gain[:, None, None]
 
         # Shot noise（泊松高斯近似）
-        shot_std = torch.sqrt(torch.clamp(electrons, min=1e-6)) * 0.03 * self.cam_noise_scale
+        shot_std = torch.sqrt(torch.clamp(electrons, min=1e-6)) * self.cam_sem.shot_noise_base * self.cam_noise_scale
         # Read noise
         read_std = self.cam_read_noise * (1.0 + 2.5 * iso01)
 
@@ -490,14 +511,16 @@ class Env:
                 self.cam_ae_log_t_max,
             )
 
-    def _apply_motion_blur(self, y):
+    def _apply_motion_blur(self, y, exposure01):
         """时序层：全局/滚动快门风格运动模糊。"""
         if not self.cam_enable_motion_blur:
             self._cam_prev_y = y.detach()
             return y
         with torch.no_grad():
             speed = torch.norm(self.v, 2, -1)
-            blur_alpha = torch.clamp(speed * self.cam_motion_blur_gain, 0.0, 0.72)
+            t_cmd = self.cam_sem.exposure_to_time(exposure01.clamp(0.0, 1.0))
+            t_norm = (t_cmd / 3.0).clamp(0.0, 1.0)
+            blur_alpha = torch.clamp(speed * self.cam_motion_blur_gain * t_norm, 0.0, 0.72)
 
         prev = self._cam_prev_y
         if prev is None:
@@ -1000,7 +1023,7 @@ class Env:
 
         # ==================== 7) 时序层：AE状态机 + 运动模糊（rolling/global） ====================
         self._update_ae_state(y)
-        y = self._apply_motion_blur(y)
+        y = self._apply_motion_blur(y, exposure.clamp(0.0, 1.0))
         return torch.clamp(y, 0.0, 1.0)
 
 

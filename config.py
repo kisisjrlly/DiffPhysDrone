@@ -74,8 +74,6 @@ def build_parser():
     parser.add_argument('--coef_tilt', type=float, default=0.0, help='侧倾对齐损失权重')
 
     # --- 可微相机与主动感知 ---
-    parser.add_argument('--camera_action_mode', type=str, default='off', choices=['off', 'absolute', 'incremental'],
-                        help='相机控制模式')
     parser.add_argument('--include_camera_state_in_obs', default=False, action=argparse.BooleanOptionalAction,
                         help='是否将相机状态拼接到观测向量')
     parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
@@ -98,11 +96,28 @@ def build_parser():
     parser.add_argument('--cam_lighting_scale', type=float, default=1.0)
     parser.add_argument('--cam_ae_target', type=float, default=0.42)
 
+    # --- 相机语义映射常数（统一管理，避免散落魔数） ---
+    parser.add_argument('--cam_exposure_t_min', type=float, default=0.25,
+                        help='曝光归一化值映射到时间尺度的下界偏置')
+    parser.add_argument('--cam_exposure_t_span', type=float, default=2.75,
+                        help='曝光归一化值映射到时间尺度的跨度')
+    parser.add_argument('--cam_exposure_eff_min', type=float, default=0.15,
+                        help='AE 后有效曝光时间最小值')
+    parser.add_argument('--cam_exposure_eff_max', type=float, default=4.0,
+                        help='AE 后有效曝光时间最大值')
+    parser.add_argument('--cam_iso_gain_base', type=float, default=1.0,
+                        help='ISO 增益基线')
+    parser.add_argument('--cam_iso_gain_scale', type=float, default=10.0,
+                        help='ISO 增益缩放系数')
+    parser.add_argument('--cam_iso_gain_gamma', type=float, default=1.2,
+                        help='ISO 增益幂指数')
+    parser.add_argument('--cam_shot_noise_base', type=float, default=0.03,
+                        help='Shot noise 基础系数')
+
     # ===== Camera loss + Teacher-Student training =====
     parser.add_argument('--enable_camera_quality_loss', default=False, action='store_true')
     parser.add_argument('--coef_blur', type=float, default=0.1)
     parser.add_argument('--coef_noise', type=float, default=0.05)
-    parser.add_argument('--cam_delta_scale', type=float, default=0.05)
     parser.add_argument('--enable_teacher_student_training', default=False, action='store_true')
     parser.add_argument('--teacher_inner_steps', type=int, default=10)
     parser.add_argument('--teacher_inner_lr', type=float, default=0.01)
@@ -207,11 +222,7 @@ def resolve_sensor_flags(args):
     use_depth_channel = args.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth')
     use_active_depth = args.sensor_mode == 'active_depth'
 
-    if args.camera_action_mode != 'off' and not (use_camera_luma or use_active_depth):
-        raise ValueError("仅在 camera_luma / camera_luma_plus_passive_depth / active_depth 模式下支持相机参数控制")
-    use_camera_control = (args.camera_action_mode != 'off') and (use_camera_luma or use_active_depth)
-    if use_active_depth and not use_camera_control:
-        raise ValueError("sensor_mode=active_depth 需要开启 camera_action_mode=absolute 或 incremental")
+    use_camera_control = (use_camera_luma or use_active_depth)
     effective_include_camera_state = bool(args.include_camera_state_in_obs and use_camera_control)
 
     return {
@@ -253,7 +264,7 @@ def validate_args(args, sensor_flags):
     if args.tbptt_enable and args.enable_teacher_student_training:
         print('[warn] 当前启用 TBPTT 与教师-学生训练：student 按原混合调度；teacher 内循环将使用 TBPTT 路径')
     if args.include_camera_state_in_obs and not use_camera_control:
-        print(f"[warn] --include_camera_state_in_obs 已启用，但当前 sensor_mode={args.sensor_mode} 且 camera_action_mode=off；将自动忽略相机状态拼接")
+        print(f"[warn] --include_camera_state_in_obs 已启用，但当前 sensor_mode={args.sensor_mode} 不支持相机控制；将自动忽略相机状态拼接")
 
 
 def print_runtime_mode(args, sensor_flags):
@@ -280,7 +291,6 @@ def print_runtime_mode(args, sensor_flags):
     print(f"distill_coef              : {args.distill_coef} -> {args.distill_coef * args.distill_final_ratio}")
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
     print(f"sensor_mode               : {args.sensor_mode}")
-    print(f"camera_action_mode        : {args.camera_action_mode}")
     print(f"sensor_control_semantics  : {'power/exposure/gain' if use_active_depth else 'fov/exposure/iso'}")
     print("=" * 75)
 

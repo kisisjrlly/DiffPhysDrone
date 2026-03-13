@@ -82,19 +82,14 @@
 --coef_d_acc 0.01                   # 动作能量/加速度正则
 --coef_d_jerk 0.001                 # jerk 正则
 
---coef_obj_avoidance 3.0            # 避障势能惩罚
+--coef_obj_avoidance 20.0            # 避障势能惩罚
 --coef_collide 7.5                  # 对齐原始 single_agent
 --coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
 
 # ----------------- 可微相机 + 主动感知 (Differentiable Camera) -----------------
 # Paper §2.1 + §2.3
-# 典型组合：camera_action_mode incremental + include_camera_state_in_obs + enable_camera_quality_loss
-# camera_action_mode absolute/incremental 都会启用相机可导路径
-# 建议论文配置优先用 incremental
---camera_action_mode absolute      # 绝对参数相机控制
-# --camera_action_mode incremental    # 增量控制：相机参数并入动作
+# 典型组合：include_camera_state_in_obs + enable_camera_quality_loss
 --include_camera_state_in_obs       # 观测中加入当前相机参数
---cam_delta_scale 0.03              # 统一控制下相机增量缩放
 
 --coef_cam_smooth 0.01              # 相机参数时域平滑
 --coef_fov_reg 0.005                # FOV 回归中心正则
@@ -118,6 +113,16 @@
 --cam_fog_scale 1.0                 # 大气散射/雾强度缩放
 --cam_lighting_scale 1.0            # 光照强度缩放
 --cam_ae_target 0.36                # 自动曝光目标亮度
+
+# 相机语义映射常数（统一管理）
+--cam_exposure_t_min 0.25
+--cam_exposure_t_span 2.75
+--cam_exposure_eff_min 0.15
+--cam_exposure_eff_max 4.0
+--cam_iso_gain_base 1.0
+--cam_iso_gain_scale 10.0
+--cam_iso_gain_gamma 1.2
+--cam_shot_noise_base 0.03
 
 # 论文光学势能 (Optical Perception Potentials)
 # - coef_blur: 惩罚高速+长曝光+长焦导致的运动模糊

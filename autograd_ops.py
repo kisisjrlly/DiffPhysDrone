@@ -22,6 +22,8 @@ class RunFunction(torch.autograd.Function):
         d_act_pred, d_act, d_p, d_v, d_a = quadsim_cuda.run_backward(
             R, dg, z_drag_coef, drag_2, pitch_ctl_delay, v, v_wind, act_next, d_act_next, d_p_next, d_v_next, d_a_next,
             ctx.grad_decay, ctx.ctl_dt)
+        # 强制同步以防止反向传播期间 GPU 积压任务过长导致桌面卡死 (TDR)
+        torch.cuda.synchronize()
         return None, None, None, None, None, d_act_pred, d_act, d_p, d_v, None, d_a, None, None, None
 
 
@@ -54,6 +56,7 @@ class DiffRenderFunction(torch.autograd.Function):
         quadsim_cuda.render_backward_fov(grad_fov, grad_output.contiguous(), canvas,
                                          balls, cyl, cyl_h, voxels, R_cam, pos,
                                          ctx.n_drones_per_group, fov)
+        torch.cuda.synchronize()
         return grad_fov, None, None, None, None, None, None, None, None, None
 
 
@@ -99,6 +102,7 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
             cyl_h,
             voxels,
             ctx.n_drones_per_group)
+        torch.cuda.synchronize()
         return grad_fov, grad_exposure, grad_iso, None, None, None, None, None, None, None, None, None
 
 
@@ -150,6 +154,8 @@ class DiffRenderActiveTofFunction(torch.autograd.Function):
             R_cam, pos, balls, cyl, cyl_h, voxels,
             int(ctx.n_drones_per_group), int(ctx.height), int(ctx.width), float(ctx.max_range),
         )
+        # 强制同步以防止反向传播期间 GPU 积压任务过长导致桌面卡死 (TDR)
+        torch.cuda.synchronize()
         return (
             grad_fov, grad_power, grad_exposure, grad_gain,
             None, None, None, None, None, None, None, None, None, None, None,
