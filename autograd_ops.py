@@ -130,13 +130,17 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
         ctx.save_for_backward(
             depth_raw, fov_x_half_tan, exposure, iso,
             normals,
-            R_cam,
+            R_cam, pos,
+            balls, cyl, cyl_h, voxels,
             cam_light_dir, cam_ambient, cam_dir_intensity,
             cam_fog_beta, cam_airlight,
             cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
             cam_dist_k1, cam_dist_k2, cam_flare_strength,
             cam_gamma, cam_prnu, cam_dsnu,
             cam_prev_y, cam_use_rolling, v, cam_ae_log_t)
+        ctx.n_drones_per_group = int(n_drones_per_group)
+        ctx.height = int(height)
+        ctx.width = int(width)
         ctx.cam_profile_mask = int(cam_profile_mask)
         ctx.cam_vignette_a = float(cam_vignette_a)
         ctx.cam_vignette_b = float(cam_vignette_b)
@@ -156,7 +160,8 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         (depth_raw, fov, exposure, iso, normals,
-         R_cam,
+         R_cam, pos,
+         balls, cyl, cyl_h, voxels,
          cam_light_dir, cam_ambient, cam_dir_intensity,
          cam_fog_beta, cam_airlight,
          cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
@@ -175,7 +180,9 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
             exposure,
             iso,
             normals,
-            R_cam,
+            R_cam, pos,
+            balls, cyl, cyl_h, voxels,
+            ctx.n_drones_per_group, ctx.height, ctx.width,
             cam_light_dir, cam_ambient, cam_dir_intensity,
             cam_fog_beta, cam_airlight,
             cam_mat_ground, cam_mat_obstacle, cam_mat_spec,

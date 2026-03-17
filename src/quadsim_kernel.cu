@@ -1564,6 +1564,81 @@ void render_yuv_y_cuda(
 // - 相机部分采用 ATen 张量算子复刻 Python 链路的低风险近似
 // - 反向中 exposure/iso/depth 使用 autograd 链式求导，fov 使用 normal-map 解析反向
 // ============================================================================
+torch::Tensor render_camera_luma_fused_forward_cuda(
+    torch::Tensor depth_raw,
+    torch::Tensor normals,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma);
+
+std::vector<torch::Tensor> render_camera_luma_fused_backward_cuda(
+    torch::Tensor grad_output,
+    torch::Tensor depth_raw,
+    torch::Tensor normals,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma,
+    bool need_grad_exposure,
+    bool need_grad_iso);
+
+static inline bool use_fused_camera_fast_path(int64_t cam_profile_mask) {
+    const int64_t mask = cam_profile_mask & 0x3f;
+    // 融合路径优先覆盖 low/high（无 flare/motion/rolling）
+    return (mask & ((int64_t(1) << 3) | (int64_t(1) << 4) | (int64_t(1) << 5))) == 0;
+}
+
 static torch::Tensor build_y_from_depth_full(
     torch::Tensor depth_raw,
     torch::Tensor normals,
@@ -1995,20 +2070,37 @@ std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
         depth_raw, normals, balls, cylinders, cylinders_h, voxels,
         R, pos, n_drones_per_group, fov_x_half_tan);
 
-    auto y = build_y_from_depth_profiled(
-        depth_raw, normals, exposure, iso,
-        cam_light_dir, cam_ambient, cam_dir_intensity,
-        cam_fog_beta, cam_airlight,
-        cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-        cam_dist_k1, cam_dist_k2, cam_flare_strength,
-        cam_gamma, cam_prnu, cam_dsnu,
-        cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-        cam_profile_mask,
-        cam_vignette_a, cam_vignette_b,
-        cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-        cam_exposure_t_min, cam_exposure_t_span,
-        cam_exposure_eff_min, cam_exposure_eff_max,
-        cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    torch::Tensor y;
+    if (use_fused_camera_fast_path(cam_profile_mask)) {
+        y = render_camera_luma_fused_forward_cuda(
+            depth_raw, normals, exposure, iso,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2,
+            cam_gamma, cam_prnu, cam_dsnu, cam_ae_log_t,
+            cam_profile_mask,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    } else {
+        y = build_y_from_depth_profiled(
+            depth_raw, normals, exposure, iso,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2, cam_flare_strength,
+            cam_gamma, cam_prnu, cam_dsnu,
+            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+            cam_profile_mask,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    }
     return {y, depth_raw, normals};
 }
 
@@ -2020,6 +2112,14 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
     torch::Tensor iso,
     torch::Tensor normals,
     torch::Tensor R,
+    torch::Tensor pos,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    int n_drones_per_group,
+    int height,
+    int width,
     torch::Tensor cam_light_dir,
     torch::Tensor cam_ambient,
     torch::Tensor cam_dir_intensity,
@@ -2062,6 +2162,44 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
     torch::Tensor grad_depth = torch::zeros_like(d);
     torch::Tensor grad_exposure = torch::zeros_like(exposure);
     torch::Tensor grad_iso = torch::zeros_like(iso);
+
+    const bool have_geom_cache = depth_raw.numel() > 0 && normals.numel() > 0;
+    if (use_fused_camera_fast_path(cam_profile_mask)) {
+        torch::Tensor d_used = d;
+        torch::Tensor n_used = normals;
+        if (!have_geom_cache) {
+            d_used = torch::empty({pos.size(0), height, width}, pos.options());
+            n_used = torch::empty({pos.size(0), 3, height, width}, pos.options());
+            render_diff_fov_with_normal_cuda(
+                d_used, n_used,
+                balls, cylinders, cylinders_h, voxels,
+                R, pos,
+                n_drones_per_group,
+                fov_x_half_tan);
+        }
+        auto fused_grads = render_camera_luma_fused_backward_cuda(
+            go,
+            d_used,
+            n_used,
+            exposure,
+            iso,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2,
+            cam_gamma, cam_prnu, cam_dsnu,
+            cam_ae_log_t,
+            cam_profile_mask,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma,
+            need_grad_exposure, need_grad_iso);
+        grad_depth = fused_grads[0];
+        if (need_grad_exposure) grad_exposure = fused_grads[1];
+        if (need_grad_iso) grad_iso = fused_grads[2];
+    } else {
 
     const bool need_depth = need_grad_fov;
     if (need_depth || need_grad_exposure || need_grad_iso) {
@@ -2115,6 +2253,7 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
         if (need_grad_iso) {
             grad_iso = grads[gi].defined() ? grads[gi] : torch::zeros_like(iso);
         }
+    }
     }
 
     auto grad_fov = torch::zeros_like(fov_x_half_tan);
