@@ -1,4 +1,6 @@
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAException.h>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -33,7 +35,7 @@ __global__ void update_state_vec_cuda_kernel(
     scalar_t az = a_thr[b][2] + 9.80665; // 加上重力加速度 (Add gravity)
     
     // thrust = torch.norm(a_thr, 2, -1, True);
-    scalar_t thrust = sqrt(ax*ax+ay*ay+az*az); // 计算总推力大小 (Calculate total thrust magnitude)
+    scalar_t thrust = max((scalar_t)1e-5, sqrt(ax*ax+ay*ay+az*az)); // 计算总推力大小并防除零 (with epsilon guard)
     
     // self.up_vec = a_thr / thrust;
     // 归一化得到向上向量 (Normalize to get the up vector)
@@ -157,7 +159,7 @@ __global__ void run_forward_cuda_kernel(
     scalar_t ax = act[i][0];
     scalar_t ay = act[i][1];
     scalar_t az = act[i][2] + 9.80665;
-    scalar_t thrust = sqrt(ax*ax+ay*ay+az*az);
+    scalar_t thrust = max((scalar_t)1e-5, sqrt(ax*ax+ay*ay+az*az));
     scalar_t airmode_a[3] = {
         ax / thrust * av * airmode_av2a,
         ay / thrust * av * airmode_av2a,
@@ -330,12 +332,13 @@ std::vector<torch::Tensor> run_forward_cuda(
     torch::Tensor v_next = torch::empty_like(v);
     torch::Tensor a_next = torch::empty_like(a);
 
-    const int threads = R.size(0); // Batch size
-    const dim3 blocks(1);          // 假设 batch size 不超过最大线程数 (Assume batch size <= max threads per block)
+    const int threads = 256;
+    const int B = R.size(0);
+    const dim3 blocks((B + threads - 1) / threads);
     
     // 启动 CUDA 内核 (Launch CUDA kernel)
     AT_DISPATCH_FLOATING_TYPES(R.type(), "run_forward_cuda", ([&] {
-        run_forward_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        run_forward_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             dg.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             z_drag_coef.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
@@ -353,6 +356,7 @@ std::vector<torch::Tensor> run_forward_cuda(
             a_next.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             ctl_dt, airmode_av2a);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
     return {act_next, p_next, v_next, a_next};
 }
 
@@ -384,12 +388,13 @@ std::vector<torch::Tensor> run_backward_cuda(
     torch::Tensor d_v = torch::empty_like(dg);
     torch::Tensor d_a = torch::empty_like(dg);
 
-    const int threads = R.size(0); // Batch size
-    const dim3 blocks(1);
+    const int threads = 256;
+    const int B = R.size(0);
+    const dim3 blocks((B + threads - 1) / threads);
     
     // 启动 CUDA 内核 (Launch CUDA kernel)
     AT_DISPATCH_FLOATING_TYPES(R.type(), "run_backward_cuda", ([&] {
-        run_backward_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        run_backward_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             dg.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             z_drag_coef.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
@@ -409,6 +414,7 @@ std::vector<torch::Tensor> run_backward_cuda(
             _d_a_next.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             grad_decay, ctl_dt);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
     // 返回计算得到的梯度 (Return computed gradients)
     return {d_act_pred, d_act, d_p, d_v, d_a};
 }
@@ -425,15 +431,16 @@ torch::Tensor update_state_vec_cuda(
     torch::Tensor alpha,
     float yaw_inertia) {
     
-    const int threads = a_thr.size(0); // Batch size
-    const dim3 blocks(1);
+    const int threads = 256;
+    const int B = a_thr.size(0);
+    const dim3 blocks((B + threads - 1) / threads);
     
     // 分配新的旋转矩阵张量 (Allocate new rotation matrix tensor)
     torch::Tensor R_new = torch::empty_like(R);
     
     // 启动 CUDA 内核 (Launch CUDA kernel)
     AT_DISPATCH_FLOATING_TYPES(a_thr.type(), "update_state_vec", ([&] {
-        update_state_vec_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        update_state_vec_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             R_new.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             a_thr.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
@@ -441,5 +448,6 @@ torch::Tensor update_state_vec_cuda(
             alpha.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             yaw_inertia);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
     return R_new;
 }

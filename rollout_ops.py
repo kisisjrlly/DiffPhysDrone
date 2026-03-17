@@ -42,6 +42,10 @@ def render_sensors(env, ctl_dt, cam_fov, cam_exposure, cam_iso,
     tof_conf = None
 
     if differentiable and use_camera_luma and use_camera_control:
+        # Debug-safety: disable FOV gradient path to avoid heavy atomic contention
+        # in render_backward_fov CUDA kernel while keeping exposure/ISO gradients.
+        # cam_fov_render = cam_fov.detach()
+        # main_obs = env.render_main_luma_diff(cam_fov_render, cam_exposure, cam_iso)
         main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
         if use_depth_channel:
             with torch.no_grad():

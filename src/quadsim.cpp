@@ -107,6 +107,19 @@ void render_diff_fov_cuda(
     int n_drones_per_group,     // 每组无人机数量 (Number of drones per group)
     torch::Tensor fov_x_half_tan); // 相机水平视场角一半的正切值 (tan(FOV_x / 2))
 
+// 带法线输出的可微 FOV 前向渲染 (Forward render with normal map output)
+void render_diff_fov_with_normal_cuda(
+    torch::Tensor canvas,
+    torch::Tensor normals,      // 输出法线图 [B,3,H,W]
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    torch::Tensor fov_x_half_tan);
+
 // 带有可微 FOV 的渲染反向传播 (Render backward pass with differentiable FOV)
 void render_backward_fov_cuda(
     torch::Tensor grad_fov,     // 输出的 FOV 梯度 (Output gradient of FOV)
@@ -120,6 +133,15 @@ void render_backward_fov_cuda(
     torch::Tensor pos,          // 位置 (Position)
     int n_drones_per_group,     // 每组无人机数量 (Number of drones per group)
     torch::Tensor fov_x_half_tan); // 相机水平视场角一半的正切值 (tan(FOV_x / 2))
+
+// 基于法线图的解析 FOV 反向传播 (Analytical backward from normal map)
+void render_backward_fov_from_normal_cuda(
+    torch::Tensor grad_fov,
+    torch::Tensor grad_output,
+    torch::Tensor canvas,
+    torch::Tensor normals,
+    torch::Tensor R,
+    torch::Tensor fov_x_half_tan);
 
 // Y 通道渲染（YUV420 的 Y）(Render luma channel Y from YUV420 pipeline)
 void render_yuv_y_cuda(
@@ -165,7 +187,39 @@ std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
     torch::Tensor voxels,
     int n_drones_per_group,
     int height,
-    int width);
+    int width,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma);
 
 // 可微 Y 通道渲染反向（返回 grad_fov, grad_exposure, grad_iso, grad_focus）
 std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
@@ -174,13 +228,43 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
     torch::Tensor fov_x_half_tan,
     torch::Tensor exposure,
     torch::Tensor iso,
+    torch::Tensor normals,
     torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group);
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma,
+    bool need_grad_fov,
+    bool need_grad_exposure,
+    bool need_grad_iso);
 
 // Active ToF 可微前向（CUDA实现，返回 noisy_depth/conf）
 std::vector<torch::Tensor> render_active_tof_forward_cuda(
@@ -235,11 +319,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("run_backward", &run_backward_cuda, "run_backward_cuda (CUDA)");
   m.def("rerender_backward", &rerender_backward_cuda, "rerender_backward_cuda (CUDA)");
   m.def("render_diff_fov", &render_diff_fov_cuda, "render_diff_fov (CUDA)");
+    m.def("render_diff_fov_with_normal", &render_diff_fov_with_normal_cuda, "render_diff_fov_with_normal (CUDA)");
   m.def("render_backward_fov", &render_backward_fov_cuda, "render_backward_fov (CUDA)");
+    m.def("render_backward_fov_from_normal", &render_backward_fov_from_normal_cuda, "render_backward_fov_from_normal (CUDA)");
     m.def("render_yuv_y", &render_yuv_y_cuda, "render_yuv_y (CUDA)");
     m.def("render_diff_yuv_y", &render_diff_yuv_y_cuda, "render_diff_yuv_y (CUDA)");
-    m.def("render_diff_yuv_y_forward", &render_diff_yuv_y_forward_cuda, "render_diff_yuv_y_forward (CUDA)");
-    m.def("render_diff_yuv_y_backward", &render_diff_yuv_y_backward_cuda, "render_diff_yuv_y_backward (CUDA)");
+        m.def("render_diff_yuv_y_forward", &render_diff_yuv_y_forward_cuda, "render_diff_yuv_y_forward (CUDA)",
+            pybind11::call_guard<pybind11::gil_scoped_release>());
+        m.def("render_diff_yuv_y_backward", &render_diff_yuv_y_backward_cuda, "render_diff_yuv_y_backward (CUDA)",
+            pybind11::call_guard<pybind11::gil_scoped_release>());
     m.def("render_active_tof_forward", &render_active_tof_forward_cuda, "render_active_tof_forward (CUDA)");
     m.def("render_active_tof_backward", &render_active_tof_backward_cuda, "render_active_tof_backward (CUDA)");
 }

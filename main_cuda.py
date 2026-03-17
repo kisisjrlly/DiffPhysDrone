@@ -13,6 +13,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import wandb
 
+# torch.autograd.set_detect_anomaly(True)
+
 from config import parse_args, print_runtime_mode
 from model import Model
 from rerun_vis import RerunVis

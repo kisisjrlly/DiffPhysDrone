@@ -3,7 +3,7 @@
 # 运行脚本 (Run script)
 
 set -euo pipefail
-set -x
+# set -x
 
 export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 
@@ -15,8 +15,8 @@ task=${TASK:-paper_final_full}
 #   CAM_PROFILE=low|high|ultra
 # 示例：
 #   TASK=paper_final_full CAM_PROFILE=ultra bash run.sh
-# 默认不叠加相机档位，避免覆盖任务配置文件中的相机设置。
-cam_profile=${CAM_PROFILE:-ultra}
+# 默认使用 high（吞吐与保真折中）；若要严格遵循任务配置，请显式传空 CAM_PROFILE。
+cam_profile=${CAM_PROFILE:-low}
 # cam_profile=${CAM_PROFILE:-low}
 
 # 日志输出模式:
@@ -69,7 +69,6 @@ echo "using config files: ${cfg_files[*]}"
 # 注：某些 PyTorch/CUDA 组合下 expandable_segments 可能触发内部断言，默认不开启。
 # export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"max_split_size_mb:128,garbage_collection_threshold:0.8"}
 
-export WGPU_BACKEND_SAFE=1
 
 if [ "$log_to_file" = "1" ]; then
 	python -u main_cuda.py $cfg_args > "$log_file" 2>&1

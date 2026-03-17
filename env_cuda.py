@@ -123,6 +123,14 @@ class Env:
         self.cam_enable_flare = bool(cam_enable_flare)
         self.cam_enable_motion_blur = bool(cam_enable_motion_blur)
         self.cam_enable_rolling = bool(cam_enable_rolling)
+        self.cam_profile_mask = self._build_camera_profile_mask(
+            self.cam_enable_shadow,
+            self.cam_enable_specular,
+            self.cam_enable_distortion,
+            self.cam_enable_flare,
+            self.cam_enable_motion_blur,
+            self.cam_enable_rolling,
+        )
         self.cam_noise_scale = float(cam_noise_scale)
         self.cam_blur_scale = float(cam_blur_scale)
         self.cam_fog_scale = float(cam_fog_scale)
@@ -206,6 +214,28 @@ class Env:
             
         # 初始化环境状态
         self.reset()
+
+    @staticmethod
+    def _build_camera_profile_mask(enable_shadow: bool,
+                                   enable_specular: bool,
+                                   enable_distortion: bool,
+                                   enable_flare: bool,
+                                   enable_motion_blur: bool,
+                                   enable_rolling: bool) -> int:
+        mask = 0
+        if enable_shadow:
+            mask |= 1 << 0
+        if enable_specular:
+            mask |= 1 << 1
+        if enable_distortion:
+            mask |= 1 << 2
+        if enable_flare:
+            mask |= 1 << 3
+        if enable_motion_blur:
+            mask |= 1 << 4
+        if enable_rolling:
+            mask |= 1 << 5
+        return int(mask)
 
     def _configure_camera_preset(self, preset: str):
         """根据档位配置高保真可微相机强度。"""
@@ -495,8 +525,12 @@ class Env:
         x = x + self.cam_sharpen_amount * (x - blur_small)
 
         # gamma
-        gamma = self._cam_gamma[:, None, None]
-        x = torch.clamp(x, 0.0, 1.0) ** (1.0 / gamma)
+        gamma = self._cam_gamma[:, None, None].clamp_min(1e-3)
+        x_lin = torch.clamp(x, 0.0, 1.0)
+        # 数值稳定：当指数 < 1 时，pow 在 x=0 处导数会发散，导致 PowBackward NaN。
+        x_safe = torch.clamp(x_lin, min=1e-6, max=1.0)
+        x_gamma = x_safe ** (1.0 / gamma)
+        x = torch.where(x_lin > 0, x_gamma, torch.zeros_like(x_gamma))
         return torch.clamp(x, 0.0, 1.0)
 
     def _update_ae_state(self, y):
@@ -562,7 +596,7 @@ class Env:
         ], -1).reshape(B, 3, 3)
 
         # 2. 随机生成环境障碍物
-        # balls: 球体 (x, y, z, r)
+        # balls: 球体 (x, y,_cam_use_rolling z, r)
         # voxels: 立方体 (x, y, z, rx, ry, rz)
         # cyl: 垂直圆柱体 (x, y, r)
         # cyl_h: 水平圆柱体 (x, z, r)
@@ -947,7 +981,41 @@ class Env:
                 self.n_drones_per_group,
                 self.height,
                 self.width,
+                self._cam_light_dir,
+                self._cam_ambient,
+                self._cam_dir_intensity,
+                self._cam_fog_beta,
+                self._cam_airlight,
+                self._cam_mat_ground,
+                self._cam_mat_obstacle,
+                self._cam_mat_spec,
+                self._cam_dist_k1,
+                self._cam_dist_k2,
+                self._cam_flare_strength,
+                self._cam_gamma,
+                self._cam_prnu,
+                self._cam_dsnu,
+                self._cam_prev_y,
+                self._cam_use_rolling,
+                self.v,
+                self._cam_ae_log_t,
+                self.cam_profile_mask,
+                self.cam_vignette_a,
+                self.cam_vignette_b,
+                self.cam_black_level,
+                self.cam_sharpen_amount,
+                self.cam_base_gain,
+                self.cam_motion_blur_gain,
+                self.cam_sem.exposure_t_min,
+                self.cam_sem.exposure_t_span,
+                self.cam_sem.exposure_eff_min,
+                self.cam_sem.exposure_eff_max,
+                self.cam_sem.iso_gain_base,
+                self.cam_sem.iso_gain_scale,
+                self.cam_sem.iso_gain_gamma,
             )
+            self._update_ae_state(y)
+            self._cam_prev_y = y.detach()
             return torch.clamp(y, 0.0, 1.0)
         if impl != 'python':
             raise ValueError(f"不支持的 diff_sensor_impl[camera_luma]={impl}，仅支持 python/cuda")

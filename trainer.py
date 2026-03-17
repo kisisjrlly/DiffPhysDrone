@@ -1109,7 +1109,8 @@ def train(args, sensor_flags, model, env_train, env_full,
             success = torch.all(distance.flatten(0, 1) > 0, 0)
             _success = success.sum() / B
             avg_speed = speed_history.mean(0)
-
+        # wandb.watch(model, log="all")
+        # wandb.watch(model, log=["gradients", "parameters"])
         # Timing
         iter_toc = time.time()
         iter_time = iter_toc - iter_tic

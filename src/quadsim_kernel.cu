@@ -1,5 +1,8 @@
 #include <torch/extension.h>
+#include <torch/autograd.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <torch/csrc/autograd/grad_mode.h>
+#include <c10/cuda/CUDAException.h>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -60,8 +63,11 @@ __global__ void render_cuda_kernel(
     scalar_t min_dist = 100;
     
     // 1. 与地面的交点 (Intersection with ground plane z = -1)
-    scalar_t  t = (-1 - oz) / dz;
-    if (t > 0) min_dist = t;
+    const scalar_t kEps = (scalar_t)1e-8;
+    if (abs(dz) > kEps) {
+        scalar_t t = (-1 - oz) / dz;
+        if (t > 0) min_dist = t;
+    }
 
     // 2. 与其他无人机的交点 (Intersection with other drones in the same group)
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
@@ -78,7 +84,7 @@ __global__ void render_cuda_kernel(
         scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy) + 4 * dz * (oz - cz));
         scalar_t c = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + 4 * (oz - cz) * (oz - cz) - r * r;
         scalar_t d = b * b - 4 * a * c;
-        if (d >= 0) {
+        if (a > kEps && d >= 0) {
             r = (-b-sqrt(d)) / (2 * a);
             if (r > 1e-5) {
                 min_dist = min(min_dist, r);
@@ -99,7 +105,7 @@ __global__ void render_cuda_kernel(
         scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy) + dz * (oz - cz));
         scalar_t c = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + (oz - cz) * (oz - cz) - r * r;
         scalar_t d = b * b - 4 * a * c;
-        if (d >= 0) {
+        if (a > kEps && d >= 0) {
             r = (-b-sqrt(d)) / (2 * a);
             if (r > 1e-5) {
                 min_dist = min(min_dist, r);
@@ -119,7 +125,7 @@ __global__ void render_cuda_kernel(
         scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy));
         scalar_t c = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) - r * r;
         scalar_t d = b * b - 4 * a * c;
-        if (d >= 0) {
+        if (a > kEps && d >= 0) {
             r = (-b-sqrt(d)) / (2 * a);
             if (r > 1e-5) {
                 min_dist = min(min_dist, r);
@@ -139,7 +145,7 @@ __global__ void render_cuda_kernel(
         scalar_t b = 2 * (dx * (ox - cx) + dz * (oz - cz));
         scalar_t c = (ox - cx) * (ox - cx) + (oz - cz) * (oz - cz) - r * r;
         scalar_t d = b * b - 4 * a * c;
-        if (d >= 0) {
+        if (a > kEps && d >= 0) {
             r = (-b-sqrt(d)) / (2 * a);
             if (r > 1e-5) {
                 min_dist = min(min_dist, r);
@@ -160,20 +166,36 @@ __global__ void render_cuda_kernel(
         scalar_t rz = voxels[batch_base][i][5];
         
         // 计算与各个面的交点参数 t (Calculate intersection parameters t for each face)
-        scalar_t tx1 = (cx - rx - ox) / dx;
-        scalar_t tx2 = (cx + rx - ox) / dx;
-        scalar_t tx_min = min(tx1, tx2);
-        scalar_t tx_max = max(tx1, tx2);
-        
-        scalar_t ty1 = (cy - ry - oy) / dy;
-        scalar_t ty2 = (cy + ry - oy) / dy;
-        scalar_t ty_min = min(ty1, ty2);
-        scalar_t ty_max = max(ty1, ty2);
-        
-        scalar_t tz1 = (cz - rz - oz) / dz;
-        scalar_t tz2 = (cz + rz - oz) / dz;
-        scalar_t tz_min = min(tz1, tz2);
-        scalar_t tz_max = max(tz1, tz2);
+        scalar_t tx_min, tx_max, ty_min, ty_max, tz_min, tz_max;
+        if (abs(dx) <= kEps) {
+            if (ox < cx - rx || ox > cx + rx) continue;
+            tx_min = -1e20; tx_max = 1e20;
+        } else {
+            scalar_t tx1 = (cx - rx - ox) / dx;
+            scalar_t tx2 = (cx + rx - ox) / dx;
+            tx_min = min(tx1, tx2);
+            tx_max = max(tx1, tx2);
+        }
+
+        if (abs(dy) <= kEps) {
+            if (oy < cy - ry || oy > cy + ry) continue;
+            ty_min = -1e20; ty_max = 1e20;
+        } else {
+            scalar_t ty1 = (cy - ry - oy) / dy;
+            scalar_t ty2 = (cy + ry - oy) / dy;
+            ty_min = min(ty1, ty2);
+            ty_max = max(ty1, ty2);
+        }
+
+        if (abs(dz) <= kEps) {
+            if (oz < cz - rz || oz > cz + rz) continue;
+            tz_min = -1e20; tz_max = 1e20;
+        } else {
+            scalar_t tz1 = (cz - rz - oz) / dz;
+            scalar_t tz2 = (cz + rz - oz) / dz;
+            tz_min = min(tz1, tz2);
+            tz_max = max(tz1, tz2);
+        }
         
         // 找到进入和离开长方体的 t 值 (Find entry and exit t values for the box)
         scalar_t t_min = max(max(tx_min, ty_min), tz_min);
@@ -237,9 +259,14 @@ __global__ void nearest_pt_cuda_kernel(
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
-            nearest_ptx = ox + dist * (cx - ox);
-            nearest_pty = oy + dist * (cy - oy);
-            nearest_ptz = oz + dist * (cz - oz);
+            scalar_t ddx = cx - ox;
+            scalar_t ddy = cy - oy;
+            scalar_t ddz = cz - oz;
+            scalar_t dn = sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+            if (dn > 1e-6f) { ddx /= dn; ddy /= dn; ddz /= dn; }
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy + dist * ddy;
+            nearest_ptz = oz + dist * ddz;
         }
     }
 
@@ -257,9 +284,14 @@ __global__ void nearest_pt_cuda_kernel(
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
-            nearest_ptx = ox + dist * (cx - ox);
-            nearest_pty = oy + dist * (cy - oy);
-            nearest_ptz = oz + dist * (cz - oz);
+            scalar_t ddx = cx - ox;
+            scalar_t ddy = cy - oy;
+            scalar_t ddz = cz - oz;
+            scalar_t dn = sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+            if (dn > 1e-6f) { ddx /= dn; ddy /= dn; ddz /= dn; }
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy + dist * ddy;
+            nearest_ptz = oz + dist * ddz;
         }
     }
 
@@ -276,8 +308,12 @@ __global__ void nearest_pt_cuda_kernel(
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
-            nearest_ptx = ox + dist * (cx - ox);
-            nearest_pty = oy + dist * (cy - oy);
+            scalar_t ddx = cx - ox;
+            scalar_t ddy = cy - oy;
+            scalar_t dn = sqrt(ddx * ddx + ddy * ddy);
+            if (dn > 1e-6f) { ddx /= dn; ddy /= dn; }
+            nearest_ptx = ox + dist * ddx;
+            nearest_pty = oy + dist * ddy;
             nearest_ptz = oz; // z 坐标保持不变 (z coordinate remains unchanged)
         }
     }
@@ -295,9 +331,13 @@ __global__ void nearest_pt_cuda_kernel(
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
-            nearest_ptx = ox + dist * (cx - ox);
+            scalar_t ddx = cx - ox;
+            scalar_t ddz = cz - oz;
+            scalar_t dn = sqrt(ddx * ddx + ddz * ddz);
+            if (dn > 1e-6f) { ddx /= dn; ddz /= dn; }
+            nearest_ptx = ox + dist * ddx;
             nearest_pty = oy; // y 坐标保持不变 (y coordinate remains unchanged)
-            nearest_ptz = oz + dist * (cz - oz);
+            nearest_ptz = oz + dist * ddz;
         }
     }
 
@@ -585,11 +625,14 @@ __device__ __forceinline__ scalar_t trace_ray_device(
     torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
     int n_drones_per_group, int batch_base, int bi, int B)
 {
+    const scalar_t kEps = (scalar_t)1e-8;
     scalar_t min_dist = 100; // 初始化为最大距离 (Initialize to max distance)
     
     // 1. 与地面的交点 (ground plane z = -1)
-    scalar_t gt = (-1 - oz) / dz;
-    if (gt > 0) min_dist = gt;
+    if (abs(dz) > kEps) {
+        scalar_t gt = (-1 - oz) / dz;
+        if (gt > 0) min_dist = gt;
+    }
 
     // 2. 与其他无人机的交点 (other drones (ellipsoid with z scaled by 2))
     for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
@@ -600,7 +643,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy) + 4*dz*(oz-cz));
         scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + 4*(oz-cz)*(oz-cz) - rad*rad;
         scalar_t qd = qb*qb - 4*qa*qc;
-        if (qd >= 0) {
+        if (qa > kEps && qd >= 0) {
             scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
             if (qt > 1e-5) { min_dist = min(min_dist, qt); }
             else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
@@ -615,7 +658,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy) + dz*(oz-cz));
         scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + (oz-cz)*(oz-cz) - rad*rad;
         scalar_t qd = qb*qb - 4*qa*qc;
-        if (qd >= 0) {
+        if (qa > kEps && qd >= 0) {
             scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
             if (qt > 1e-5) { min_dist = min(min_dist, qt); }
             else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
@@ -630,7 +673,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy));
         scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) - rad*rad;
         scalar_t qd = qb*qb - 4*qa*qc;
-        if (qd >= 0) {
+        if (qa > kEps && qd >= 0) {
             scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
             if (qt > 1e-5) { min_dist = min(min_dist, qt); }
             else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
@@ -645,7 +688,7 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         scalar_t qb = 2*(dx*(ox-cx) + dz*(oz-cz));
         scalar_t qc = (ox-cx)*(ox-cx) + (oz-cz)*(oz-cz) - rad*rad;
         scalar_t qd = qb*qb - 4*qa*qc;
-        if (qd >= 0) {
+        if (qa > kEps && qd >= 0) {
             scalar_t qt = (-qb - sqrt(qd)) / (2*qa);
             if (qt > 1e-5) { min_dist = min(min_dist, qt); }
             else { qt = (-qb + sqrt(qd)) / (2*qa); if (qt > 1e-5) min_dist = min(min_dist, qt); }
@@ -658,18 +701,248 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         scalar_t cz = voxels[batch_base][i][2];
         scalar_t rx = voxels[batch_base][i][3], ry = voxels[batch_base][i][4];
         scalar_t rz = voxels[batch_base][i][5];
-        scalar_t tx1 = (cx - rx - ox) / dx, tx2 = (cx + rx - ox) / dx;
-        scalar_t tx_min = min(tx1, tx2), tx_max = max(tx1, tx2);
-        scalar_t ty1 = (cy - ry - oy) / dy, ty2 = (cy + ry - oy) / dy;
-        scalar_t ty_min = min(ty1, ty2), ty_max = max(ty1, ty2);
-        scalar_t tz1 = (cz - rz - oz) / dz, tz2 = (cz + rz - oz) / dz;
-        scalar_t tz_min = min(tz1, tz2), tz_max = max(tz1, tz2);
+        scalar_t tx_min, tx_max, ty_min, ty_max, tz_min, tz_max;
+        if (abs(dx) <= kEps) {
+            if (ox < cx - rx || ox > cx + rx) continue;
+            tx_min = -1e20; tx_max = 1e20;
+        } else {
+            scalar_t tx1 = (cx - rx - ox) / dx;
+            scalar_t tx2 = (cx + rx - ox) / dx;
+            tx_min = min(tx1, tx2);
+            tx_max = max(tx1, tx2);
+        }
+        if (abs(dy) <= kEps) {
+            if (oy < cy - ry || oy > cy + ry) continue;
+            ty_min = -1e20; ty_max = 1e20;
+        } else {
+            scalar_t ty1 = (cy - ry - oy) / dy;
+            scalar_t ty2 = (cy + ry - oy) / dy;
+            ty_min = min(ty1, ty2);
+            ty_max = max(ty1, ty2);
+        }
+        if (abs(dz) <= kEps) {
+            if (oz < cz - rz || oz > cz + rz) continue;
+            tz_min = -1e20; tz_max = 1e20;
+        } else {
+            scalar_t tz1 = (cz - rz - oz) / dz;
+            scalar_t tz2 = (cz + rz - oz) / dz;
+            tz_min = min(tz1, tz2);
+            tz_max = max(tz1, tz2);
+        }
         scalar_t t_min_v = max(max(tx_min, ty_min), tz_min);
         scalar_t t_max_v = min(min(tx_max, ty_max), tz_max);
         if (t_min_v < min_dist && t_min_v < t_max_v && t_min_v > 0)
             min_dist = t_min_v;
     }
 
+    return min_dist;
+}
+
+
+// 设备函数：追踪单条“原始”光线并返回命中法线
+// (Device function: trace original ray and return hit normal)
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t trace_ray_with_normal_device(
+    scalar_t dx, scalar_t dy, scalar_t dz,
+    scalar_t ox, scalar_t oy, scalar_t oz,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
+    int n_drones_per_group, int batch_base, int bi, int B,
+    scalar_t* out_nx, scalar_t* out_ny, scalar_t* out_nz)
+{
+    const scalar_t kEps = (scalar_t)1e-8;
+    scalar_t min_dist = (scalar_t)100;
+    scalar_t nx = (scalar_t)0, ny = (scalar_t)0, nz = (scalar_t)0;
+
+    // ground plane z = -1
+    if (abs(dz) > kEps) {
+        scalar_t gt = (-1 - oz) / dz;
+        if (gt > 0 && gt < min_dist) {
+            min_dist = gt;
+            nx = (scalar_t)0; ny = (scalar_t)0; nz = (scalar_t)1;
+        }
+    }
+
+    // other drones (ellipsoid with z scaled by 2)
+    for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
+        if (i == bi || i >= B) continue;
+        scalar_t cx = pos[i][0], cy = pos[i][1], cz = pos[i][2];
+        scalar_t rad = (scalar_t)0.15;
+        scalar_t qa = dx*dx + dy*dy + 4*dz*dz;
+        scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy) + 4*dz*(oz-cz));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + 4*(oz-cz)*(oz-cz) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qa > kEps && qd >= 0) {
+            scalar_t sqrt_qd = sqrt(qd);
+            scalar_t qt = (-qb - sqrt_qd) / (2*qa);
+            if (!(qt > (scalar_t)1e-5)) qt = (-qb + sqrt_qd) / (2*qa);
+            if (qt > (scalar_t)1e-5 && qt < min_dist) {
+                scalar_t px = ox + qt * dx;
+                scalar_t py = oy + qt * dy;
+                scalar_t pz = oz + qt * dz;
+                scalar_t gx = px - cx;
+                scalar_t gy = py - cy;
+                scalar_t gz = (scalar_t)4 * (pz - cz);
+                scalar_t gn = sqrt(gx*gx + gy*gy + gz*gz);
+                if (gn > kEps) {
+                    nx = gx / gn; ny = gy / gn; nz = gz / gn;
+                    min_dist = qt;
+                }
+            }
+        }
+    }
+
+    // spheres
+    for (int i = 0; i < balls.size(1); i++) {
+        scalar_t cx = balls[batch_base][i][0], cy = balls[batch_base][i][1];
+        scalar_t cz = balls[batch_base][i][2], rad = balls[batch_base][i][3];
+        scalar_t qa = dx*dx + dy*dy + dz*dz;
+        scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy) + dz*(oz-cz));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) + (oz-cz)*(oz-cz) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qa > kEps && qd >= 0) {
+            scalar_t sqrt_qd = sqrt(qd);
+            scalar_t qt = (-qb - sqrt_qd) / (2*qa);
+            if (!(qt > (scalar_t)1e-5)) qt = (-qb + sqrt_qd) / (2*qa);
+            if (qt > (scalar_t)1e-5 && qt < min_dist) {
+                scalar_t px = ox + qt * dx;
+                scalar_t py = oy + qt * dy;
+                scalar_t pz = oz + qt * dz;
+                scalar_t gx = px - cx;
+                scalar_t gy = py - cy;
+                scalar_t gz = pz - cz;
+                scalar_t gn = sqrt(gx*gx + gy*gy + gz*gz);
+                if (gn > kEps) {
+                    nx = gx / gn; ny = gy / gn; nz = gz / gn;
+                    min_dist = qt;
+                }
+            }
+        }
+    }
+
+    // vertical cylinders
+    for (int i = 0; i < cylinders.size(1); i++) {
+        scalar_t cx = cylinders[batch_base][i][0], cy = cylinders[batch_base][i][1];
+        scalar_t rad = cylinders[batch_base][i][2];
+        scalar_t qa = dx*dx + dy*dy;
+        scalar_t qb = 2*(dx*(ox-cx) + dy*(oy-cy));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oy-cy)*(oy-cy) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qa > kEps && qd >= 0) {
+            scalar_t sqrt_qd = sqrt(qd);
+            scalar_t qt = (-qb - sqrt_qd) / (2*qa);
+            if (!(qt > (scalar_t)1e-5)) qt = (-qb + sqrt_qd) / (2*qa);
+            if (qt > (scalar_t)1e-5 && qt < min_dist) {
+                scalar_t px = ox + qt * dx;
+                scalar_t py = oy + qt * dy;
+                scalar_t gx = px - cx;
+                scalar_t gy = py - cy;
+                scalar_t gn = sqrt(gx*gx + gy*gy);
+                if (gn > kEps) {
+                    nx = gx / gn; ny = gy / gn; nz = (scalar_t)0;
+                    min_dist = qt;
+                }
+            }
+        }
+    }
+
+    // horizontal cylinders
+    for (int i = 0; i < cylinders_h.size(1); i++) {
+        scalar_t cx = cylinders_h[batch_base][i][0], cz = cylinders_h[batch_base][i][1];
+        scalar_t rad = cylinders_h[batch_base][i][2];
+        scalar_t qa = dx*dx + dz*dz;
+        scalar_t qb = 2*(dx*(ox-cx) + dz*(oz-cz));
+        scalar_t qc = (ox-cx)*(ox-cx) + (oz-cz)*(oz-cz) - rad*rad;
+        scalar_t qd = qb*qb - 4*qa*qc;
+        if (qa > kEps && qd >= 0) {
+            scalar_t sqrt_qd = sqrt(qd);
+            scalar_t qt = (-qb - sqrt_qd) / (2*qa);
+            if (!(qt > (scalar_t)1e-5)) qt = (-qb + sqrt_qd) / (2*qa);
+            if (qt > (scalar_t)1e-5 && qt < min_dist) {
+                scalar_t px = ox + qt * dx;
+                scalar_t pz = oz + qt * dz;
+                scalar_t gx = px - cx;
+                scalar_t gz = pz - cz;
+                scalar_t gn = sqrt(gx*gx + gz*gz);
+                if (gn > kEps) {
+                    nx = gx / gn; ny = (scalar_t)0; nz = gz / gn;
+                    min_dist = qt;
+                }
+            }
+        }
+    }
+
+    // voxels (AABB)
+    for (int i = 0; i < voxels.size(1); i++) {
+        scalar_t cx = voxels[batch_base][i][0], cy = voxels[batch_base][i][1];
+        scalar_t cz = voxels[batch_base][i][2];
+        scalar_t rx = voxels[batch_base][i][3], ry = voxels[batch_base][i][4];
+        scalar_t rz = voxels[batch_base][i][5];
+        scalar_t tx_min, tx_max, ty_min, ty_max, tz_min, tz_max;
+
+        if (abs(dx) <= kEps) {
+            if (ox < cx - rx || ox > cx + rx) continue;
+            tx_min = (scalar_t)-1e20; tx_max = (scalar_t)1e20;
+        } else {
+            scalar_t tx1 = (cx - rx - ox) / dx;
+            scalar_t tx2 = (cx + rx - ox) / dx;
+            tx_min = min(tx1, tx2);
+            tx_max = max(tx1, tx2);
+        }
+        if (abs(dy) <= kEps) {
+            if (oy < cy - ry || oy > cy + ry) continue;
+            ty_min = (scalar_t)-1e20; ty_max = (scalar_t)1e20;
+        } else {
+            scalar_t ty1 = (cy - ry - oy) / dy;
+            scalar_t ty2 = (cy + ry - oy) / dy;
+            ty_min = min(ty1, ty2);
+            ty_max = max(ty1, ty2);
+        }
+        if (abs(dz) <= kEps) {
+            if (oz < cz - rz || oz > cz + rz) continue;
+            tz_min = (scalar_t)-1e20; tz_max = (scalar_t)1e20;
+        } else {
+            scalar_t tz1 = (cz - rz - oz) / dz;
+            scalar_t tz2 = (cz + rz - oz) / dz;
+            tz_min = min(tz1, tz2);
+            tz_max = max(tz1, tz2);
+        }
+
+        scalar_t t_min_v = max(max(tx_min, ty_min), tz_min);
+        scalar_t t_max_v = min(min(tx_max, ty_max), tz_max);
+        if (t_min_v > 0 && t_min_v < t_max_v && t_min_v < min_dist) {
+            scalar_t px = ox + t_min_v * dx;
+            scalar_t py = oy + t_min_v * dy;
+            scalar_t pz = oz + t_min_v * dz;
+            scalar_t lx = px - cx;
+            scalar_t ly = py - cy;
+            scalar_t lz = pz - cz;
+            scalar_t ex = abs(abs(lx) - rx);
+            scalar_t ey = abs(abs(ly) - ry);
+            scalar_t ez = abs(abs(lz) - rz);
+            if (ex <= ey && ex <= ez) {
+                nx = (lx >= 0) ? (scalar_t)1 : (scalar_t)-1;
+                ny = (scalar_t)0;
+                nz = (scalar_t)0;
+            } else if (ey <= ex && ey <= ez) {
+                nx = (scalar_t)0;
+                ny = (ly >= 0) ? (scalar_t)1 : (scalar_t)-1;
+                nz = (scalar_t)0;
+            } else {
+                nx = (scalar_t)0;
+                ny = (scalar_t)0;
+                nz = (lz >= 0) ? (scalar_t)1 : (scalar_t)-1;
+            }
+            min_dist = t_min_v;
+        }
+    }
+
+    *out_nx = nx;
+    *out_ny = ny;
+    *out_nz = nz;
     return min_dist;
 }
 
@@ -722,6 +995,58 @@ __global__ void render_diff_fov_cuda_kernel(
 
 
 // ============================================================================
+// 可微视场前向渲染 CUDA 内核（含法线输出）
+// (Differentiable FOV forward kernel with normal map output)
+// ============================================================================
+template <typename scalar_t>
+__global__ void render_diff_fov_with_normal_cuda_kernel(
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> normals,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
+    int n_drones_per_group,
+    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
+
+    const int c = blockIdx.x * blockDim.x + threadIdx.x;
+    const int B = canvas.size(0);
+    const int H = canvas.size(1);
+    const int W = canvas.size(2);
+    if (c >= B * H * W) return;
+    const int b = c / (H * W);
+    const int u = (c % (H * W)) / W;
+    const int v = c % W;
+
+    const scalar_t fov = fov_x_half_tan[b];
+    const scalar_t fov_y_ht = fov / W * H;
+    const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_ht - 1e-5;
+    const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
+
+    scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
+    scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
+    scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
+
+    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+
+    scalar_t nx = (scalar_t)0, ny = (scalar_t)0, nz = (scalar_t)0;
+    scalar_t depth = trace_ray_with_normal_device(
+        dx, dy, dz,
+        pos[b][0], pos[b][1], pos[b][2],
+        balls, cylinders, cylinders_h, voxels, pos,
+        n_drones_per_group, batch_base, b, B,
+        &nx, &ny, &nz);
+
+    canvas[b][u][v] = depth;
+    normals[b][0][u][v] = nx;
+    normals[b][1][u][v] = ny;
+    normals[b][2][u][v] = nz;
+}
+
+
+// ============================================================================
 // 可微视场反向传播 CUDA 内核 (Differentiable FOV Backward CUDA Kernel)
 // 
 // 通过有限差分法计算深度对 FOV 的梯度: d(depth)/d(fov)，
@@ -741,42 +1066,153 @@ __global__ void render_backward_fov_cuda_kernel(
     int n_drones_per_group,
     torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
 
-    const int c = blockIdx.x * blockDim.x + threadIdx.x;
+    // 3D Grid: x->W, y->H, z->B
+    const int v = blockIdx.x * blockDim.x + threadIdx.x;
+    const int u = blockIdx.y * blockDim.y + threadIdx.y;
+    const int b = blockIdx.z;
+
     const int B = canvas.size(0);
     const int H = canvas.size(1);
     const int W = canvas.size(2);
-    if (c >= B * H * W) return;
-    const int b = c / (H * W);
-    const int u = (c % (H * W)) / W;
-    const int v = c % W;
 
-    const scalar_t go = grad_output[b][u][v];
-    if (abs(go) < 1e-8) return;  // 跳过零梯度像素以加速 (skip zero-gradient pixels for speed)
+    // blockDim = (16,16,1) => 256 threads per block
+    __shared__ scalar_t s_grad[256];
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    s_grad[tid] = (scalar_t)0;
 
-    const scalar_t fov = fov_x_half_tan[b];
-    const scalar_t eps = (scalar_t)1e-3; // 有限差分步长 (Finite difference step size)
-    const scalar_t fov_p = fov + eps;    // 扰动后的 FOV (Perturbed FOV)
-    const scalar_t ox = pos[b][0], oy = pos[b][1], oz = pos[b][2];
+    if (b < B && u < H && v < W) {
+        const scalar_t go = grad_output[b][u][v];
+        if (abs(go) >= (scalar_t)1e-8) {
+            const scalar_t fov = fov_x_half_tan[b];
+            const scalar_t ox = pos[b][0], oy = pos[b][1], oz = pos[b][2];
 
-    // 计算扰动后的光线方向 (Perturbed ray direction at fov + eps)
-    const scalar_t fov_y_p = fov_p / W * H;
-    const scalar_t fu_p = (2 * (u + 0.5) / H - 1) * fov_y_p - 1e-5;
-    const scalar_t fv_p = (2 * (v + 0.5) / W - 1) * fov_p - 1e-5;
-    scalar_t dx_p = R[b][0][0] - fu_p * R[b][0][2] - fv_p * R[b][0][1];
-    scalar_t dy_p = R[b][1][0] - fu_p * R[b][1][2] - fv_p * R[b][1][1];
-    scalar_t dz_p = R[b][2][0] - fu_p * R[b][2][2] - fv_p * R[b][2][1];
+            // 原始光线方向 d
+            const scalar_t fov_y = fov / W * H;
+            const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y - 1e-5;
+            const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
+            const scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
+            const scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
+            const scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
 
-    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
-    
-    // 重新追踪扰动后的光线 (Retrace perturbed ray)
-    scalar_t depth_p = trace_ray_device(dx_p, dy_p, dz_p, ox, oy, oz,
-        balls, cylinders, cylinders_h, voxels, pos,
-        n_drones_per_group, batch_base, b, B);
+            // d / d(fov)
+            const scalar_t d_fv_d_fov = (2 * (v + 0.5) / W - 1);
+            const scalar_t d_fu_d_fov = (2 * (u + 0.5) / H - 1) * ((scalar_t)H / W);
+            const scalar_t d_dx_d_fov = -d_fu_d_fov * R[b][0][2] - d_fv_d_fov * R[b][0][1];
+            const scalar_t d_dy_d_fov = -d_fu_d_fov * R[b][1][2] - d_fv_d_fov * R[b][1][1];
+            const scalar_t d_dz_d_fov = -d_fu_d_fov * R[b][2][2] - d_fv_d_fov * R[b][2][1];
 
-    // 计算局部梯度并累加 (Calculate local gradient and accumulate)
-    scalar_t depth_orig = canvas[b][u][v];
-    scalar_t local_grad = (depth_p - depth_orig) / eps;
-    atomicAdd(&grad_fov[b], go * local_grad);
+            const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+            scalar_t nx = (scalar_t)0, ny = (scalar_t)0, nz = (scalar_t)0;
+
+            // 单次追踪原始光线并拿到命中法线
+            scalar_t depth_hit = trace_ray_with_normal_device(
+                dx, dy, dz, ox, oy, oz,
+                balls, cylinders, cylinders_h, voxels, pos,
+                n_drones_per_group, batch_base, b, B,
+                &nx, &ny, &nz);
+
+            // 使用前向缓存深度作为 D（与计算图保持一致）
+            scalar_t D = canvas[b][u][v];
+            if (D < (scalar_t)99.0 && depth_hit < (scalar_t)99.0) {
+                scalar_t n_dot_d = nx * dx + ny * dy + nz * dz;
+                if (abs(n_dot_d) > (scalar_t)1e-6) {
+                    scalar_t n_dot_dd_dfov = nx * d_dx_d_fov + ny * d_dy_d_fov + nz * d_dz_d_fov;
+                    scalar_t local_grad = -D * (n_dot_dd_dfov / n_dot_d);
+                    s_grad[tid] = go * local_grad;
+                }
+            }
+        }
+    }
+
+    __syncthreads();
+
+    // Tree reduction in shared memory
+    for (int s = (blockDim.x * blockDim.y) / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            s_grad[tid] += s_grad[tid + s];
+        }
+        __syncthreads();
+    }
+
+    // Single atomic add per block
+    if (tid == 0 && s_grad[0] != (scalar_t)0) {
+        atomicAdd(&grad_fov[b], s_grad[0]);
+    }
+}
+
+
+// ============================================================================
+// 可微视场反向传播 CUDA 内核（基于法线图解析梯度）
+// (Differentiable FOV backward kernel from normal map, analytical)
+// ============================================================================
+template <typename scalar_t>
+__global__ void render_backward_fov_from_normal_cuda_kernel(
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_output,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> normals,
+    scalar_t* __restrict__ grad_fov,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
+    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
+
+    const int v = blockIdx.x * blockDim.x + threadIdx.x;
+    const int u = blockIdx.y * blockDim.y + threadIdx.y;
+    const int b = blockIdx.z;
+
+    const int B = canvas.size(0);
+    const int H = canvas.size(1);
+    const int W = canvas.size(2);
+
+    __shared__ scalar_t s_grad[256];
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    s_grad[tid] = (scalar_t)0;
+
+    if (b < B && u < H && v < W) {
+        const scalar_t go = grad_output[b][u][v];
+        const scalar_t D = canvas[b][u][v];
+
+        if (abs(go) >= (scalar_t)1e-8 && D < (scalar_t)99.0) {
+            const scalar_t fov = fov_x_half_tan[b];
+
+            // 当前光线方向
+            const scalar_t fov_y = fov / W * H;
+            const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y - 1e-5;
+            const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
+            const scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
+            const scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
+            const scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
+
+            // d(d)/d(fov)
+            const scalar_t d_fv_d_fov = (2 * (v + 0.5) / W - 1);
+            const scalar_t d_fu_d_fov = (2 * (u + 0.5) / H - 1) * ((scalar_t)H / W);
+            const scalar_t d_dx_d_fov = -d_fu_d_fov * R[b][0][2] - d_fv_d_fov * R[b][0][1];
+            const scalar_t d_dy_d_fov = -d_fu_d_fov * R[b][1][2] - d_fv_d_fov * R[b][1][1];
+            const scalar_t d_dz_d_fov = -d_fu_d_fov * R[b][2][2] - d_fv_d_fov * R[b][2][1];
+
+            const scalar_t nx = normals[b][0][u][v];
+            const scalar_t ny = normals[b][1][u][v];
+            const scalar_t nz = normals[b][2][u][v];
+
+            const scalar_t n_dot_d = nx * dx + ny * dy + nz * dz;
+            if (abs(n_dot_d) > (scalar_t)5e-2) {
+                const scalar_t n_dot_dd_dfov = nx * d_dx_d_fov + ny * d_dy_d_fov + nz * d_dz_d_fov;
+                scalar_t local_grad = -D * (n_dot_dd_dfov / n_dot_d);
+                local_grad = max((scalar_t)-500.0, min((scalar_t)500.0, local_grad));
+                s_grad[tid] = go * local_grad;
+            }
+        }
+    }
+
+    __syncthreads();
+    for (int s = (blockDim.x * blockDim.y) / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            s_grad[tid] += s_grad[tid + s];
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0 && s_grad[0] != (scalar_t)0) {
+        atomicAdd(&grad_fov[b], s_grad[0]);
+    }
 }
 
 // ============================================================================
@@ -858,6 +1294,7 @@ void render_cuda(
             n_drones_per_group,
             fov_x_half_tan);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // ============================================================================
@@ -878,6 +1315,7 @@ void rerender_backward_cuda(
             dddp.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             fov_x_half_tan);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // ============================================================================
@@ -908,6 +1346,7 @@ void find_nearest_pt_cuda(
             drone_radius,
             n_drones_per_group);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // ============================================================================
@@ -944,6 +1383,7 @@ void find_nearest_pt_ellipsoid_cuda(
             ellipsoid_a,
             ellipsoid_c);
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // ============================================================================
@@ -976,6 +1416,42 @@ void render_diff_fov_cuda(
             n_drones_per_group,
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// ============================================================================
+// C++ 接口函数：可微视场前向渲染（含法线输出）
+// ============================================================================
+void render_diff_fov_with_normal_cuda(
+    torch::Tensor canvas,
+    torch::Tensor normals,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    torch::Tensor fov_x_half_tan) {
+
+    const int threads = 1024;
+    size_t state_size = canvas.numel();
+    const dim3 blocks((state_size + threads - 1) / threads);
+
+    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_diff_fov_with_normal_cuda", ([&] {
+        render_diff_fov_with_normal_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            normals.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
+            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+            n_drones_per_group,
+            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
+    }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // ============================================================================
@@ -993,10 +1469,17 @@ void render_backward_fov_cuda(
     torch::Tensor pos,
     int n_drones_per_group,
     torch::Tensor fov_x_half_tan) {
-    
-    const int threads = 1024;
-    size_t state_size = canvas.numel();
-    const dim3 blocks((state_size + threads - 1) / threads);
+
+    const int B = canvas.size(0);
+    const int H = canvas.size(1);
+    const int W = canvas.size(2);
+
+    // 2D block + 3D grid to reduce atomic contention within each batch
+    const dim3 threads(16, 16, 1);
+    const dim3 blocks(
+        (W + threads.x - 1) / threads.x,
+        (H + threads.y - 1) / threads.y,
+        B);
 
     AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_backward_fov_cuda", ([&] {
         render_backward_fov_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
@@ -1012,6 +1495,40 @@ void render_backward_fov_cuda(
             n_drones_per_group,
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// ============================================================================
+// C++ 接口函数：可微视场反向传播（基于法线图解析梯度）
+// ============================================================================
+void render_backward_fov_from_normal_cuda(
+    torch::Tensor grad_fov,
+    torch::Tensor grad_output,
+    torch::Tensor canvas,
+    torch::Tensor normals,
+    torch::Tensor R,
+    torch::Tensor fov_x_half_tan) {
+
+    const int B = canvas.size(0);
+    const int H = canvas.size(1);
+    const int W = canvas.size(2);
+
+    const dim3 threads(16, 16, 1);
+    const dim3 blocks(
+        (W + threads.x - 1) / threads.x,
+        (H + threads.y - 1) / threads.y,
+        B);
+
+    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_backward_fov_from_normal_cuda", ([&] {
+        render_backward_fov_from_normal_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+            grad_output.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            normals.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
+            grad_fov.data_ptr<scalar_t>(),
+            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
+    }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 // ============================================================================
@@ -1043,23 +1560,286 @@ void render_yuv_y_cuda(
 // ============================================================================
 // C++ 接口函数：Y 通道可微渲染（FOV + exposure/iso 输入）
 // 说明：
-// - 几何部分复用 render_diff_fov_cuda（由 Python 侧自定义 autograd 处理 FOV 梯度）
-// - 相机参数部分采用 ATen 张量算子做可微亮度映射
+// - 几何部分复用 render_diff_fov_with_normal_cuda
+// - 相机部分采用 ATen 张量算子复刻 Python 链路的低风险近似
+// - 反向中 exposure/iso/depth 使用 autograd 链式求导，fov 使用 normal-map 解析反向
 // ============================================================================
-static torch::Tensor build_y_from_depth(
+static torch::Tensor build_y_from_depth_full(
     torch::Tensor depth_raw,
+    torch::Tensor normals,
     torch::Tensor exposure,
-    torch::Tensor iso) {
-    // 与 Python 路径保持一致：exposure/iso 视为归一化后的 [0,1] 参数
-    auto exposure01 = exposure.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
-    auto iso01 = iso.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
+    torch::Tensor iso,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    bool cam_enable_shadow,
+    bool cam_enable_specular,
+    bool cam_enable_distortion,
+    bool cam_enable_flare,
+    bool cam_enable_motion_blur,
+    bool cam_enable_rolling,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma) {
 
-    // t_cmd = 0.25 + 2.75 * exposure01
-    auto exposure_scale = 0.25 + 2.75 * exposure01;
-    // iso_gain = 1.0 + 10.0 * (iso01 ^ 1.2)
-    auto iso_gain = 1.0 + 10.0 * torch::pow(iso01, 1.2);
+    auto depth = depth_raw.clamp(0.03, 120.0);
+    const auto B = depth.size(0);
+    const auto H = depth.size(1);
+    const auto W = depth.size(2);
 
-    return depth_raw * exposure_scale * iso_gain;
+    auto nx = normals.select(1, 0);
+    auto ny = normals.select(1, 1);
+    auto nz = normals.select(1, 2);
+    auto nz_abs = torch::abs(nz);
+
+    auto w_ground = ((nz_abs - 0.55) / 0.45).clamp(0.0, 1.0);
+    auto albedo =
+        w_ground * cam_mat_ground.unsqueeze(1).unsqueeze(2)
+        + (1.0 - w_ground) * cam_mat_obstacle.unsqueeze(1).unsqueeze(2);
+
+    auto Lx = cam_light_dir.select(1, 0).unsqueeze(1).unsqueeze(2);
+    auto Ly = cam_light_dir.select(1, 1).unsqueeze(1).unsqueeze(2);
+    auto Lz = cam_light_dir.select(1, 2).unsqueeze(1).unsqueeze(2);
+    auto ndotl = (nx * Lx + ny * Ly + nz * Lz).clamp_min(0.0);
+
+    torch::Tensor shadow = torch::ones_like(depth);
+    if (cam_enable_shadow) {
+        shadow = (0.35 + 0.65 * ndotl).clamp(0.2, 1.0);
+    }
+
+    torch::Tensor specular = torch::zeros_like(depth);
+    if (cam_enable_specular) {
+        specular = cam_mat_spec.unsqueeze(1).unsqueeze(2) * torch::pow(ndotl, 24.0);
+    }
+
+    auto irradiance =
+        albedo * (cam_ambient.unsqueeze(1).unsqueeze(2) + cam_dir_intensity.unsqueeze(1).unsqueeze(2) * ndotl * shadow)
+        + specular;
+
+    auto trans = torch::exp(-cam_fog_beta.unsqueeze(1).unsqueeze(2) * depth);
+    irradiance = (irradiance * trans + cam_airlight.unsqueeze(1).unsqueeze(2) * (1.0 - trans)).clamp(0.0, 4.0);
+
+    auto yy = torch::linspace(-1.0, 1.0, H, depth.options()).view({H, 1});
+    auto xx = torch::linspace(-1.0, 1.0, W, depth.options()).view({1, W});
+    auto r2 = yy * yy + xx * xx;
+    auto vignette = (1.0 - cam_vignette_a * r2 - cam_vignette_b * (r2 * r2)).clamp(0.25, 1.0);
+    auto lens_y = irradiance * vignette.unsqueeze(0);
+
+    if (cam_enable_distortion) {
+        auto r2b = r2.unsqueeze(0);
+        auto radial = 1.0 + cam_dist_k1.unsqueeze(1).unsqueeze(2) * r2b + cam_dist_k2.unsqueeze(1).unsqueeze(2) * (r2b * r2b);
+        lens_y = (lens_y * radial.clamp(0.7, 1.3)).clamp(0.0, 4.0);
+    }
+
+    if (cam_enable_flare) {
+        auto bright = torch::relu(lens_y - 0.82);
+        auto flare = at::avg_pool2d(
+            bright.unsqueeze(1),
+            {9, 9},
+            {1, 1},
+            {4, 4},
+            false,
+            true,
+            c10::nullopt).squeeze(1);
+        lens_y = lens_y + cam_flare_strength.unsqueeze(1).unsqueeze(2) * flare;
+    }
+
+    auto exposure01 = exposure.clamp(0.0, 1.0);
+    auto iso01 = iso.clamp(0.0, 1.0);
+    auto t_cmd = cam_exposure_t_min + cam_exposure_t_span * exposure01;
+    auto t_ae = torch::exp(cam_ae_log_t);
+    auto t_eff = (t_cmd * t_ae).clamp(cam_exposure_eff_min, cam_exposure_eff_max);
+    auto iso_gain = cam_iso_gain_base + cam_iso_gain_scale * torch::pow(iso01, cam_iso_gain_gamma);
+
+    auto electrons = lens_y * t_eff.unsqueeze(1).unsqueeze(2) * cam_base_gain;
+    electrons = electrons * iso_gain.unsqueeze(1).unsqueeze(2);
+    auto raw = electrons * (1.0 + cam_prnu) + cam_dsnu;
+
+    auto x = torch::relu(raw - cam_black_level);
+    x = x / (1.0 + x);
+
+    auto denoise_strength = 0.08 + 0.28 * iso01;
+    auto smooth = at::avg_pool2d(
+        x.unsqueeze(1),
+        {3, 3},
+        {1, 1},
+        {1, 1},
+        false,
+        true,
+        c10::nullopt).squeeze(1);
+    x = x * (1.0 - denoise_strength.unsqueeze(1).unsqueeze(2)) + smooth * denoise_strength.unsqueeze(1).unsqueeze(2);
+
+    auto blur_small = at::avg_pool2d(
+        x.unsqueeze(1),
+        {3, 3},
+        {1, 1},
+        {1, 1},
+        false,
+        true,
+        c10::nullopt).squeeze(1);
+    x = x + cam_sharpen_amount * (x - blur_small);
+
+    auto gamma = cam_gamma.unsqueeze(1).unsqueeze(2).clamp_min(1e-3);
+    auto x_lin = x.clamp(0.0, 1.0);
+    auto x_safe = x_lin.clamp(1e-6, 1.0);
+    auto x_gamma = torch::pow(x_safe, 1.0 / gamma);
+    auto y = torch::where(x_lin > 0, x_gamma, torch::zeros_like(x_gamma));
+
+    if (cam_enable_motion_blur) {
+        auto speed = v.norm(2, -1);
+        auto t_norm = (t_cmd / 3.0).clamp(0.0, 1.0);
+        auto blur_alpha = (speed * cam_motion_blur_gain * t_norm).clamp(0.0, 0.72);
+
+        auto yg = y * (1.0 - blur_alpha.unsqueeze(1).unsqueeze(2)) + cam_prev_y * blur_alpha.unsqueeze(1).unsqueeze(2);
+
+        if (cam_enable_rolling) {
+            auto row = torch::linspace(0.0, 1.0, H, depth.options()).view({1, H, 1}).expand({B, H, W});
+            auto a_roll = blur_alpha.unsqueeze(1).unsqueeze(2) * row;
+            auto yr = y * (1.0 - a_roll) + cam_prev_y * a_roll;
+            auto use_roll = cam_use_rolling.unsqueeze(1).unsqueeze(2);
+            y = yg * (1.0 - use_roll) + yr * use_roll;
+        } else {
+            y = yg;
+        }
+    }
+
+    return y.clamp(0.0, 1.0);
+}
+
+static torch::Tensor build_y_from_depth_profiled(
+    torch::Tensor depth_raw,
+    torch::Tensor normals,
+    torch::Tensor exposure,
+    torch::Tensor iso,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma) {
+    const int64_t mask = cam_profile_mask & 0x3f;
+    if (mask == 63) {
+        return build_y_from_depth_full(
+            depth_raw, normals, exposure, iso,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2, cam_flare_strength,
+            cam_gamma, cam_prnu, cam_dsnu,
+            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+            true, true, true, true, true, true,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    }
+    if (mask == 7) {
+        return build_y_from_depth_full(
+            depth_raw, normals, exposure, iso,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2, cam_flare_strength,
+            cam_gamma, cam_prnu, cam_dsnu,
+            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+            true, true, true, false, false, false,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    }
+    if (mask == 2) {
+        return build_y_from_depth_full(
+            depth_raw, normals, exposure, iso,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2, cam_flare_strength,
+            cam_gamma, cam_prnu, cam_dsnu,
+            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+            false, true, false, false, false, false,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    }
+
+    const bool cam_enable_shadow = (mask & (1 << 0)) != 0;
+    const bool cam_enable_specular = (mask & (1 << 1)) != 0;
+    const bool cam_enable_distortion = (mask & (1 << 2)) != 0;
+    const bool cam_enable_flare = (mask & (1 << 3)) != 0;
+    const bool cam_enable_motion_blur = (mask & (1 << 4)) != 0;
+    const bool cam_enable_rolling = (mask & (1 << 5)) != 0;
+
+    return build_y_from_depth_full(
+        depth_raw, normals, exposure, iso,
+        cam_light_dir, cam_ambient, cam_dir_intensity,
+        cam_fog_beta, cam_airlight,
+        cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+        cam_dist_k1, cam_dist_k2, cam_flare_strength,
+        cam_gamma, cam_prnu, cam_dsnu,
+        cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+        cam_enable_shadow, cam_enable_specular, cam_enable_distortion,
+        cam_enable_flare, cam_enable_motion_blur, cam_enable_rolling,
+        cam_vignette_a, cam_vignette_b,
+        cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+        cam_exposure_t_min, cam_exposure_t_span,
+        cam_exposure_eff_min, cam_exposure_eff_max,
+        cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
 }
 
 std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
@@ -1074,7 +1854,39 @@ std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
     torch::Tensor voxels,
     int n_drones_per_group,
     int height,
-    int width);
+    int width,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma);
 
 torch::Tensor render_diff_yuv_y_cuda(
     torch::Tensor fov_x_half_tan,
@@ -1089,10 +1901,44 @@ torch::Tensor render_diff_yuv_y_cuda(
     int n_drones_per_group,
     int height,
     int width) {
+    const auto B = pos.size(0);
+    auto opts = pos.options();
+    auto cam_light_dir = torch::zeros({B, 3}, opts);
+    cam_light_dir.select(1, 2).fill_(1.0);
+    auto cam_ambient = torch::full({B}, 0.2, opts);
+    auto cam_dir_intensity = torch::full({B}, 1.0, opts);
+    auto cam_fog_beta = torch::full({B}, 0.02, opts);
+    auto cam_airlight = torch::full({B}, 0.4, opts);
+    auto cam_mat_ground = torch::full({B}, 0.4, opts);
+    auto cam_mat_obstacle = torch::full({B}, 0.6, opts);
+    auto cam_mat_spec = torch::full({B}, 0.08, opts);
+    auto cam_dist_k1 = torch::zeros({B}, opts);
+    auto cam_dist_k2 = torch::zeros({B}, opts);
+    auto cam_flare_strength = torch::zeros({B}, opts);
+    auto cam_gamma = torch::full({B}, 2.2, opts);
+    auto cam_prnu = torch::zeros({B, height, width}, opts);
+    auto cam_dsnu = torch::zeros({B, height, width}, opts);
+    auto cam_prev_y = torch::zeros({B, height, width}, opts);
+    auto cam_use_rolling = torch::zeros({B}, opts);
+    auto v = torch::zeros({B, 3}, opts);
+    auto cam_ae_log_t = torch::zeros({B}, opts);
+
     auto out = render_diff_yuv_y_forward_cuda(
         fov_x_half_tan, exposure, iso,
         R, pos, balls, cylinders, cylinders_h, voxels,
-        n_drones_per_group, height, width);
+        n_drones_per_group, height, width,
+        cam_light_dir, cam_ambient, cam_dir_intensity,
+        cam_fog_beta, cam_airlight,
+        cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+        cam_dist_k1, cam_dist_k2, cam_flare_strength,
+        cam_gamma, cam_prnu, cam_dsnu,
+        cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+        0,
+        0.28, 0.22,
+        0.01, 0.35, 0.14, 0.09,
+        0.25, 2.75,
+        0.15, 4.0,
+        1.0, 10.0, 1.2);
     return out[0];
 }
 
@@ -1108,16 +1954,62 @@ std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
     torch::Tensor voxels,
     int n_drones_per_group,
     int height,
-    int width) {
+    int width,
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma) {
 
     const auto B = pos.size(0);
     auto depth_raw = torch::empty({B, height, width}, pos.options());
-    render_diff_fov_cuda(
-        depth_raw, balls, cylinders, cylinders_h, voxels,
+    auto normals = torch::empty({B, 3, height, width}, pos.options());
+    render_diff_fov_with_normal_cuda(
+        depth_raw, normals, balls, cylinders, cylinders_h, voxels,
         R, pos, n_drones_per_group, fov_x_half_tan);
 
-    auto y = build_y_from_depth(depth_raw, exposure, iso);
-    return {y, depth_raw};
+    auto y = build_y_from_depth_profiled(
+        depth_raw, normals, exposure, iso,
+        cam_light_dir, cam_ambient, cam_dir_intensity,
+        cam_fog_beta, cam_airlight,
+        cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+        cam_dist_k1, cam_dist_k2, cam_flare_strength,
+        cam_gamma, cam_prnu, cam_dsnu,
+        cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+        cam_profile_mask,
+        cam_vignette_a, cam_vignette_b,
+        cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+        cam_exposure_t_min, cam_exposure_t_span,
+        cam_exposure_eff_min, cam_exposure_eff_max,
+        cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
+    return {y, depth_raw, normals};
 }
 
 std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
@@ -1126,56 +2018,115 @@ std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
     torch::Tensor fov_x_half_tan,
     torch::Tensor exposure,
     torch::Tensor iso,
+    torch::Tensor normals,
     torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group) {
+    torch::Tensor cam_light_dir,
+    torch::Tensor cam_ambient,
+    torch::Tensor cam_dir_intensity,
+    torch::Tensor cam_fog_beta,
+    torch::Tensor cam_airlight,
+    torch::Tensor cam_mat_ground,
+    torch::Tensor cam_mat_obstacle,
+    torch::Tensor cam_mat_spec,
+    torch::Tensor cam_dist_k1,
+    torch::Tensor cam_dist_k2,
+    torch::Tensor cam_flare_strength,
+    torch::Tensor cam_gamma,
+    torch::Tensor cam_prnu,
+    torch::Tensor cam_dsnu,
+    torch::Tensor cam_prev_y,
+    torch::Tensor cam_use_rolling,
+    torch::Tensor v,
+    torch::Tensor cam_ae_log_t,
+    int64_t cam_profile_mask,
+    double cam_vignette_a,
+    double cam_vignette_b,
+    double cam_black_level,
+    double cam_sharpen_amount,
+    double cam_base_gain,
+    double cam_motion_blur_gain,
+    double cam_exposure_t_min,
+    double cam_exposure_t_span,
+    double cam_exposure_eff_min,
+    double cam_exposure_eff_max,
+    double cam_iso_gain_base,
+    double cam_iso_gain_scale,
+    double cam_iso_gain_gamma,
+    bool need_grad_fov,
+    bool need_grad_exposure,
+    bool need_grad_iso) {
 
     auto go = grad_output.contiguous();
     auto d = depth_raw.contiguous();
 
-    auto exposure01 = exposure.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
-    auto iso01 = iso.clamp(0.0, 1.0).unsqueeze(1).unsqueeze(2);
+    torch::Tensor grad_depth = torch::zeros_like(d);
+    torch::Tensor grad_exposure = torch::zeros_like(exposure);
+    torch::Tensor grad_iso = torch::zeros_like(iso);
 
-    auto exposure_scale = 0.25 + 2.75 * exposure01;
-    auto iso_gain = 1.0 + 10.0 * torch::pow(iso01, 1.2);
+    const bool need_depth = need_grad_fov;
+    if (need_depth || need_grad_exposure || need_grad_iso) {
+        torch::autograd::AutoGradMode enable_grad(true);
 
-    auto exposure_mask = ((exposure > 0.0) & (exposure < 1.0))
-        .to(exposure.scalar_type()).unsqueeze(1).unsqueeze(2);
-    auto iso_mask = ((iso > 0.0) & (iso < 1.0))
-        .to(iso.scalar_type()).unsqueeze(1).unsqueeze(2);
+        torch::Tensor d_var = need_depth ? d.detach() : d;
+        torch::Tensor e_var = need_grad_exposure ? exposure.detach() : exposure;
+        torch::Tensor i_var = need_grad_iso ? iso.detach() : iso;
 
-    // dy/dd
-    auto grad_depth_local = exposure_scale * iso_gain;
-    auto grad_depth = go * grad_depth_local;
+        if (need_depth) d_var.set_requires_grad(true);
+        if (need_grad_exposure) e_var.set_requires_grad(true);
+        if (need_grad_iso) i_var.set_requires_grad(true);
 
-    // dy/dexposure
-    auto d_exposure_scale = 2.75 * exposure_mask;
-    auto grad_exposure_map = go * d * iso_gain * d_exposure_scale;
-    auto grad_exposure = grad_exposure_map.sum({1, 2});
+        auto y_var = build_y_from_depth_profiled(
+            d_var, normals, e_var, i_var,
+            cam_light_dir, cam_ambient, cam_dir_intensity,
+            cam_fog_beta, cam_airlight,
+            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
+            cam_dist_k1, cam_dist_k2, cam_flare_strength,
+            cam_gamma, cam_prnu, cam_dsnu,
+            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
+            cam_profile_mask,
+            cam_vignette_a, cam_vignette_b,
+            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
+            cam_exposure_t_min, cam_exposure_t_span,
+            cam_exposure_eff_min, cam_exposure_eff_max,
+            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
 
-    // dy/diso
-    auto d_iso_gain = 12.0 * torch::pow(iso01, 0.2) * iso_mask;
-    auto grad_iso_map = go * d * exposure_scale * d_iso_gain;
-    auto grad_iso = grad_iso_map.sum({1, 2});
+        std::vector<torch::Tensor> grad_inputs;
+        if (need_depth) grad_inputs.push_back(d_var);
+        if (need_grad_exposure) grad_inputs.push_back(e_var);
+        if (need_grad_iso) grad_inputs.push_back(i_var);
 
-    // dL/dfov 通过几何反向（带上相机映射后的链式梯度）
+        std::vector<torch::Tensor> grads = torch::autograd::grad(
+            {y_var},
+            grad_inputs,
+            {go},
+            false,
+            false,
+            true);
+
+        int gi = 0;
+        if (need_depth) {
+            grad_depth = grads[gi].defined() ? grads[gi] : torch::zeros_like(d);
+            gi++;
+        }
+        if (need_grad_exposure) {
+            grad_exposure = grads[gi].defined() ? grads[gi] : torch::zeros_like(exposure);
+            gi++;
+        }
+        if (need_grad_iso) {
+            grad_iso = grads[gi].defined() ? grads[gi] : torch::zeros_like(iso);
+        }
+    }
+
     auto grad_fov = torch::zeros_like(fov_x_half_tan);
-    render_backward_fov_cuda(
-        grad_fov,
-        grad_depth.contiguous(),
-        d,
-        balls,
-        cylinders,
-        cylinders_h,
-        voxels,
-        R,
-        pos,
-        n_drones_per_group,
-        fov_x_half_tan);
+    if (need_grad_fov) {
+        render_backward_fov_from_normal_cuda(
+            grad_fov,
+            grad_depth.contiguous(),
+            d,
+            normals,
+            R,
+            fov_x_half_tan);
+    }
 
     return {grad_fov, grad_exposure, grad_iso};
 }
