@@ -83,13 +83,13 @@ def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
 
 
 def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed_seq,
-                          use_active_depth, enable_camera_quality_loss,
+                          use_diff_depth, enable_camera_quality_loss,
                           cam_sem: Optional[CameraSemantics] = None):
     """计算所有与 相机控制/光学 相关的损失项。
 
     Returns:
         dict 包含: loss_cam_smooth, loss_fov_reg, loss_cam_range,
-                   loss_blur, loss_noise, loss_active_depth_power, loss_active_depth_blur
+                   loss_blur, loss_noise, loss_diff_depth_power, loss_diff_depth_blur
     """
     device = speed_seq.device if isinstance(speed_seq, torch.Tensor) else cam_exp_seq.device
     result = {
@@ -98,8 +98,8 @@ def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed
         'loss_cam_range': torch.zeros((), device=device),
         'loss_blur': torch.zeros((), device=device),
         'loss_noise': torch.zeros((), device=device),
-        'loss_active_depth_power': torch.zeros((), device=device),
-        'loss_active_depth_blur': torch.zeros((), device=device),
+        'loss_diff_depth_power': torch.zeros((), device=device),
+        'loss_diff_depth_blur': torch.zeros((), device=device),
     }
 
     # 相机平滑度与正则化
@@ -111,9 +111,9 @@ def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed
 
     # 光学损失
     if cam_exp_seq is not None:
-        if use_active_depth:
-            result['loss_active_depth_power'] = cam_fov_seq.pow(2).mean()
-            result['loss_active_depth_blur'] = (speed_seq * cam_exp_seq).mean()
+        if use_diff_depth:
+            result['loss_diff_depth_power'] = cam_fov_seq.pow(2).mean()
+            result['loss_diff_depth_blur'] = (speed_seq * cam_exp_seq).mean()
         elif enable_camera_quality_loss:
             sem = cam_sem if cam_sem is not None else CameraSemantics()
             exp_phys = torch.as_tensor(
@@ -222,8 +222,8 @@ def aggregate_loss(physics_losses, camera_losses, args,
         + args.coef_tilt * loss_tilt
         + args.coef_blur * camera_losses['loss_blur']
         + args.coef_noise * camera_losses['loss_noise']
-        + args.coef_active_depth_power * camera_losses['loss_active_depth_power']
-        + args.coef_active_depth_blur * camera_losses['loss_active_depth_blur']
+        + args.coef_diff_depth_power * camera_losses['loss_diff_depth_power']
+        + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
     )
 
     if args.enable_teacher_student_training and distill_coef_iter is not None:
@@ -247,8 +247,8 @@ def aggregate_loss(physics_losses, camera_losses, args,
         'loss_tilt': loss_tilt,
         'loss_blur': camera_losses['loss_blur'],
         'loss_noise': camera_losses['loss_noise'],
-        'loss_active_depth_power': camera_losses['loss_active_depth_power'],
-        'loss_active_depth_blur': camera_losses['loss_active_depth_blur'],
+        'loss_diff_depth_power': camera_losses['loss_diff_depth_power'],
+        'loss_diff_depth_blur': camera_losses['loss_diff_depth_blur'],
         'loss_distill': loss_distill,
     }
 

@@ -65,15 +65,13 @@ def main():
             and args.hybrid_full_bptt_batch_size != args.batch_size):
         env_full = build_env(args.hybrid_full_bptt_batch_size, args, sf, device)
         print(f"[info] 混合调度启用：完整BPTT每 {args.hybrid_full_bptt_every} 轮一次，batch={args.hybrid_full_bptt_batch_size}")
-    if sf['use_passive_depth']:
-        print(f"[info] passive_depth render size: {int(env_train.width)}x{int(env_train.height)}")
+    if sf['use_depth_only']:
+        print(f"[info] depth-only render size: {int(env_train.width)}x{int(env_train.height)}")
 
     # ── 5. Create model ──────────────────────────────────────────────────
     obs_dim = 7 if args.no_odom else 10
     main_channels = 1
-    in_channels = (main_channels
-                   + (1 if sf['use_depth_channel'] else 0)
-                   + (1 if (sf['use_depth_channel'] and args.tof_use_conf) else 0))
+    in_channels = main_channels + (1 if sf['use_depth'] else 0)
     model = Model(
         obs_dim, 6,
         include_camera_state_in_obs=sf['effective_include_camera_state'],
@@ -82,10 +80,9 @@ def main():
         intent_dim=9,
         main_in_channels=main_channels,
         enable_camera_head=sf['use_camera_control'],
-        use_tof_conf=(sf['use_depth_channel'] and args.tof_use_conf),
-        tof_nn_width=args.tof_nn_width,
-        tof_nn_height=args.tof_nn_height,
-        active_depth_use_pipeline=args.active_depth_use_pipeline,
+        depth_nn_width=args.depth_nn_width,
+        depth_nn_height=args.depth_nn_height,
+        diff_depth_use_pipeline=args.diff_depth_use_pipeline,
         sensor_mode=args.sensor_mode,
     ).to(device)
 

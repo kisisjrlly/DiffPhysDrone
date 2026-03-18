@@ -6,7 +6,12 @@ import torch.nn.functional as F
 import quadsim_cuda
 
 from utils import g_decay
-from autograd_ops import run, diff_render, diff_render_yuv_y, diff_render_active_tof
+from autograd_ops import (
+    run,
+    diff_render,
+    diff_render_yuv_y_with_depth_aux,
+    diff_render_diff_depth,
+)
 from camera_utils import apply_camera_effects, _safe_normalize, _make_separable_gaussian_kernel1d, _separable_gaussian_blur
 from camera_semantics import CameraSemantics
 
@@ -21,7 +26,7 @@ class Env:
                  single=False, gate=False, ground_voxels=False, scaffold=False, speed_mtp=1,
                  random_rotation=False, cam_angle=10,
                  wall_slit=False, ellipsoid_a=0.0, ellipsoid_c=0.0,
-                 tof_downsample=4, tof_width=None, tof_height=None,
+                 depth_width=None, depth_height=None,
                  camera_preset='high',
                  cam_enable_shadow=True,
                  cam_enable_specular=True,
@@ -98,19 +103,14 @@ class Env:
         self.random_rotation = random_rotation # 是否随机旋转整个场景
         self.cam_angle = cam_angle       # 相机俯仰角
         self.fov_x_half_tan = fov_x_half_tan # 基础视场角 (tan(FOV/2))
-        _impl = {'camera_luma': 'python', 'active_depth': 'python'}
+        _impl = {'camera_luma': 'python', 'diff_depth': 'python'}
         if diff_sensor_impl is not None:
             _impl.update({str(k): str(v).lower() for k, v in dict(diff_sensor_impl).items()})
         self.diff_sensor_impl = _impl
-        self.tof_downsample = max(int(tof_downsample), 1)
-        if tof_width is None:
-            self.tof_width = max(int(self.width) // self.tof_downsample, 1)
-        else:
-            self.tof_width = max(int(tof_width), 1)
-        if tof_height is None:
-            self.tof_height = max(int(self.height) // self.tof_downsample, 1)
-        else:
-            self.tof_height = max(int(tof_height), 1)
+        if depth_width is not None:
+            self.depth_width = max(int(depth_width), 1)
+        if depth_height is not None:
+            self.depth_height = max(int(depth_height), 1)
         
         if wall_slit:
             self.single = True  # 狭缝穿越任务强制使用单机模式
@@ -617,8 +617,8 @@ class Env:
         # 随机生成最大飞行速度限制
         rd = torch.rand((B // self.n_drones_per_group, 1), device=device).repeat_interleave(self.n_drones_per_group, 0)
         self.max_speed = (0.75 + 2.5 * rd) * self.speed_mtp
-        scale = (self.max_speed - 0.5).clamp_min(1) # 根据速度缩放场景大小
-        y_stretch = (self.max_speed + 4) / scale   # Y 轴拉伸系数（用于障碍物与起终点保持一致）
+        scene_scale = (self.max_speed - 0.5).clamp_min(1) # 根据速度缩放场景大小
+        scene_y_stretch = (self.max_speed + 4) / scene_scale   # Y 轴拉伸系数（用于障碍物与起终点保持一致）
 
         # 推力估计误差 (模拟真实世界中电机推力的不确定性)
         self.thr_est_error = 1 + torch.randn(B, device=device) * 0.01
@@ -631,10 +631,10 @@ class Env:
         self.balls[~roof, :15] = self.balls[~roof, :15] + self.roof_add[:4]
         self.voxels[~roof, :15] = self.voxels[~roof, :15] + self.roof_add
         # 限制障碍物的 X 坐标范围，确保起点和终点有足够的空间
-        self.balls[..., 0] = torch.minimum(torch.maximum(self.balls[..., 0], self.balls[..., 3] + 0.3 / scale), 8 - 0.3 / scale - self.balls[..., 3])
-        self.voxels[..., 0] = torch.minimum(torch.maximum(self.voxels[..., 0], self.voxels[..., 3] + 0.3 / scale), 8 - 0.3 / scale - self.voxels[..., 3])
-        self.cyl[..., 0] = torch.minimum(torch.maximum(self.cyl[..., 0], self.cyl[..., 2] + 0.3 / scale), 8 - 0.3 / scale - self.cyl[..., 2])
-        self.cyl_h[..., 0] = torch.minimum(torch.maximum(self.cyl_h[..., 0], self.cyl_h[..., 2] + 0.3 / scale), 8 - 0.3 / scale - self.cyl_h[..., 2])
+        self.balls[..., 0] = torch.minimum(torch.maximum(self.balls[..., 0], self.balls[..., 3] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.balls[..., 3])
+        self.voxels[..., 0] = torch.minimum(torch.maximum(self.voxels[..., 0], self.voxels[..., 3] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.voxels[..., 3])
+        self.cyl[..., 0] = torch.minimum(torch.maximum(self.cyl[..., 0], self.cyl[..., 2] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.cyl[..., 2])
+        self.cyl_h[..., 0] = torch.minimum(torch.maximum(self.cyl_h[..., 0], self.cyl_h[..., 2] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.cyl_h[..., 2])
         # 设置屋顶的高度
         self.voxels[roof, 0, 2] = self.voxels[roof, 0, 2] * 0.5 + 201
         self.voxels[roof, 0, 3:] = 200
@@ -660,9 +660,9 @@ class Env:
             self.voxels = torch.cat([self.voxels, ground_voxels], 1)
 
         # 根据最大速度拉伸场景的 Y 轴 (速度越快，场景越长)
-        self.voxels[:, :, 1] *= y_stretch
-        self.balls[:, :, 1] *= y_stretch
-        self.cyl[:, :, 1] *= y_stretch
+        self.voxels[:, :, 1] *= scene_y_stretch
+        self.balls[:, :, 1] *= scene_y_stretch
+        self.cyl[:, :, 1] *= scene_y_stretch
 
         # 5. 场景变体：穿越门 (Gates)
         if self.gate:
@@ -686,12 +686,12 @@ class Env:
             self.voxels = torch.cat([self.voxels, gate], 1)
             
         # 根据 scale 缩放所有障碍物的 X 坐标
-        self.voxels[..., 0] *= scale
-        self.balls[..., 0] *= scale
-        self.cyl[..., 0] *= scale
-        self.cyl_h[..., 0] *= scale
+        self.voxels[..., 0] *= scene_scale
+        self.balls[..., 0] *= scene_scale
+        self.cyl[..., 0] *= scene_scale
+        self.cyl_h[..., 0] *= scene_scale
         if self.ground_voxels:
-            self.balls[:, :2, 0] = torch.minimum(torch.maximum(self.balls[:, :2, 0], ground_balls_r_ground + 0.3), scale * 8 - 0.3 - ground_balls_r_ground)
+            self.balls[:, :2, 0] = torch.minimum(torch.maximum(self.balls[:, :2, 0], ground_balls_r_ground + 0.3), scene_scale * 8 - 0.3 - ground_balls_r_ground)
 
         # 6. 初始化无人机动力学参数
         # 俯仰/滚转控制延迟 (模拟底层飞控的响应时间)
@@ -700,12 +700,12 @@ class Env:
         self.yaw_ctl_delay = 6 + 0.6 * torch.randn((B, 1), device=device)
 
         # 7. 初始化无人机位置 (p) 和目标位置 (p_target)
-        scale = torch.cat([
-            scale,
-            y_stretch,
-            torch.rand_like(scale) - 0.5], -1)
-        self.p = self.p_init * scale + torch.randn_like(scale) * 0.1
-        self.p_target = self.p_end * scale + torch.randn_like(scale) * 0.1
+        pos_scale = torch.cat([
+            scene_scale,
+            scene_y_stretch,
+            torch.rand_like(scene_scale) - 0.5], -1)
+        self.p = self.p_init * pos_scale + torch.randn_like(pos_scale) * 0.1
+        self.p_target = self.p_end * pos_scale + torch.randn_like(pos_scale) * 0.1
 
         # 8. 场景变体：随机旋转整个场景 (增加泛化能力)
         if self.random_rotation:
@@ -731,8 +731,8 @@ class Env:
             # 生成垂直脚手架杆
             scaf_v = torch.stack([_x, _y, torch.full_like(_x, 0.02)], -1).flatten(0, 1)
             x_bias = torch.rand_like(self.max_speed) * self.max_speed
-            scale = 1 + torch.rand((B, 1, 1), device=device)
-            scaf_v = scaf_v * scale + torch.stack([
+            scaf_scale = 1 + torch.rand((B, 1, 1), device=device)
+            scaf_v = scaf_v * scaf_scale + torch.stack([
                 x_bias,
                 torch.randn_like(self.max_speed),
                 torch.rand_like(self.max_speed) * 0.01
@@ -741,7 +741,7 @@ class Env:
             # 生成水平脚手架杆
             _x, _z = torch.meshgrid(x, z)
             scaf_h = torch.stack([_x, _z, torch.full_like(_x, 0.02)], -1).flatten(0, 1)
-            scaf_h = scaf_h * scale + torch.stack([
+            scaf_h = scaf_h * scaf_scale + torch.stack([
                 x_bias,
                 torch.randn_like(self.max_speed) * 0.1,
                 torch.rand_like(self.max_speed) * 0.01
@@ -774,7 +774,12 @@ class Env:
         self.drag_2[:, 0] = 0
         self.z_drag_coef = torch.ones((B, 1), device=device) # Z轴阻力系数
 
-        # 12. 初始化高保真可微相机状态
+        # 12. 保存场景缩放参数（用于可视化AABB计算）
+        # 这些值在reset时计算，用于log_environment中的动态AABB
+        self._current_scale = scene_scale.reshape(-1)[0].item() if isinstance(scene_scale, torch.Tensor) else float(scene_scale)
+        self._current_y_stretch = scene_y_stretch.reshape(-1)[0].item() if isinstance(scene_y_stretch, torch.Tensor) else float(scene_y_stretch)
+
+        # 13. 初始化高保真可微相机状态
         self._reset_camera_states()
 
     def _reset_wall_slit(self, B, device):
@@ -929,6 +934,21 @@ class Env:
                             self._fov_x_half_tan)
         return canvas, None
 
+    def render_depth_passive(self, ctl_dt):
+        """
+        被动深度渲染（独立深度分辨率）。
+        返回:
+            depth: (B, depth_height, depth_width)
+        """
+        canvas = torch.empty((self.batch_size, self.depth_height, self.depth_width), device=self.device)
+        depth_flow = torch.empty((self.batch_size, 0, self.depth_height, self.depth_width), device=self.device)
+        quadsim_cuda.render(
+            canvas, depth_flow, self.balls, self.cyl, self.cyl_h,
+            self.voxels, self.R @ self.R_cam, self.R_old, self.p,
+            self.p_old, self.drone_radius, self.n_drones_per_group,
+            self._fov_x_half_tan)
+        return canvas
+
     def render_diff(self, fov_tensor):
         """
         可微渲染函数 (Differentiable Rendering)。
@@ -955,20 +975,21 @@ class Env:
             self._fov_x_half_tan)
         return y
 
-    def render_main_luma_diff(self, fov_tensor, exposure, iso):
+    def render_main_luma_diff(self, fov_tensor, exposure, iso, return_depth_raw=False):
         """
         主相机亮度图 (Y) 渲染（可微相机参数路径）。
         训练时用于模拟 IMX477 RAW->ISP->YUV420 后仅取 Y 通道。
         该路径要求 CUDA 扩展提供原生可微 Y 渲染实现，不使用任何代理转换。
         (由于无人机使用固定焦距，我们去除了 focus 参数)
         返回:
-            y: (B, H, W)
+            - return_depth_raw=False: y: (B, H, W)
+            - return_depth_raw=True:  (y, depth_raw)
         """
         impl = self.diff_sensor_impl.get('camera_luma', 'python')
         if impl == 'cuda':
             if not hasattr(quadsim_cuda, 'render_diff_yuv_y_forward') or not hasattr(quadsim_cuda, 'render_diff_yuv_y_backward'):
                 raise RuntimeError("diff_sensor_impl[camera_luma]=cuda 但 quadsim_cuda 未实现 render_diff_yuv_y_forward/backward")
-            y = diff_render_yuv_y(
+            y, depth_raw = diff_render_yuv_y_with_depth_aux(
                 fov_tensor.contiguous(),
                 exposure.contiguous(),
                 iso.contiguous(),
@@ -1014,9 +1035,20 @@ class Env:
                 self.cam_sem.iso_gain_scale,
                 self.cam_sem.iso_gain_gamma,
             )
+            if y is None:
+                raise RuntimeError("render_main_luma_diff(cuda) 返回了空的 y")
             self._update_ae_state(y)
             self._cam_prev_y = y.detach()
-            return torch.clamp(y, 0.0, 1.0)
+            y_out = torch.clamp(y, 0.0, 1.0)
+            if not return_depth_raw:
+                return y_out
+            if depth_raw.shape[-2:] != (self.depth_height, self.depth_width):
+                depth_raw = F.interpolate(
+                    depth_raw[:, None],
+                    size=(self.depth_height, self.depth_width),
+                    mode='area',
+                )[:, 0]
+            return y_out, depth_raw.detach()
         if impl != 'python':
             raise ValueError(f"不支持的 diff_sensor_impl[camera_luma]={impl}，仅支持 python/cuda")
 
@@ -1039,7 +1071,7 @@ class Env:
             self.height,
             self.width,
         )
-        depth = torch.clamp(depth, min=0.03, max=120.0)
+        depth = torch.clamp(depth, min=0.03, max=24.0)
 
         
         # 【核心修改点】：注册反向传播钩子
@@ -1092,26 +1124,36 @@ class Env:
         # ==================== 7) 时序层：AE状态机 + 运动模糊（rolling/global） ====================
         self._update_ae_state(y)
         y = self._apply_motion_blur(y, exposure.clamp(0.0, 1.0))
-        return torch.clamp(y, 0.0, 1.0)
+        y_out = torch.clamp(y, 0.0, 1.0)
+        if not return_depth_raw:
+            return y_out
+        depth_aux = depth
+        if depth_aux.shape[-2:] != (self.depth_height, self.depth_width):
+            depth_aux = F.interpolate(
+                depth_aux[:, None],
+                size=(self.depth_height, self.depth_width),
+                mode='area',
+            )[:, 0]
+        return y_out, depth_aux.detach()
 
 
-    def render_active_tof_diff(self, power, exposure, gain, max_range=6.0):
+    def render_diff_depth(self, power, exposure, gain, max_range=6.0):
         """
-        可微主动深度相机渲染（Active ToF Sensor）。
+        可微主动深度相机渲染（Diff Depth Sensor）。
         优先使用 CUDA 扩展高性能路径；失败时回退到 Python 实现。
         """
-        impl = self.diff_sensor_impl.get('active_depth', 'python')
+        impl = self.diff_sensor_impl.get('diff_depth', 'python')
         if impl == 'cuda':
             if (not hasattr(quadsim_cuda, 'render_active_tof_forward')) or (not hasattr(quadsim_cuda, 'render_active_tof_backward')):
                 raise RuntimeError(
-                    "diff_sensor_impl[active_depth]=cuda 但 quadsim_cuda 未实现 render_active_tof_forward/backward"
+                    "diff_sensor_impl[diff_depth]=cuda 但 quadsim_cuda 未实现 render_active_tof_forward/backward"
                 )
             B = power.shape[0]
             device = power.device
             fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
             R_cam_world = (self.R @ self.R_cam).contiguous()
             pos = self.p.contiguous()
-            noisy_depth, conf = diff_render_active_tof(
+            noisy_depth, _ = diff_render_diff_depth(
                 fov_tensor,
                 power,
                 exposure,
@@ -1124,25 +1166,24 @@ class Env:
                 self.cyl_h,
                 self.voxels,
                 self.n_drones_per_group,
-                int(self.tof_height),
-                int(self.tof_width),
+                int(self.depth_height),
+                int(self.depth_width),
                 float(max_range),
             )
-            return noisy_depth, conf
+            return noisy_depth
         if impl == 'python':
-            return self._render_active_tof_diff_python(power, exposure, gain, max_range=max_range)
-        raise ValueError(f"不支持的 diff_sensor_impl[active_depth]={impl}，仅支持 python/cuda")
+            return self._render_diff_depth_python(power, exposure, gain, max_range=max_range)
+        raise ValueError(f"不支持的 diff_sensor_impl[diff_depth]={impl}，仅支持 python/cuda")
 
-    def _render_active_tof_diff_python(self, power, exposure, gain, max_range=6.0):
+    def _render_diff_depth_python(self, power, exposure, gain, max_range=6.0):
         """
-        可微主动深度相机渲染（Active ToF Sensor）。
+        可微主动深度相机渲染（Diff Depth Sensor）。
         输入:
             power: 激光发射功率 [0, 1] 标量 (内部可缩放至物理数值如 0~360)
             exposure: 曝光时间 [0, 1] 标量 (控制运动模糊，反比于速率限制)
             gain: 接收增益 [0, 1] 标量 (在暗处放大信号，但增加噪声)
         输出:
-            tof_depth: 包含可微噪声的深度图 (B, H_tof, W_tof)
-            confidence: 深度置信度 (B, H_tof, W_tof)
+            depth_obs: 包含可微噪声的深度图 (B, H_depth, W_depth)
         """
         B = power.shape[0]
         device = power.device
@@ -1161,8 +1202,8 @@ class Env:
             self.cyl_h,
             self.voxels,
             self.n_drones_per_group,
-            self.tof_height,
-            self.tof_width,
+            self.depth_height,
+            self.depth_width,
         )
         depth = torch.clamp(depth, min=0.03, max=120.0)
             
@@ -1176,10 +1217,6 @@ class Env:
         energy_recv = (power_scaled[:, None, None] * exp_scaled[:, None, None]) / (depth ** 2 + 0.1)
         energy_recv = energy_recv * gain_scaled[:, None, None] * 100.0
         
-        # 3. 置信度计算
-        # 如果接收能量低于阈值，则 conf 接近 0
-        conf_raw = torch.tanh(energy_recv * 0.5)
-        
         # 4. 运动模糊惩罚 (Flying Pixels)
         # 如果速度快且曝光长，置信度下降，深度被“拉长”平均（用均值滤波模拟拖尾）
         speed = torch.norm(self.v, 2, -1)
@@ -1187,16 +1224,13 @@ class Env:
         
         # # 如果速度过快，我们施加一些空间模糊表示 Flying Pixels
         # # _separable_gaussian_blur(depth, sigma=1.0)
-        # if hasattr(self, '_apply_motion_blur_tof'):
-        #     depth_blurred = self._apply_motion_blur_tof(depth, motion_blur_factor)
+        # if hasattr(self, '_apply_motion_blur_depth'):
+        #     depth_blurred = self._apply_motion_blur_depth(depth, motion_blur_factor)
         # else:
         # 简化版：直接加上与速度和曝光成正比的随机拉伸或利用 pooling 混合
         blur_kernel = F.avg_pool2d(depth[:, None], 3, stride=1, padding=1)[:, 0]
         depth_blurred = depth * (1 - motion_blur_factor[:, None, None]) + blur_kernel * motion_blur_factor[:, None, None]
             
-        # 同时运动模糊会降低置信度
-        conf = conf_raw * (1.0 - motion_blur_factor[:, None, None] * 0.8)
-        
         # 5. 可微噪声注入 (Reparameterization Trick)
         # 噪声幅度与信号强度成反比，与 Gain 成正比
         noise_std_base = 0.05
@@ -1207,50 +1241,7 @@ class Env:
         noisy_depth = depth_blurred + torch.randn_like(depth_blurred) * noise_std
         noisy_depth = noisy_depth.clamp(min=0.05, max=max_range)
         
-        return noisy_depth, conf
-
-    @torch.no_grad()
-    def render_tof(self, ctl_dt, max_range=6.0, noise_std=0.01, return_meta=False):
-        """
-        训练阶段 ToF 近似观测。
-        先复用几何渲染深度，再施加 ToF 风格量程截断与小噪声。
-
-        Args:
-            ctl_dt: 控制步长
-            max_range: ToF 最大量程（米）
-            noise_std: 高斯测距噪声标准差（米）
-        Returns:
-            tof_depth: (B, H_tof, W_tof)
-            optional meta when return_meta=True:
-                confidence: (B, H_tof, W_tof)
-                valid_ratio: (B,)
-                min_dist: (B,)
-        """
-        depth, _ = self.render(ctl_dt)
-        if self.tof_downsample > 1:
-            d = F.avg_pool2d(depth[:, None], self.tof_downsample, self.tof_downsample)
-            depth = d[:, 0]
-        if depth.shape[-2] != self.tof_height or depth.shape[-1] != self.tof_width:
-            depth = F.interpolate(depth[:, None], size=(self.tof_height, self.tof_width), mode='nearest')[:, 0]
-        # 量程截断
-        tof_depth = depth.clamp(min=0.05, max=max_range)
-        # 小幅噪声（远距离更不稳定）
-        dist_scale = (tof_depth / max_range).clamp(0.0, 1.0)
-        tof_depth = tof_depth + torch.randn_like(tof_depth) * noise_std * (0.5 + dist_scale)
-        tof_depth = tof_depth.clamp(min=0.05, max=max_range)
-
-        # ToF 置信度近似：距离越远、噪声越大，置信度越低
-        confidence = torch.exp(-2.0 * (tof_depth / max_range)).clamp(0.0, 1.0)
-        valid = (tof_depth < max_range - 1e-6).float()
-        valid_ratio = valid.flatten(1).mean(-1)
-
-        # 近场几何摘要（用于控制注入或统计）
-        vec_to_pt = self.find_vec_to_nearest_pt()
-        min_dist = torch.norm(vec_to_pt, 2, -1).min(0).values
-
-        if return_meta:
-            return tof_depth, confidence, valid_ratio, min_dist
-        return tof_depth
+        return noisy_depth
 
     def find_vec_to_nearest_pt(self):
         """

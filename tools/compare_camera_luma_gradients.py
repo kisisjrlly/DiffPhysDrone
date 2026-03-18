@@ -106,7 +106,7 @@ def make_env(repo_root: str, impl: str, seed: int, batch_size: int, width: int, 
         grad_decay=0.4,
         device=device,
         single=True,
-        diff_sensor_impl={"camera_luma": impl, "active_depth": "python"},
+        diff_sensor_impl={"camera_luma": impl, "diff_depth": "python"},
         **kwargs,
     )
     return env

@@ -64,10 +64,10 @@ def _teacher_initial_guess(env, model, args, sensor_flags, B, device,
     for t in range(args.timesteps):
         dt = teacher_dt_like_student(float(cam_exp.mean()), use_camera_control,
                                      args.base_control_freq, env.cam_sem)
-        main_obs, tof_depth, tof_conf = render_sensors(
+        main_obs, depth_obs = render_sensors(
             env, dt, cam_fov, cam_exp, cam_iso,
-            sf['use_passive_depth'], sf['use_camera_luma'],
-            sf['use_active_depth'], sf['use_depth_channel'],
+            sf['use_depth_only'], sf['use_camera_luma'],
+            sf['use_diff_depth'], sf['use_depth_aux'],
             use_camera_control, differentiable=False)
         # torch.cuda.synchronize() 
         if args.yaw_drift and yaw_drift_R is not None:
@@ -87,8 +87,8 @@ def _teacher_initial_guess(env, model, args, sensor_flags, B, device,
             with autocast(enabled=use_amp):
                 a_out, c_out, h_tmp, y_out = model(
                     state, h_tmp, return_intent=True,
-                    main_obs=main_obs, tof_depth=tof_depth,
-                    tof_conf=tof_conf, add_noise=False)
+                    main_obs=main_obs, depth_obs=depth_obs,
+                    add_noise=False)
             a_out, y_out = a_out.float(), y_out.float()
             if c_out is not None:
                 c_out = c_out.float()
@@ -98,7 +98,7 @@ def _teacher_initial_guess(env, model, args, sensor_flags, B, device,
             with autocast(enabled=use_amp):
                 a_out, c_out, h_tmp = model(
                     state, h_tmp, main_obs=main_obs,
-                    tof_depth=tof_depth, tof_conf=tof_conf, add_noise=False)
+                    depth_obs=depth_obs, add_noise=False)
             a_out = a_out.float()
             if c_out is not None:
                 c_out = c_out.float()
@@ -122,8 +122,8 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
     """Run teacher inner optimization (TBPTT) and return u_star / y_star / u_star_cam."""
     sf = sensor_flags
     use_camera_control = sf['use_camera_control']
-    use_depth_channel = sf['use_depth_channel']
-    use_active_depth = sf['use_active_depth']
+    use_depth_aux = sf['use_depth_aux']
+    use_diff_depth = sf['use_diff_depth']
     optimize_intent = bool(args.policy_output_intent and args.use_dmpc)
 
     # Build optimizable parameters
@@ -186,8 +186,8 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
                     y_guess[t], R_k, env, local_v_k, B,
                     A_lqr_k, B_lqr_k,
                     args.lqr_horizon, args.lqr_reg, args.max_acc_cmd,
-                    args.inject_tof_into_lqr, args.tof_safe_dist, args.tof_repel_gain,
-                    use_depth_channel, vec_now_k, solve_batched_dlqr)
+                    args.inject_depth_into_lqr, args.depth_safe_dist, args.depth_repel_gain,
+                    vec_now_k, solve_batched_dlqr)
             else:
                 assert u_guess is not None
                 a_final_k, _ = decode_action_direct(
@@ -228,7 +228,7 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
                     main_fov_half_tan=(float(cam_fov_k[j].detach().cpu())
                                       if use_camera_control else float(env._fov_x_half_tan)),
                     main_hw=(int(env.height), int(env.width)),
-                    tof_hw=(int(env.tof_height), int(env.tof_width)))
+                    depth_hw=(int(env.depth_height), int(env.depth_width)))
 
             # ---- TBPTT chunk boundary ----
             chunk_end_k = ((t + 1) % teacher_chunk_steps == 0) or (t == args.timesteps - 1)
@@ -265,9 +265,9 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
                 if use_camera_control and c_cam_exp:
                     sp = torch.stack(c_speed); ex = torch.stack(c_cam_exp)
                     iso_t = torch.stack(c_cam_iso); fov_t = torch.stack(c_cam_fov)
-                    if use_active_depth:
-                        chunk_loss = chunk_loss + args.coef_active_depth_power * fov_t.pow(2).mean()
-                        chunk_loss = chunk_loss + args.coef_active_depth_blur * (sp * ex).mean()
+                    if use_diff_depth:
+                        chunk_loss = chunk_loss + args.coef_diff_depth_power * fov_t.pow(2).mean()
+                        chunk_loss = chunk_loss + args.coef_diff_depth_blur * (sp * ex).mean()
                     elif args.enable_camera_quality_loss:
                         ep = env.cam_sem.exposure_to_time(ex)
                         ef = 1.0 / fov_t.clamp(min=0.1)
@@ -340,10 +340,10 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
       loss, per-component losses, histories (detached), metrics, etc.
     """
     sf = sensor_flags
-    use_passive_depth = sf['use_passive_depth']
+    use_depth_only = sf['use_depth_only']
     use_camera_luma = sf['use_camera_luma']
-    use_depth_channel = sf['use_depth_channel']
-    use_active_depth = sf['use_active_depth']
+    use_depth_aux = sf['use_depth_aux']
+    use_diff_depth = sf['use_diff_depth']
     use_camera_control = sf['use_camera_control']
     effective_include_camera_state = sf['effective_include_camera_state']
 
@@ -392,14 +392,19 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
         student_add_noise = (args.student_noise_mode == 'on') if args.enable_teacher_student_training else True
 
         # Render sensors
-        diff_cam = (use_camera_luma and use_camera_control) or (use_active_depth and use_camera_control)
-        main_obs, tof_depth, tof_conf = render_sensors(
+        # 可微渲染策略：
+        # - camera_luma*：主亮度分支可微（FOV/Exposure/ISO 可通过渲染链路反传）
+        # - camera_luma_plus_depth：depth_aux 由同次主渲染复用 depth_raw，并 detached
+        # - diff_depth：保持原可微路径
+        diff_cam = ((use_camera_luma and use_camera_control)
+                or (use_diff_depth and use_camera_control))
+        main_obs, depth_obs = render_sensors(
             env, ctl_dt, cam_fov, cam_exposure, cam_iso,
-            use_passive_depth, use_camera_luma, use_active_depth,
-            use_depth_channel, use_camera_control,
+            use_depth_only, use_camera_luma, use_diff_depth,
+            use_depth_aux, use_camera_control,
             differentiable=diff_cam)
         # torch.cuda.synchronize() 
-        depth_vis = main_obs if main_obs is not None else tof_depth
+        depth_vis = main_obs if main_obs is not None else depth_obs
         assert depth_vis is not None
 
         vec_now = env.find_vec_to_nearest_pt()
@@ -429,16 +434,15 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
 
         # Detach non-differentiable sensor inputs
         main_obs_in = main_obs if diff_cam and use_camera_luma else (main_obs.detach() if main_obs is not None else None)
-        tof_depth_in = tof_depth.detach() if tof_depth is not None else None
-        tof_conf_in = tof_conf.detach() if tof_conf is not None else None
+        depth_obs_in = depth_obs.detach() if depth_obs is not None else None
 
         # Policy forward
         if args.policy_output_intent:
             with autocast(enabled=use_amp):
                 act, cam_params, h, intent = model(
                     state, h, return_intent=True,
-                    main_obs=main_obs_in, tof_depth=tof_depth_in,
-                    tof_conf=tof_conf_in, add_noise=student_add_noise)
+                    main_obs=main_obs_in, depth_obs=depth_obs_in,
+                    add_noise=student_add_noise)
             act, intent = act.float(), intent.float()
             if args.enable_teacher_student_training and args.use_dmpc:
                 raw_intent_history.append(intent)
@@ -446,7 +450,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
             with autocast(enabled=use_amp):
                 act, cam_params, h = model(
                     state, h, main_obs=main_obs_in,
-                    tof_depth=tof_depth_in, tof_conf=tof_conf_in,
+                    depth_obs=depth_obs_in,
                     add_noise=student_add_noise)
             act = act.float()
             intent = None
@@ -485,8 +489,8 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
             act_final, v_pred = decode_action_lqr(
                 intent, R, env, local_v, B, A_lqr, B_lqr,
                 args.lqr_horizon, args.lqr_reg, args.max_acc_cmd,
-                args.inject_tof_into_lqr, args.tof_safe_dist, args.tof_repel_gain,
-                use_depth_channel, vec_now, solve_batched_dlqr)
+                args.inject_depth_into_lqr, args.depth_safe_dist, args.depth_repel_gain,
+                vec_now, solve_batched_dlqr)
         else:
             act_final, v_pred = decode_action_direct(act, R, env, B, args.max_acc_cmd)
         v_preds.append(v_pred)
@@ -551,7 +555,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                 if use_camera_control and c_cam_exp:
                     sp = torch.stack(c_speed); ex = torch.stack(c_cam_exp)
                     iso_h = torch.stack(c_cam_iso); fov_h = torch.stack(c_cam_fov)
-                    if use_active_depth:
+                    if use_diff_depth:
                         loss_adp_c = fov_h.pow(2).mean()
                         loss_adb_c = (sp * ex).mean()
                     elif args.enable_camera_quality_loss:
@@ -590,8 +594,8 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                     + args.coef_cam_range * loss_cam_range_c
                     + args.coef_blur * loss_blur_c
                     + args.coef_noise * loss_noise_c
-                    + args.coef_active_depth_power * loss_adp_c
-                    + args.coef_active_depth_blur * loss_adb_c)
+                    + args.coef_diff_depth_power * loss_adp_c
+                    + args.coef_diff_depth_blur * loss_adb_c)
 
                 if args.enable_teacher_student_training:
                     chunk_loss = distill_coef_iter * loss_distill_c + args.student_physics_coef * chunk_loss
@@ -606,8 +610,10 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                 if do_step:
                     if use_amp:
                         scaler.unscale_(optim)
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                         scaler.step(optim); scaler.update()
                     else:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                         optim.step()
                     sched.step()
                     optim.zero_grad(set_to_none=True)
@@ -627,8 +633,8 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                 tbptt_stats['loss_tilt'] += 0.0
                 tbptt_stats['loss_blur'] += float(loss_blur_c.detach())
                 tbptt_stats['loss_noise'] += float(loss_noise_c.detach())
-                tbptt_stats['loss_active_depth_power'] += float(loss_adp_c.detach())
-                tbptt_stats['loss_active_depth_blur'] += float(loss_adb_c.detach())
+                tbptt_stats['loss_diff_depth_power'] += float(loss_adp_c.detach())
+                tbptt_stats['loss_diff_depth_blur'] += float(loss_adb_c.detach())
                 tbptt_stats['loss_distill'] += float(loss_distill_c.detach())
                 tbptt_chunk_n += 1
 
@@ -657,20 +663,20 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                             float(cam_iso[j].detach().cpu()))
             main_img_np = main_obs[j].detach().cpu().numpy() if main_obs is not None else None
             main_img_mode = 'luma' if use_camera_luma else 'depth'
-            tof_img_np = tof_depth[j].detach().cpu().numpy() if tof_depth is not None else None
+            depth_img_np = depth_obs[j].detach().cpu().numpy() if depth_obs is not None else None
             vis.log_step(
                 phase='student', step_idx=t,
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=depth_vis[j].detach().cpu().numpy(),
                 cam=cam_vals, main_img=main_img_np,
-                main_img_mode=main_img_mode, tof_img=tof_img_np,
+                main_img_mode=main_img_mode, depth_img=depth_img_np,
                 drone_R=env.R[j].detach().cpu().numpy(),
                 cam_R=env.R_cam[j].detach().cpu().numpy(),
                 main_fov_half_tan=(float(cam_fov[j].detach().cpu())
                                    if use_camera_control else float(env._fov_x_half_tan)),
                 main_hw=(int(env.height), int(env.width)),
-                tof_hw=(int(env.tof_height), int(env.tof_width)))
+                depth_hw=(int(env.depth_height), int(env.depth_width)))
 
     # ── End of rollout loop ──
     # Package results for the caller (train loop)
@@ -707,7 +713,7 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
     """Compute all losses for full-BPTT iterations and return (loss, loss_dict)."""
     sf = sensor_flags
     use_camera_control = sf['use_camera_control']
-    use_active_depth = sf['use_active_depth']
+    use_diff_depth = sf['use_diff_depth']
 
     p_history = torch.stack(rollout['p_history'])
     v_history = torch.stack(rollout['v_history'])
@@ -753,7 +759,7 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
         ex = torch.stack(rollout['cam_exposure_history'])
         iso_h = torch.stack(rollout['cam_iso_history'])
         fov_h = torch.stack(rollout['cam_fov_history'])
-        if use_active_depth:
+        if use_diff_depth:
             loss_adp = fov_h.pow(2).mean()
             loss_adb = (sp * ex).mean()
         elif args.enable_camera_quality_loss:
@@ -779,8 +785,8 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
             + args.coef_tilt * loss_tilt
             + args.coef_blur * loss_blur
             + args.coef_noise * loss_noise
-            + args.coef_active_depth_power * loss_adp
-            + args.coef_active_depth_blur * loss_adb)
+            + args.coef_diff_depth_power * loss_adp
+            + args.coef_diff_depth_blur * loss_adb)
 
     # Distillation
     loss_distill = torch.tensor(0.0, device=device)
@@ -806,8 +812,8 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
         'loss_fov_reg': loss_fov_reg, 'loss_cam_range': loss_cam_range,
         'loss_tilt': loss_tilt,
         'loss_blur': loss_blur, 'loss_noise': loss_noise,
-        'loss_active_depth_power': loss_adp,
-        'loss_active_depth_blur': loss_adb,
+        'loss_diff_depth_power': loss_adp,
+        'loss_diff_depth_blur': loss_adb,
         'loss_distill': loss_distill,
         'distance': distance, 'speed_history': speed_history,
         'p_history': p_history, 'v_history': v_history,
@@ -825,7 +831,7 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, sensor_flags, smoot
     """Compute and log emerging-behavior metrics (roll, correlations, slit)."""
     sf = sensor_flags
     use_camera_control = sf['use_camera_control']
-    use_active_depth = sf['use_active_depth']
+    use_diff_depth = sf['use_diff_depth']
     p_history = loss_dict.get('p_history')
     vec_to_pt_history = loss_dict.get('vec_to_pt_history')
     distance = loss_dict.get('distance')
@@ -860,7 +866,7 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, sensor_flags, smoot
         cov_fd = ((_fv - fv_m) * (_dn - dn_m)).mean(0)
         fv_s = (_fv - fv_m).pow(2).mean(0).sqrt().clamp(min=1e-6)
         dn_s = (_dn - dn_m).pow(2).mean(0).sqrt().clamp(min=1e-6)
-        corr_key = 'power_obstacle_corr' if use_active_depth else 'fov_obstacle_corr'
+        corr_key = 'power_obstacle_corr' if use_diff_depth else 'fov_obstacle_corr'
         smoother.add({corr_key: (cov_fd / (fv_s * dn_s)).mean().item()})
 
     # Wall slit
@@ -896,8 +902,8 @@ def _build_loss_share_metrics(loss_scalars: dict, args, distill_coef_iter: float
         'tilt': ('loss_tilt', float(args.coef_tilt)),
         'blur': ('loss_blur', float(args.coef_blur)),
         'noise': ('loss_noise', float(args.coef_noise)),
-        'active_depth_power': ('loss_active_depth_power', float(args.coef_active_depth_power)),
-        'active_depth_blur': ('loss_active_depth_blur', float(args.coef_active_depth_blur)),
+        'diff_depth_power': ('loss_diff_depth_power', float(args.coef_diff_depth_power)),
+        'diff_depth_blur': ('loss_diff_depth_blur', float(args.coef_diff_depth_blur)),
     }
 
     physics_scale = float(args.student_physics_coef) if args.enable_teacher_student_training else 1.0
@@ -931,7 +937,7 @@ def _log_save_iter(rollout, loss_dict, env, args, sensor_flags, i):
         print('[warn] matplotlib not installed: skip figure/video logging.')
     sf = sensor_flags
     use_camera_control = sf['use_camera_control']
-    use_active_depth = sf['use_active_depth']
+    use_diff_depth = sf['use_diff_depth']
     vid_idx = rollout['vid_idx']
     vid = rollout['vid']
     p_history = loss_dict['p_history']
@@ -962,13 +968,15 @@ def _log_save_iter(rollout, loss_dict, env, args, sensor_flags, i):
     vid_np = vid_t[0].permute(0, 2, 3, 1).cpu().numpy()
     vid_np = (vid_np * 255).astype('uint8')
     tmp_path = f'/tmp/wandb_demo_{i}.mp4'
-    writer = imageio.get_writer(tmp_path, fps=15)
+    # 保持原始分辨率（如 120x90），避免 imageio 按 16 宏块自动 resize 到 128x96。
+    writer = imageio.get_writer(tmp_path, fps=15, macro_block_size=1)
     for frame in vid_np:
         writer.append_data(frame)
     writer.close()
 
     wandb.log({
-        "demo": wandb.Video(tmp_path, fps=15, format="mp4"),
+        # 对于文件路径输入，wandb.Video 的 fps 参数不会生效；帧率由编码文件本身决定。
+        "demo": wandb.Video(tmp_path, format="mp4"),
         **({
             "p_history": wandb.Image(fig_p),
             "v_history": wandb.Image(fig_v),
@@ -985,7 +993,7 @@ def _log_save_iter(rollout, loss_dict, env, args, sensor_flags, i):
     if MATPLOTLIB_AVAILABLE and use_camera_control and rollout['cam_params_history']:
         ch = torch.stack(rollout['cam_params_history'])[:, vid_idx].detach().cpu()
         fig_cam, axes = plt.subplots(1, 3, figsize=(12, 3))
-        if use_active_depth:
+        if use_diff_depth:
             labels = ['Power', 'Exposure', 'Gain']
         else:
             labels = ['FOV delta', 'Exposure', 'ISO']
@@ -1043,6 +1051,10 @@ def train(args, sensor_flags, model, env_train, env_full,
         if should_vis:
             vis.begin_iter(i)
             j = int(min(max(args.vis_env_idx, 0), B - 1))
+            # 从环境中提取缩放参数（用于动态AABB计算）
+            max_speed_j = env.max_speed[j:j+1] if hasattr(env, 'max_speed') else None
+            y_stretch_j = getattr(env, '_current_y_stretch', None)
+            scale_j = getattr(env, '_current_scale', None)
             vis.log_environment(
                 phase='student',
                 balls=env.balls[j].detach().cpu().numpy(),
@@ -1050,7 +1062,10 @@ def train(args, sensor_flags, model, env_train, env_full,
                 cyl=env.cyl[j].detach().cpu().numpy(),
                 cyl_h=env.cyl_h[j].detach().cpu().numpy(),
                 start=env.p[j].detach().cpu().numpy(),
-                target=env.p_target[j].detach().cpu().numpy())
+                target=env.p_target[j].detach().cpu().numpy(),
+                max_speed=max_speed_j,
+                y_stretch=y_stretch_j,
+                scale=scale_j)
 
         # Teacher phase
         u_star, y_star, u_star_cam = None, None, None
@@ -1100,9 +1115,11 @@ def train(args, sensor_flags, model, env_train, env_full,
             if use_amp:
                 scaler.scale(loss).backward()
                 scaler.unscale_(optim)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 scaler.step(optim); scaler.update()
             else:
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 optim.step()
             sched.step()
 

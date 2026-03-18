@@ -49,7 +49,7 @@ class RerunVis:
                         ),
                         rrb.Vertical(
                             rrb.Spatial2DView(origin="/student/camera/main", contents=["/student/camera/main"], name="main_y"),
-                            rrb.Spatial2DView(origin="/student/camera/tof_depth", contents=["/student/camera/tof_depth"], name="tof_depth"),
+                            rrb.Spatial2DView(origin="/student/camera/depth_aux", contents=["/student/camera/depth_aux"], name="depth_aux"),
                             name="cameras",
                         ),
                         rrb.Vertical(
@@ -75,8 +75,69 @@ class RerunVis:
         except Exception as e:
             print(f"[warn] failed to send rerun blueprint, fallback to auto layout: {e}")
 
+    def _compute_scene_bounds(self, max_speed=None, y_stretch=None, scale=None):
+        """从环境参数动态计算AABB（回退到常数如果参数缺失）。
+        
+        Args:
+            max_speed: unused (kept for API compatibility)
+            y_stretch: Y轴拉伸系数（前后距离的拉伸比例），可选
+            scale:     X轴场景缩放系数，可选
+        
+        Returns:
+            (scene_min, scene_max): numpy arrays of shape (3,)
+        """
+        # 基础范围（来自env_cuda.py参数）
+        x_lo_base, x_hi_base = 0.0, 8.0
+        y_lo_base, y_hi_base = -9.0, 9.0
+        z_lo_base, z_hi_base = -1.5, 5.0
+        
+        # 安全地提取标量值
+        def _safe_float(val):
+            if val is None:
+                return None
+            try:
+                # torch.Tensor (including CUDA tensor) support without hard dependency
+                if hasattr(val, "detach") and hasattr(val, "reshape") and hasattr(val, "item"):
+                    return float(val.detach().reshape(-1)[0].item())
+                if isinstance(val, np.ndarray):
+                    return float(val.item() if val.ndim == 0 else val.flat[0])
+                return float(val)
+            except Exception:
+                return None
+        
+        scale_val = _safe_float(scale)
+        y_stretch_val = _safe_float(y_stretch)
+        
+        # 应用缩放因子
+        if scale_val is not None and scale_val > 0:
+            x_lo_base *= scale_val
+            x_hi_base *= scale_val
+        
+        if y_stretch_val is not None and y_stretch_val > 0:
+            y_lo_base *= y_stretch_val
+            y_hi_base *= y_stretch_val
+        
+        # 添加安全边距
+        margin_x = max(0.5, 0.15 * (x_hi_base - x_lo_base))
+        margin_y = max(0.5, 0.1 * abs(y_hi_base - y_lo_base))
+        margin_z = 1.0
+        
+        scene_min = np.array([
+            x_lo_base - margin_x,
+            y_lo_base - margin_y,
+            z_lo_base - margin_z,
+        ], dtype=np.float32)
+        
+        scene_max = np.array([
+            x_hi_base + margin_x,
+            y_hi_base + margin_y,
+            z_hi_base + margin_z,
+        ], dtype=np.float32)
+        
+        return scene_min, scene_max
+
     def begin_iter(self, iter_idx: int):
-        if not self.enabled:
+        if not self.enabled or self._rr is None:
             return
         self._paths["teacher"].clear()
         self._paths["student"].clear()
@@ -84,7 +145,8 @@ class RerunVis:
 
     def log_environment(self, phase: str,
                         balls=None, voxels=None, cyl=None, cyl_h=None,
-                        start=None, target=None):
+                        start=None, target=None,
+                        max_speed=None, y_stretch=None, scale=None):
         """Log one environment snapshot for global 3D inspection.
 
         All arrays should already be numpy arrays for a single env index:
@@ -93,44 +155,111 @@ class RerunVis:
           cyl:    (K,3) [x,y,r]      (approx rendered as points)
           cyl_h:  (L,3) [x,z,r]      (approx rendered as points)
           start/target: (3,)
+        
+        Environment info (optional, for accurate AABB):
+          max_speed: 最大飞行速度（用于推断场景大小）
+          y_stretch: Y轴拉伸系数（前后距离拉伸比例）
+          scale:     X轴场景缩放系数
         """
-        if not self.enabled:
+        if not self.enabled or self._rr is None:
             return
         rr = self._rr
         # Use a deterministic step for static scene entities in current iter.
-        rr.set_time_sequence("step", 0)
+        try:
+            rr.set_time_sequence("step", 0)
+        except Exception as e:
+            print(f"[rerun warn] failed to set time sequence: {e}")
+            return
 
+        # 环境参数给出“理论范围”（仅作兜底），主AABB优先由当前实体数据决定。
+        env_min, env_max = self._compute_scene_bounds(
+            max_speed=max_speed,
+            y_stretch=y_stretch,
+            scale=scale,
+        )
+        scene_min = np.array([np.inf, np.inf, np.inf], dtype=np.float32)
+        scene_max = np.array([-np.inf, -np.inf, -np.inf], dtype=np.float32)
+        has_bounds = False
+        
         # Estimate scene scale for readable world axes.
         axis_len = 3.0
-        scene_min = np.array([-2.0, -2.0, -1.0], dtype=np.float32)
-        scene_max = np.array([8.0, 8.0, 2.0], dtype=np.float32)
 
         def _expand_bounds(lo, hi):
-            nonlocal scene_min, scene_max
-            scene_min = np.minimum(scene_min, lo)
-            scene_max = np.maximum(scene_max, hi)
+            """安全地扩展AABB，避免NaN或极端值。"""
+            nonlocal scene_min, scene_max, has_bounds
+            lo = np.asarray(lo, dtype=np.float32)
+            hi = np.asarray(hi, dtype=np.float32)
+            # 检查是否为有效的有限数值
+            if np.all(np.isfinite(lo)) and np.all(np.isfinite(hi)):
+                scene_min = np.minimum(scene_min, lo)
+                scene_max = np.maximum(scene_max, hi)
+                has_bounds = True
 
         if voxels is not None:
-            v = np.asarray(voxels, dtype=np.float32)
-            if v.size > 0:
-                _expand_bounds((v[:, :3] - v[:, 3:6]).min(0), (v[:, :3] + v[:, 3:6]).max(0))
+            try:
+                v = np.asarray(voxels, dtype=np.float32)
+                if v.size > 0 and v.shape[1] >= 6:
+                    # 过滤“哨兵/极端”体素（例如 roof 高度 200+、半尺寸 200）
+                    center = v[:, :3]
+                    half = np.abs(v[:, 3:6])
+                    valid = np.isfinite(v).all(axis=1)
+                    valid &= (half.max(axis=1) < 80.0)
+                    valid &= (np.abs(center).max(axis=1) < 300.0)
+                    vv = v[valid]
+                    if vv.size > 0:
+                        lo = (vv[:, :3] - vv[:, 3:6]).min(0)
+                        hi = (vv[:, :3] + vv[:, 3:6]).max(0)
+                        _expand_bounds(lo, hi)
+            except Exception as e:
+                print(f"[rerun warn] failed to expand bounds from voxels: {e}")
+                
         if balls is not None:
-            b = np.asarray(balls, dtype=np.float32)
-            if b.size > 0:
-                r = b[:, 3:4]
-                _expand_bounds((b[:, :3] - r).min(0), (b[:, :3] + r).max(0))
+            try:
+                b = np.asarray(balls, dtype=np.float32)
+                if b.size > 0 and b.shape[1] >= 4:
+                    r = b[:, 3:4]
+                    lo = (b[:, :3] - r).min(0)
+                    hi = (b[:, :3] + r).max(0)
+                    _expand_bounds(lo, hi)
+            except Exception as e:
+                print(f"[rerun warn] failed to expand bounds from balls: {e}")
+                
         if cyl is not None:
-            c = np.asarray(cyl, dtype=np.float32)
-            if c.size > 0:
-                c_lo = np.stack([c[:, 0] - c[:, 2], c[:, 1] - c[:, 2], np.full_like(c[:, 0], -1.0)], -1).min(0)
-                c_hi = np.stack([c[:, 0] + c[:, 2], c[:, 1] + c[:, 2], np.full_like(c[:, 0], 2.0)], -1).max(0)
-                _expand_bounds(c_lo, c_hi)
+            try:
+                c = np.asarray(cyl, dtype=np.float32)
+                if c.size > 0 and c.shape[1] >= 3:
+                    c_lo = np.stack([c[:, 0] - c[:, 2], c[:, 1] - c[:, 2], np.full_like(c[:, 0], -1.0)], -1).min(0)
+                    c_hi = np.stack([c[:, 0] + c[:, 2], c[:, 1] + c[:, 2], np.full_like(c[:, 0], 2.0)], -1).max(0)
+                    _expand_bounds(c_lo, c_hi)
+            except Exception as e:
+                print(f"[rerun warn] failed to expand bounds from cyl: {e}")
+                
         if cyl_h is not None:
-            ch = np.asarray(cyl_h, dtype=np.float32)
-            if ch.size > 0:
-                ch_lo = np.stack([ch[:, 0] - ch[:, 2], np.full_like(ch[:, 0], -1.0), ch[:, 1] - ch[:, 2]], -1).min(0)
-                ch_hi = np.stack([ch[:, 0] + ch[:, 2], np.full_like(ch[:, 0], 1.0), ch[:, 1] + ch[:, 2]], -1).max(0)
-                _expand_bounds(ch_lo, ch_hi)
+            try:
+                ch = np.asarray(cyl_h, dtype=np.float32)
+                if ch.size > 0 and ch.shape[1] >= 3:
+                    ch_lo = np.stack([ch[:, 0] - ch[:, 2], np.full_like(ch[:, 0], -1.0), ch[:, 1] - ch[:, 2]], -1).min(0)
+                    ch_hi = np.stack([ch[:, 0] + ch[:, 2], np.full_like(ch[:, 0], 1.0), ch[:, 1] + ch[:, 2]], -1).max(0)
+                    _expand_bounds(ch_lo, ch_hi)
+            except Exception as e:
+                print(f"[rerun warn] failed to expand bounds from cyl_h: {e}")
+
+        # 起点终点也应参与边界，避免目标在盒子外。
+        if start is not None:
+            s = np.asarray(start, dtype=np.float32).reshape(3)
+            _expand_bounds(s, s)
+        if target is not None:
+            t = np.asarray(target, dtype=np.float32).reshape(3)
+            _expand_bounds(t, t)
+
+        # 若没有任何有效实体，则回退到理论边界；否则按实体边界添加小边距。
+        if not has_bounds:
+            scene_min, scene_max = env_min, env_max
+        else:
+            span_now = np.maximum(scene_max - scene_min, 1e-3)
+            margin = np.maximum(0.08 * span_now, np.array([0.8, 0.8, 0.5], dtype=np.float32))
+            scene_min = scene_min - margin
+            scene_max = scene_max + margin
 
         span = scene_max - scene_min
         axis_len = float(max(3.0, 0.25 * np.max(span)))
@@ -449,11 +578,25 @@ class RerunVis:
 
         mode:
           - depth: expects metric depth in meters, maps [0.05, 10.0] -> [0, 255]
+          - depth_aux: expects metric depth in meters, uses robust per-frame contrast
+                       stretch for readability in rerun (visualization only)
           - luma:  expects [0, 1] brightness, maps directly to [0, 255]
         """
         x = np.asarray(img, dtype=np.float32)
         if mode == "luma":
             x = np.clip(x, 0.0, 1.0)
+            return (x * 255.0).astype(np.uint8)
+        if mode == "depth_aux":
+            x = np.clip(x, 0.3, 24.0)
+            finite = x[np.isfinite(x)]
+            if finite.size >= 16:
+                lo = float(np.percentile(finite, 2.0))
+                hi = float(np.percentile(finite, 98.0))
+                if hi - lo < 1e-3:
+                    lo, hi = 0.3, 24.0
+            else:
+                lo, hi = 0.3, 24.0
+            x = np.clip((x - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
             return (x * 255.0).astype(np.uint8)
         # depth by default
         x = np.clip(x, 0.05, 10.0)
@@ -462,7 +605,7 @@ class RerunVis:
 
     def _log_drone_rig(self, phase: str, pos, drone_R=None, cam_R=None,
                        main_fov_half_tan: float = 0.53,
-                       main_hw=(240, 320), tof_hw=(60, 80)):
+                       main_hw=(240, 320), depth_hw=(60, 80)):
         """Log drone body size/orientation and dual-camera frustums in 3D."""
         if not self.enabled:
             return
@@ -516,7 +659,7 @@ class RerunVis:
             ),
         )
 
-        # Camera rig (both main + ToF share simulator extrinsics in this project)
+        # Camera rig (both main + depth share simulator extrinsics in this project)
         Rcw = Rw @ Rc
 
         def _frustum_lines_local(tan_half_x, h, w, near, far):
@@ -563,24 +706,24 @@ class RerunVis:
             ),
         )
 
-        # ToF frustum (same extrinsics in simulator; separate style for readability)
+        # Depth frustum (same extrinsics in simulator; separate style for readability)
         rr.log(
-            f"{phase}/drone/cameras/tof",
+            f"{phase}/drone/cameras/depth",
             rr.Transform3D(translation=o.tolist(), mat3x3=Rcw.tolist(), axis_length=0.12),
         )
-        tof_strips = _frustum_lines_local(float(main_fov_half_tan), int(tof_hw[0]), int(tof_hw[1]), near=0.10, far=0.90)
+        depth_strips = _frustum_lines_local(float(main_fov_half_tan), int(depth_hw[0]), int(depth_hw[1]), near=0.10, far=0.90)
         rr.log(
-            f"{phase}/drone/cameras/tof/frustum",
-            rr.LineStrips3D(tof_strips, colors=[[80, 200, 255]] * len(tof_strips), radii=[0.003] * len(tof_strips)),
+            f"{phase}/drone/cameras/depth/frustum",
+            rr.LineStrips3D(depth_strips, colors=[[80, 200, 255]] * len(depth_strips), radii=[0.003] * len(depth_strips)),
         )
         rr.log(
-            f"{phase}/drone/cameras/tof/look",
+            f"{phase}/drone/cameras/depth/look",
             rr.Arrows3D(
                 origins=[[0.0, 0.0, 0.0]],
                 vectors=[[0.75, 0.0, 0.0]],
                 colors=[[80, 210, 255]],
                 radii=[0.008],
-                labels=["TOF_CAM"],
+                labels=["DEPTH_CAM"],
                 show_labels=False,
             ),
         )
@@ -588,16 +731,20 @@ class RerunVis:
     def log_step(self, phase: str, step_idx: int, pos, target,
                  depth=None, cam=None, scalars=None,
                  main_img=None, main_img_mode: str = "depth",
-                 tof_img=None,
+                 depth_img=None,
                  drone_R=None,
                  cam_R=None,
                  main_fov_half_tan: float = 0.53,
                  main_hw=(240, 320),
-                 tof_hw=(60, 80)):
-        if not self.enabled:
+                 depth_hw=(60, 80)):
+        if not self.enabled or self._rr is None:
             return
         rr = self._rr
-        rr.set_time_sequence("step", int(step_idx))
+        try:
+            rr.set_time_sequence("step", int(step_idx))
+        except Exception as e:
+            print(f"[rerun warn] failed to set step time sequence: {e}")
+            return
 
         p = np.asarray(pos, dtype=np.float32).reshape(3)
         t = np.asarray(target, dtype=np.float32).reshape(3)
@@ -633,14 +780,14 @@ class RerunVis:
             cam_R=cam_R,
             main_fov_half_tan=main_fov_half_tan,
             main_hw=main_hw,
-            tof_hw=tof_hw,
+            depth_hw=depth_hw,
         )
 
-        # 新接口：分别记录主相机和ToF
+        # 新接口：分别记录主相机和深度相机
         if main_img is not None:
             rr.log(f"{phase}/camera/main", rr.Image(self._img_u8(main_img, mode=main_img_mode)))
-        if tof_img is not None:
-            rr.log(f"{phase}/camera/tof_depth", rr.Image(self._img_u8(tof_img, mode="depth")))
+        if depth_img is not None:
+            rr.log(f"{phase}/camera/depth_aux", rr.Image(self._img_u8(depth_img, mode="depth_aux")))
 
         # 兼容旧接口
         if (main_img is None) and (depth is not None):
@@ -657,16 +804,22 @@ class RerunVis:
                 rr.log(f"{phase}/metrics/{k}", self._scalar_msg(float(v)))
 
     def log_train_scalars(self, scalars: dict, iter_idx=None):
-        if not self.enabled:
+        if not self.enabled or self._rr is None:
             return
         rr = self._rr
         # 避免继承 student/teacher 的 step 时间轴。
-        # 否则 train 标量会全部堆在同一个 step（例如 70）上，看起来像“没有曲线”。
+        # 否则 train 标量会全部堆在同一个 step（例如 70）上，看起来像"没有曲线"。
         try:
             rr.disable_timeline("step")
         except Exception:
             pass
         if iter_idx is not None:
-            rr.set_time_sequence("iter", int(iter_idx))
+            try:
+                rr.set_time_sequence("iter", int(iter_idx))
+            except Exception:
+                pass
         for k, v in scalars.items():
-            rr.log(f"train/{k}", self._scalar_msg(float(v)))
+            try:
+                rr.log(f"train/{k}", self._scalar_msg(float(v)))
+            except Exception:
+                pass

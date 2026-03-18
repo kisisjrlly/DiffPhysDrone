@@ -25,59 +25,62 @@ def camera_iso_to_gain(iso01, cam_sem: CameraSemantics = _DEFAULT_CAM_SEM):
 # 1. Sensor rendering
 # ---------------------------------------------------------------------------
 def render_sensors(env, ctl_dt, cam_fov, cam_exposure, cam_iso,
-                   use_passive_depth, use_camera_luma, use_active_depth,
-                   use_depth_channel, use_camera_control,
+                   use_depth_only, use_camera_luma, use_diff_depth,
+                   use_depth_aux, use_camera_control,
                    differentiable=False):
-    """Render main observation and optional ToF.
+    """Render main observation and optional depth branch.
 
     Args:
         differentiable: If True, keep the computation graph for the main camera
                         path (required for student's camera-control gradient).
                         If False, wrap everything in torch.no_grad().
     Returns:
-        main_obs, tof_depth, tof_conf
+        main_obs, depth_obs
     """
     main_obs = None
-    tof_depth = None
-    tof_conf = None
+    depth_obs = None
 
     if differentiable and use_camera_luma and use_camera_control:
-        # Debug-safety: disable FOV gradient path to avoid heavy atomic contention
-        # in render_backward_fov CUDA kernel while keeping exposure/ISO gradients.
-        # cam_fov_render = cam_fov.detach()
-        # main_obs = env.render_main_luma_diff(cam_fov_render, cam_exposure, cam_iso)
-        main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
-        if use_depth_channel:
-            with torch.no_grad():
-                tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
-        return main_obs, tof_depth, tof_conf
+        # camera_luma differentiable main path
+        if use_depth_aux:
+            main_obs, depth_obs = env.render_main_luma_diff(
+                cam_fov, cam_exposure, cam_iso, return_depth_raw=True)
+        else:
+            main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
+        return main_obs, depth_obs
 
-    if differentiable and use_active_depth and use_camera_control:
+    if differentiable and use_diff_depth and use_camera_control:
         active_power, active_exposure, active_gain = cam_fov, cam_exposure, cam_iso
-        tof_depth, tof_conf = env.render_active_tof_diff(active_power, active_exposure, active_gain)
-        return main_obs, tof_depth, tof_conf
+        depth_obs = env.render_diff_depth(active_power, active_exposure, active_gain)
+        return main_obs, depth_obs
 
     # Non-differentiable / teacher paths
     with torch.no_grad():
-        if use_passive_depth:
-            main_depth, _ = env.render(ctl_dt)
+        if use_depth_only:
+            main_depth = env.render_depth_passive(ctl_dt)
             main_obs = main_depth
         elif use_camera_luma:
             if use_camera_control:
-                main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
+                if use_depth_aux:
+                    main_obs, depth_obs = env.render_main_luma_diff(
+                        cam_fov, cam_exposure, cam_iso, return_depth_raw=True)
+                else:
+                    main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
             else:
                 main_obs = env.render_main_luma(ctl_dt)
-        elif use_active_depth:
+        elif use_diff_depth:
             if use_camera_control:
                 active_power, active_exposure, active_gain = cam_fov, cam_exposure, cam_iso
-                tof_depth, tof_conf = env.render_active_tof_diff(active_power, active_exposure, active_gain)
+                depth_obs = env.render_diff_depth(active_power, active_exposure, active_gain)
             else:
-                raise NotImplementedError("active_depth requires camera control to be enabled")
+                raise NotImplementedError("diff_depth requires camera control to be enabled")
 
-        if use_depth_channel and not use_active_depth:
-            tof_depth, tof_conf, _, _ = env.render_tof(ctl_dt, return_meta=True)
+        if use_depth_aux and not use_diff_depth:
+            if depth_obs is None:
+                depth_obs = env.render_depth_passive(ctl_dt)
 
-    return main_obs, tof_depth, tof_conf
+
+    return main_obs, depth_obs
 
 
 # ---------------------------------------------------------------------------
@@ -146,8 +149,8 @@ def decode_action_direct(act_raw, R, env, B, max_acc_cmd):
 def decode_action_lqr(intent, R, env, local_v, B,
                       A_lqr, B_lqr,
                       lqr_horizon, lqr_reg, max_acc_cmd,
-                      inject_tof, tof_safe_dist, tof_repel_gain,
-                      use_depth_channel, vec_now,
+                      inject_depth, depth_safe_dist, depth_repel_gain,
+                      vec_now,
                       solve_batched_dlqr_fn):
     """Decode policy output in *intent domain* via dLQR.
 
@@ -169,10 +172,10 @@ def decode_action_lqr(intent, R, env, local_v, B,
     )
     u_local = u_local.clamp(-max_acc_cmd, max_acc_cmd)
 
-    if inject_tof and use_depth_channel and vec_now is not None:
+    if inject_depth and vec_now is not None:
         vec_now_lqr = vec_now[0]  # (B, 3)
         dist_now = torch.norm(vec_now_lqr, 2, -1)
-        repel_mag = F.softplus(tof_safe_dist - dist_now) * tof_repel_gain
+        repel_mag = F.softplus(depth_safe_dist - dist_now) * depth_repel_gain
         vec_local = torch.squeeze(vec_now_lqr[:, None] @ R, 1)
         repel_dir = -F.normalize(vec_local, 2, -1)
         u_local = u_local + repel_dir * repel_mag[:, None]

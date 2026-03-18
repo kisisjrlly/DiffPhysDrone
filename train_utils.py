@@ -51,14 +51,14 @@ class MetricSmoother:
         cam_keys = {'loss_cam_smooth', 'loss_fov_reg', 'loss_cam_range',
                      'speed_exposure_corr', 'fov_obstacle_corr', 'power_obstacle_corr'}
         optical_keys = {'loss_blur', 'loss_noise'}
-        active_keys = {'loss_active_depth_power', 'loss_active_depth_blur'}
+        active_keys = {'loss_diff_depth_power', 'loss_diff_depth_blur'}
         wall_keys = {'slit_crossed', 'slit_pass_rate', 'roll_at_wall_deg'}
 
         if not sf['use_camera_control']:
             for k in cam_keys | optical_keys | active_keys:
                 out.pop(k, None)
         else:
-            if sf['use_active_depth']:
+            if sf['use_diff_depth']:
                 for k in optical_keys:
                     out.pop(k, None)
                 if 'fov_obstacle_corr' in out and 'power_obstacle_corr' not in out:
@@ -74,10 +74,10 @@ class MetricSmoother:
             for k in wall_keys:
                 out.pop(k, None)
 
-        out['mode/is_passive_depth'] = float(sf['use_passive_depth'])
+        out['mode/is_depth_only'] = float(sf['use_depth_only'])
         out['mode/is_camera_luma'] = float(sf['use_camera_luma'])
-        out['mode/has_depth_channel'] = float(sf['use_depth_channel'])
-        out['mode/is_active_depth'] = float(sf['use_active_depth'])
+        out['mode/use_depth'] = float(sf['use_depth'])
+        out['mode/is_diff_depth'] = float(sf['use_diff_depth'])
         out['mode/use_camera_control'] = float(sf['use_camera_control'])
         return out
 
@@ -149,14 +149,16 @@ def estimate_optimizer_steps(args) -> int:
 def build_env(batch_size: int, args, sensor_flags: dict, device) -> Env:
     """Create an Env instance from parsed args + sensor flags."""
     sf = sensor_flags
-    use_passive_depth = sf['use_passive_depth']
+    use_depth_only = bool(sf['use_depth_only'])
+    use_depth_aux = bool(sf['use_depth_aux'])
 
-    tw = args.tof_width if args.tof_width is not None else max(args.imx_width // max(args.tof_downsample, 1), 1)
-    th = args.tof_height if args.tof_height is not None else max(args.imx_height // max(args.tof_downsample, 1), 1)
-    tw, th = int(tw), int(th)
+    dw = args.depth_width if args.depth_width is not None else args.imx_width
+    dh = args.depth_height if args.depth_height is not None else args.imx_height
+    dw, dh = int(dw), int(dh)
 
-    render_w = tw if use_passive_depth else args.imx_width
-    render_h = th if use_passive_depth else args.imx_height
+    # 主相机分辨率固定使用 IMX 配置；深度分辨率通过 depth_width/depth_height 独立控制。
+    render_w = int(args.imx_width)
+    render_h = int(args.imx_height)
 
     return Env(
         batch_size, render_w, render_h, args.grad_decay, device,
@@ -167,7 +169,7 @@ def build_env(batch_size: int, args, sensor_flags: dict, device) -> Env:
         wall_slit=args.wall_slit,
         ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
         ellipsoid_c=args.drone_c if args.ellipsoid_collision else 0.0,
-        tof_downsample=args.tof_downsample, tof_width=tw, tof_height=th,
+        depth_width=dw, depth_height=dh,
         camera_preset=args.cam_realism_preset,
         cam_enable_shadow=args.cam_enable_shadow,
         cam_enable_specular=args.cam_enable_specular,

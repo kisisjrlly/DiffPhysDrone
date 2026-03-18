@@ -11,13 +11,13 @@
 # --resume /home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-03-10-22-18-02/checkpoint0049.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 512                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 64                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
 --timesteps 80                     # 每个 rollout 的物理步数
 
 # ----------------- TBPTT + 混合调度 (Long-horizon Training) -----------------
 # 目的：解决长时域 BPTT 显存压力与梯度不稳问题
---tbptt_enable                      # 开启 TBPTT
+# --tbptt_enable                      # 开启 TBPTT
 --tbptt_chunk_steps 15              # 每 xx 步截断一次图
 --tbptt_chunk_accum 1               # 每 1 个 chunk step 一次优化器
 --hybrid_full_bptt_every 0         # 每 20 iter 做一次完整 BPTT 校准
@@ -54,19 +54,18 @@
 --cam_angle 20                      # 对齐原始 single_agent
 
 # ----------------- 传感器分辨率 (Sensor Resolutions) -----------------
---imx_width 64                     # 主相机宽（降低显存峰值，优先保证可运行）
---imx_height 48                    # 主相机高（降低显存峰值，优先保证可运行）
-# --tof_width 480                     # ToF 原始渲染宽（可微深度相机原始分辨率） D455 最小分辨率
-# --tof_height 270                    # ToF 原始渲染高（可微深度相机原始分辨率）
---tof_width 16                      # ToF 原始渲染宽（可微深度相机原始分辨率） D455 最小分辨率
---tof_height 12                    # ToF 原始渲染高（可微深度相机原始分辨率）
---tof_nn_width 16                   # 输入策略网络的 ToF 宽（流水线最终尺寸）
---tof_nn_height 12                  # 输入策略网络的 ToF 高（流水线最终尺寸）
-# --active_depth_use_pipeline           # active_depth: 启用图像处理流水线（逆深度+nearest+maxpool）
---no-active_depth_use_pipeline      # active_depth: 关闭流水线，直接将渲染图按原逻辑输入网络
-# --diff_sensor_impl camera_luma=cuda active_depth=cuda   # 列表参数：按传感器选择后端（若选 cuda 但该传感器未实现，会直接报错）
---diff_sensor_impl camera_luma=cuda active_depth=cuda # 推荐默认：确保全流程可微（active_depth 当前仅 python 路径有反向）
-# --tof_downsample 4                # 若不显式给 tof_width/height，可用该倍率
+--imx_width 120                      # 主相机宽 (从 480 降至 120，解决 OOM)
+--imx_height 90                     # 主相机高 (从 360 降至 90，解决 OOM)
+# --depth_width 480                   # 深度相机原始渲染宽（可微深度相机原始分辨率）
+# --depth_height 270                  # 深度相机原始渲染高（可微深度相机原始分辨率）
+--depth_width 32                      # 深度相机原始渲染宽（可微深度相机原始分辨率）
+--depth_height 24                     # 深度相机原始渲染高（可微深度相机原始分辨率）
+--depth_nn_width 16                   # 输入策略网络的深度宽（流水线最终尺寸）
+--depth_nn_height 12                  # 输入策略网络的深度高（流水线最终尺寸）
+--diff_depth_use_pipeline             # diff_depth: 启用图像处理流水线（逆深度+nearest+maxpool）
+# --no-diff_depth_use_pipeline        # diff_depth: 关闭流水线，直接将渲染图按原逻辑输入网络
+# --diff_sensor_impl camera_luma=cuda diff_depth=cuda
+--diff_sensor_impl camera_luma=cuda diff_depth=cuda
 
 # 已弃用（仅保留对照）：策略融合输入尺寸，当前代码会给 warning
 # --policy_input_width 80
@@ -82,7 +81,7 @@
 --coef_d_acc 0.01                   # 动作能量/加速度正则
 --coef_d_jerk 0.001                 # jerk 正则
 
---coef_obj_avoidance 20.0            # 避障势能惩罚
+--coef_obj_avoidance 3.0            # 避障势能惩罚
 --coef_collide 7.5                  # 对齐原始 single_agent
 --coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
 
@@ -144,8 +143,8 @@
 --student_noise_mode off            # 蒸馏阶段 student 前向是否加噪声：off=关闭, on=开启
 
 # ----------------- 传感模式 + 控制架构 (Sensor & Control) -----------------
-# 当前推荐：sensor_mode camera_luma_plus_passive_depth（主视觉 + 被动深度）
---sensor_mode camera_luma  # passive_depth / camera_luma / camera_luma_plus_passive_depth / active_depth
+--sensor_mode camera_luma_plus_depth #（主视觉 + 深度）
+# --sensor_mode camera_luma  # depth / camera_luma / camera_luma_plus_depth / diff_depth
 
 # dMPC/dLQR 相关：
 # 只有 use_dmpc + policy_output_intent 同时开启时，才走意图域 LQR 路径
@@ -153,23 +152,21 @@
 # --use_dmpc
 --policy_direct_action             # 与 policy_output_intent 互斥
 # --policy_output_intent              # 策略输出意图向量（速度参考 + 代价权重参数）
-# --inject_tof_into_lqr             # 仅 use_dmpc 时生效；当前 direct_action 配置下关闭以避免歧义
+# --inject_depth_into_lqr           # 仅 use_dmpc 时生效；当前 direct_action 配置下关闭以避免歧义
 --lqr_horizon 5                     # dLQR 有限时域长度（前瞻步数）
---lqr_reg 1e-3                      # Riccaticamera_luma_plus_passive_depth/求解正则项，防止病态矩阵
---tof_safe_dist 0.6                 # ToF 安全距离阈值（米）
---tof_repel_gain 1.0                # 安全距离内的排斥增益系数
+--lqr_reg 1e-3                      # Riccati 求解正则项，防止病态矩阵
+--depth_safe_dist 0.6               # 深度安全距离阈值（米）
+--depth_repel_gain 1.0              # 安全距离内的排斥增益系数
 
-# ToF 输入通道配置
-# tof_use_conf 开启后，会把 ToF confidence 作为额外输入通道
-# --tof_use_conf                      # 默认即开启；显式写出便于审阅
---no-tof_use_conf                 # 关闭 ToF confidence 通道
+# 深度输入通道配置
+# 当前实现仅使用深度通道，不再提供 confidence 通道开关。
 
 # 已弃用（保留对照）：
 # --dual_encoder                    # 代码会 warning：结构由 sensor_mode 自动决定
 
 # ----------------- 可视化与日志 (Visualization & Logging) -----------------
 # 可视化会影响训练吞吐；做长跑实验时可适当降低采样频率
-# --vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
+--vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
 --vis_backend rerun                 # 可视化后端（当前支持 rerun）
 --vis_env_idx 0                     # 可视化的环境索引（batch 内第几个）
 --vis_every_iters 10                # 每多少个迭代记录一次可视化
@@ -179,5 +176,5 @@
 --vis_spawn                         # 自动拉起可视化窗口
 
 # WandB
-# --wandb_disabled                  # 关闭在线日志
+--wandb_disabled                  # 关闭在线日志
 # --no-amp                           # 对齐原始项目：关闭混合精度

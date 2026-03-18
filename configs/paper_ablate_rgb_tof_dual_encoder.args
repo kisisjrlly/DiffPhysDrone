@@ -19,16 +19,16 @@
 --include_camera_state_in_obs
 --enable_camera_quality_loss
 
-# Ablation: camera_luma+passive_depth + intent dLQR
---sensor_mode=camera_luma_plus_passive_depth
+# Ablation: camera_luma+depth + intent dLQR
+--sensor_mode=camera_luma_plus_depth
 --dual_encoder
 --use_dmpc
 --policy_output_intent
---inject_tof_into_lqr
+--inject_depth_into_lqr
 --lqr_horizon 5
 --lqr_reg 1e-4
---tof_safe_dist 0.6
---tof_repel_gain 1.0
+--depth_safe_dist 0.6
+--depth_repel_gain 1.0
 
 # Optical loss weights
 --coef_cam_smooth 0.01

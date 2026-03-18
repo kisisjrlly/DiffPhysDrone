@@ -9,11 +9,10 @@ class Model(nn.Module):
                  in_channels=1, use_policy_intent=False, intent_dim=9,
                  main_in_channels=1,
                  enable_camera_head=True,
-                 use_tof_conf=False,
-                 tof_nn_width=16,
-                 tof_nn_height=12,
-                 active_depth_use_pipeline=True,
-                 sensor_mode='camera_luma_plus_passive_depth') -> None:
+                 depth_nn_width=16,
+                 depth_nn_height=12,
+                 diff_depth_use_pipeline=True,
+                 sensor_mode='camera_luma_plus_depth') -> None:
         """
         初始化无人机的策略网络模型 (Policy Network)。
         Args:
@@ -27,13 +26,12 @@ class Model(nn.Module):
         self.intent_dim = intent_dim
         self.main_in_channels = main_in_channels
         self.enable_camera_head = bool(enable_camera_head)
-        self.use_tof_conf = use_tof_conf
-        self.tof_nn_width = max(int(tof_nn_width), 1)
-        self.tof_nn_height = max(int(tof_nn_height), 1)
-        self.active_depth_use_pipeline = bool(active_depth_use_pipeline)
+        self.depth_nn_width = max(int(depth_nn_width), 1)
+        self.depth_nn_height = max(int(depth_nn_height), 1)
+        self.diff_depth_use_pipeline = bool(diff_depth_use_pipeline)
         self.sensor_mode = self._normalize_sensor_mode(sensor_mode)
 
-        def make_stem(cin: int, feat_dim: int):
+        def make_spatial_stem(cin: int):
             return nn.Sequential(
                 nn.Conv2d(cin, 32, 2, 2, bias=False),
                 nn.LeakyReLU(0.05),
@@ -42,6 +40,11 @@ class Model(nn.Module):
                 nn.Conv2d(64, 128, 3, bias=False),
                 nn.LeakyReLU(0.05),
                 nn.AdaptiveAvgPool2d((2, 4)),
+            )
+
+        def make_stem(cin: int, feat_dim: int):
+            return nn.Sequential(
+                make_spatial_stem(cin),
                 nn.Flatten(),
                 nn.Linear(128 * 2 * 4, feat_dim, bias=False),
             )
@@ -51,22 +54,33 @@ class Model(nn.Module):
 
         # 视觉特征提取主干网络 (CNN Stem)
         # 按 sensor_mode 固定网络结构：
-        #   passive_depth: 单分支
+        #   depth: 单分支
         #   camera_luma: 单分支
-        #   camera_luma_plus_passive_depth: 双分支 + 特征融合
-        #   active_depth: 单分支（只用主动深度/置信度）
-        if self.sensor_mode == 'camera_luma_plus_passive_depth':
-            self.main_feat_dim = 96
-            self.tof_feat_dim = 96
-            self.stem_main = make_stem(self.main_in_channels, self.main_feat_dim)
-            tof_in = 1 + (1 if self.use_tof_conf else 0)
-            self.stem_tof = make_stem(tof_in, self.tof_feat_dim)
-            self.fuse = nn.Linear(self.main_feat_dim + self.tof_feat_dim, 192, bias=False)
-            self.fuse.weight.data.mul_(0.5)
-        elif self.sensor_mode in ('passive_depth', 'camera_luma', 'active_depth'):
+        #   camera_luma_plus_depth: 双分支 + 特征融合
+        #   diff_depth: 单分支（只用可微深度）
+        if self.sensor_mode == 'camera_luma_plus_depth':
+            # 池化后网格级空间引导融合 (Grid-level Spatial Guidance):
+            # 将两路特征都在 2x4 (即 8 个空间块) 级别进行对齐，再用主视觉为深度生成空间门控。
+            # 保留了 DEPTHOR 的空间语义对应特性，同时也完美避免高分辨率对齐带来的 OOM。
+            self.stem_main_spatial = make_spatial_stem(self.main_in_channels)
+            depth_in = 1
+            self.stem_depth_spatial = make_spatial_stem(depth_in)
+            self.depth_gate = nn.Sequential(
+                nn.Conv2d(128, 32, 1, bias=False),
+                nn.LeakyReLU(0.05),
+                nn.Conv2d(32, 128, 1, bias=False),
+                nn.Sigmoid(),
+            )
+            self.depth_gate[0].weight.data.mul_(0.5)
+            self.fuse_spatial = nn.Sequential(
+                nn.Flatten(),
+                nn.Linear(256 * 2 * 4, 192, bias=False)
+            )
+            self.fuse_spatial[-1].weight.data.mul_(0.5)
+        elif self.sensor_mode in ('depth', 'camera_luma', 'diff_depth'):
             stem_in_channels = in_channels
-            if self.sensor_mode == 'active_depth':
-                stem_in_channels = 1 + (1 if self.use_tof_conf else 0)
+            if self.sensor_mode == 'diff_depth':
+                stem_in_channels = 1
             self.stem = make_stem(stem_in_channels, 192)
         else:
             raise ValueError(f'unsupported sensor_mode: {self.sensor_mode}')
@@ -106,10 +120,10 @@ class Model(nn.Module):
     def _normalize_sensor_mode(raw_mode: str) -> str:
         key = str(raw_mode).strip().lower()
         allowed = {
-            'passive_depth',
+            'depth',
             'camera_luma',
-            'camera_luma_plus_passive_depth',
-            'active_depth',
+            'camera_luma_plus_depth',
+            'diff_depth',
         }
         if key not in allowed:
             raise ValueError(
@@ -131,19 +145,21 @@ class Model(nn.Module):
             return x[:, None]
         return x
 
-    def _active_depth_pipeline(self, depth_like: torch.Tensor):
+    def _diff_depth_pipeline(self, depth_like: torch.Tensor):
         """
-        active_depth 输入流水线：
-        1) 深度反转并归一化（近处值更大）
-        2) 最近邻下采样到 (2*H_nn, 2*W_nn)
-        3) 2x2 最大池化到 (H_nn, W_nn)
+        diff_depth 输入流水线：
+        1) 深度反转并归一化（近处值更大，范围 [0.05~24m] -> [0,1]）
+        2) 直接 2x2 最大池化从 (2*H_nn, 2*W_nn) 到 (H_nn, W_nn)
+        
+        假设输入原始深度分辨率为 (2*H_nn, 2*W_nn)，例如 32×24。
+        最大池化保留每个 2×2 窗口内的最近物体信息，输出为 16×12。
         """
         # 支持 (B,H,W) 或 (B,1,H,W)
         d = depth_like
         if d.dim() == 4 and d.shape[1] == 1:
             d = d[:, 0]
         elif d.dim() != 3:
-            raise ValueError(f'active_depth pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
+            raise ValueError(f'diff_depth pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
 
         # 反转 + 归一化：把 0.05~24m 映射到 [0,1]，近处更亮
         d = d.clamp(0.05, 24.0)
@@ -153,18 +169,12 @@ class Model(nn.Module):
         x = (inv - inv_min) / (inv_max - inv_min)
         x = x.clamp(0.0, 1.0)
 
-        # 先最近邻到 2x 目标尺寸，再 max-pooling 到最终输入尺寸
-        h2 = max(self.tof_nn_height * 2, 2)
-        w2 = max(self.tof_nn_width * 2, 2)
-        x = torch.nn.functional.interpolate(
-            x[:, None],
-            size=(h2, w2),
-            mode='nearest',
-        )
-        x = torch.nn.functional.max_pool2d(x, kernel_size=2, stride=2)
+        # 直接从原始深度分辨率 (2*H_nn, 2*W_nn) 通过 2x2 最大池化到目标尺寸 (H_nn, W_nn)
+        # 例如：32×24 -> 16×12
+        x = torch.nn.functional.max_pool2d(x[:, None], kernel_size=2, stride=2)
         return x
 
-    def preprocess_sensor_inputs(self, main_obs=None, tof_depth=None, tof_conf=None,
+    def preprocess_sensor_inputs(self, main_obs=None, depth_obs=None,
                                  add_noise=False):
         """
         将“原始传感器观测”转换成模型可直接消费的张量。
@@ -176,15 +186,15 @@ class Model(nn.Module):
         返回:
             x_fused: 单张量融合输入（兼容单输入路径）
             x_main:  主传感器分支输入（给 dual-encoder 的 main stem）
-            x_tof_pack: ToF 分支输入（ToF depth + 可选 conf 拼接）
+            x_depth_pack: 深度分支输入
         """
         x_main = None
-        x_tof = None
+        x_depth = None
 
-        if self.sensor_mode in ('passive_depth', 'camera_luma', 'camera_luma_plus_passive_depth'):
+        if self.sensor_mode in ('depth', 'camera_luma', 'camera_luma_plus_depth'):
             if main_obs is None:
                 raise ValueError(f"sensor_mode={self.sensor_mode} 需要 main_obs 输入")
-            if self.sensor_mode == 'passive_depth':
+            if self.sensor_mode == 'depth':
                 x_main = 3 / main_obs.clamp(0.3, 24) - 0.6
                 if add_noise:
                     x_main = x_main + torch.randn_like(x_main) * 0.02
@@ -194,83 +204,60 @@ class Model(nn.Module):
                     x_main = (x_main + torch.randn_like(x_main) * 0.01).clamp(0.0, 1.0)
                 x_main = x_main * 2.0 - 1.0
             x_main = self._as_bchw(x_main)
-        elif self.sensor_mode == 'active_depth':
+        elif self.sensor_mode == 'diff_depth':
             pass
         else:
             raise ValueError(f"unsupported sensor_mode: {self.sensor_mode}")
 
-        if self.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth'):
-            if tof_depth is None:
-                raise ValueError(f"sensor_mode={self.sensor_mode} 需要 tof_depth 输入")
-            if self.sensor_mode == 'active_depth':
-                if self.active_depth_use_pipeline:
-                    x_tof = self._active_depth_pipeline(tof_depth)
+        if self.sensor_mode in ('camera_luma_plus_depth', 'diff_depth'):
+            if depth_obs is None:
+                raise ValueError(f"sensor_mode={self.sensor_mode} 需要 depth_obs 输入")
+            if self.sensor_mode == 'diff_depth':
+                if self.diff_depth_use_pipeline:
+                    x_depth = self._diff_depth_pipeline(depth_obs)
                     if add_noise:
-                        x_tof = (x_tof + torch.randn_like(x_tof) * 0.01).clamp(0.0, 1.0)
-                    x_tof = x_tof * 2.0 - 1.0
+                        x_depth = (x_depth + torch.randn_like(x_depth) * 0.01).clamp(0.0, 1.0)
+                    x_depth = x_depth * 2.0 - 1.0
                 else:
-                    # active_tof（直输模式）：回退到原逻辑，不做分辨率流水线处理
-                    x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
+                    # diff_depth（直输模式）：回退到原逻辑，不做分辨率流水线处理
+                    x_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
                     if add_noise:
-                        x_tof = x_tof + torch.randn_like(x_tof) * 0.01
-                    x_tof = self._as_bchw(x_tof)
+                        x_depth = x_depth + torch.randn_like(x_depth) * 0.01
+                    x_depth = self._as_bchw(x_depth)
             else:
-                # x_tof = 3 / tof_depth.clamp(0.05, 24) - 0.6
+                # x_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
 
                 # 依然使用倒数深度保留对近处物体的敏感性
-                inv_depth = 3 / tof_depth.clamp(0.05, 24) - 0.6
+                inv_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
 
                 # 【修改点1】：使用 Tanh 进行软截断，将无穷大的突变平滑压缩到 [-1.0, 1.0] 附近
                 # 除以 3.0 是为了让 1 米 (算出来是 2.4) 的距离刚好在 tanh(0.8) 左右，处于敏感区
-                x_tof = torch.tanh(inv_depth / 3.0)
+                x_depth = torch.tanh(inv_depth / 3.0)
                 if add_noise:
-                    x_tof = x_tof + torch.randn_like(x_tof) * 0.01
-                x_tof = self._as_bchw(x_tof)
+                    x_depth = x_depth + torch.randn_like(x_depth) * 0.01
+                x_depth = self._as_bchw(x_depth)
         else:
-            if tof_depth is not None or tof_conf is not None:
-                raise ValueError(f"sensor_mode={self.sensor_mode} 不应提供 ToF 输入")
+            if depth_obs is not None:
+                raise ValueError(f"sensor_mode={self.sensor_mode} 不应提供深度输入")
 
-        x_tof_pack = x_tof
-        if self.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth') and self.use_tof_conf and tof_conf is not None:
-            c = tof_conf
-            if self.sensor_mode == 'active_depth':
-                if self.active_depth_use_pipeline:
-                    c = self._active_depth_pipeline(c)
-                    if add_noise:
-                        c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
-                    c = c * 2.0 - 1.0
-                else:
-                    if add_noise:
-                        c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
-                    c = self._as_bchw(c * 2.0 - 1.0)
-            else:
-                if add_noise:
-                    c = (c + torch.randn_like(c) * 0.01).clamp(0.0, 1.0)
-                c = self._as_bchw(c * 2.0 - 1.0)
-            assert c is not None
-            if x_tof_pack is not None and (x_tof_pack.shape[-2:] != c.shape[-2:]):
-                raise ValueError('tof_depth 与 tof_conf 尺寸必须一致')
-            x_tof_pack = c if x_tof_pack is None else torch.cat([x_tof_pack, c], 1)
-
-        if self.sensor_mode in ('camera_luma_plus_passive_depth', 'active_depth') and self.use_tof_conf and tof_conf is None:
-            raise ValueError(f"sensor_mode={self.sensor_mode} 且 use_tof_conf=True 时必须提供 tof_conf")
+        x_depth_pack = x_depth
 
         channels = []
         if x_main is not None:
             channels.append(x_main)
-        if x_tof_pack is not None:
-            channels.append(x_tof_pack)
+        if x_depth_pack is not None:
+            channels.append(x_depth_pack)
         if len(channels) == 0:
             raise ValueError("preprocess_sensor_inputs 需要至少一种传感器输入")
 
-        if self.sensor_mode == 'camera_luma_plus_passive_depth':
+        if self.sensor_mode == 'camera_luma_plus_depth':
             x_fused = x_main
         else:
             x_fused = torch.cat(channels, 1)
-        return x_fused, x_main, x_tof_pack
+        return x_fused, x_main, x_depth_pack
 
     def forward(self, v, hx=None, return_intent=False,
-                main_obs=None, tof_depth=None, tof_conf=None,
+                main_obs=None, depth_obs=None,
                 add_noise=False):
         """
         前向传播函数。
@@ -285,22 +272,25 @@ class Model(nn.Module):
         """
         # ==========================
         # A. 严格模式输入：仅接受传感器原始输入
-        x, x_main, x_tof = self.preprocess_sensor_inputs(
+        x, x_main, x_depth = self.preprocess_sensor_inputs(
             main_obs=main_obs,
-            tof_depth=tof_depth,
-            tof_conf=tof_conf,
+            depth_obs=depth_obs,
             add_noise=add_noise,
         )
 
         # ==========================
         # B. 视觉特征提取
         # ==========================
-        if self.sensor_mode == 'camera_luma_plus_passive_depth':
-            if x_main is None or x_tof is None:
-                raise ValueError('sensor_mode=camera_luma_plus_passive_depth 需要同时提供 main 与 tof 输入')
-            feat_main = self.stem_main(x_main)
-            feat_tof = self.stem_tof(x_tof)
-            img_feat = self.fuse(torch.cat([feat_main, feat_tof], -1))
+        if self.sensor_mode == 'camera_luma_plus_depth':
+            if x_main is None or x_depth is None:
+                raise ValueError('sensor_mode=camera_luma_plus_depth 需要同时提供 main 与 depth 输入')
+            # 分别提取空间网格特征 [B, 128, 2, 4]
+            feat_main_grid = self.stem_main_spatial(x_main)
+            feat_depth_grid = self.stem_depth_spatial(x_depth)
+            # 空间语义引导：用 main 特征在 2x4 的网格上为深度分支生成空间+通道 mask
+            depth_grid_refined = feat_depth_grid * self.depth_gate(feat_main_grid)
+            # 融合并降维到 192 维
+            img_feat = self.fuse_spatial(torch.cat([feat_main_grid, depth_grid_refined], dim=1))
         else:
             img_feat = self.stem(x)
         

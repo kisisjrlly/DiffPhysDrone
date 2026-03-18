@@ -1,6 +1,7 @@
 import torch
 import quadsim_cuda
 import os
+from typing import Tuple
 
 
 _SYNC_BACKWARD = os.getenv("DIFFPHYS_SYNC_BACKWARD", "0") == "1"
@@ -77,9 +78,13 @@ class DiffRenderFunction(torch.autograd.Function):
 diff_render = DiffRenderFunction.apply
 
 
-class DiffRenderYuvYFunction(torch.autograd.Function):
+class DiffRenderYuvYCoreFunction(torch.autograd.Function):
     """
-    Y 通道可微渲染函数。
+    Y 通道可微渲染核心函数。
+    说明：
+    - 始终返回 (y, depth_aux)
+    - depth_aux 为 detached 张量，不参与梯度回传
+    - 需要仅 y 输出时，通过下方包装函数 `diff_render_yuv_y` 取第一项
     """
     @staticmethod
     def forward(ctx, fov_x_half_tan, exposure, iso,
@@ -155,10 +160,10 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
         ctx.cam_iso_gain_base = float(cam_iso_gain_base)
         ctx.cam_iso_gain_scale = float(cam_iso_gain_scale)
         ctx.cam_iso_gain_gamma = float(cam_iso_gain_gamma)
-        return y
+        return y, depth_raw.detach()
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx, grad_output, grad_depth_aux):
         (depth_raw, fov, exposure, iso, normals,
          R_cam, pos,
          balls, cyl, cyl_h, voxels,
@@ -205,12 +210,12 @@ class DiffRenderYuvYFunction(torch.autograd.Function):
         )
 
 
-diff_render_yuv_y = DiffRenderYuvYFunction.apply
+diff_render_yuv_y_with_depth_aux = DiffRenderYuvYCoreFunction.apply
 
 
 class DiffRenderActiveTofFunction(torch.autograd.Function):
     """
-    Active ToF 可微渲染（CUDA 路径）。
+    Diff depth 可微渲染（CUDA 路径）。
     """
     @staticmethod
     def forward(ctx, fov_x_half_tan, power, exposure, gain, v,
@@ -260,4 +265,4 @@ class DiffRenderActiveTofFunction(torch.autograd.Function):
         )
 
 
-diff_render_active_tof = DiffRenderActiveTofFunction.apply
+diff_render_diff_depth = DiffRenderActiveTofFunction.apply

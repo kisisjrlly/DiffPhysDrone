@@ -136,28 +136,30 @@ __global__ void gaussian_h3_shared_kernel(
     const int B = in.size(0);
     const int H = in.size(1);
     const int W = in.size(2);
-    if (b >= B || u >= H) return;
+    const bool valid = (b < B && u < H);
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
 
     const int vc = min(max(v, 0), W - 1);
-    if (v < W) {
-        tile[ty][tx + 1] = in[b][u][vc];
+    const int uc = valid ? u : 0;
+    const int bc = valid ? b : 0;
+    if (valid && v < W) {
+        tile[ty][tx + 1] = in[bc][uc][vc];
     }
 
-    if (tx == 0) {
+    if (tx == 0 && valid) {
         const int vl = min(max(v - 1, 0), W - 1);
-        tile[ty][0] = in[b][u][vl];
+        tile[ty][0] = in[bc][uc][vl];
     }
-    if (tx == blockDim.x - 1) {
+    if (tx == blockDim.x - 1 && valid) {
         const int vr = min(max(v + 1, 0), W - 1);
-        tile[ty][blockDim.x + 1] = in[b][u][vr];
+        tile[ty][blockDim.x + 1] = in[bc][uc][vr];
     }
 
     __syncthreads();
 
-    if (v < W) {
+    if (valid && v < W) {
         const scalar_t l = tile[ty][tx];
         const scalar_t c = tile[ty][tx + 1];
         const scalar_t r = tile[ty][tx + 2];
@@ -179,28 +181,30 @@ __global__ void gaussian_v3_shared_kernel(
     const int B = in.size(0);
     const int H = in.size(1);
     const int W = in.size(2);
-    if (b >= B || v >= W) return;
+    const bool valid = (b < B && v < W);
 
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
 
+    const int vc = valid ? v : 0;
+    const int bc = valid ? b : 0;
     const int uc = min(max(u, 0), H - 1);
-    if (u < H) {
-        tile[ty + 1][tx] = in[b][uc][v];
+    if (valid && u < H) {
+        tile[ty + 1][tx] = in[bc][uc][vc];
     }
 
-    if (ty == 0) {
+    if (ty == 0 && valid) {
         const int ut = min(max(u - 1, 0), H - 1);
-        tile[0][tx] = in[b][ut][v];
+        tile[0][tx] = in[bc][ut][vc];
     }
-    if (ty == blockDim.y - 1) {
+    if (ty == blockDim.y - 1 && valid) {
         const int ub = min(max(u + 1, 0), H - 1);
-        tile[blockDim.y + 1][tx] = in[b][ub][v];
+        tile[blockDim.y + 1][tx] = in[bc][ub][vc];
     }
 
     __syncthreads();
 
-    if (u < H) {
+    if (valid && u < H) {
         const scalar_t t = tile[ty][tx];
         const scalar_t c = tile[ty + 1][tx];
         const scalar_t d = tile[ty + 2][tx];

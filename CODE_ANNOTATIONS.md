@@ -36,12 +36,12 @@
   - `--tbptt_chunk_accum`
   - `--hybrid_full_bptt_every`
   - `--hybrid_full_bptt_batch_size`
-- **传感模式**：`--sensor_mode in {passive_depth, camera_luma, camera_luma_plus_passive_depth, active_depth}`
+- **传感模式**：`--sensor_mode in {depth, camera_luma, camera_luma_plus_depth, diff_depth}`
 - **相机主动感知**：`--camera_action_mode`, `--include_camera_state_in_obs`, `--enable_camera_quality_loss`
 
 补充：传感器控制头是 3 通道，语义按 `sensor_mode` 切换：
 
-- `camera_luma` / `camera_luma_plus_passive_depth`：`(FOV, Exposure, ISO)`
+- `camera_luma` / `camera_luma_plus_depth`：`(FOV, Exposure, ISO)`
 - `active_depth`：`(Power, Exposure, Gain)`
 
 ### 2.2 环境与模型初始化
@@ -111,8 +111,8 @@ chunk 边界会做：
 `Model` 由三部分组成：
 
 1. **视觉编码器**
-   - `passive_depth/camera_luma`：单分支 `stem`
-   - `camera_luma_plus_passive_depth`：`stem_main + stem_tof + fuse`
+   - `depth/camera_luma`：单分支 `stem`
+   - `camera_luma_plus_depth`：`stem_main + stem_tof + fuse`
 2. **状态融合**
    - `v_proj(state)` 与视觉特征相加
 3. **时序与输出**
@@ -125,7 +125,7 @@ chunk 边界会做：
 
 - 深度映射：`3/depth - 0.6`
 - 亮度映射到 `[-1,1]`
-- ToF 深度与置信度拼接（若启用 `use_tof_conf`）
+- ToF 深度通道与主视觉联合输入（不再使用 confidence 额外通道）
 
 ---
 
@@ -140,10 +140,7 @@ chunk 边界会做：
 
 - 随机场景生成（球、体素、圆柱、墙缝）
 - 状态重置 `reset()`
-- 传感器渲染：
-  - `render()` 深度
-  - `render_main_luma()` 主相机亮度
-  - `render_tof()` ToF 近似
+- 传感器渲染：`render()` 深度、`render_main_luma()` 主相机亮度；被动 ToF 由 `render()` 深度图经采样/后处理近似得到
 - 物理步进 `run(...)`
 - 最近障碍查询 `find_vec_to_nearest_pt()`
 - 状态快照 `save_state/restore_state()`（教师-学生训练与 TBPTT 都会用）

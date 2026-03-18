@@ -20,7 +20,7 @@ Policy-controlled sensor parameters are **3D** in current code (no focus head):
 
 | `sensor_mode` | Policy output channels (1,2,3) | Physical meaning |
 |---|---|---|
-| `camera_luma_plus_passive_depth` / `camera_luma` | `(fov, exposure, iso)` | 主相机视场、曝光、增益 |
+| `camera_luma_plus_depth` / `camera_luma` | `(fov, exposure, iso)` | 主相机视场、曝光、增益 |
 | `active_depth` | `(power, exposure, gain)` | 主动深度发射功率、曝光、接收增益 |
 
 More sensor types and models are planned for future releases.
@@ -41,7 +41,7 @@ The image below shows a live training session visualised with [Rerun](https://re
 
 ### 1. Differentiable RGB Camera
 
-The passive camera renders a grayscale luminance image (`Y` channel) through a **multi-layer differentiable photometric pipeline**:
+The depth-aligned camera renders a grayscale luminance image (`Y` channel) through a **multi-layer differentiable photometric pipeline**:
 
 1. **Geometry** — depth + approximate surface normals from Sobel derivatives
 2. **Lighting** — ambient + directional light, distance attenuation, shadow approximation
@@ -94,7 +94,7 @@ Additional physical effects modelled:
 
 - **Motion blur** penalty: $\text{Blur} \propto \|v\| \cdot t_{exp}$ — the policy learns to shorten exposure at high speed.
 - **Reparameterised noise injection**: gradients flow through the stochastic depth noise via a Gaussian reparameterisation of the Poisson process.
-- **Confidence channel**: the confidence map $C$ is optionally fed to the policy (`--tof_use_conf`), letting it reason about sensing quality.
+- Active ToF depth is used directly as policy input (single depth channel).
 
 Both a pure **PyTorch backend** (`active_depth=python`) and a custom **CUDA kernel** (`active_depth=cuda`) are available, selectable per-sensor via `--diff_sensor_impl`.
 
@@ -166,12 +166,11 @@ python main_cuda.py $(cat configs/single_agent.args)
 | Flag | Description |
 |---|---|
 | `--sensor_mode active_depth` | Use differentiable active-depth sensor only |
-| `--sensor_mode camera_luma_plus_passive_depth` | Dual-encoder: camera luma + passive depth |
+| `--sensor_mode camera_luma_plus_depth` | Dual-encoder: camera luma + depth |
 | `--sensor_mode camera_luma` | Camera luma only |
-| `--sensor_mode passive_depth` | Passive depth only |
+| `--sensor_mode depth` | Depth only |
 | `--camera_action_mode incremental` | Camera parameters as part of the action space |
 | `--enable_camera_quality_loss` | Enable blur & noise perception losses |
-| `--tof_use_conf` | Feed ToF confidence map to the policy |
 | `--diff_sensor_impl camera_luma=python active_depth=cuda` | Per-sensor backend selection |
 | `--cam_realism_preset high` | Photometric pipeline quality (`low/medium/high/ultra`) |
 | `--tbptt_enable` | Truncated BPTT for long-horizon training |
@@ -251,7 +250,7 @@ python eval.py --resume <path to checkpoint> --target_speed 2.5
 │                          #   DiffRenderActiveTofFunction — differentiable Active ToF
 │                          #   render_active_tof_diff  — Python / CUDA dispatch
 ├── model.py               # Policy network (CNN stem + GRU + multi-head output)
-│                          #   sensor_mode: passive_depth / camera_luma / camera_luma_plus_passive_depth / active_depth
+│                          #   sensor_mode: depth / camera_luma / camera_luma_plus_depth / diff_depth
 ├── main_cuda.py           # Training loop (BPTT / TBPTT / hybrid + teacher-student)
 ├── lqr.py                 # Differentiable LQR / dMPC solver
 ├── rerun_vis.py           # Rerun visualisation helper
@@ -272,7 +271,7 @@ python eval.py --resume <path to checkpoint> --target_speed 2.5
 
 ## Roadmap
 
-- [x] Differentiable passive RGB camera (FOV / exposure / ISO / focus)
+- [x] Differentiable RGB camera (FOV / exposure / ISO / focus)
 - [x] Differentiable Active ToF camera (power / exposure / gain / confidence)
 - [x] Multi-layer high-fidelity photometric pipeline (shadow, fog, vignetting, AE)
 - [x] CUDA kernel for Active ToF backward pass
