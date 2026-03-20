@@ -53,19 +53,22 @@ __global__ void update_state_vec_cuda_kernel(
     // forward_vec = F.normalize(forward_vec, 2, -1);
     // forward_vec = (1-alpha) * forward_vec + alpha * self.forward_vec
     // 归一化并应用一阶低通滤波 (模拟姿态控制延迟)
-    scalar_t t = sqrt(fx * fx + fy * fy + fz * fz);
+    scalar_t t = max((scalar_t)1e-6, sqrt(fx * fx + fy * fy + fz * fz));
     fx = (1 - alpha[b][0]) * (fx / t) + alpha[b][0] * R[b][0][0];
     fy = (1 - alpha[b][0]) * (fy / t) + alpha[b][0] * R[b][1][0];
     fz = (1 - alpha[b][0]) * (fz / t) + alpha[b][0] * R[b][2][0];
-    
+
     // 3. 确保前向向量与向上向量正交 (Ensure forward vector is orthogonal to up vector)
     // forward_vec[2] = (forward_vec[0] * self_up_vec[0] + forward_vec[1] * self_up_vec[1]) / -self_up_vec[2]
     // 通过调整 Z 分量使得点积为 0 (fx*ux + fy*uy + fz*uz = 0)
-    fz = (fx * ux + fy * uy) / -uz;
-    
+    // 防止 uz≈0 时除零导致 NaN/Inf 传播并最终触发 GPU hang
+    if (abs(uz) > (scalar_t)1e-4) {
+        fz = (fx * ux + fy * uy) / -uz;
+    }
+
     // self.forward_vec = F.normalize(forward_vec, 2, -1);
     // 再次归一化前向向量 (Re-normalize forward vector)
-    t = sqrt(fx * fx + fy * fy + fz * fz);
+    t = max((scalar_t)1e-6, sqrt(fx * fx + fy * fy + fz * fz));
     fx /= t;
     fy /= t;
     fz /= t;
@@ -357,6 +360,7 @@ std::vector<torch::Tensor> run_forward_cuda(
             ctl_dt, airmode_av2a);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
     return {act_next, p_next, v_next, a_next};
 }
 
@@ -415,6 +419,7 @@ std::vector<torch::Tensor> run_backward_cuda(
             grad_decay, ctl_dt);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
     // 返回计算得到的梯度 (Return computed gradients)
     return {d_act_pred, d_act, d_p, d_v, d_a};
 }
@@ -449,5 +454,6 @@ torch::Tensor update_state_vec_cuda(
             yaw_inertia);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
     return R_new;
 }

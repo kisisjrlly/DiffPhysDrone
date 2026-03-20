@@ -11,14 +11,14 @@
 # --resume /home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-03-10-22-18-02/checkpoint0049.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 64                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 32                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
---timesteps 80                     # 每个 rollout 的物理步数
+--timesteps 150                     # 每个 rollout 的物理步数
 
 # ----------------- TBPTT + 混合调度 (Long-horizon Training) -----------------
 # 目的：解决长时域 BPTT 显存压力与梯度不稳问题
 # --tbptt_enable                      # 开启 TBPTT
---tbptt_chunk_steps 15              # 每 xx 步截断一次图
+--tbptt_chunk_steps 10              # 每 xx 步截断一次图
 --tbptt_chunk_accum 1               # 每 1 个 chunk step 一次优化器
 --hybrid_full_bptt_every 0         # 每 20 iter 做一次完整 BPTT 校准
 --hybrid_full_bptt_batch_size 64     # 完整 BPTT 使用较小 batch 省显存
@@ -75,13 +75,13 @@
 # 速度相关区别：
 # - coef_v      : 向量级主目标（方向+大小）
 # - coef_v_pred : 监督网络的速度预测头（表征辅助）
---coef_v 2.3                        # 速度向量跟踪主损失
+--coef_v 3.0                        # 速度向量跟踪主损失
 --coef_v_pred 0.0                   # 速度预测头监督损失
 
 --coef_d_acc 0.01                   # 动作能量/加速度正则
 --coef_d_jerk 0.001                 # jerk 正则
 
---coef_obj_avoidance 3.0            # 避障势能惩罚
+--coef_obj_avoidance 2.0            # 避障势能惩罚
 --coef_collide 7.5                  # 对齐原始 single_agent
 --coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
 
@@ -166,7 +166,7 @@
 
 # ----------------- 可视化与日志 (Visualization & Logging) -----------------
 # 可视化会影响训练吞吐；做长跑实验时可适当降低采样频率
---vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
+# --vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
 --vis_backend rerun                 # 可视化后端（当前支持 rerun）
 --vis_env_idx 0                     # 可视化的环境索引（batch 内第几个）
 --vis_every_iters 10                # 每多少个迭代记录一次可视化
@@ -176,5 +176,5 @@
 --vis_spawn                         # 自动拉起可视化窗口
 
 # WandB
---wandb_disabled                  # 关闭在线日志
+# --wandb_disabled                  # 关闭在线日志
 # --no-amp                           # 对齐原始项目：关闭混合精度

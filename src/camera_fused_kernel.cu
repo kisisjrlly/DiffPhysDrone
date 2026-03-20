@@ -451,6 +451,7 @@ void gaussian_blur3_separable_cuda(torch::Tensor out, torch::Tensor in) {
             tmp.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>());
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 } // namespace
@@ -552,6 +553,7 @@ torch::Tensor render_camera_luma_fused_forward_cuda(
             (float)cam_sharpen_amount);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 
     return y;
 }
@@ -711,6 +713,7 @@ std::vector<torch::Tensor> render_camera_luma_fused_backward_cuda(
             need_grad_iso ? 1 : 0);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 
     return {grad_depth, grad_exposure, grad_iso};
 }

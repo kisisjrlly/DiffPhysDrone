@@ -194,6 +194,31 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
             main_img_mode = 'luma' if use_camera_luma else 'depth'
             depth_img_np = depth_obs[j].detach().cpu().numpy() if depth_obs is not None else None
 
+            # 评估阶段按 step 记录无人机动力学指标（替代训练 loss/fps 指标）
+            vj = env.v[j]
+            speed_mps = float(vj.norm(2).detach().cpu())
+
+            # 由旋转增量估算角速度幅值：|omega| ~= theta / dt
+            R_old_j = env.R_old[j]
+            R_j = env.R[j]
+            R_delta = R_old_j.transpose(0, 1) @ R_j
+            trace_val = float((R_delta[0, 0] + R_delta[1, 1] + R_delta[2, 2]).detach().cpu())
+            cos_theta = max(-1.0, min(1.0, 0.5 * (trace_val - 1.0)))
+            theta = float(torch.acos(torch.tensor(cos_theta)).item())
+            angular_speed_rps = theta / max(float(ctl_dt), 1e-6)
+
+            thrust_norm_mps2 = float(env.act[j].norm(2).detach().cpu())
+            accel_norm_mps2 = float(env.a[j].norm(2).detach().cpu())
+            dist_to_goal_m = float((env.p_target[j] - env.p[j]).norm(2).detach().cpu())
+
+            step_scalars = {
+                'speed_mps': speed_mps,
+                'angular_speed_rps': angular_speed_rps,
+                'thrust_norm_mps2': thrust_norm_mps2,
+                'accel_norm_mps2': accel_norm_mps2,
+                'dist_to_goal_m': dist_to_goal_m,
+            }
+
             vis.log_step(
                 phase='student',
                 step_idx=t,
@@ -201,6 +226,7 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=(main_obs[j].detach().cpu().numpy() if (main_obs is not None and use_depth_only) else None),
                 cam=cam_vals,
+                scalars=step_scalars,
                 main_img=main_img_np,
                 main_img_mode=main_img_mode,
                 depth_img=depth_img_np,
@@ -225,12 +251,7 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
         f"success_rate={success_rate:.3f} avg_speed={avg_speed:.3f} max_speed={max_speed:.3f}"
     )
 
-    if vis.enabled:
-        vis.log_train_scalars({
-            'eval_success_rate': success_rate,
-            'eval_avg_speed': avg_speed,
-            'eval_max_speed': max_speed,
-        }, iter_idx=ep_idx)
+    # 评估汇总指标保留在控制台输出；Rerun 侧重点为 step 级飞行状态。
 
 
 def main():

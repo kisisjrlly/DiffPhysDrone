@@ -1295,6 +1295,7 @@ void render_cuda(
             fov_x_half_tan);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1316,6 +1317,7 @@ void rerender_backward_cuda(
             fov_x_half_tan);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1347,6 +1349,7 @@ void find_nearest_pt_cuda(
             n_drones_per_group);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1384,6 +1387,7 @@ void find_nearest_pt_ellipsoid_cuda(
             ellipsoid_c);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1417,6 +1421,7 @@ void render_diff_fov_cuda(
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1452,6 +1457,7 @@ void render_diff_fov_with_normal_cuda(
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1496,6 +1502,7 @@ void render_backward_fov_cuda(
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================
@@ -1529,6 +1536,7 @@ void render_backward_fov_from_normal_cuda(
             fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
 }
 
 // ============================================================================

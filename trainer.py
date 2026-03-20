@@ -600,13 +600,16 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                 if args.enable_teacher_student_training:
                     chunk_loss = distill_coef_iter * loss_distill_c + args.student_physics_coef * chunk_loss
 
+                # Determine if we should optimize this chunk
+                chunk_counter += 1
+                do_step = (chunk_counter % chunk_accum == 0) or (t == args.timesteps - 1)
+
+                # Backprop through this chunk (graphs are independent due to h.detach())
                 if use_amp:
                     scaler.scale(chunk_loss).backward()
                 else:
                     chunk_loss.backward()
 
-                chunk_counter += 1
-                do_step = (chunk_counter % chunk_accum == 0) or (t == args.timesteps - 1)
                 if do_step:
                     if use_amp:
                         scaler.unscale_(optim)
@@ -617,6 +620,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                         optim.step()
                     sched.step()
                     optim.zero_grad(set_to_none=True)
+                    torch.cuda.synchronize()  # flush GPU queue after optimizer step
 
                 # stats
                 tbptt_stats['loss'] += float(chunk_loss.detach())
@@ -1122,6 +1126,7 @@ def train(args, sensor_flags, model, env_train, env_full,
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 optim.step()
             sched.step()
+            torch.cuda.synchronize()  # flush GPU queue to prevent display starvation
 
             success = torch.all(distance.flatten(0, 1) > 0, 0)
             _success = success.sum() / B

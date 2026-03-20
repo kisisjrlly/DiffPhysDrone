@@ -11,6 +11,7 @@ class RerunVis:
 
     def __init__(self, enabled=False, app_id="DiffPhysDrone", spawn=True):
         self.enabled = enabled
+        self.app_id = app_id
         self._rr = None
         self._paths = {"teacher": [], "student": []}
 
@@ -34,6 +35,24 @@ class RerunVis:
         rr = self._rr
         try:
             import rerun.blueprint as rrb  # type: ignore
+
+            if "eval" in str(self.app_id).lower():
+                metrics_row = rrb.Horizontal(
+                    rrb.TimeSeriesView(origin="/student/metrics/speed_mps", contents=["/student/metrics/speed_mps"], name="speed_mps"),
+                    rrb.TimeSeriesView(origin="/student/metrics/angular_speed_rps", contents=["/student/metrics/angular_speed_rps"], name="angular_speed_rps"),
+                    rrb.TimeSeriesView(origin="/student/metrics/thrust_norm_mps2", contents=["/student/metrics/thrust_norm_mps2"], name="thrust_norm_mps2"),
+                    rrb.TimeSeriesView(origin="/student/metrics/accel_norm_mps2", contents=["/student/metrics/accel_norm_mps2"], name="accel_norm_mps2"),
+                    rrb.TimeSeriesView(origin="/student/metrics/dist_to_goal_m", contents=["/student/metrics/dist_to_goal_m"], name="dist_to_goal_m"),
+                    name="eval_metrics",
+                )
+            else:
+                metrics_row = rrb.Horizontal(
+                    rrb.TimeSeriesView(origin="/train/loss", contents=["/train/loss"], name="loss"),
+                    rrb.TimeSeriesView(origin="/train/loss_distill", contents=["/train/loss_distill"], name="loss_distill"),
+                    rrb.TimeSeriesView(origin="/train/sim_fps", contents=["/train/sim_fps"], name="sim_fps"),
+                    rrb.TimeSeriesView(origin="/train/iter_per_sec", contents=["/train/iter_per_sec"], name="iter_per_sec"),
+                    name="train_metrics",
+                )
 
             bp = rrb.Blueprint(
                 rrb.Vertical(
@@ -60,13 +79,7 @@ class RerunVis:
                         ),
                         name="top_row",
                     ),
-                    rrb.Horizontal(
-                        rrb.TimeSeriesView(origin="/train/loss", contents=["/train/loss"], name="loss"),
-                        rrb.TimeSeriesView(origin="/train/loss_distill", contents=["/train/loss_distill"], name="loss_distill"),
-                        rrb.TimeSeriesView(origin="/train/sim_fps", contents=["/train/sim_fps"], name="sim_fps"),
-                        rrb.TimeSeriesView(origin="/train/iter_per_sec", contents=["/train/iter_per_sec"], name="iter_per_sec"),
-                        name="train_metrics",
-                    ),
+                    metrics_row,
                 ),
                 auto_layout=False,
                 auto_views=False,

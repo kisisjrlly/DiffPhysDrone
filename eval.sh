@@ -13,7 +13,9 @@ task=${TASK:-paper_final_full}
 cam_profile=${CAM_PROFILE:-low}
 
 # 评估 checkpoint（可通过环境变量覆盖）
-ckpt_path=${CKPT:-checkpoint/2026-03-17-22-37-37/checkpoint0049.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-03-18-22-23-06/checkpoint0049.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-03-20-10-05-24/checkpoint0000.pth}
+ckpt_path=${CKPT:-checkpoint/2026-03-19-17-20-34/checkpoint0049.pth}
 
 # 评估 episode 数（默认 1）
 eval_episodes=${EVAL_EPISODES:-10}

@@ -4,12 +4,17 @@ import os
 from typing import Tuple
 
 
+# Phase 1 Optimization: Remove Python-layer redundant synchronization
+# C++ layer still maintains synchronize() at function boundaries for stability
 _SYNC_BACKWARD = os.getenv("DIFFPHYS_SYNC_BACKWARD", "0") == "1"
 
 
 def _maybe_sync_backward():
-    if _SYNC_BACKWARD:
-        torch.cuda.synchronize()
+    # Disabled: C++ layer already handles synchronization
+    # To restore old behavior: set DIFFPHYS_SYNC_BACKWARD=1 and uncomment below
+    # if _SYNC_BACKWARD:
+    #     torch.cuda.synchronize()
+    pass
 
 
 class RunFunction(torch.autograd.Function):
