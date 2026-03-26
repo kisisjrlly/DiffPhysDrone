@@ -25,6 +25,7 @@ Policy-controlled sensor parameters are **3D** in current code (no focus head):
 
 More sensor types and models are planned for future releases.
 
+
 ---
 
 ## Visualization
