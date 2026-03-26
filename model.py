@@ -11,7 +11,7 @@ class Model(nn.Module):
                  enable_camera_head=True,
                  depth_nn_width=16,
                  depth_nn_height=12,
-                 diff_depth_use_pipeline=True,
+                 depth_use_pipeline=True,
                  sensor_mode='camera_luma_plus_depth') -> None:
         """
         初始化无人机的策略网络模型 (Policy Network)。
@@ -28,7 +28,7 @@ class Model(nn.Module):
         self.enable_camera_head = bool(enable_camera_head)
         self.depth_nn_width = max(int(depth_nn_width), 1)
         self.depth_nn_height = max(int(depth_nn_height), 1)
-        self.diff_depth_use_pipeline = bool(diff_depth_use_pipeline)
+        self.depth_use_pipeline = bool(depth_use_pipeline)
         self.sensor_mode = self._normalize_sensor_mode(sensor_mode)
 
         def make_spatial_stem(cin: int):
@@ -145,9 +145,9 @@ class Model(nn.Module):
             return x[:, None]
         return x
 
-    def _diff_depth_pipeline(self, depth_like: torch.Tensor):
+    def _depth_pipeline(self, depth_like: torch.Tensor):
         """
-        diff_depth 输入流水线：
+        深度输入流水线（可用于 diff_depth / camera_luma_plus_depth）：
         1) 深度反转并归一化（近处值更大，范围 [0.05~24m] -> [0,1]）
         2) 直接 2x2 最大池化从 (2*H_nn, 2*W_nn) 到 (H_nn, W_nn)
         
@@ -159,7 +159,7 @@ class Model(nn.Module):
         if d.dim() == 4 and d.shape[1] == 1:
             d = d[:, 0]
         elif d.dim() != 3:
-            raise ValueError(f'diff_depth pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
+            raise ValueError(f'depth pipeline 期望输入为 (B,H,W) 或 (B,1,H,W)，实际: {tuple(d.shape)}')
 
         # 反转 + 归一化：把 0.05~24m 映射到 [0,1]，近处更亮
         d = d.clamp(0.05, 24.0)
@@ -212,30 +212,27 @@ class Model(nn.Module):
         if self.sensor_mode in ('camera_luma_plus_depth', 'diff_depth'):
             if depth_obs is None:
                 raise ValueError(f"sensor_mode={self.sensor_mode} 需要 depth_obs 输入")
-            if self.sensor_mode == 'diff_depth':
-                if self.diff_depth_use_pipeline:
-                    x_depth = self._diff_depth_pipeline(depth_obs)
-                    if add_noise:
-                        x_depth = (x_depth + torch.randn_like(x_depth) * 0.01).clamp(0.0, 1.0)
-                    x_depth = x_depth * 2.0 - 1.0
-                else:
-                    # diff_depth（直输模式）：回退到原逻辑，不做分辨率流水线处理
+            if self.depth_use_pipeline:
+                x_depth = self._depth_pipeline(depth_obs)
+                if add_noise:
+                    x_depth = (x_depth + torch.randn_like(x_depth) * 0.01).clamp(0.0, 1.0)
+                x_depth = x_depth * 2.0 - 1.0
+            else:
+                if self.sensor_mode == 'diff_depth':
+                    # diff_depth 直输模式：回退到原逻辑，不做分辨率流水线处理
                     x_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
                     if add_noise:
                         x_depth = x_depth + torch.randn_like(x_depth) * 0.01
                     x_depth = self._as_bchw(x_depth)
-            else:
-                # x_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
-
-                # 依然使用倒数深度保留对近处物体的敏感性
-                inv_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
-
-                # 【修改点1】：使用 Tanh 进行软截断，将无穷大的突变平滑压缩到 [-1.0, 1.0] 附近
-                # 除以 3.0 是为了让 1 米 (算出来是 2.4) 的距离刚好在 tanh(0.8) 左右，处于敏感区
-                x_depth = torch.tanh(inv_depth / 3.0)
-                if add_noise:
-                    x_depth = x_depth + torch.randn_like(x_depth) * 0.01
-                x_depth = self._as_bchw(x_depth)
+                else:
+                    # camera_luma_plus_depth 直输模式
+                    # 依然使用倒数深度保留对近处物体的敏感性
+                    inv_depth = 3 / depth_obs.clamp(0.05, 24) - 0.6
+                    # 使用 Tanh 软截断，抑制近距离深度突变导致的极端值
+                    x_depth = torch.tanh(inv_depth / 3.0)
+                    if add_noise:
+                        x_depth = x_depth + torch.randn_like(x_depth) * 0.01
+                    x_depth = self._as_bchw(x_depth)
         else:
             if depth_obs is not None:
                 raise ValueError(f"sensor_mode={self.sensor_mode} 不应提供深度输入")

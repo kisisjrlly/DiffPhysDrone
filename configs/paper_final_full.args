@@ -11,7 +11,7 @@
 # --resume /home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-03-10-22-18-02/checkpoint0049.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 32                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 36                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
 --timesteps 150                     # 每个 rollout 的物理步数
 
@@ -25,7 +25,7 @@
 
 # ----------------- 优化器与数值稳定 (Optimization & Stability) -----------------
 --lr 1e-4                           # AdamW 学习率
---grad_decay 0.4                    # 传给环境的梯度衰减因子
+--grad_decay 0.3                    # 传给环境的梯度衰减因子
 --max_acc_cmd 20.0                  # 动作/加速度限幅
 
 # ----------------- 随机性与可复现 (Reproducibility) -----------------
@@ -62,8 +62,8 @@
 --depth_height 24                     # 深度相机原始渲染高（可微深度相机原始分辨率）
 --depth_nn_width 16                   # 输入策略网络的深度宽（流水线最终尺寸）
 --depth_nn_height 12                  # 输入策略网络的深度高（流水线最终尺寸）
---diff_depth_use_pipeline             # diff_depth: 启用图像处理流水线（逆深度+nearest+maxpool）
-# --no-diff_depth_use_pipeline        # diff_depth: 关闭流水线，直接将渲染图按原逻辑输入网络
+--depth_use_pipeline                  # 深度输入启用图像处理流水线（diff_depth 与 camera_luma_plus_depth 均生效）
+# --no-depth_use_pipeline             # 关闭流水线，按各模式的直输逻辑输入网络
 # --diff_sensor_impl camera_luma=cuda diff_depth=cuda
 --diff_sensor_impl camera_luma=cuda diff_depth=cuda
 

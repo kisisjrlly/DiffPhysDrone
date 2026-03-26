@@ -15,7 +15,9 @@ cam_profile=${CAM_PROFILE:-low}
 # 评估 checkpoint（可通过环境变量覆盖）
 # ckpt_path=${CKPT:-checkpoint/2026-03-18-22-23-06/checkpoint0049.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-03-20-10-05-24/checkpoint0000.pth}
-ckpt_path=${CKPT:-checkpoint/2026-03-19-17-20-34/checkpoint0049.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-03-19-17-20-34/checkpoint0049.pth} 往后退
+# ckpt_path=${CKPT:-checkpoint/2026-03-20-21-45-04/checkpoint0049.pth} # 向后退
+ckpt_path=${CKPT:-checkpoint/2026-03-24-22-56-19/checkpoint0045.pth} 
 
 # 评估 episode 数（默认 1）
 eval_episodes=${EVAL_EPISODES:-10}
@@ -68,7 +70,7 @@ done
 # - 使用指定 checkpoint
 # - 禁用 wandb
 # - 仅运行 eval.py 前向推理
-common_cmd="python -u eval.py $cfg_args --resume $ckpt_path --wandb_disabled --eval_episodes $eval_episodes"
+common_cmd="python -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes"
 
 if [ "$log_to_file" = "1" ]; then
 	eval "$common_cmd" > "$log_file" 2>&1

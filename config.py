@@ -54,8 +54,12 @@ def build_parser():
     parser.add_argument('--depth_height', type=int, default=None, help='深度相机输入分辨率高')
     parser.add_argument('--depth_nn_width', type=int, default=16, help='diff_depth: 输入策略网络前的深度特征宽')
     parser.add_argument('--depth_nn_height', type=int, default=12, help='diff_depth: 输入策略网络前的深度特征高')
-    parser.add_argument('--diff_depth_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
-                        help='diff_depth: 是否启用图像处理流水线')
+    parser.add_argument('--depth_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
+                        help='深度输入是否启用图像处理流水线（对 diff_depth 与 camera_luma_plus_depth 均生效）')
+    # 向后兼容旧参数名：--diff_depth_use_pipeline / --no-diff_depth_use_pipeline
+    parser.add_argument('--diff_depth_use_pipeline', dest='depth_use_pipeline',
+                        action=argparse.BooleanOptionalAction,
+                        help=argparse.SUPPRESS)
     parser.add_argument('--diff_sensor_impl', nargs='*', default=['camera_luma=python', 'diff_depth=python'],
                         help='可微传感实现后端列表')
     parser.add_argument('--policy_input_width', type=int, default=None, help='已弃用')

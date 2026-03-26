@@ -82,7 +82,7 @@ def main():
         enable_camera_head=sf['use_camera_control'],
         depth_nn_width=args.depth_nn_width,
         depth_nn_height=args.depth_nn_height,
-        diff_depth_use_pipeline=args.diff_depth_use_pipeline,
+        depth_use_pipeline=args.depth_use_pipeline,
         sensor_mode=args.sensor_mode,
     ).to(device)
 
