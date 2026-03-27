@@ -74,6 +74,7 @@ if [ "$log_to_file" = "1" ]; then
 	python -u main_cuda.py $cfg_args > "$log_file" 2>&1
 elif [ "$log_to_file" = "0" ]; then
 	python -u main_cuda.py $cfg_args > res.log 2>&1
+	# python -u main_cuda.py $cfg_args
 else
 	echo "[error] invalid LOG_TO_FILE=$log_to_file (expected 0 or 1)"
 	exit 1

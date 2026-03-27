@@ -11,9 +11,9 @@
 # --resume /home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-03-10-22-18-02/checkpoint0049.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 36                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 76                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
---timesteps 150                     # 每个 rollout 的物理步数
+--timesteps 120                     # 每个 rollout 的物理步数
 
 # ----------------- TBPTT + 混合调度 (Long-horizon Training) -----------------
 # 目的：解决长时域 BPTT 显存压力与梯度不稳问题
@@ -40,7 +40,7 @@
 --scaffold                        # 脚手架障碍
 --random_rotation                   # 对齐原始 single_agent：场景随机旋转
 --yaw_drift                         # 对齐原始 single_agent：偏航漂移噪声
---no_odom                         # 关闭里程计输入
+# --no_odom                         # 关闭里程计输入
 # --wall_slit                       # 狭缝场景
 
 # --ellipsoid_collision               # 椭球碰撞体（更接近真实无人机外形）

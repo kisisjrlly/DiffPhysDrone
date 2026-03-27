@@ -8,7 +8,6 @@ Created incrementally:
 """
 from collections import defaultdict
 import math
-import os
 from random import normalvariate
 import time
 
@@ -19,7 +18,6 @@ except ModuleNotFoundError:
     plt = None
     MATPLOTLIB_AVAILABLE = False
 
-import imageio
 import torch
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
@@ -351,7 +349,7 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
 
     # Global history lists (used for full-BPTT and logging)
     p_history, v_history, target_v_history = [], [], []
-    vec_to_pt_history, v_preds, vid = [], [], []
+    vec_to_pt_history, v_preds = [], []
     raw_act_history, raw_intent_history, raw_cam_history = [], [], []
     cam_params_history = []
     cam_fov_history, cam_exposure_history, cam_iso_history = [], [], []
@@ -414,9 +412,6 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
         else:
             p_history.append(env.p)
             vec_to_pt_history.append(vec_now)
-
-        if is_save_iter(i) and not tbptt_this_iter:
-            vid.append(depth_vis[vid_idx].detach().to(dtype=torch.float16).cpu())
 
         # Target velocity
         if args.yaw_drift and R_drift is not None:
@@ -693,7 +688,6 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
         'target_v_history': target_v_history,
         'vec_to_pt_history': vec_to_pt_history,
         'v_preds': v_preds,
-        'vid': vid,
         'vid_idx': vid_idx,
         'act_buffer': act_buffer,
         'raw_act_history': raw_act_history,
@@ -936,62 +930,41 @@ def _build_loss_share_metrics(loss_scalars: dict, args, distill_coef_iter: float
 
 
 def _log_save_iter(rollout, loss_dict, env, args, sensor_flags, i):
-    """Save videos and plots to WandB on checkpoint iterations."""
+    """Save plots to WandB on checkpoint iterations (video logging removed)."""
     if not MATPLOTLIB_AVAILABLE:
-        print('[warn] matplotlib not installed: skip figure/video logging.')
+        print('[warn] matplotlib not installed: skip figure logging.')
+        return
     sf = sensor_flags
     use_camera_control = sf['use_camera_control']
     use_diff_depth = sf['use_diff_depth']
     vid_idx = rollout['vid_idx']
-    vid = rollout['vid']
     p_history = loss_dict['p_history']
     v_history = loss_dict['v_history']
     act_buffer = loss_dict['act_buffer']
-
-    if not vid:
-        return
     print("save check success:", i)
-    vid_t = torch.stack(vid).cpu().div(10).clamp(0, 1)[None, :, None].repeat(1, 1, 3, 1, 1)
 
-    if MATPLOTLIB_AVAILABLE:
-        fig_p, ax = plt.subplots()
-        ph = p_history[:, vid_idx].detach().cpu()
-        ax.plot(ph[:, 0], label='x'); ax.plot(ph[:, 1], label='y'); ax.plot(ph[:, 2], label='z')
-        ax.legend()
+    fig_p, ax = plt.subplots()
+    ph = p_history[:, vid_idx].detach().cpu()
+    ax.plot(ph[:, 0], label='x'); ax.plot(ph[:, 1], label='y'); ax.plot(ph[:, 2], label='z')
+    ax.legend()
 
-        fig_v, ax = plt.subplots()
-        vh = v_history[:, vid_idx].detach().cpu()
-        ax.plot(vh[:, 0], label='x'); ax.plot(vh[:, 1], label='y'); ax.plot(vh[:, 2], label='z')
-        ax.legend()
+    fig_v, ax = plt.subplots()
+    vh = v_history[:, vid_idx].detach().cpu()
+    ax.plot(vh[:, 0], label='x'); ax.plot(vh[:, 1], label='y'); ax.plot(vh[:, 2], label='z')
+    ax.legend()
 
-        fig_a, ax = plt.subplots()
-        ah = act_buffer[:, vid_idx].detach().cpu()
-        ax.plot(ah[:, 0], label='x'); ax.plot(ah[:, 1], label='y'); ax.plot(ah[:, 2], label='z')
-        ax.legend()
-
-    vid_np = vid_t[0].permute(0, 2, 3, 1).cpu().numpy()
-    vid_np = (vid_np * 255).astype('uint8')
-    tmp_path = f'/tmp/wandb_demo_{i}.mp4'
-    # 保持原始分辨率（如 120x90），避免 imageio 按 16 宏块自动 resize 到 128x96。
-    writer = imageio.get_writer(tmp_path, fps=15, macro_block_size=1)
-    for frame in vid_np:
-        writer.append_data(frame)
-    writer.close()
+    fig_a, ax = plt.subplots()
+    ah = act_buffer[:, vid_idx].detach().cpu()
+    ax.plot(ah[:, 0], label='x'); ax.plot(ah[:, 1], label='y'); ax.plot(ah[:, 2], label='z')
+    ax.legend()
 
     wandb.log({
-        # 对于文件路径输入，wandb.Video 的 fps 参数不会生效；帧率由编码文件本身决定。
-        "demo": wandb.Video(tmp_path, format="mp4"),
-        **({
-            "p_history": wandb.Image(fig_p),
-            "v_history": wandb.Image(fig_v),
-            "a_reals": wandb.Image(fig_a),
-        } if MATPLOTLIB_AVAILABLE else {})
+        "p_history": wandb.Image(fig_p),
+        "v_history": wandb.Image(fig_v),
+        "a_reals": wandb.Image(fig_a),
     }, step=i + 1)
 
-    if os.path.exists(tmp_path):
-        os.remove(tmp_path)
-    if MATPLOTLIB_AVAILABLE:
-        plt.close(fig_p); plt.close(fig_v); plt.close(fig_a)
+    plt.close(fig_p); plt.close(fig_v); plt.close(fig_a)
 
     # Camera params plot
     if MATPLOTLIB_AVAILABLE and use_camera_control and rollout['cam_params_history']:
