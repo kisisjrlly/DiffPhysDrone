@@ -149,17 +149,33 @@ class RerunVis:
         
         return scene_min, scene_max
 
-    def begin_iter(self, iter_idx: int):
+    def begin_iter(self, iter_idx: int, reset_scene: bool = False, step_base: int = 0):
         if not self.enabled or self._rr is None:
             return
         self._paths["teacher"].clear()
         self._paths["student"].clear()
+        try:
+            self._rr.set_time_sequence("step", int(step_base))
+        except Exception:
+            pass
+        if reset_scene:
+            rr = self._rr
+            # 评估多 episode 时，清空上一轮实体，避免 viewer 中残留旧轨迹/障碍显示。
+            try:
+                rr.log("student", rr.Clear(recursive=True))
+            except Exception:
+                pass
+            try:
+                rr.log("teacher", rr.Clear(recursive=True))
+            except Exception:
+                pass
         self._rr.set_time_sequence("iter", int(iter_idx))
 
     def log_environment(self, phase: str,
                         balls=None, voxels=None, cyl=None, cyl_h=None,
                         start=None, target=None,
-                        max_speed=None, y_stretch=None, scale=None):
+                        max_speed=None, y_stretch=None, scale=None,
+                        step_idx: int = 0):
         """Log one environment snapshot for global 3D inspection.
 
         All arrays should already be numpy arrays for a single env index:
@@ -179,7 +195,7 @@ class RerunVis:
         rr = self._rr
         # Use a deterministic step for static scene entities in current iter.
         try:
-            rr.set_time_sequence("step", 0)
+            rr.set_time_sequence("step", int(step_idx))
         except Exception as e:
             print(f"[rerun warn] failed to set time sequence: {e}")
             return

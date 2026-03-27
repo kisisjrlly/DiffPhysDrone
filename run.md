@@ -20,3 +20,5 @@ python main_cuda.py $(cat configs/paper_unified.args)
 python main_cuda.py $(cat configs/paper_gdac.args)
 # Evaluate with camera-control model
 python eval_wall_slit.py --resume checkpoint0004.pth --ellipsoid_collision --include_camera_state_in_obs --num_episodes 200
+
+scp -r -p 46936 root@10.130.145.237:/root/code/DiffPhysDrone/checkpoint/2026-03-27-10-23-25 //home/zhaoguodong/work/code/DiffPhysDrone/checkpoint

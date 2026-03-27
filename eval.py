@@ -72,9 +72,11 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
 
     env.reset()
     model.reset()
+    ep_step_base = ep_idx * args.timesteps
 
     if vis.enabled:
-        vis.begin_iter(ep_idx)
+        # 每个 episode 开始时清理上一轮可视化实体，避免画面残留。
+        vis.begin_iter(ep_idx, reset_scene=True, step_base=ep_step_base)
         j = int(min(max(args.vis_env_idx, 0), B - 1))
         # 从环境中提取缩放参数（用于动态AABB计算）
         y_stretch_j = getattr(env, '_current_y_stretch', None)
@@ -89,6 +91,7 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
             target=env.p_target[j].detach().cpu().numpy(),
             y_stretch=y_stretch_j,
             scale=scale_j,
+            step_idx=ep_step_base,
         )
 
     h = None
@@ -221,7 +224,8 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
 
             vis.log_step(
                 phase='student',
-                step_idx=t,
+                # 使用全局单调 step，避免 episode 间 step 从 0 回绕导致 viewer 停在旧帧。
+                step_idx=ep_step_base + t,
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=(main_obs[j].detach().cpu().numpy() if (main_obs is not None and use_depth_only) else None),
