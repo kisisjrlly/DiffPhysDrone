@@ -978,7 +978,7 @@ class Env:
     def render_main_luma_diff(self, fov_tensor, exposure, iso, return_depth_raw=False):
         """
         主相机亮度图 (Y) 渲染（可微相机参数路径）。
-        训练时用于模拟 IMX477 RAW->ISP->YUV420 后仅取 Y 通道。
+        训练时用于模拟 IMX279 RAW->ISP->YUV420 后仅取 Y 通道。
         该路径要求 CUDA 扩展提供原生可微 Y 渲染实现，不使用任何代理转换。
         (由于无人机使用固定焦距，我们去除了 focus 参数)
         返回:

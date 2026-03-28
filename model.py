@@ -65,13 +65,17 @@ class Model(nn.Module):
             self.stem_main_spatial = make_spatial_stem(self.main_in_channels)
             depth_in = 1
             self.stem_depth_spatial = make_spatial_stem(depth_in)
+            # 深度分支在融合前做归一化，降低近距离突变深度带来的特征抖动
+            self.depth_feat_norm = nn.GroupNorm(16, 128)
             self.depth_gate = nn.Sequential(
                 nn.Conv2d(128, 32, 1, bias=False),
                 nn.LeakyReLU(0.05),
                 nn.Conv2d(32, 128, 1, bias=False),
-                nn.Sigmoid(),
+                nn.Tanh(),
             )
             self.depth_gate[0].weight.data.mul_(0.5)
+            # 让 gate 初值更保守（接近 1）：tanh 初值接近 0 -> 缩放后约 1.0
+            self.depth_gate[2].weight.data.zero_()
             self.fuse_spatial = nn.Sequential(
                 nn.Flatten(),
                 nn.Linear(256 * 2 * 4, 192, bias=False)
@@ -90,9 +94,30 @@ class Model(nn.Module):
         # 初始化权重，乘以 0.5 使其初始输出较小，防止物理状态特征在初期淹没视觉特征
         self.v_proj.weight.data.mul_(0.5)
 
+        # 多模态门控融合（替代简单相加）
+        # 目标：防止训练后期某一模态长期压制另一模态
+        self.img_norm = nn.LayerNorm(192)
+        self.v_norm = nn.LayerNorm(192)
+        self.fuse_gate = nn.Sequential(
+            nn.Linear(192 * 2, 192, bias=True),
+            nn.LeakyReLU(0.05),
+            nn.Linear(192, 192, bias=True),
+            nn.Sigmoid(),
+        )
+        self.fuse_gate[-2].weight.data.mul_(0.1)
+        self.fuse_gate[-2].bias.data.zero_()
+
         # 门控循环单元 (GRU)：用于处理时序信息，赋予无人机记忆能力
         # 因为无人机只能看到当前的深度图（部分可观测环境 POMDP），需要记忆来推断自身速度和环境结构
         self.gru = nn.GRUCell(192, 192)
+        # GRU 后残差稳态头：提升记忆表达稳定性，缓解后期策略抖动
+        self.gru_residual = nn.Sequential(
+            nn.Linear(192, 192, bias=False),
+            nn.LeakyReLU(0.05),
+            nn.Linear(192, 192, bias=False),
+        )
+        self.gru_residual[-1].weight.data.mul_(0.01)
+        self.hx_norm = nn.LayerNorm(192)
 
         # 动作输出头 (Action Head)
         self.fc = nn.Linear(192, dim_action, bias=False)
@@ -283,9 +308,10 @@ class Model(nn.Module):
                 raise ValueError('sensor_mode=camera_luma_plus_depth 需要同时提供 main 与 depth 输入')
             # 分别提取空间网格特征 [B, 128, 2, 4]
             feat_main_grid = self.stem_main_spatial(x_main)
-            feat_depth_grid = self.stem_depth_spatial(x_depth)
+            feat_depth_grid = self.depth_feat_norm(self.stem_depth_spatial(x_depth))
             # 空间语义引导：用 main 特征在 2x4 的网格上为深度分支生成空间+通道 mask
-            depth_grid_refined = feat_depth_grid * self.depth_gate(feat_main_grid)
+            depth_gate_delta = self.depth_gate(feat_main_grid)
+            depth_grid_refined = feat_depth_grid * (1.0 + 0.1 * depth_gate_delta)
             # 融合并降维到 192 维
             img_feat = self.fuse_spatial(torch.cat([feat_main_grid, depth_grid_refined], dim=1))
         else:
@@ -294,11 +320,15 @@ class Model(nn.Module):
         # ==========================
         # C. 多模态融合 + 时序建模
         # ==========================
-        # 视觉特征 + 状态向量投影后做非线性激活
-        x = self.act(img_feat + self.v_proj(v))
+        # 门控融合：平衡视觉特征与状态向量，降低单模态长期压制风险
+        img_feat = self.img_norm(img_feat)
+        v_feat = self.v_norm(self.v_proj(v))
+        fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
+        x = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）
         hx = self.gru(x, hx)
+        hx = self.hx_norm(hx + 0.1 * self.gru_residual(hx))
         
         # 输出动作头原始值
         raw = self.fc(self.act(hx))
