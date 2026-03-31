@@ -28,8 +28,9 @@ def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int
 
 
 def barrier(x: torch.Tensor, v_to_pt):
-    """障碍物避让屏障函数：当距离小于安全边距时产生巨大惩罚梯度。"""
-    return (v_to_pt * (1 - x).relu().pow(2)).mean()
+    """障碍物避让屏障函数：当距离小于安全边距时产生巨大惩罚梯度。
+    clamp(max=5.0) 防止深度穿透时 (1-x) 过大导致梯度爆炸。"""
+    return (v_to_pt * (1 - x).relu().clamp(max=5.0).pow(2)).mean()
 
 
 def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
@@ -60,11 +61,13 @@ def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
     loss_d_jerk = jerk.pow(2).sum(-1).mean()
 
     # 避障与碰撞损失
-    dist = torch.norm(vec_chunk, 2, -1) - margin
+    # 使用 clamp(min=1e-6) 防止零向量导致 torch.norm 反向传播产生 NaN (0/0)
+    # clamp(min=-3.0) 限制穿透深度对 softplus 输入的影响，防止 softplus(96+) 导致梯度爆炸
+    dist = torch.norm(vec_chunk + 1e-6, 2, -1) - margin
     with torch.no_grad():
         v_to = (-torch.diff(dist, 1, 1) * 135).clamp_min(1)
     loss_avoid = barrier(dist[:, 1:], v_to)
-    loss_collide = F.softplus(dist[:, 1:].mul(-32)).mul(v_to).mean()
+    loss_collide = F.softplus(dist[:, 1:].clamp(min=-3.0).mul(-32)).mul(v_to).mean()
 
     # 地面亲和力损失
     loss_ground = p_chunk[..., 2].relu().pow(2).mean()

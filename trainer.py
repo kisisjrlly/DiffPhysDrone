@@ -246,11 +246,11 @@ def _teacher_inner_loop(env, env_snapshot, args, sensor_flags,
                 l_acc = act_ck.pow(2).sum(-1).mean()
                 l_jerk = jk.pow(2).sum(-1).mean()
 
-                dist_k = torch.norm(vec_ck, 2, -1) - env.margin
+                dist_k = torch.norm(vec_ck + 1e-6, 2, -1) - env.margin
                 with torch.no_grad():
                     v_to = (-torch.diff(dist_k, 1, 1) * 135).clamp_min(1)
                 l_avoid = barrier(dist_k[:, 1:], v_to)
-                l_coll = F.softplus(dist_k[:, 1:].mul(-32)).mul(v_to).mean()
+                l_coll = F.softplus(dist_k[:, 1:].clamp(min=-3.0).mul(-32)).mul(v_to).mean()
                 l_ga = p_ck[..., 2].relu().pow(2).mean()
 
                 chunk_loss = (args.coef_v * l_v
@@ -527,11 +527,11 @@ def student_rollout(env, model, args, sensor_flags, B, device, use_amp,
                 loss_d_acc_c = act_ck.pow(2).sum(-1).mean()
                 loss_d_jerk_c = jk.pow(2).sum(-1).mean()
 
-                dist_c = torch.norm(vec_ck, 2, -1) - env.margin
+                dist_c = torch.norm(vec_ck + 1e-6, 2, -1) - env.margin
                 with torch.no_grad():
                     v_to_c = (-torch.diff(dist_c, 1, 1) * 135).clamp_min(1)
                 loss_avoid_c = barrier(dist_c[:, 1:], v_to_c)
-                loss_collide_c = F.softplus(dist_c[:, 1:].mul(-32)).mul(v_to_c).mean()
+                loss_collide_c = F.softplus(dist_c[:, 1:].clamp(min=-3.0).mul(-32)).mul(v_to_c).mean()
                 loss_ground_c = p_ck[..., 2].relu().pow(2).mean()
 
                 loss_cam_smooth_c = torch.zeros((), device=device)
@@ -728,11 +728,11 @@ def full_bptt_losses(rollout, env, args, sensor_flags, device,
     loss_d_acc = act_buffer.pow(2).sum(-1).mean()
     loss_d_jerk = jerk.pow(2).sum(-1).mean()
 
-    distance = torch.norm(vec_to_pt_history, 2, -1) - env.margin
+    distance = torch.norm(vec_to_pt_history + 1e-6, 2, -1) - env.margin
     with torch.no_grad():
         v_to_pt = (-torch.diff(distance, 1, 1) * 135).clamp_min(1)
     loss_obj_avoidance = barrier(distance[:, 1:], v_to_pt)
-    loss_collide = F.softplus(distance[:, 1:].mul(-32)).mul(v_to_pt).mean()
+    loss_collide = F.softplus(distance[:, 1:].clamp(min=-3.0).mul(-32)).mul(v_to_pt).mean()
 
     speed_history = v_history.norm(2, -1)
 
@@ -1089,7 +1089,10 @@ def train(args, sensor_flags, model, env_train, env_full,
 
             pbar.set_description_str(f'loss: {loss:.3f}')
             optim.zero_grad()
-            if use_amp:
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[WARN] loss is nan/inf at iter {i}, skipping optimizer step")
+                optim.zero_grad(set_to_none=True)
+            elif use_amp:
                 scaler.scale(loss).backward()
                 scaler.unscale_(optim)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)

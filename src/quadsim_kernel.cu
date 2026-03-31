@@ -1115,9 +1115,10 @@ __global__ void render_backward_fov_cuda_kernel(
             scalar_t D = canvas[b][u][v];
             if (D < (scalar_t)99.0 && depth_hit < (scalar_t)99.0) {
                 scalar_t n_dot_d = nx * dx + ny * dy + nz * dz;
-                if (abs(n_dot_d) > (scalar_t)1e-6) {
+                if (abs(n_dot_d) > (scalar_t)5e-2) {
                     scalar_t n_dot_dd_dfov = nx * d_dx_d_fov + ny * d_dy_d_fov + nz * d_dz_d_fov;
                     scalar_t local_grad = -D * (n_dot_dd_dfov / n_dot_d);
+                    local_grad = max((scalar_t)-500.0, min((scalar_t)500.0, local_grad));
                     s_grad[tid] = go * local_grad;
                 }
             }
