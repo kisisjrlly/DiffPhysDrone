@@ -24,7 +24,7 @@
 --hybrid_full_bptt_batch_size 64     # 完整 BPTT 使用较小 batch 省显存
 
 # ----------------- 优化器与数值稳定 (Optimization & Stability) -----------------
---lr 1e-4                           # AdamW 学习率
+--lr 5e-5                           # AdamW 学习率
 --grad_decay 0.3                    # 传给环境的梯度衰减因子
 --max_acc_cmd 20.0                  # 动作/加速度限幅
 
@@ -48,7 +48,7 @@
 --drone_c 0.075                     # 椭球 c 半轴 (z)
 --coef_tilt 0.0                     # wall_slit 侧倾损失权重（当前实现默认可设 0）
 
---speed_mtp 4.0                     # 对齐原始 single_agent
+--speed_mtp 6.0                     # 对齐原始 single_agent
 --fov_x_half_tan 0.82               # 对齐原始 single_agent
 --base_control_freq 15.0              # 基础控制频率 (Hz)，对应控制时间步长 ctl_dt = 1/base_control_freq
 --cam_angle 20                      # 对齐原始 single_agent
@@ -60,8 +60,8 @@
 # --depth_height 270                  # 深度相机原始渲染高（可微深度相机原始分辨率）
 --depth_width 32                      # 深度相机原始渲染宽（可微深度相机原始分辨率）
 --depth_height 24                     # 深度相机原始渲染高（可微深度相机原始分辨率）
---depth_nn_width 16                   # 输入策略网络的深度宽（流水线最终尺寸）
---depth_nn_height 12                  # 输入策略网络的深度高（流水线最终尺寸）
+--depth_nn_width 4                   # 输入策略网络的深度宽（流水线最终尺寸）
+--depth_nn_height 4                  # 输入策略网络的深度高（流水线最终尺寸）
 --depth_use_pipeline                  # 深度输入启用图像处理流水线（diff_depth 与 camera_luma_plus_depth 均生效）
 # --no-depth_use_pipeline             # 关闭流水线，按各模式的直输逻辑输入网络
 # --diff_sensor_impl camera_luma=cuda diff_depth=cuda

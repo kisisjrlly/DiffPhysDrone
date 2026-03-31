@@ -278,7 +278,7 @@ python eval.py --resume <path to checkpoint> --target_speed 2.5
 - [x] CUDA kernel for Active ToF backward pass
 - [ ] Differentiable LiDAR / radar sensor model
 - [ ] Differentiable event camera model
-- [ ] More real sensor noise profiles (e.g., Sony IMX477, Intel RealSense D455)
+- [ ] More real sensor noise profiles (e.g., Sony IMX279, Intel RealSense D455)
 
 ---
 
