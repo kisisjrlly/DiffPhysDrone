@@ -20,5 +20,4 @@ copilot --allow-all
 code
 
 
-scp -r -p 46936 root@10.130.145.237:/root/code/DiffPhysDrone/checkpoint/2026-03-27-10-23-25 //home/zhaoguodong/work/code/DiffPhysDrone/checkpoint
-
+scp -r -p 46936 root@10.130.145.237:/root/code/DiffPhysDrone/checkpoint/2026-03-31-21-03-07 /home/zhaoguodong/work/code/DiffPhysDrone/checkpoint

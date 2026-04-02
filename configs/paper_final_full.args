@@ -81,8 +81,8 @@
 --coef_d_acc 0.01                   # 动作能量/加速度正则
 --coef_d_jerk 0.001                 # jerk 正则
 
---coef_obj_avoidance 2.0            # 避障势能惩罚
---coef_collide 7.5                  # 对齐原始 single_agent
+--coef_obj_avoidance 1.0            # 避障势能惩罚
+--coef_collide 2                  # 对齐原始 single_agent
 --coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
 
 # ----------------- 可微相机 + 主动感知 (Differentiable Camera) -----------------

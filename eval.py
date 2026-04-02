@@ -108,6 +108,8 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
 
     min_margin_hist = []
     speed_hist = []
+    collided = False
+    collided_step = None
 
     for t in range(args.timesteps):
         print("timestep:", t)
@@ -125,9 +127,9 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
             differentiable=False,
         )
 
+        # 记录推进前的最小安全边距（<=0 视为碰撞）
         vec_now = env.find_vec_to_nearest_pt()
-        min_margin_now = (torch.norm(vec_now, 2, -1) - env.margin)
-        min_margin_hist.append(min_margin_now)
+        min_margin_before = (torch.norm(vec_now, 2, -1) - env.margin)
 
         if args.yaw_drift and yaw_drift_R is not None:
             target_v_raw = torch.squeeze(target_v_raw[:, None] @ yaw_drift_R, 1)
@@ -135,6 +137,18 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
             target_v_raw = env.p_target - env.p.detach()
 
         env.run(act_buffer[t], ctl_dt, target_v_raw)
+
+        # 记录推进后的最小安全边距，避免漏检“本步内发生”的碰撞
+        vec_after = env.find_vec_to_nearest_pt()
+        min_margin_after = (torch.norm(vec_after, 2, -1) - env.margin)
+        min_margin_now = torch.minimum(min_margin_before, min_margin_after)
+        min_margin_hist.append(min_margin_now)
+
+        # eval 规则：一旦发生碰撞，立即结束当前 episode
+        # 当前 batch 并行评估时，只要任一无人机碰撞就提前终止。
+        if bool((min_margin_now <= 0).any().item()):
+            collided = True
+            collided_step = t
 
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
@@ -240,19 +254,28 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
                 main_hw=(int(env.height), int(env.width)),
                 depth_hw=(int(env.depth_height), int(env.depth_width)),
             )
-        time.sleep(1)
+
+        if collided:
+            print(f"[eval] collision detected at step={t}, early stop this episode.")
+            break
+        time.sleep(0.1)
 
     min_margin_all = torch.stack(min_margin_hist).amin(dim=0)
     success_mask = min_margin_all > 0
     success_rate = float(success_mask.float().mean().detach().cpu())
 
-    speed_all = torch.stack(speed_hist)
-    avg_speed = float(speed_all.mean().detach().cpu())
-    max_speed = float(speed_all.max().detach().cpu())
+    if len(speed_hist) > 0:
+        speed_all = torch.stack(speed_hist)
+        avg_speed = float(speed_all.mean().detach().cpu())
+        max_speed = float(speed_all.max().detach().cpu())
+    else:
+        avg_speed = 0.0
+        max_speed = 0.0
 
     print(
         f"[eval] episode={ep_idx + 1}/{args.eval_episodes} "
-        f"success_rate={success_rate:.3f} avg_speed={avg_speed:.3f} max_speed={max_speed:.3f}"
+        f"success_rate={success_rate:.3f} avg_speed={avg_speed:.3f} max_speed={max_speed:.3f} "
+        f"collided={collided}" + (f" collided_step={collided_step}" if collided_step is not None else "")
     )
 
     # 评估汇总指标保留在控制台输出；Rerun 侧重点为 step 级飞行状态。

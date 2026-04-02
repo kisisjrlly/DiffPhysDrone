@@ -18,11 +18,14 @@ cam_profile=${CAM_PROFILE:-low}
 # ckpt_path=${CKPT:-checkpoint/2026-03-19-17-20-34/checkpoint0049.pth} 往后退
 # ckpt_path=${CKPT:-checkpoint/2026-03-20-21-45-04/checkpoint0049.pth} # 向后退
 # ckpt_path=${CKPT:-checkpoint/2026-03-24-22-56-19/checkpoint0045.pth} 
-ckpt_path=${CKPT:-checkpoint/2026-03-27-10-23-25/checkpoint0013.pth} 
+ckpt_path=${CKPT:-checkpoint/2026-03-31-21-03-07/checkpoint0005.pth} 
 
 
 # 评估 episode 数（默认 1）
 eval_episodes=${EVAL_EPISODES:-10}
+
+# 评估 batch 大小（默认 1，只看单机/单轨迹结果）
+eval_batch_size=${EVAL_BATCH_SIZE:-1}
 
 # 日志输出模式:
 # - LOG_TO_FILE=1 (默认): 输出到 logs/eval-<task>-<time>.log
@@ -60,6 +63,7 @@ echo "log file: $log_file"
 echo "using config files: ${cfg_files[*]}"
 echo "using checkpoint  : $ckpt_path"
 echo "eval episodes     : $eval_episodes"
+echo "eval batch_size   : $eval_batch_size"
 
 # 支持：空行 / 整行注释 / 行尾注释
 cfg_args=""
@@ -72,7 +76,7 @@ done
 # - 使用指定 checkpoint
 # - 禁用 wandb
 # - 仅运行 eval.py 前向推理
-common_cmd="python -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes"
+common_cmd="python -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes --batch_size $eval_batch_size --timesteps 300"
 
 if [ "$log_to_file" = "1" ]; then
 	eval "$common_cmd" > "$log_file" 2>&1

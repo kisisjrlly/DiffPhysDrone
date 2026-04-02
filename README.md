@@ -145,40 +145,48 @@ pip install -e src
 
 ---
 
-## Training
+## Running (Current Workflow)
 
-### Paper Full Config (Active ToF + Unified Control)
+目前仓库默认且正在使用的运行方式只有下面这一套：
+
+- 训练入口：`run.sh`
+- 评估入口：`eval.sh`
+- 主配置文件：`configs/paper_final_full.args`
+
+> 说明：当前阶段其它参数文件与其它启动方式暂不使用，不在本 README 里展开。
+
+### 1) 训练
 
 ```bash
-python main_cuda.py $(cat configs/paper_final_full.args)
+bash run.sh
 ```
 
-### Multi-agent / Single-agent Quick Start
+默认会读取：
+
+- `configs/paper_final_full.args`
+- `configs/cam_low.args`（由 `CAM_PROFILE=low` 默认叠加）
+
+若你希望**只使用** `paper_final_full.args`（不叠加相机 profile），可将 `CAM_PROFILE` 设为空。
+
+### 2) 评估
 
 ```bash
-# For multi-agent
-python main_cuda.py $(cat configs/multi_agent.args)
-# For single-agent
-python main_cuda.py $(cat configs/single_agent.args)
+bash eval.sh
 ```
 
-### Key Training Flags
+默认会：
 
-| Flag | Description |
-|---|---|
-| `--sensor_mode active_depth` | Use differentiable active-depth sensor only |
-| `--sensor_mode camera_luma_plus_depth` | Dual-encoder: camera luma + depth |
-| `--sensor_mode camera_luma` | Camera luma only |
-| `--sensor_mode depth` | Depth only |
-| `--camera_action_mode incremental` | Camera parameters as part of the action space |
-| `--enable_camera_quality_loss` | Enable blur & noise perception losses |
-| `--diff_sensor_impl camera_luma=python active_depth=cuda` | Per-sensor backend selection |
-| `--cam_realism_preset high` | Photometric pipeline quality (`low/medium/high/ultra`) |
-| `--tbptt_enable` | Truncated BPTT for long-horizon training |
-| `--hybrid_full_bptt_every N` | Interleave full BPTT every N iters for long-range calibration |
-| `--resume <ckpt>` | Resume from a checkpoint |
+- 从 `configs/paper_final_full.args` 读取参数
+- 叠加 `configs/cam_low.args`
+- 使用 `eval.sh` 里指定的 checkpoint
+- 开启可视化并执行 `eval.py`
 
-A fully-annotated configuration covering all available parameters is in [`configs/paper_final_full.args`](configs/paper_final_full.args).
+可通过环境变量覆盖常用项：
+
+- `CKPT=<path>`：指定评估权重
+- `EVAL_EPISODES=<N>`：评估回合数
+- `EVAL_BATCH_SIZE=<N>`：评估 batch 大小（默认 `1`）
+- `CAM_PROFILE=low|high|ultra`：叠加相机配置；设为空表示不叠加
 
 ---
 
@@ -205,9 +213,11 @@ The script reports **cosine similarity** and **relative L2 error** between the P
 Enable real-time visualisation during training with [Rerun](https://rerun.io):
 
 ```bash
-python main_cuda.py $(cat configs/paper_final_full.args) \
-    --vis_enable --vis_backend rerun --vis_spawn
+bash run.sh
 ```
+
+`run.sh` reads `configs/paper_final_full.args` (plus optional camera profile overlay).  
+If you need live viewer output, make sure visualization flags are enabled in the active args.
 
 The viewer shows:
 - `student_3d` — 3-D world with obstacles, drone body frame, and full trajectory
@@ -224,21 +234,15 @@ python rerun_vis.py
 
 ## Evaluation
 
-Download the simulation validation environment from the original [DiffPhysDrone releases page](https://github.com/HenryHuYu/DiffPhysDrone).
-
-Launch the simulator:
+Use the repository default evaluation entry:
 
 ```bash
-cd <path to multi-agent code supplementary>
-./LinuxNoEditor/Blocks.sh -ResX=896 -ResY=504 -windowed -WinX=512 -WinY=304 \
-    -settings=$PWD/settings.json
+bash eval.sh
 ```
 
-Evaluate a trained checkpoint:
+All evaluation parameters are read from `configs/paper_final_full.args` (with optional camera profile overlay in `eval.sh`).
 
-```bash
-python eval.py --resume <path to checkpoint> --target_speed 2.5
-```
+If needed, override runtime variables directly when launching, e.g. checkpoint path / episode count / batch size.
 
 ---
 
