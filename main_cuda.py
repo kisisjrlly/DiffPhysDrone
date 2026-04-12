@@ -24,8 +24,7 @@ from trainer import train
 
 def main():
     # ── 1. Parse arguments & validate ────────────────────────────────────
-    args, sensor_flags = parse_args()
-    sf = sensor_flags
+    args = parse_args()
 
     # ── 2. Device setup ──────────────────────────────────────────────────
     device = torch.device('cuda')
@@ -55,35 +54,28 @@ def main():
         print(f"{k:<30}: {v}")
     print(f"{'checkpoint_dir':<30}: {checkpoint_dir}")
     print("=" * 75 + "\n")
-    print_runtime_mode(args, sf)
+    print_runtime_mode(args)
 
     # ── 4. Create environments ───────────────────────────────────────────
-    env_train = build_env(args.batch_size, args, sf, device)
+    env_train = build_env(args.batch_size, args, device)
     env_full = env_train
     if (args.tbptt_enable and args.hybrid_full_bptt_every > 0
             and args.hybrid_full_bptt_batch_size > 0
             and args.hybrid_full_bptt_batch_size != args.batch_size):
-        env_full = build_env(args.hybrid_full_bptt_batch_size, args, sf, device)
+        env_full = build_env(args.hybrid_full_bptt_batch_size, args, device)
         print(f"[info] 混合调度启用：完整BPTT每 {args.hybrid_full_bptt_every} 轮一次，batch={args.hybrid_full_bptt_batch_size}")
-    if sf['use_depth_only']:
-        print(f"[info] depth-only render size: {int(env_train.width)}x{int(env_train.height)}")
-
     # ── 5. Create model ──────────────────────────────────────────────────
     obs_dim = 7 if args.no_odom else 10
-    main_channels = 1
-    in_channels = main_channels + (1 if sf['use_depth'] else 0)
     model = Model(
         obs_dim, 6,
-        include_camera_state_in_obs=sf['effective_include_camera_state'],
-        in_channels=in_channels,
+        include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=args.policy_output_intent,
         intent_dim=9,
-        main_in_channels=main_channels,
-        enable_camera_head=sf['use_camera_control'],
         depth_nn_width=args.depth_nn_width,
         depth_nn_height=args.depth_nn_height,
         depth_use_pipeline=args.depth_use_pipeline,
-        sensor_mode=args.sensor_mode,
+        depth_min_valid=args.depth_min_valid,
+        depth_max_range=args.depth_max_range,
     ).to(device)
 
     use_amp = bool(args.amp and device.type == 'cuda')
@@ -111,7 +103,7 @@ def main():
     sched = CosineAnnealingLR(optim, estimate_optimizer_steps(args), args.lr * 0.01)
 
     # ── 9. Train ─────────────────────────────────────────────────────────
-    train(args, sensor_flags, model, env_train, env_full,
+    train(args, model, env_train, env_full,
           optim, sched, scaler, vis, checkpoint_dir, device)
 
 

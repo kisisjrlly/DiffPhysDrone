@@ -8,16 +8,16 @@ set -euo pipefail
 export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 
 # 设置要运行的任务名称 (Set the task to run)
-# 可通过环境变量覆盖，例如：TASK=paper_intent_lqr bash run.sh
+# 可通过环境变量覆盖，例如：TASK=paper_ablate_diff_depth bash run.sh
 task=${TASK:-paper_final_full}
 
 # 可选相机档位叠加配置：
 #   CAM_PROFILE=low|high|ultra
 # 示例：
 #   TASK=paper_final_full CAM_PROFILE=ultra bash run.sh
-# 默认使用 high（吞吐与保真折中）；若要严格遵循任务配置，请显式传空 CAM_PROFILE。
-cam_profile=${CAM_PROFILE:-low}
-# cam_profile=${CAM_PROFILE:-low}
+# diff_depth-only 分支默认不再隐式叠加相机 profile；
+# 若需要额外 profile，请显式传入 CAM_PROFILE=low|high|ultra。
+cam_profile=${CAM_PROFILE:-}
 
 # 日志输出模式:
 # - LOG_TO_FILE=1 (默认): 输出到 logs/<task>-<time>.log
@@ -26,6 +26,18 @@ cam_profile=${CAM_PROFILE:-low}
 #   LOG_TO_FILE=1 bash run.sh
 #   LOG_TO_FILE=0 bash run.sh
 log_to_file=${LOG_TO_FILE:-1}
+
+if [ -n "${PYTHON_BIN:-}" ]; then
+	py_bin="$PYTHON_BIN"
+elif [ -n "${CONDA_PREFIX:-}" ] && [ -x "${CONDA_PREFIX}/bin/python" ]; then
+	py_bin="${CONDA_PREFIX}/bin/python"
+elif [ -x "${HOME}/miniconda3/envs/mappo-mpc/bin/python" ]; then
+	py_bin="${HOME}/miniconda3/envs/mappo-mpc/bin/python"
+elif command -v python >/dev/null 2>&1; then
+	py_bin="python"
+else
+	py_bin="python3"
+fi
 
 cfg_file="configs/${task}.args"
 if [ ! -f "$cfg_file" ]; then
@@ -65,16 +77,22 @@ done
 
 echo "using config files: ${cfg_files[*]}"
 
+if ! command -v "$py_bin" >/dev/null 2>&1; then
+	echo "[error] python executable not found: $py_bin"
+	echo "        set PYTHON_BIN=/path/to/python if needed"
+	exit 1
+fi
+
 # CUDA 显存分配器：降低碎片导致的 OOM 概率（不改变训练配置/模型）
 # 注：某些 PyTorch/CUDA 组合下 expandable_segments 可能触发内部断言，默认不开启。
 # export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"max_split_size_mb:128,garbage_collection_threshold:0.8"}
 
 
 if [ "$log_to_file" = "1" ]; then
-	python -u main_cuda.py $cfg_args > "$log_file" 2>&1
+	"$py_bin" -u main_cuda.py $cfg_args > "$log_file" 2>&1
 elif [ "$log_to_file" = "0" ]; then
-	python -u main_cuda.py $cfg_args > res.log 2>&1
-	# python -u main_cuda.py $cfg_args
+	"$py_bin" -u main_cuda.py $cfg_args > res.log 2>&1
+	# "$py_bin" -u main_cuda.py $cfg_args
 else
 	echo "[error] invalid LOG_TO_FILE=$log_to_file (expected 0 or 1)"
 	exit 1

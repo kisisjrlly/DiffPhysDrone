@@ -57,8 +57,6 @@ def run_one(
     impl: str,
     seed: int,
     batch_size: int,
-    imx_w: int,
-    imx_h: int,
     depth_w: int,
     depth_h: int,
     loss_mode: str,
@@ -72,28 +70,20 @@ def run_one(
     device = torch.device("cuda")
     env = Env(
         batch_size=batch_size,
-        width=imx_w,
-        height=imx_h,
+        width=depth_w,
+        height=depth_h,
         grad_decay=0.4,
         device=device,
         single=True,
-        depth_width=depth_w,
-        depth_height=depth_h,
-        diff_sensor_impl={"camera_luma": "python", "diff_depth": impl},
+        diff_sensor_impl={"diff_depth": impl},
     )
 
     power = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
     exposure = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
     gain = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
 
-    depth, conf = env.render_diff_depth(power, exposure, gain)
-
-    if loss_mode == "conf":
-        loss = conf.mean()
-    elif loss_mode == "depth":
-        loss = depth.mean()
-    else:
-        loss = depth.mean() + conf.mean()
+    depth = env.render_diff_depth(power, exposure, gain)
+    loss = depth.mean()
 
     loss.backward()
 
@@ -111,12 +101,10 @@ def main() -> None:
     parser.add_argument("--repo_root", type=str, default=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--imx_width", type=int, default=320)
-    parser.add_argument("--imx_height", type=int, default=240)
     parser.add_argument("--depth_width", type=int, default=64)
     parser.add_argument("--depth_height", type=int, default=48)
-    parser.add_argument("--loss_mode", type=str, default="conf", choices=["conf", "depth", "both"],
-                        help="conf: 无噪声路径更稳定；both: 与训练更接近")
+    parser.add_argument("--loss_mode", type=str, default="depth", choices=["depth"],
+                        help="当前仅比较深度主输出的梯度一致性")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -128,8 +116,6 @@ def main() -> None:
         impl="python",
         seed=args.seed,
         batch_size=args.batch_size,
-        imx_w=args.imx_width,
-        imx_h=args.imx_height,
         depth_w=args.depth_width,
         depth_h=args.depth_height,
         loss_mode=args.loss_mode,
@@ -141,8 +127,6 @@ def main() -> None:
         impl="cuda",
         seed=args.seed,
         batch_size=args.batch_size,
-        imx_w=args.imx_width,
-        imx_h=args.imx_height,
         depth_w=args.depth_width,
         depth_h=args.depth_height,
         loss_mode=args.loss_mode,
@@ -168,7 +152,7 @@ def main() -> None:
         cu_ok = bool(torch.isfinite(g_cu).all().item())
         print(f"{k:<11}| {cos:>10.6f} | {rel:>10.6f} | {py_mean:>12.6e} | {cu_mean:>12.6e} | {py_ok}/{cu_ok}")
 
-    print("\n[hint] 建议先看 cos_sim 是否接近 1，再看 rel_err；若 loss_mode=both，随机噪声会放大差异。")
+    print("\n[hint] 建议先看 cos_sim 是否接近 1，再看 rel_err。")
 
 
 if __name__ == "__main__":

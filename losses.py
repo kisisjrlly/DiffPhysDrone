@@ -2,12 +2,10 @@
 统一的损失函数模块。
 消除 Teacher 阶段、Student TBPTT chunk、Student 完整 BPTT 之间的重复代码。
 """
-from typing import Optional
-
 import torch
 import torch.nn.functional as F
 
-from camera_semantics import CameraSemantics
+from rollout_ops import diff_depth_exposure_to_time
 
 
 def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int = 30):
@@ -85,68 +83,61 @@ def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
     }
 
 
-def compute_camera_losses(cam_hist, cam_fov_seq, cam_exp_seq, cam_iso_seq, speed_seq,
-                          use_diff_depth, enable_camera_quality_loss,
-                          cam_sem: Optional[CameraSemantics] = None):
-    """计算所有与 相机控制/光学 相关的损失项。
+def _infer_loss_device(*items):
+    for item in items:
+        if isinstance(item, torch.Tensor):
+            return item.device
+    return torch.device('cpu')
 
-    Returns:
-        dict 包含: loss_cam_smooth, loss_fov_reg, loss_cam_range,
-                   loss_blur, loss_noise, loss_diff_depth_power, loss_diff_depth_blur
-    """
-    device = speed_seq.device if isinstance(speed_seq, torch.Tensor) else cam_exp_seq.device
+
+def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq,
+                          fill_rate_seq=None, min_fill_rate=0.18,
+                          camera_semantics=None):
+    """计算 diff_depth-only 分支的相机控制损失。"""
+    device = _infer_loss_device(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq)
     result = {
         'loss_cam_smooth': torch.zeros((), device=device),
-        'loss_fov_reg': torch.zeros((), device=device),
+        'loss_power_reg': torch.zeros((), device=device),
         'loss_cam_range': torch.zeros((), device=device),
-        'loss_blur': torch.zeros((), device=device),
-        'loss_noise': torch.zeros((), device=device),
         'loss_diff_depth_power': torch.zeros((), device=device),
         'loss_diff_depth_blur': torch.zeros((), device=device),
+        'loss_diff_depth_noise': torch.zeros((), device=device),
+        'loss_diff_depth_fill': torch.zeros((), device=device),
     }
 
     # 相机平滑度与正则化
     if cam_hist is not None and cam_hist.shape[0] > 1:
         cam_diff = cam_hist.diff(1, 0)
         result['loss_cam_smooth'] = cam_diff.pow(2).mean()
-        result['loss_fov_reg'] = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
+        result['loss_power_reg'] = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
         result['loss_cam_range'] = (cam_hist - 0.5).pow(2).mean()
 
-    # 光学损失
-    if cam_exp_seq is not None:
-        if use_diff_depth:
-            result['loss_diff_depth_power'] = cam_fov_seq.pow(2).mean()
-            result['loss_diff_depth_blur'] = (speed_seq * cam_exp_seq).mean()
-        elif enable_camera_quality_loss:
-            sem = cam_sem if cam_sem is not None else CameraSemantics()
-            exp_phys = torch.as_tensor(
-                sem.exposure_to_time(cam_exp_seq),
-                device=cam_exp_seq.device,
-                dtype=cam_exp_seq.dtype,
-            )
-            eff_f = 1.0 / cam_fov_seq.clamp(min=0.1)
-            result['loss_blur'] = (speed_seq.pow(2) * exp_phys.pow(2) * eff_f.pow(2)).mean()
-            iso_gain = torch.as_tensor(
-                sem.iso_to_gain(cam_iso_seq),
-                device=cam_iso_seq.device,
-                dtype=cam_iso_seq.dtype,
-            )
-            noise_sigma = sem.shot_noise_base * iso_gain / exp_phys.clamp_min(1e-3)
-            result['loss_noise'] = noise_sigma.pow(2).mean()
+    # diff_depth 光学损失
+    if exposure_seq is not None:
+        exp_phys = diff_depth_exposure_to_time(
+            exposure_seq,
+            camera_semantics=camera_semantics,
+        )
+        result['loss_diff_depth_power'] = power_seq.pow(2).mean()
+        result['loss_diff_depth_blur'] = (speed_seq * exp_phys).pow(2).mean()
+        result['loss_diff_depth_noise'] = gain_seq.pow(2).mean()
+    if fill_rate_seq is not None:
+        fill_gap = F.relu(float(min_fill_rate) - fill_rate_seq)
+        result['loss_diff_depth_fill'] = fill_gap.pow(2).mean()
 
     return result
 
 
 def compute_distill_loss(raw_act_history, raw_intent_history, raw_cam_history,
                          u_star, y_star, u_star_cam,
-                         start_idx=None, end_idx=None):
+                         start_idx=None, end_idx=None, device=None):
     """计算蒸馏损失。
 
     如果提供了 start_idx/end_idx，则只使用对应的 slice（用于 TBPTT chunk）。
     如果不提供，则使用全部数据（用于完整 BPTT）。
     """
-    device = None
-    loss = torch.tensor(0.0)
+    loss = torch.tensor(0.0, device=device) if device is not None else torch.tensor(0.0)
+    target_device = device
 
     if y_star is not None and len(raw_intent_history) > 0:
         if start_idx is not None:
@@ -155,8 +146,8 @@ def compute_distill_loss(raw_act_history, raw_intent_history, raw_cam_history,
         else:
             student = torch.stack(raw_intent_history)
             teacher = torch.stack(y_star)
-        device = student.device
-        loss = loss.to(device)
+        target_device = student.device
+        loss = loss.to(target_device)
         loss = loss + F.mse_loss(student, teacher)
     elif u_star is not None and len(raw_act_history) > 0:
         if start_idx is not None:
@@ -165,8 +156,8 @@ def compute_distill_loss(raw_act_history, raw_intent_history, raw_cam_history,
         else:
             student = torch.stack(raw_act_history)
             teacher = torch.stack(u_star)
-        device = student.device
-        loss = loss.to(device)
+        target_device = student.device
+        loss = loss.to(target_device)
         loss = loss + F.mse_loss(student, teacher)
 
     if u_star_cam is not None and len(raw_cam_history) > 0:
@@ -176,13 +167,13 @@ def compute_distill_loss(raw_act_history, raw_intent_history, raw_cam_history,
         else:
             student_cam = torch.stack(raw_cam_history)
             teacher_cam = torch.stack(u_star_cam)
-        if device is None:
-            device = student_cam.device
-        loss = loss.to(device)
+        if target_device is None:
+            target_device = student_cam.device
+        loss = loss.to(target_device)
         loss = loss + F.mse_loss(student_cam, teacher_cam)
 
-    if device is not None:
-        loss = loss.to(device)
+    if target_device is not None:
+        loss = loss.to(target_device)
     return loss
 
 
@@ -220,13 +211,13 @@ def aggregate_loss(physics_losses, camera_losses, args,
         + args.coef_ground_affinity * physics_losses['loss_ground']
         + args.coef_v_pred * loss_v_pred
         + args.coef_cam_smooth * camera_losses['loss_cam_smooth']
-        + args.coef_fov_reg * camera_losses['loss_fov_reg']
+        + args.coef_power_reg * camera_losses['loss_power_reg']
         + args.coef_cam_range * camera_losses['loss_cam_range']
         + args.coef_tilt * loss_tilt
-        + args.coef_blur * camera_losses['loss_blur']
-        + args.coef_noise * camera_losses['loss_noise']
         + args.coef_diff_depth_power * camera_losses['loss_diff_depth_power']
         + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
+        + args.coef_diff_depth_noise * camera_losses['loss_diff_depth_noise']
+        + args.coef_diff_depth_fill * camera_losses['loss_diff_depth_fill']
     )
 
     if args.enable_teacher_student_training and distill_coef_iter is not None:
@@ -245,13 +236,13 @@ def aggregate_loss(physics_losses, camera_losses, args,
         'loss_ground_affinity': physics_losses['loss_ground'],
         'loss_v_pred': loss_v_pred,
         'loss_cam_smooth': camera_losses['loss_cam_smooth'],
-        'loss_fov_reg': camera_losses['loss_fov_reg'],
+        'loss_power_reg': camera_losses['loss_power_reg'],
         'loss_cam_range': camera_losses['loss_cam_range'],
         'loss_tilt': loss_tilt,
-        'loss_blur': camera_losses['loss_blur'],
-        'loss_noise': camera_losses['loss_noise'],
         'loss_diff_depth_power': camera_losses['loss_diff_depth_power'],
         'loss_diff_depth_blur': camera_losses['loss_diff_depth_blur'],
+        'loss_diff_depth_noise': camera_losses['loss_diff_depth_noise'],
+        'loss_diff_depth_fill': camera_losses['loss_diff_depth_fill'],
         'loss_distill': loss_distill,
     }
 

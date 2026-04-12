@@ -1,7 +1,6 @@
 import torch
 import quadsim_cuda
 import os
-from typing import Tuple
 
 
 # Phase 1 Optimization: Remove Python-layer redundant synchronization
@@ -83,142 +82,7 @@ class DiffRenderFunction(torch.autograd.Function):
 diff_render = DiffRenderFunction.apply
 
 
-class DiffRenderYuvYCoreFunction(torch.autograd.Function):
-    """
-    Y 通道可微渲染核心函数。
-    说明：
-    - 始终返回 (y, depth_aux)
-    - depth_aux 为 detached 张量，不参与梯度回传
-    - 需要仅 y 输出时，通过下方包装函数 `diff_render_yuv_y` 取第一项
-    """
-    @staticmethod
-    def forward(ctx, fov_x_half_tan, exposure, iso,
-                R_cam, pos, balls, cyl, cyl_h, voxels,
-                n_drones_per_group, height, width,
-                cam_light_dir, cam_ambient, cam_dir_intensity,
-                cam_fog_beta, cam_airlight,
-                cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-                cam_dist_k1, cam_dist_k2, cam_flare_strength,
-                cam_gamma, cam_prnu, cam_dsnu,
-                cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-                cam_profile_mask,
-                cam_vignette_a, cam_vignette_b,
-                cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-                cam_exposure_t_min, cam_exposure_t_span,
-                cam_exposure_eff_min, cam_exposure_eff_max,
-                cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma):
-        fov_x_half_tan = fov_x_half_tan.contiguous()
-        exposure = exposure.contiguous()
-        iso = iso.contiguous()
-        R_cam = R_cam.contiguous()
-        pos = pos.contiguous()
-        out = quadsim_cuda.render_diff_yuv_y_forward(
-            fov_x_half_tan, exposure, iso,
-            R_cam, pos, balls, cyl, cyl_h, voxels,
-            n_drones_per_group, height, width,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            int(cam_profile_mask),
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma)
-        if isinstance(out, (list, tuple)) and len(out) >= 3:
-            y, depth_raw, normals = out[0], out[1], out[2]
-        elif isinstance(out, (list, tuple)) and len(out) >= 2:
-            y, depth_raw = out[0], out[1]
-            normals = None
-        else:
-            raise RuntimeError("render_diff_yuv_y_forward 返回值异常，期望至少包含 (y, depth_raw)")
-        if normals is None:
-            normals = torch.zeros((depth_raw.shape[0], 3, depth_raw.shape[1], depth_raw.shape[2]), device=depth_raw.device, dtype=depth_raw.dtype)
-        ctx.save_for_backward(
-            depth_raw, fov_x_half_tan, exposure, iso,
-            normals,
-            R_cam, pos,
-            balls, cyl, cyl_h, voxels,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t)
-        ctx.n_drones_per_group = int(n_drones_per_group)
-        ctx.height = int(height)
-        ctx.width = int(width)
-        ctx.cam_profile_mask = int(cam_profile_mask)
-        ctx.cam_vignette_a = float(cam_vignette_a)
-        ctx.cam_vignette_b = float(cam_vignette_b)
-        ctx.cam_black_level = float(cam_black_level)
-        ctx.cam_sharpen_amount = float(cam_sharpen_amount)
-        ctx.cam_base_gain = float(cam_base_gain)
-        ctx.cam_motion_blur_gain = float(cam_motion_blur_gain)
-        ctx.cam_exposure_t_min = float(cam_exposure_t_min)
-        ctx.cam_exposure_t_span = float(cam_exposure_t_span)
-        ctx.cam_exposure_eff_min = float(cam_exposure_eff_min)
-        ctx.cam_exposure_eff_max = float(cam_exposure_eff_max)
-        ctx.cam_iso_gain_base = float(cam_iso_gain_base)
-        ctx.cam_iso_gain_scale = float(cam_iso_gain_scale)
-        ctx.cam_iso_gain_gamma = float(cam_iso_gain_gamma)
-        return y, depth_raw.detach()
-
-    @staticmethod
-    def backward(ctx, grad_output, grad_depth_aux):
-        (depth_raw, fov, exposure, iso, normals,
-         R_cam, pos,
-         balls, cyl, cyl_h, voxels,
-         cam_light_dir, cam_ambient, cam_dir_intensity,
-         cam_fog_beta, cam_airlight,
-         cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-         cam_dist_k1, cam_dist_k2, cam_flare_strength,
-         cam_gamma, cam_prnu, cam_dsnu,
-         cam_prev_y, cam_use_rolling, v, cam_ae_log_t) = ctx.saved_tensors
-
-        need_grad_fov = bool(ctx.needs_input_grad[0])
-        need_grad_exposure = bool(ctx.needs_input_grad[1])
-        need_grad_iso = bool(ctx.needs_input_grad[2])
-
-        grad_fov, grad_exposure, grad_iso = quadsim_cuda.render_diff_yuv_y_backward(
-            grad_output.contiguous(),
-            depth_raw,
-            fov,
-            exposure,
-            iso,
-            normals,
-            R_cam, pos,
-            balls, cyl, cyl_h, voxels,
-            ctx.n_drones_per_group, ctx.height, ctx.width,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            ctx.cam_profile_mask,
-            ctx.cam_vignette_a, ctx.cam_vignette_b,
-            ctx.cam_black_level, ctx.cam_sharpen_amount, ctx.cam_base_gain, ctx.cam_motion_blur_gain,
-            ctx.cam_exposure_t_min, ctx.cam_exposure_t_span,
-            ctx.cam_exposure_eff_min, ctx.cam_exposure_eff_max,
-            ctx.cam_iso_gain_base, ctx.cam_iso_gain_scale, ctx.cam_iso_gain_gamma,
-            need_grad_fov, need_grad_exposure, need_grad_iso)
-        _maybe_sync_backward()
-        return (
-            grad_fov if need_grad_fov else None,
-            grad_exposure if need_grad_exposure else None,
-            grad_iso if need_grad_iso else None,
-            *([None] * 41),
-        )
-
-
-diff_render_yuv_y_with_depth_aux = DiffRenderYuvYCoreFunction.apply
-
-
-class DiffRenderActiveTofFunction(torch.autograd.Function):
+class DiffRenderDiffDepthFunction(torch.autograd.Function):
     """
     Diff depth 可微渲染（CUDA 路径）。
     """
@@ -226,7 +90,7 @@ class DiffRenderActiveTofFunction(torch.autograd.Function):
     def forward(ctx, fov_x_half_tan, power, exposure, gain, v,
                 R_cam, pos, balls, cyl, cyl_h, voxels,
                 n_drones_per_group, height, width, max_range):
-        out = quadsim_cuda.render_active_tof_forward(
+        out = quadsim_cuda.render_diff_depth_forward(
             fov_x_half_tan.contiguous(),
             power.contiguous(),
             exposure.contiguous(),
@@ -237,28 +101,28 @@ class DiffRenderActiveTofFunction(torch.autograd.Function):
             balls, cyl, cyl_h, voxels,
             int(n_drones_per_group), int(height), int(width), float(max_range),
         )
-        noisy_depth, conf = out[0], out[1]
+        noisy_depth, quality = out[0], out[1]
         ctx.save_for_backward(
-            noisy_depth, conf,
+            noisy_depth, quality,
             fov_x_half_tan, power, exposure, gain, v,
             R_cam, pos, balls, cyl, cyl_h, voxels)
         ctx.n_drones_per_group = int(n_drones_per_group)
         ctx.height = int(height)
         ctx.width = int(width)
         ctx.max_range = float(max_range)
-        return noisy_depth, conf
+        return noisy_depth, quality
 
     @staticmethod
-    def backward(ctx, grad_noisy_depth, grad_conf):
-        (noisy_depth, conf,
+    def backward(ctx, grad_noisy_depth, grad_quality):
+        (noisy_depth, quality,
          fov_x_half_tan, power, exposure, gain, v,
          R_cam, pos, balls, cyl, cyl_h, voxels) = ctx.saved_tensors
 
         grad_noisy_depth = grad_noisy_depth.contiguous()
-        grad_conf = grad_conf.contiguous()
+        grad_quality = grad_quality.contiguous()
 
-        grad_fov, grad_power, grad_exposure, grad_gain = quadsim_cuda.render_active_tof_backward(
-            grad_noisy_depth, grad_conf, noisy_depth, conf,
+        grad_fov, grad_power, grad_exposure, grad_gain = quadsim_cuda.render_diff_depth_backward(
+            grad_noisy_depth, grad_quality, noisy_depth, quality,
             fov_x_half_tan, power, exposure, gain, v,
             R_cam, pos, balls, cyl, cyl_h, voxels,
             int(ctx.n_drones_per_group), int(ctx.height), int(ctx.width), float(ctx.max_range),
@@ -270,4 +134,4 @@ class DiffRenderActiveTofFunction(torch.autograd.Function):
         )
 
 
-diff_render_diff_depth = DiffRenderActiveTofFunction.apply
+diff_render_diff_depth = DiffRenderDiffDepthFunction.apply

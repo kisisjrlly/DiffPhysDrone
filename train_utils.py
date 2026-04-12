@@ -9,14 +9,13 @@ from collections import defaultdict
 import math
 import os
 from random import normalvariate
-from typing import Optional
 
 import torch
-import torch.nn.functional as F
 import wandb
 
+from config import OPENING_SCENES
 from env_cuda import Env
-from camera_semantics import CameraSemantics
+from rollout_ops import diff_depth_exposure_to_time
 
 
 # ── Smoothed metric logging ──────────────────────────────────────────────
@@ -24,9 +23,8 @@ from camera_semantics import CameraSemantics
 class MetricSmoother:
     """Accumulates scalar metrics and flushes averaged values to WandB."""
 
-    def __init__(self, sensor_flags: dict, args):
+    def __init__(self, args):
         self._q: dict[str, list[float]] = defaultdict(list)
-        self._sf = sensor_flags
         self._args = args
 
     # -- public API used like the old ``smooth_dict`` ---
@@ -45,41 +43,99 @@ class MetricSmoother:
     # -- internal filter (was ``_filter_metrics_by_mode``) --
     def _filter(self, log: dict) -> dict:
         out = dict(log)
-        sf = self._sf
         args = self._args
 
-        cam_keys = {'loss_cam_smooth', 'loss_fov_reg', 'loss_cam_range',
-                     'speed_exposure_corr', 'fov_obstacle_corr', 'power_obstacle_corr'}
-        optical_keys = {'loss_blur', 'loss_noise'}
-        active_keys = {'loss_diff_depth_power', 'loss_diff_depth_blur'}
         wall_keys = {'slit_crossed', 'slit_pass_rate', 'roll_at_wall_deg'}
+        has_opening_scene = bool(getattr(args, 'wall_slit', False) or any(
+            name in OPENING_SCENES for name in getattr(args, 'scenarios', [])
+        ))
 
-        if not sf['use_camera_control']:
-            for k in cam_keys | optical_keys | active_keys:
-                out.pop(k, None)
-        else:
-            if sf['use_diff_depth']:
-                for k in optical_keys:
-                    out.pop(k, None)
-                if 'fov_obstacle_corr' in out and 'power_obstacle_corr' not in out:
-                    out['power_obstacle_corr'] = out.pop('fov_obstacle_corr')
-            else:
-                for k in active_keys:
-                    out.pop(k, None)
-                if not args.enable_camera_quality_loss:
-                    for k in optical_keys:
-                        out.pop(k, None)
-
-        if not args.wall_slit:
+        if not has_opening_scene:
             for k in wall_keys:
                 out.pop(k, None)
 
-        out['mode/is_depth_only'] = float(sf['use_depth_only'])
-        out['mode/is_camera_luma'] = float(sf['use_camera_luma'])
-        out['mode/use_depth'] = float(sf['use_depth'])
-        out['mode/is_diff_depth'] = float(sf['use_diff_depth'])
-        out['mode/use_camera_control'] = float(sf['use_camera_control'])
+        if len(getattr(args, 'scenarios', ['random_base'])) <= 1 and not getattr(args, 'wall_slit', False):
+            for k in list(out.keys()):
+                if k.startswith('scene/'):
+                    out.pop(k, None)
+
+        active_term_names = {
+            name for name, _, _ in active_loss_term_specs(
+                args,
+                distill_coef_iter=(
+                    float(args.distill_coef)
+                    if getattr(args, 'enable_teacher_student_training', False)
+                    else None
+                ),
+            )
+        }
+        for k in list(out.keys()):
+            if k.startswith('loss_contrib/'):
+                name = k.split('/', 1)[1]
+                if name not in active_term_names:
+                    out.pop(k, None)
+            elif k.startswith('loss_share/'):
+                name = k.split('/', 1)[1]
+                if name == 'physics_total':
+                    if 'distill' not in active_term_names:
+                        out.pop(k, None)
+                elif name not in active_term_names:
+                    out.pop(k, None)
         return out
+
+
+def _coef_enabled(coef: float, eps: float = 1e-12) -> bool:
+    return abs(float(coef)) > eps
+
+
+def active_loss_term_specs(args, distill_coef_iter=None):
+    """Return active loss terms for the current runtime mode and coefficient setup."""
+    specs = []
+
+    def add(name: str, raw_key: str, coef: float):
+        if _coef_enabled(coef):
+            specs.append((name, raw_key, float(coef)))
+
+    add('v', 'loss_v', args.coef_v)
+    add('obj_avoidance', 'loss_obj_avoidance', args.coef_obj_avoidance)
+    add('d_acc', 'loss_d_acc', args.coef_d_acc)
+    add('d_jerk', 'loss_d_jerk', args.coef_d_jerk)
+    add('v_pred', 'loss_v_pred', args.coef_v_pred)
+    add('collide', 'loss_collide', args.coef_collide)
+    add('ground_affinity', 'loss_ground_affinity', args.coef_ground_affinity)
+    add('tilt', 'loss_tilt', args.coef_tilt)
+
+    add('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth)
+    add('power_reg', 'loss_power_reg', args.coef_power_reg)
+    add('cam_range', 'loss_cam_range', args.coef_cam_range)
+    add('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power)
+    add('diff_depth_blur', 'loss_diff_depth_blur', args.coef_diff_depth_blur)
+    add('diff_depth_noise', 'loss_diff_depth_noise', args.coef_diff_depth_noise)
+    add('diff_depth_fill', 'loss_diff_depth_fill', args.coef_diff_depth_fill)
+
+    if getattr(args, 'enable_teacher_student_training', False) and distill_coef_iter is not None:
+        add('distill', 'loss_distill', distill_coef_iter)
+
+    return specs
+
+
+def filter_active_loss_scalars(loss_scalars: dict, args) -> dict:
+    """Keep only the raw loss scalars that are active for the current mode."""
+    if not getattr(args, 'wandb_log_raw_loss_terms', False):
+        return {}
+    out = {}
+    for _, raw_key, _ in active_loss_term_specs(
+        args,
+        distill_coef_iter=(
+            float(args.distill_coef)
+            if getattr(args, 'enable_teacher_student_training', False)
+            else None
+        ),
+        ):
+        if raw_key not in loss_scalars:
+            continue
+        out[f'loss_raw/{raw_key.removeprefix("loss_")}'] = float(loss_scalars[raw_key])
+    return out
 
 
 # ── Periodic tail operations ─────────────────────────────────────────────
@@ -121,12 +177,12 @@ def distill_coef_at_iter(iter_idx: int, args) -> float:
     return float(args.distill_coef) * ratio
 
 
-def teacher_dt_like_student(cam_exposure_mean: float, use_camera: bool,
-                            base_control_freq: float,
-                            cam_sem: Optional[CameraSemantics] = None) -> float:
+def teacher_dt_like_student(cam_exposure_mean: float, base_control_freq: float, camera_semantics=None) -> float:
     base_dt = normalvariate(1 / base_control_freq, 0.1 / base_control_freq)
-    sem = cam_sem if cam_sem is not None else CameraSemantics()
-    exposure_delay = (sem.exposure_to_time(cam_exposure_mean) * 0.01) if use_camera else 0.015
+    exposure_delay = float(diff_depth_exposure_to_time(
+        cam_exposure_mean,
+        camera_semantics=camera_semantics,
+    )) * 0.01
     return float(base_dt + exposure_delay)
 
 
@@ -146,22 +202,13 @@ def estimate_optimizer_steps(args) -> int:
 
 # ── Environment factory ──────────────────────────────────────────────────
 
-def build_env(batch_size: int, args, sensor_flags: dict, device) -> Env:
-    """Create an Env instance from parsed args + sensor flags."""
-    sf = sensor_flags
-    use_depth_only = bool(sf['use_depth_only'])
-    use_depth_aux = bool(sf['use_depth_aux'])
-
-    dw = args.depth_width if args.depth_width is not None else args.imx_width
-    dh = args.depth_height if args.depth_height is not None else args.imx_height
-    dw, dh = int(dw), int(dh)
-
-    # 主相机分辨率固定使用 IMX 配置；深度分辨率通过 depth_width/depth_height 独立控制。
-    render_w = int(args.imx_width)
-    render_h = int(args.imx_height)
+def build_env(batch_size: int, args, device) -> Env:
+    """Create a diff_depth-only Env instance from parsed args."""
+    dw = int(args.depth_width)
+    dh = int(args.depth_height)
 
     return Env(
-        batch_size, render_w, render_h, args.grad_decay, device,
+        batch_size, dw, dh, args.grad_decay, device,
         fov_x_half_tan=args.fov_x_half_tan, single=args.single,
         gate=args.gate, ground_voxels=args.ground_voxels,
         scaffold=args.scaffold, speed_mtp=args.speed_mtp,
@@ -169,19 +216,13 @@ def build_env(batch_size: int, args, sensor_flags: dict, device) -> Env:
         wall_slit=args.wall_slit,
         ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
         ellipsoid_c=args.drone_c if args.ellipsoid_collision else 0.0,
-        depth_width=dw, depth_height=dh,
         camera_preset=args.cam_realism_preset,
-        cam_enable_shadow=args.cam_enable_shadow,
         cam_enable_specular=args.cam_enable_specular,
-        cam_enable_distortion=args.cam_enable_distortion,
-        cam_enable_flare=args.cam_enable_flare,
         cam_enable_motion_blur=args.cam_enable_motion_blur,
-        cam_enable_rolling=args.cam_enable_rolling,
         cam_noise_scale=args.cam_noise_scale,
         cam_blur_scale=args.cam_blur_scale,
         cam_fog_scale=args.cam_fog_scale,
         cam_lighting_scale=args.cam_lighting_scale,
-        cam_ae_target=args.cam_ae_target,
         cam_exposure_t_min=args.cam_exposure_t_min,
         cam_exposure_t_span=args.cam_exposure_t_span,
         cam_exposure_eff_min=args.cam_exposure_eff_min,
@@ -190,6 +231,9 @@ def build_env(batch_size: int, args, sensor_flags: dict, device) -> Env:
         cam_iso_gain_scale=args.cam_iso_gain_scale,
         cam_iso_gain_gamma=args.cam_iso_gain_gamma,
         cam_shot_noise_base=args.cam_shot_noise_base,
+        depth_min_valid=args.depth_min_valid,
+        depth_max_range=args.depth_max_range,
+        scenarios=args.scenarios,
         diff_sensor_impl=args.diff_sensor_impl,
     )
 

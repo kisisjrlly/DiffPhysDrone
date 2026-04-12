@@ -16,7 +16,6 @@ setup(
         CUDAExtension('quadsim_cuda', [
             'quadsim.cpp',        # C++ 接口绑定文件 (C++ interface binding file)
             'quadsim_kernel.cu',  # CUDA 渲染和碰撞检测内核 (CUDA rendering and collision kernels)
-            'camera_fused_kernel.cu', # CUDA 融合相机 ISP kernel
             'dynamics_kernel.cu', # CUDA 物理动力学内核 (CUDA physics dynamics kernels)
         ]),
     ],

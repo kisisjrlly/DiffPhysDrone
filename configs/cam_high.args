@@ -5,18 +5,13 @@
 # ==========================================================
 
 --cam_realism_preset high
---cam_enable_shadow
 --cam_enable_specular
---cam_enable_distortion
---no-cam_enable_flare
 --no-cam_enable_motion_blur
---no-cam_enable_rolling
 
 --cam_noise_scale 0.9
 --cam_blur_scale 0.85
 --cam_fog_scale 0.9
 --cam_lighting_scale 1.0
---cam_ae_target 0.42
 
 # Camera semantic mapping constants
 --cam_exposure_t_min 0.25

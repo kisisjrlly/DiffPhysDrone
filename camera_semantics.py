@@ -30,12 +30,26 @@ class CameraSemantics:
     # noise model base
     shot_noise_base: float = 0.03
 
-    def exposure_to_time(self, exposure01: TensorOrFloat) -> TensorOrFloat:
+    def exposure_to_command(self, exposure01: TensorOrFloat) -> TensorOrFloat:
         if isinstance(exposure01, torch.Tensor):
             ex = exposure01.clamp(0.0, 1.0)
             return self.exposure_t_min + self.exposure_t_span * ex
         ex = min(max(float(exposure01), 0.0), 1.0)
         return self.exposure_t_min + self.exposure_t_span * ex
+
+    def exposure_to_effective(self, exposure01: TensorOrFloat) -> TensorOrFloat:
+        if isinstance(exposure01, torch.Tensor):
+            return self.exposure_to_command(exposure01).clamp(
+                self.exposure_eff_min,
+                self.exposure_eff_max,
+            )
+        return min(
+            max(float(self.exposure_to_command(exposure01)), self.exposure_eff_min),
+            self.exposure_eff_max,
+        )
+
+    def exposure_to_time(self, exposure01: TensorOrFloat) -> TensorOrFloat:
+        return self.exposure_to_effective(exposure01)
 
     def iso_to_gain(self, iso01: TensorOrFloat) -> TensorOrFloat:
         if isinstance(iso01, torch.Tensor):

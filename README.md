@@ -1,302 +1,75 @@
-# DiffPhysDrone — Differentiable Perception Extension
+# DiffPhysDrone diff_depth-only
 
-> Built upon **[DiffPhysDrone](https://github.com/HenryHuYu/DiffPhysDrone)** (*Learning Vision-based Agile Flight via Differentiable Physics*, Nature Machine Intelligence 2025).  
-> This repository extends the original differentiable physics simulator with a **Differentiable Perception** (可微感知) module, making the entire sensing-to-control pipeline end-to-end differentiable.
+本分支已经收敛为 `diff_depth` 的单主线版本。
 
----
+## Scope
 
-## Overview
+- 仅支持 `diff_depth`
+- 传感器控制语义固定为 `power / exposure / gain`
+- 策略输入固定为单通道深度
 
-The original DiffPhysDrone provides a CUDA-accelerated differentiable physics engine for agile drone flight. This fork goes one layer deeper and wraps the sensor stack in fully differentiable PyTorch operators, so **gradients can flow from the loss all the way back through the sensor parameters** — just as they flow through the physics.
+## Current Pipeline
 
-Currently implemented differentiable sensors:
+1. `config.py`
+   只保留 `diff_depth` 主线参数
+2. `env_cuda.py`
+   使用 `render_diff_depth(power, exposure, gain)` 生成可微深度
+3. `model.py`
+   只接收 `depth_obs`
+4. `rollout_ops.py`
+   只维护 `power / exposure / gain` 更新和 `diff_depth` 渲染
+5. `trainer.py`
+   只统计 `diff_depth` 相关损失与指标
+6. `eval.py`
+   只走 `diff_depth` 推理链路
 
-| Sensor | Parameters Differentiable via Backprop |
-|---|---|
-| **Differentiable RGB Camera** (可微普通相机) | FOV, Exposure, ISO/Gain |
-| **Differentiable Active ToF Camera** (可微深度相机) | Transmit Power, Exposure time, Receiver Gain |
+## Main Losses
 
-Policy-controlled sensor parameters are **3D** in current code (no focus head):
+- `loss_v`
+- `loss_obj_avoidance`
+- `loss_collide`
+- `loss_d_acc`
+- `loss_d_jerk`
+- `loss_cam_smooth`
+- `loss_power_reg`
+- `loss_cam_range`
+- `loss_diff_depth_power`
+- `loss_diff_depth_blur`
+- `loss_diff_depth_noise`
 
-| `sensor_mode` | Policy output channels (1,2,3) | Physical meaning |
-|---|---|---|
-| `camera_luma_plus_depth` / `camera_luma` | `(fov, exposure, iso)` | 主相机视场、曝光、增益 |
-| `active_depth` | `(power, exposure, gain)` | 主动深度发射功率、曝光、接收增益 |
+## Main Metrics
 
-More sensor types and models are planned for future releases.
+- `diff_depth_fill_rate`
+- `diff_depth_hole_rate`
+- `speed_exposure_corr`
+- `power_obstacle_corr`
 
+## Running
 
----
-
-## Visualization
-
-The image below shows a live training session visualised with [Rerun](https://rerun.io). The left panel shows the 3-D scene with obstacles (orange spheres), the drone trajectory (yellow), and the AABB collision field. The right top panel (`main_y`) shows the grayscale luminance channel rendered by the **differentiable RGB camera**. The right bottom panel (`tof_depth`) shows the depth map rendered by the **differentiable Active ToF camera**.
-
-![Differentiable Perception Visualization](./assets/yuv_tof.png)
-
-> **Note**: Save the screenshot to `assets/visualization.png` in the repository root.
-
----
-
-## Differentiable Sensor Design
-
-### 1. Differentiable RGB Camera
-
-The depth-aligned camera renders a grayscale luminance image (`Y` channel) through a **multi-layer differentiable photometric pipeline**:
-
-1. **Geometry** — depth + approximate surface normals from Sobel derivatives
-2. **Lighting** — ambient + directional light, distance attenuation, shadow approximation
-3. **Reflectance** — Lambert diffuse + optional specular (material-class priors per object type)
-4. **Lens** — vignetting, PSF blur (σ linked to focus/motion state), optional radial distortion and flare
-5. **Sensor** — exposure integration, shot/read noise (Poisson–Gaussian approximation), PRNU/DSNU pattern
-6. **ISP** — black-level correction, gain, tone-mapping (Reinhard / softplus), gamma, optional sharpening
-7. **Temporal AE** — auto-exposure state-machine with PI controller tracking a target luminance
-
-Camera/sensor control parameters are 3D and are predicted with `--camera_action_mode absolute` or `--camera_action_mode incremental`:
-
-- `absolute`: 输出绝对值（`[0,1]` 域）
-- `incremental`: 输出增量（`[-1,1]` 域），按 `--cam_delta_scale` 累积更新
-
-CUDA-backed differentiable FOV rendering is provided via `DiffRenderFunction` (wrapping `quadsim_cuda.render_diff_fov`).
-
-**Camera-related loss terms** (active when `--camera_action_mode` is not `off`):
-
-| Loss | Purpose |
-|---|---|
-| `loss_cam_smooth` | Penalises rapid parameter changes between time-steps |
-| `loss_fov_reg` | Soft-anchors the first control channel near default (`camera_luma*`: FOV; `active_depth`: power) |
-| `loss_cam_range` | Keeps all parameters near the sigmoid centre to prevent gradient vanishing |
-| `loss_blur` | Penalises motion blur: $\mathcal{L}_{blur} \propto \|v\| \cdot t_{exp}$ |
-| `loss_noise` | Penalises sensor noise amplification at high ISO / low exposure |
-
-Enable the full optical-loss set with `--enable_camera_quality_loss`.
-
----
-
-### 2. Differentiable Active ToF Camera
-
-The active Time-of-Flight sensor models the full **optical energy chain** in a differentiable manner, enabling the policy to learn *when* to emit light and *how much energy* to spend.
-
-**Physical model:**
-
-$$E_{recv} \propto \frac{P \cdot t_{exp} \cdot g}{D^2 + \epsilon}$$
-
-$$C = \tanh\!\left(\alpha \cdot E_{recv}\right), \qquad \sigma_{noise}^2 \propto \frac{1}{E_{recv}}$$
-
-| Symbol | Meaning |
-|---|---|
-| $P$ | Transmit power |
-| $t_{exp}$ | Exposure time |
-| $g$ | Receiver gain |
-| $D$ | Per-pixel geometric depth |
-| $C$ | Depth confidence map (output alongside depth) |
-
-Additional physical effects modelled:
-
-- **Motion blur** penalty: $\text{Blur} \propto \|v\| \cdot t_{exp}$ — the policy learns to shorten exposure at high speed.
-- **Reparameterised noise injection**: gradients flow through the stochastic depth noise via a Gaussian reparameterisation of the Poisson process.
-- Active ToF depth is used directly as policy input (single depth channel).
-
-Both a pure **PyTorch backend** (`active_depth=python`) and a custom **CUDA kernel** (`active_depth=cuda`) are available, selectable per-sensor via `--diff_sensor_impl`.
-
----
-
-## Quick Demos (from Original DiffPhysDrone)
-
-### Single Agent Flights
-<table>
-  <tr>
-    <td><img src="./gifs/20ms.gif" alt="GIF 1" width="300"></td>
-    <td><img src="./gifs/fpv_dense.gif" alt="GIF 2" width="300"></td>
-  </tr>
-</table>
-
-### Swarm Tasks
-<table>
-  <tr>
-    <td><img src="./gifs/swap_position.gif" alt="GIF 1" width="300"></td>
-    <td><img src="./gifs/main_task.gif" alt="GIF 2" width="300"></td>
-  </tr>
-</table>
-
----
-
-## Environment Setup
-
-### Python Environment
-
-Tested with:
-
-| Dependency | Version |
-|---|---|
-| Python | 3.9 / 3.11 |
-| PyTorch | 2.2.2 |
-| CUDA | 11.8 |
-
-Other recent PyTorch + CUDA combinations should also work.
-
-### Build CUDA Ops
-
-To build the CUDA operations, run the following command:
-
-```bash
-pip install -e src
-```
-
----
-
-## Running (Current Workflow)
-
-目前仓库默认且正在使用的运行方式只有下面这一套：
-
-- 训练入口：`run.sh`
-- 评估入口：`eval.sh`
-- 主配置文件：`configs/paper_final_full.args`
-
-> 说明：当前阶段其它参数文件与其它启动方式暂不使用，不在本 README 里展开。
-
-### 1) 训练
+训练：
 
 ```bash
 bash run.sh
 ```
 
-默认会读取：
-
-- `configs/paper_final_full.args`
-- `configs/cam_low.args`（由 `CAM_PROFILE=low` 默认叠加）
-
-若你希望**只使用** `paper_final_full.args`（不叠加相机 profile），可将 `CAM_PROFILE` 设为空。
-
-### 2) 评估
+评估：
 
 ```bash
 bash eval.sh
 ```
 
-默认会：
+默认主配置：
 
-- 从 `configs/paper_final_full.args` 读取参数
-- 叠加 `configs/cam_low.args`
-- 使用 `eval.sh` 里指定的 checkpoint
-- 开启可视化并执行 `eval.py`
+- [configs/paper_final_full.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/paper_final_full.args)
 
-可通过环境变量覆盖常用项：
-
-- `CKPT=<path>`：指定评估权重
-- `EVAL_EPISODES=<N>`：评估回合数
-- `EVAL_BATCH_SIZE=<N>`：评估 batch 大小（默认 `1`）
-- `CAM_PROFILE=low|high|ultra`：叠加相机配置；设为空表示不叠加
-
----
-
-## Active ToF Gradient Consistency Check
-
-To verify that the Python and CUDA Active ToF implementations produce consistent gradients for `power`, `exposure`, and `gain`:
+默认不再隐式叠加 `CAM_PROFILE`。如需叠加，请显式传入：
 
 ```bash
-python tools/compare_active_tof_gradients.py --loss_mode conf
+CAM_PROFILE=low bash run.sh
 ```
 
-Options:
+## Notes
 
-- `--loss_mode conf` — stable mode, no stochastic noise in the loss path (recommended)
-- `--loss_mode both` — closer to training loss, but higher variance due to stochastic noise
-- `--batch_size 4` — batch size for the comparison
-
-The script reports **cosine similarity** and **relative L2 error** between the Python and CUDA gradient paths.
-
----
-
-## Live Visualisation
-
-Enable real-time visualisation during training with [Rerun](https://rerun.io):
-
-```bash
-bash run.sh
-```
-
-`run.sh` reads `configs/paper_final_full.args` (plus optional camera profile overlay).  
-If you need live viewer output, make sure visualization flags are enabled in the active args.
-
-The viewer shows:
-- `student_3d` — 3-D world with obstacles, drone body frame, and full trajectory
-- `main_y` — RGB camera luminance output (grayscale)
-- `tof_depth` — Active ToF depth map
-
-Replay a saved recording:
-
-```bash
-python rerun_vis.py
-```
-
----
-
-## Evaluation
-
-Use the repository default evaluation entry:
-
-```bash
-bash eval.sh
-```
-
-All evaluation parameters are read from `configs/paper_final_full.args` (with optional camera profile overlay in `eval.sh`).
-
-If needed, override runtime variables directly when launching, e.g. checkpoint path / episode count / batch size.
-
----
-
-## Repository Structure
-
-```
-.
-├── env_cuda.py            # Differentiable environment: physics + all sensor renderers
-│                          #   DiffRenderFunction      — differentiable FOV rendering
-│                          #   DiffRenderActiveTofFunction — differentiable Active ToF
-│                          #   render_active_tof_diff  — Python / CUDA dispatch
-├── model.py               # Policy network (CNN stem + GRU + multi-head output)
-│                          #   sensor_mode: depth / camera_luma / camera_luma_plus_depth / diff_depth
-├── main_cuda.py           # Training loop (BPTT / TBPTT / hybrid + teacher-student)
-├── lqr.py                 # Differentiable LQR / dMPC solver
-├── rerun_vis.py           # Rerun visualisation helper
-├── configs/
-│   ├── paper_final_full.args     # Full paper config (Active ToF + unified control)
-│   ├── paper_ablate_rgb_only.args
-│   ├── paper_ablate_tof_only_intent_lqr.args
-│   └── ...               # Other ablation / task configs
-├── src/                   # CUDA extension
-│   ├── quadsim_kernel.cu  # Physics forward + rendering kernels
-│   ├── dynamics_kernel.cu # Quadrotor dynamics backward pass
-│   └── setup.py
-└── tools/
-    └── compare_active_tof_gradients.py  # Python vs CUDA gradient sanity check
-```
-
----
-
-## Roadmap
-
-- [x] Differentiable RGB camera (FOV / exposure / ISO / focus)
-- [x] Differentiable Active ToF camera (power / exposure / gain / confidence)
-- [x] Multi-layer high-fidelity photometric pipeline (shadow, fog, vignetting, AE)
-- [x] CUDA kernel for Active ToF backward pass
-- [ ] Differentiable LiDAR / radar sensor model
-- [ ] Differentiable event camera model
-- [ ] More real sensor noise profiles (e.g., Sony IMX279, Intel RealSense D455)
-
----
-
-## Citation
-
-If you use this repository or the underlying physics engine, please cite the original paper:
-
-```bibtex
-@article{zhang2025learning,
-  title={Learning vision-based agile flight via differentiable physics},
-  author={Zhang, Yuang and Hu, Yu and Song, Yunlong and Zou, Danping and Lin, Weiyao},
-  journal={Nature Machine Intelligence},
-  pages={1--13},
-  year={2025},
-  publisher={Nature Publishing Group}
-}
-```
+- 当前论文主线建议使用 `diff_sensor_impl diff_depth=python`
+- `diff_depth=cuda` 仍可用于对照与梯度检查，但论文主结果默认使用 `python`
+- 本分支的目标是围绕 `diff_depth` 论文主线继续精简与强化

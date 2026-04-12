@@ -1,12 +1,19 @@
-"""
-命令行参数解析、验证、传感模式解析。
-从 main_cuda.py 中提取，保持完全相同的参数名和语义。
-"""
+"""命令行参数解析与运行时校验。"""
 import argparse
 import os
 import random
 import numpy as np
 import torch
+
+
+SUPPORTED_SCENARIOS = (
+    'random_base',
+    'sun_glare',
+    'black_gap',
+    'dark_slit_lite',
+)
+OPENING_SCENES = {'black_gap', 'dark_slit_lite'}
+HARD_SCENES = {'sun_glare', 'black_gap', 'dark_slit_lite'}
 
 
 def build_parser():
@@ -27,14 +34,11 @@ def build_parser():
 
     # --- 物理与控制损失函数权重 ---
     parser.add_argument('--coef_v', type=float, default=1.0, help='速度跟踪损失权重')
-    parser.add_argument('--coef_speed', type=float, default=0.0, help='速度标量跟踪损失权重（legacy 对齐项）')
-    parser.add_argument('--coef_bias', type=float, default=0.0, help='速度方向偏置损失权重（legacy 对齐项）')
     parser.add_argument('--coef_v_pred', type=float, default=2.0, help='速度预测 MSE 损失权重')
     parser.add_argument('--coef_collide', type=float, default=2.0, help='碰撞惩罚权重')
     parser.add_argument('--coef_obj_avoidance', type=float, default=1.5, help='避障安全距离惩罚权重')
     parser.add_argument('--coef_d_acc', type=float, default=0.01, help='控制加速度正则化权重')
     parser.add_argument('--coef_d_jerk', type=float, default=0.001, help='控制 Jerk 正则化权重')
-    parser.add_argument('--coef_d_snap', type=float, default=0.0, help='控制 Snap 正则化权重（legacy 对齐项）')
     parser.add_argument('--coef_ground_affinity', type=float, default=0., help='贴地飞行偏好权重')
 
     # --- 训练超参数 ---
@@ -48,22 +52,18 @@ def build_parser():
     parser.add_argument('--timesteps', type=int, default=150, help='每个 episode 的物理步数')
     parser.add_argument('--base_control_freq', type=float, default=15.0, help='基础控制频率 (Hz)')
     parser.add_argument('--cam_angle', type=int, default=10, help='相机默认俯仰角 (度)')
-    parser.add_argument('--imx_width', type=int, default=320, help='IMX279 主相机分辨率宽')
-    parser.add_argument('--imx_height', type=int, default=240, help='IMX279 主相机分辨率高')
-    parser.add_argument('--depth_width', type=int, default=None, help='深度相机输入分辨率宽')
-    parser.add_argument('--depth_height', type=int, default=None, help='深度相机输入分辨率高')
+    parser.add_argument('--depth_width', type=int, default=64, help='深度相机渲染分辨率宽')
+    parser.add_argument('--depth_height', type=int, default=48, help='深度相机渲染分辨率高')
+    parser.add_argument('--depth_min_valid', type=float, default=0.3,
+                        help='深度图最小可信距离；低于该阈值视为无效深度')
+    parser.add_argument('--depth_max_range', type=float, default=6.0,
+                        help='diff_depth 传感器最大可靠量程；网络前处理与渲染器保持一致')
     parser.add_argument('--depth_nn_width', type=int, default=16, help='diff_depth: 输入策略网络前的深度特征宽')
     parser.add_argument('--depth_nn_height', type=int, default=12, help='diff_depth: 输入策略网络前的深度特征高')
     parser.add_argument('--depth_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
-                        help='深度输入是否启用图像处理流水线（对 diff_depth 与 camera_luma_plus_depth 均生效）')
-    # 向后兼容旧参数名：--diff_depth_use_pipeline / --no-diff_depth_use_pipeline
-    parser.add_argument('--diff_depth_use_pipeline', dest='depth_use_pipeline',
-                        action=argparse.BooleanOptionalAction,
-                        help=argparse.SUPPRESS)
-    parser.add_argument('--diff_sensor_impl', nargs='*', default=['camera_luma=python', 'diff_depth=python'],
-                        help='可微传感实现后端列表')
-    parser.add_argument('--policy_input_width', type=int, default=None, help='已弃用')
-    parser.add_argument('--policy_input_height', type=int, default=None, help='已弃用')
+                        help='深度输入是否启用图像处理流水线（仅对 diff_depth 生效）')
+    parser.add_argument('--diff_sensor_impl', nargs='*', default=['diff_depth=python'],
+                        help='diff_depth 可微传感实现后端列表')
 
     # --- 环境变体开关 ---
     parser.add_argument('--single', default=False, action='store_true', help='单机模式')
@@ -74,6 +74,8 @@ def build_parser():
     parser.add_argument('--yaw_drift', default=False, action='store_true', help='模拟偏航角漂移')
     parser.add_argument('--no_odom', default=False, action='store_true', help='无里程计模式')
     parser.add_argument('--wall_slit', default=False, action='store_true', help='狭缝穿越环境')
+    parser.add_argument('--scenarios', nargs='*', default=['random_base'],
+                        help='diff_depth 论文场景列表；训练时每个 episode 从中采样，评测时按顺序轮转')
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
@@ -83,24 +85,22 @@ def build_parser():
     parser.add_argument('--include_camera_state_in_obs', default=False, action=argparse.BooleanOptionalAction,
                         help='是否将相机状态拼接到观测向量')
     parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
-    parser.add_argument('--coef_fov_reg', type=float, default=0.005, help='FOV 偏离默认值的正则化权重')
+    parser.add_argument('--coef_power_reg', type=float, default=0.005,
+                        help='首个相机控制通道偏离中心值的正则化权重（diff_depth 分支中对应 power）')
     parser.add_argument('--coef_cam_range', type=float, default=0.001, help='相机参数范围正则化权重')
     parser.add_argument('--wandb_disabled', default=False, action='store_true', help='禁用 wandb 日志记录')
+    parser.add_argument('--wandb_log_raw_loss_terms', default=False, action=argparse.BooleanOptionalAction,
+                        help='是否把未加权的各 loss 分量单独写入 wandb；默认关闭以避免与 loss_contrib 重复')
 
     # --- 高保真可微相机渲染配置 ---
     parser.add_argument('--cam_realism_preset', type=str, default='high', choices=['low', 'medium', 'high', 'ultra'],
                         help='高保真可微相机强度档位')
-    parser.add_argument('--cam_enable_shadow', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--cam_enable_specular', default=True, action=argparse.BooleanOptionalAction)
-    parser.add_argument('--cam_enable_distortion', default=True, action=argparse.BooleanOptionalAction)
-    parser.add_argument('--cam_enable_flare', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--cam_enable_motion_blur', default=True, action=argparse.BooleanOptionalAction)
-    parser.add_argument('--cam_enable_rolling', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--cam_noise_scale', type=float, default=1.0)
     parser.add_argument('--cam_blur_scale', type=float, default=1.0)
     parser.add_argument('--cam_fog_scale', type=float, default=1.0)
     parser.add_argument('--cam_lighting_scale', type=float, default=1.0)
-    parser.add_argument('--cam_ae_target', type=float, default=0.42)
 
     # --- 相机语义映射常数（统一管理，避免散落魔数） ---
     parser.add_argument('--cam_exposure_t_min', type=float, default=0.25,
@@ -121,9 +121,6 @@ def build_parser():
                         help='Shot noise 基础系数')
 
     # ===== Camera loss + Teacher-Student training =====
-    parser.add_argument('--enable_camera_quality_loss', default=False, action='store_true')
-    parser.add_argument('--coef_blur', type=float, default=0.1)
-    parser.add_argument('--coef_noise', type=float, default=0.05)
     parser.add_argument('--enable_teacher_student_training', default=False, action='store_true')
     parser.add_argument('--teacher_inner_steps', type=int, default=10)
     parser.add_argument('--teacher_inner_lr', type=float, default=0.01)
@@ -133,20 +130,21 @@ def build_parser():
     parser.add_argument('--student_noise_mode', type=str, default='off', choices=['off', 'on'])
     parser.add_argument('--teacher_tbptt_chunk_steps', type=int, default=10)
 
-    # ===== Multi-sensor + dLQR training switches =====
-    parser.add_argument('--sensor_mode', type=str, default='camera_luma_plus_depth',
-                        choices=['depth', 'camera_luma', 'camera_luma_plus_depth', 'diff_depth'])
+    # ===== dLQR / intent related =====
     parser.add_argument('--coef_diff_depth_power', type=float, default=0.01)
     parser.add_argument('--coef_diff_depth_blur', type=float, default=0.01)
+    parser.add_argument('--coef_diff_depth_noise', type=float, default=0.01)
+    parser.add_argument('--coef_diff_depth_fill', type=float, default=0.0,
+                        help='惩罚 fill rate 低于阈值的 blackout 现象，防止策略把深度相机关到近乎失效')
+    parser.add_argument('--diff_depth_min_fill_rate', type=float, default=0.18,
+                        help='深度 fill rate 的最低目标阈值；低于它时会触发 blackout penalty')
     parser.add_argument('--use_dmpc', default=False, action='store_true')
-    parser.add_argument('--policy_direct_action', default=False, action='store_true')
     parser.add_argument('--policy_output_intent', default=False, action='store_true')
     parser.add_argument('--inject_depth_into_lqr', default=False, action='store_true')
     parser.add_argument('--lqr_horizon', type=int, default=5)
     parser.add_argument('--lqr_reg', type=float, default=1e-4)
     parser.add_argument('--depth_safe_dist', type=float, default=0.6)
     parser.add_argument('--depth_repel_gain', type=float, default=1.0)
-    parser.add_argument('--dual_encoder', default=False, action='store_true')
     parser.add_argument('--max_acc_cmd', type=float, default=20.0)
     parser.add_argument('--amp', default=True, action=argparse.BooleanOptionalAction)
 
@@ -164,9 +162,8 @@ def build_parser():
 
 
 def parse_diff_sensor_impl(items):
-    """将命令行列表解析为 {'camera_luma': 'python|cuda', 'diff_depth': 'python|cuda'}。"""
+    """将命令行列表解析为 {'diff_depth': 'python|cuda'}。"""
     impl = {
-        'camera_luma': 'python',
         'diff_depth': 'python',
     }
     if items is None:
@@ -185,16 +182,51 @@ def parse_diff_sensor_impl(items):
         key = key.strip()
         val = val.strip()
         if key not in allowed_keys:
-            raise ValueError(f"--diff_sensor_impl 不支持 key='{key}'，仅支持: {sorted(allowed_keys)}")
+            print(f"[warn] diff_depth-only 分支忽略 --diff_sensor_impl 条目 key='{key}'")
+            continue
         if val not in allowed_vals:
             raise ValueError(f"--diff_sensor_impl 不支持 value='{val}'，仅支持: {sorted(allowed_vals)}")
         impl[key] = val
     return impl
 
 
-def normalize_sensor_mode(sensor_mode: str) -> str:
-    """Normalize sensor_mode key casing/spacing only."""
-    return str(sensor_mode).strip().lower()
+def parse_scenarios(items):
+    """解析论文场景列表。支持空格或逗号分隔。"""
+    if items is None:
+        return ['random_base']
+
+    aliases = {
+        'base': 'random_base',
+        'random': 'random_base',
+        'random_scene': 'random_base',
+    }
+    scenarios = []
+    for raw in items:
+        if raw is None:
+            continue
+        for token in str(raw).split(','):
+            name = token.strip().lower()
+            if not name:
+                continue
+            name = aliases.get(name, name)
+            if name not in SUPPORTED_SCENARIOS:
+                raise ValueError(
+                    f"--scenarios 不支持 '{name}'，仅支持: {list(SUPPORTED_SCENARIOS)}"
+                )
+            scenarios.append(name)
+
+    if not scenarios:
+        return ['random_base']
+
+    # 保持用户给定顺序，但去重，避免 eval 轮转时重复。
+    dedup = []
+    seen = set()
+    for name in scenarios:
+        if name in seen:
+            continue
+        seen.add(name)
+        dedup.append(name)
+    return dedup
 
 
 def set_global_seed(seed: int, deterministic: bool = True):
@@ -219,72 +251,46 @@ def set_global_seed(seed: int, deterministic: bool = True):
         torch.backends.cudnn.benchmark = True
 
 
-def resolve_sensor_flags(args):
-    """从 args.sensor_mode 推导出所有传感器开关，返回 dict。"""
-    use_depth_only = args.sensor_mode == 'depth'
-    use_camera_luma = args.sensor_mode in ('camera_luma', 'camera_luma_plus_depth')
-    use_depth = args.sensor_mode in ('camera_luma_plus_depth', 'diff_depth')
-    use_depth_aux = args.sensor_mode == 'camera_luma_plus_depth'
-    use_diff_depth = args.sensor_mode == 'diff_depth'
-
-    use_camera_control = (use_camera_luma or use_diff_depth)
-    effective_include_camera_state = bool(args.include_camera_state_in_obs and use_camera_control)
-
-    return {
-        'use_depth_only': use_depth_only,
-        'use_camera_luma': use_camera_luma,
-        'use_depth': use_depth,
-        'use_depth_aux': use_depth_aux,
-        'use_diff_depth': use_diff_depth,
-        'use_camera_control': use_camera_control,
-        'effective_include_camera_state': effective_include_camera_state,
-    }
-
-
-def validate_args(args, sensor_flags):
+def validate_args(args):
     """打印警告信息并做互斥检查。"""
-    use_camera_control = sensor_flags['use_camera_control']
-    use_depth_aux = sensor_flags['use_depth_aux']
-
-    if args.policy_direct_action and args.policy_output_intent:
-        raise ValueError("--policy_direct_action 与 --policy_output_intent 互斥，请二选一")
     if args.use_dmpc and not args.policy_output_intent:
         print("[warn] --use_dmpc 已启用，但 --policy_output_intent 未启用；将回退到动作域控制")
-    if args.inject_depth_into_lqr and args.sensor_mode != 'camera_luma_plus_depth':
-        print("[warn] --inject_depth_into_lqr 已启用，但 sensor_mode 不是 camera_luma_plus_depth；深度注入将被忽略")
     if args.enable_teacher_student_training and args.policy_output_intent and not args.use_dmpc:
         print("[warn] enable_teacher_student_training + policy_output_intent 且未启用 --use_dmpc："
               "将回退到动作域 teacher/蒸馏；intent 头仅作为辅助输出，不参与 teacher 优化")
-    if args.dual_encoder:
-        print("[warn] --dual_encoder 已弃用：模型结构由 sensor_mode 自动决定")
-    if args.policy_input_width is not None or args.policy_input_height is not None:
-        print("[warn] --policy_input_width/height 已弃用：当前模型不再做跨传感器强制尺寸对齐")
     if args.tbptt_enable and args.tbptt_chunk_steps < 2:
         raise ValueError('--tbptt_chunk_steps 必须 >= 2')
     if args.tbptt_enable and args.tbptt_chunk_accum < 1:
         raise ValueError('--tbptt_chunk_accum 必须 >= 1')
+    if args.depth_min_valid <= 0:
+        raise ValueError('--depth_min_valid 必须 > 0')
+    if args.depth_max_range <= args.depth_min_valid:
+        raise ValueError('--depth_max_range 必须大于 --depth_min_valid')
     if args.hybrid_full_bptt_every < 0:
         raise ValueError('--hybrid_full_bptt_every 必须 >= 0')
     if args.hybrid_full_bptt_batch_size < 0:
         raise ValueError('--hybrid_full_bptt_batch_size 必须 >= 0')
     if args.tbptt_enable and args.enable_teacher_student_training:
         print('[warn] 当前启用 TBPTT 与教师-学生训练：student 按原混合调度；teacher 内循环将使用 TBPTT 路径')
-    if args.include_camera_state_in_obs and not use_camera_control:
-        print(f"[warn] --include_camera_state_in_obs 已启用，但当前 sensor_mode={args.sensor_mode} 不支持相机控制；将自动忽略相机状态拼接")
+    if args.depth_width < 1 or args.depth_height < 1:
+        raise ValueError('--depth_width/--depth_height 必须 >= 1')
+    if args.depth_nn_width < 1 or args.depth_nn_height < 1:
+        raise ValueError('--depth_nn_width/--depth_nn_height 必须 >= 1')
+    if not getattr(args, 'scenarios', None):
+        raise ValueError('--scenarios 至少需要一个场景')
+    if args.no_odom and (args.wall_slit or any(scene in HARD_SCENES for scene in args.scenarios)):
+        print('[warn] 当前配置为 no_odom + hard scenarios；建议先在带 odom 或更简单场景上热启动，再逐步加难度')
 
 
-def print_runtime_mode(args, sensor_flags):
+def print_runtime_mode(args):
     """打印启动模式横幅。"""
-    use_diff_depth = sensor_flags['use_diff_depth']
-    use_depth_aux = sensor_flags['use_depth_aux']
-
     policy_head_mode = 'intent_head' if args.policy_output_intent else 'action_head'
     exec_control_mode = 'dmpc' if (args.use_dmpc and args.policy_output_intent) else 'direct_action'
     if args.enable_teacher_student_training:
         teacher_mode = 'intent_teacher' if (args.policy_output_intent and args.use_dmpc) else 'action_teacher'
     else:
         teacher_mode = 'disabled'
-    depth_lqr_effective = bool(args.inject_depth_into_lqr and args.use_dmpc and args.policy_output_intent and use_depth_aux)
+    depth_lqr_effective = bool(args.inject_depth_into_lqr and args.use_dmpc and args.policy_output_intent)
 
     print("=" * 30 + " Runtime Mode " + "=" * 30)
     print(f"policy_head                : {policy_head_mode}")
@@ -296,18 +302,17 @@ def print_runtime_mode(args, sensor_flags):
     print(f"student_noise_mode        : {args.student_noise_mode}")
     print(f"distill_coef              : {args.distill_coef} -> {args.distill_coef * args.distill_final_ratio}")
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
-    print(f"sensor_mode               : {args.sensor_mode}")
-    print(f"sensor_control_semantics  : {'power/exposure/gain' if use_diff_depth else 'fov/exposure/iso'}")
+    print(f"scenarios                 : {args.scenarios}")
+    print("sensor_control_semantics  : power/exposure/gain")
     print("=" * 75)
 
 
 def parse_args():
-    """解析命令行参数，执行验证，返回 (args, sensor_flags) 元组。"""
+    """解析命令行参数并执行验证。"""
     parser = build_parser()
     args = parser.parse_args()
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
-    args.sensor_mode = normalize_sensor_mode(args.sensor_mode)
+    args.scenarios = parse_scenarios(args.scenarios)
     set_global_seed(args.seed, args.deterministic)
-    sensor_flags = resolve_sensor_flags(args)
-    validate_args(args, sensor_flags)
-    return args, sensor_flags
+    validate_args(args)
+    return args

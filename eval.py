@@ -18,8 +18,7 @@ from torch.cuda.amp.autocast_mode import autocast
 from config import (
     build_parser,
     parse_diff_sensor_impl,
-    normalize_sensor_mode,
-    resolve_sensor_flags,
+    parse_scenarios,
     set_global_seed,
     validate_args,
     print_runtime_mode,
@@ -35,6 +34,12 @@ from rollout_ops import (
     decode_action_direct,
     decode_action_lqr,
     update_camera_params,
+    diff_depth_exposure_to_time,
+    init_camera_params,
+    compute_camera_param_stats,
+    compute_diff_depth_proxies,
+    compute_depth_fill_rate,
+    diff_depth_fill_softness,
 )
 from train_utils import build_env, make_yaw_drift_R
 
@@ -46,31 +51,21 @@ def parse_eval_args():
     args = parser.parse_args()
 
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
-    args.sensor_mode = normalize_sensor_mode(args.sensor_mode)
+    args.scenarios = parse_scenarios(args.scenarios)
     set_global_seed(args.seed, args.deterministic)
-
-    sensor_flags = resolve_sensor_flags(args)
-    validate_args(args, sensor_flags)
+    validate_args(args)
 
     if args.eval_episodes < 1:
         raise ValueError('--eval_episodes 必须 >= 1')
 
-    return args, sensor_flags
+    return args
 
 
-def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
-    sf = sensor_flags
+def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
     B = env.batch_size
     use_amp = bool(args.amp and device.type == 'cuda')
 
-    use_depth_only = sf['use_depth_only']
-    use_camera_luma = sf['use_camera_luma']
-    use_depth_aux = sf['use_depth_aux']
-    use_diff_depth = sf['use_diff_depth']
-    use_camera_control = sf['use_camera_control']
-    effective_include_camera_state = sf['effective_include_camera_state']
-
-    env.reset()
+    env.reset(scene_name=scene_name)
     model.reset()
     ep_step_base = ep_idx * args.timesteps
 
@@ -99,33 +94,41 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
     target_v_raw = env.p_target - env.p
     yaw_drift_R = make_yaw_drift_R(B, device) if args.yaw_drift else None
 
-    cam_fov = torch.full((B,), env._fov_x_half_tan, device=device)
-    cam_exposure = torch.full((B,), 0.5, device=device)
-    cam_iso = torch.full((B,), 0.5, device=device)
+    power, exposure, gain = init_camera_params(env, B, device)
 
     # 与训练推理路径一致（目前训练中也是固定 1/15 构造 LQR 离散系统）
     A_lqr, B_lqr = build_velocity_tracking_linear_system(B, 1 / 15, device)
 
     min_margin_hist = []
     speed_hist = []
+    power_hist = []
+    exposure_hist = []
+    gain_hist = []
+    fill_rate_hist = []
+    fill_rate_soft_hist = []
+    goal_dist_hist = []
     collided = False
     collided_step = None
 
     for t in range(args.timesteps):
         print("timestep:", t)
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
-        exposure_delay = (
-            float(env.cam_sem.exposure_to_time(cam_exposure.mean().detach())) * 0.01
-            if use_camera_control else 0.015
-        )
+        exposure_delay = float(diff_depth_exposure_to_time(
+            exposure.mean().detach(),
+            camera_semantics=env.cam_sem,
+        )) * 0.01
         ctl_dt = base_dt + exposure_delay
 
-        main_obs, depth_obs = render_sensors(
-            env, ctl_dt, cam_fov, cam_exposure, cam_iso,
-            use_depth_only, use_camera_luma, use_diff_depth,
-            use_depth_aux, use_camera_control,
-            differentiable=False,
-        )
+        depth_obs = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=False)
+        fill_rate_hist.append(compute_depth_fill_rate(
+            depth_obs,
+            min_valid_depth=args.depth_min_valid,
+        ).detach())
+        fill_rate_soft_hist.append(compute_depth_fill_rate(
+            depth_obs,
+            min_valid_depth=args.depth_min_valid,
+            softness=diff_depth_fill_softness(args.depth_min_valid),
+        ).detach())
 
         # 记录推进前的最小安全边距（<=0 视为碰撞）
         vec_now = env.find_vec_to_nearest_pt()
@@ -153,35 +156,29 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
         state, local_v = build_state_vector(
-            env, target_v, R, cam_fov, cam_exposure, cam_iso,
-            args.no_odom, effective_include_camera_state, use_camera_control,
+            env, target_v, R, power, exposure, gain,
+            args.no_odom, args.include_camera_state_in_obs,
         )
 
         if args.policy_output_intent:
             with autocast(enabled=use_amp):
                 act_raw, cam_params, h, intent = model(
-                    state, h, return_intent=True,
-                    main_obs=main_obs, depth_obs=depth_obs,
-                    add_noise=False,
-                )
+                    state, h, return_intent=True, depth_obs=depth_obs, add_noise=False)
             act_raw = act_raw.float()
             intent = intent.float()
         else:
             with autocast(enabled=use_amp):
                 act_raw, cam_params, h = model(
-                    state, h,
-                    main_obs=main_obs, depth_obs=depth_obs,
-                    add_noise=False,
-                )
+                    state, h, depth_obs=depth_obs, add_noise=False)
             act_raw = act_raw.float()
             intent = None
 
-        if cam_params is not None:
-            cam_params = cam_params.float()
+        cam_params = cam_params.float()
 
-        cam_fov, cam_exposure, cam_iso, _ = update_camera_params(
-            cam_params, cam_fov, cam_exposure, cam_iso, env,
-        )
+        power, exposure, gain, _ = update_camera_params(cam_params, power, exposure, gain, env)
+        power_hist.append(power.detach())
+        exposure_hist.append(exposure.detach())
+        gain_hist.append(gain.detach())
 
         if args.use_dmpc and args.policy_output_intent and intent is not None:
             act_final, _ = decode_action_lqr(
@@ -196,20 +193,19 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
 
         act_buffer.append(act_final)
         speed_hist.append(env.v.norm(2, -1))
+        goal_dist_hist.append((env.p_target - env.p).norm(2, -1))
 
         if vis.enabled:
             j = int(min(max(args.vis_env_idx, 0), B - 1))
-            cam_vals = None
-            if use_camera_control:
-                cam_vals = (
-                    float(cam_fov[j].detach().cpu()),
-                    float(cam_exposure[j].detach().cpu()),
-                    float(cam_iso[j].detach().cpu()),
-                )
+            cam_vals = (
+                float(power[j].detach().cpu()),
+                float(exposure[j].detach().cpu()),
+                float(gain[j].detach().cpu()),
+            )
 
-            main_img_np = main_obs[j].detach().cpu().numpy() if main_obs is not None else None
-            main_img_mode = 'luma' if use_camera_luma else 'depth'
-            depth_img_np = depth_obs[j].detach().cpu().numpy() if depth_obs is not None else None
+            main_img_np = None
+            main_img_mode = 'depth'
+            depth_img_np = depth_obs[j].detach().cpu().numpy()
 
             # 评估阶段按 step 记录无人机动力学指标（替代训练 loss/fps 指标）
             vj = env.v[j]
@@ -242,7 +238,7 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
                 step_idx=ep_step_base + t,
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
-                depth=(main_obs[j].detach().cpu().numpy() if (main_obs is not None and use_depth_only) else None),
+                depth=None,
                 cam=cam_vals,
                 scalars=step_scalars,
                 main_img=main_img_np,
@@ -250,19 +246,21 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
                 depth_img=depth_img_np,
                 drone_R=env.R[j].detach().cpu().numpy(),
                 cam_R=env.R_cam[j].detach().cpu().numpy(),
-                main_fov_half_tan=(float(cam_fov[j].detach().cpu()) if use_camera_control else float(env._fov_x_half_tan)),
+                main_fov_half_tan=float(env._fov_x_half_tan),
                 main_hw=(int(env.height), int(env.width)),
-                depth_hw=(int(env.depth_height), int(env.depth_width)),
+                depth_hw=(int(env.height), int(env.width)),
             )
 
         if collided:
             print(f"[eval] collision detected at step={t}, early stop this episode.")
             break
-        time.sleep(0.1)
+        if vis.enabled:
+            time.sleep(0.1)
 
     min_margin_all = torch.stack(min_margin_hist).amin(dim=0)
     success_mask = min_margin_all > 0
     success_rate = float(success_mask.float().mean().detach().cpu())
+    collision_rate = float((~success_mask).float().mean().detach().cpu())
 
     if len(speed_hist) > 0:
         speed_all = torch.stack(speed_hist)
@@ -272,18 +270,63 @@ def run_one_episode(ep_idx, args, sensor_flags, model, env, vis, device):
         avg_speed = 0.0
         max_speed = 0.0
 
+    fill_mean = float(torch.stack(fill_rate_hist).mean().item()) if fill_rate_hist else 0.0
+    fill_soft_mean = float(torch.stack(fill_rate_soft_hist).mean().item()) if fill_rate_soft_hist else fill_mean
+    hole_mean = 1.0 - fill_mean
+    hole_soft_mean = 1.0 - fill_soft_mean
+
+    cam_stats = compute_camera_param_stats(power_hist, exposure_hist, gain_hist)
+    proxy_stats = compute_diff_depth_proxies(
+        power_hist,
+        exposure_hist,
+        gain_hist,
+        speed_hist,
+        camera_semantics=env.cam_sem,
+    )
+
+    if goal_dist_hist:
+        goal_dist_all = torch.stack(goal_dist_hist)
+        reached = goal_dist_all < 0.5
+        reached_any = reached.any(dim=0)
+        first_hit = torch.full((B,), args.timesteps, device=device, dtype=torch.long)
+        if reached_any.any():
+            hit_idx = reached.float().argmax(dim=0)
+            first_hit = torch.where(reached_any, hit_idx, first_hit)
+        time_to_goal = float(first_hit.float().mean().item() / max(args.base_control_freq, 1e-6))
+    else:
+        time_to_goal = float(args.timesteps / max(args.base_control_freq, 1e-6))
+
+    metrics = {
+        'scene_name': str(getattr(env, 'current_scene_name', scene_name)),
+        'success_rate': success_rate,
+        'collision_rate': collision_rate,
+        'avg_speed': avg_speed,
+        'max_speed': max_speed,
+        'fill_rate': fill_mean,
+        'fill_rate_soft': fill_soft_mean,
+        'hole_rate': hole_mean,
+        'hole_rate_soft': hole_soft_mean,
+        'time_to_goal': time_to_goal,
+        'collided': float(collided),
+    }
+    metrics.update(cam_stats)
+    metrics.update(proxy_stats)
+
     print(
         f"[eval] episode={ep_idx + 1}/{args.eval_episodes} "
-        f"success_rate={success_rate:.3f} avg_speed={avg_speed:.3f} max_speed={max_speed:.3f} "
+        f"scene={metrics['scene_name']} "
+        f"success_rate={success_rate:.3f} collision_rate={collision_rate:.3f} "
+        f"fill_rate={fill_mean:.3f} fill_rate_soft={fill_soft_mean:.3f} "
+        f"avg_speed={avg_speed:.3f} max_speed={max_speed:.3f} "
         f"collided={collided}" + (f" collided_step={collided_step}" if collided_step is not None else "")
     )
 
     # 评估汇总指标保留在控制台输出；Rerun 侧重点为 step 级飞行状态。
+    return metrics
 
 
 def main():
-    args, sensor_flags = parse_eval_args()
-    sf = sensor_flags
+    args = parse_eval_args()
 
     if not args.resume:
         raise ValueError('评估必须提供 --resume <checkpoint_path>')
@@ -299,25 +342,21 @@ def main():
     for k, v in vars(args).items():
         print(f"{k:<30}: {v}")
     print("=" * 80 + "\n")
-    print_runtime_mode(args, sf)
+    print_runtime_mode(args)
 
-    env = build_env(args.batch_size, args, sf, device)
+    env = build_env(args.batch_size, args, device)
 
     obs_dim = 7 if args.no_odom else 10
-    main_channels = 1
-    in_channels = main_channels + (1 if sf['use_depth'] else 0)
     model = Model(
         obs_dim, 6,
-        include_camera_state_in_obs=sf['effective_include_camera_state'],
-        in_channels=in_channels,
+        include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=args.policy_output_intent,
         intent_dim=9,
-        main_in_channels=main_channels,
-        enable_camera_head=sf['use_camera_control'],
         depth_nn_width=args.depth_nn_width,
         depth_nn_height=args.depth_nn_height,
         depth_use_pipeline=args.depth_use_pipeline,
-        sensor_mode=args.sensor_mode,
+        depth_min_valid=args.depth_min_valid,
+        depth_max_range=args.depth_max_range,
     ).to(device)
 
     print(f"[eval] loading checkpoint: {args.resume}")
@@ -337,8 +376,37 @@ def main():
     )
 
     with torch.no_grad():
+        ep_metrics = []
+        eval_scenes = ['wall_slit'] if args.wall_slit else list(args.scenarios)
         for ep_idx in range(args.eval_episodes):
-            run_one_episode(ep_idx, args, sf, model, env, vis, device)
+            scene_name = eval_scenes[ep_idx % len(eval_scenes)]
+            ep_metrics.append(run_one_episode(ep_idx, scene_name, args, model, env, vis, device))
+
+    if ep_metrics:
+        keys = [
+            'success_rate', 'collision_rate', 'time_to_goal',
+            'fill_rate', 'fill_rate_soft', 'hole_rate', 'hole_rate_soft',
+            'energy_proxy', 'blur_proxy', 'noise_proxy',
+            'avg_speed', 'max_speed',
+        ]
+        print('[eval] overall summary:')
+        for key in keys:
+            vals = [float(m[key]) for m in ep_metrics if key in m]
+            if vals:
+                print(f'  {key:<16}: {sum(vals) / len(vals):.4f}')
+
+        if len(eval_scenes) > 1:
+            print('[eval] per-scene summary:')
+            for scene_name in eval_scenes:
+                scene_eps = [m for m in ep_metrics if m.get('scene_name') == scene_name]
+                if not scene_eps:
+                    continue
+                parts = []
+                for key in keys:
+                    vals = [float(m[key]) for m in scene_eps if key in m]
+                    if vals:
+                        parts.append(f'{key}={sum(vals) / len(vals):.4f}')
+                print(f'  {scene_name}: ' + ' '.join(parts))
 
     print('[eval] done.')
 

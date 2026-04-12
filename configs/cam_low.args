@@ -1,22 +1,17 @@
 # ==========================================================
 # Camera Profile: LOW (train-fast)
-# 目标：训练早期加速，保留核心可微链路（曝光/ISO/ISP）
+# 目标：训练早期加速，保留核心 diff_depth 退化链路
 # 用法：TASK=paper_final_full CAM_PROFILE=low bash run.sh
 # ==========================================================
 
 --cam_realism_preset low
---no-cam_enable_shadow
 --cam_enable_specular
---no-cam_enable_distortion
---no-cam_enable_flare
 --no-cam_enable_motion_blur
---no-cam_enable_rolling
 
 --cam_noise_scale 0.65
 --cam_blur_scale 0.55
 --cam_fog_scale 0.6
 --cam_lighting_scale 0.9
---cam_ae_target 0.45
 
 # Camera semantic mapping constants
 --cam_exposure_t_min 0.25

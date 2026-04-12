@@ -1541,752 +1541,13 @@ void render_backward_fov_from_normal_cuda(
 }
 
 // ============================================================================
-// C++ 接口函数：Y 通道渲染（非可微相机参数）
-// 目前复用几何深度渲染内核，输出为单通道主传感器观测。
-// ============================================================================
-void render_yuv_y_cuda(
-    torch::Tensor canvas,
-    torch::Tensor flow,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    torch::Tensor R,
-    torch::Tensor R_old,
-    torch::Tensor pos,
-    torch::Tensor pos_old,
-    float drone_radius,
-    int n_drones_per_group,
-    float fov_x_half_tan) {
-
-    // 当前实现以几何渲染作为 Y 通道基础，接口保持 YUV 主相机语义。
-    render_cuda(
-        canvas, flow, balls, cylinders, cylinders_h, voxels,
-        R, R_old, pos, pos_old,
-        drone_radius, n_drones_per_group, fov_x_half_tan);
-}
-
-// ============================================================================
-// C++ 接口函数：Y 通道可微渲染（FOV + exposure/iso 输入）
-// 说明：
-// - 几何部分复用 render_diff_fov_with_normal_cuda
-// - 相机部分采用 ATen 张量算子复刻 Python 链路的低风险近似
-// - 反向中 exposure/iso/depth 使用 autograd 链式求导，fov 使用 normal-map 解析反向
-// ============================================================================
-torch::Tensor render_camera_luma_fused_forward_cuda(
-    torch::Tensor depth_raw,
-    torch::Tensor normals,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_ae_log_t,
-    int64_t cam_profile_mask,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma);
-
-std::vector<torch::Tensor> render_camera_luma_fused_backward_cuda(
-    torch::Tensor grad_output,
-    torch::Tensor depth_raw,
-    torch::Tensor normals,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_ae_log_t,
-    int64_t cam_profile_mask,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma,
-    bool need_grad_exposure,
-    bool need_grad_iso);
-
-static inline bool use_fused_camera_fast_path(int64_t cam_profile_mask) {
-    const int64_t mask = cam_profile_mask & 0x3f;
-    // 融合路径优先覆盖 low/high（无 flare/motion/rolling）
-    return (mask & ((int64_t(1) << 3) | (int64_t(1) << 4) | (int64_t(1) << 5))) == 0;
-}
-
-static torch::Tensor build_y_from_depth_full(
-    torch::Tensor depth_raw,
-    torch::Tensor normals,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_flare_strength,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_prev_y,
-    torch::Tensor cam_use_rolling,
-    torch::Tensor v,
-    torch::Tensor cam_ae_log_t,
-    bool cam_enable_shadow,
-    bool cam_enable_specular,
-    bool cam_enable_distortion,
-    bool cam_enable_flare,
-    bool cam_enable_motion_blur,
-    bool cam_enable_rolling,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_motion_blur_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma) {
-
-    auto depth = depth_raw.clamp(0.03, 120.0);
-    const auto B = depth.size(0);
-    const auto H = depth.size(1);
-    const auto W = depth.size(2);
-
-    auto nx = normals.select(1, 0);
-    auto ny = normals.select(1, 1);
-    auto nz = normals.select(1, 2);
-    auto nz_abs = torch::abs(nz);
-
-    auto w_ground = ((nz_abs - 0.55) / 0.45).clamp(0.0, 1.0);
-    auto albedo =
-        w_ground * cam_mat_ground.unsqueeze(1).unsqueeze(2)
-        + (1.0 - w_ground) * cam_mat_obstacle.unsqueeze(1).unsqueeze(2);
-
-    auto Lx = cam_light_dir.select(1, 0).unsqueeze(1).unsqueeze(2);
-    auto Ly = cam_light_dir.select(1, 1).unsqueeze(1).unsqueeze(2);
-    auto Lz = cam_light_dir.select(1, 2).unsqueeze(1).unsqueeze(2);
-    auto ndotl = (nx * Lx + ny * Ly + nz * Lz).clamp_min(0.0);
-
-    torch::Tensor shadow = torch::ones_like(depth);
-    if (cam_enable_shadow) {
-        shadow = (0.35 + 0.65 * ndotl).clamp(0.2, 1.0);
-    }
-
-    torch::Tensor specular = torch::zeros_like(depth);
-    if (cam_enable_specular) {
-        specular = cam_mat_spec.unsqueeze(1).unsqueeze(2) * torch::pow(ndotl, 24.0);
-    }
-
-    auto irradiance =
-        albedo * (cam_ambient.unsqueeze(1).unsqueeze(2) + cam_dir_intensity.unsqueeze(1).unsqueeze(2) * ndotl * shadow)
-        + specular;
-
-    auto trans = torch::exp(-cam_fog_beta.unsqueeze(1).unsqueeze(2) * depth);
-    irradiance = (irradiance * trans + cam_airlight.unsqueeze(1).unsqueeze(2) * (1.0 - trans)).clamp(0.0, 4.0);
-
-    auto yy = torch::linspace(-1.0, 1.0, H, depth.options()).view({H, 1});
-    auto xx = torch::linspace(-1.0, 1.0, W, depth.options()).view({1, W});
-    auto r2 = yy * yy + xx * xx;
-    auto vignette = (1.0 - cam_vignette_a * r2 - cam_vignette_b * (r2 * r2)).clamp(0.25, 1.0);
-    auto lens_y = irradiance * vignette.unsqueeze(0);
-
-    if (cam_enable_distortion) {
-        auto r2b = r2.unsqueeze(0);
-        auto radial = 1.0 + cam_dist_k1.unsqueeze(1).unsqueeze(2) * r2b + cam_dist_k2.unsqueeze(1).unsqueeze(2) * (r2b * r2b);
-        lens_y = (lens_y * radial.clamp(0.7, 1.3)).clamp(0.0, 4.0);
-    }
-
-    if (cam_enable_flare) {
-        auto bright = torch::relu(lens_y - 0.82);
-        auto flare = at::avg_pool2d(
-            bright.unsqueeze(1),
-            {9, 9},
-            {1, 1},
-            {4, 4},
-            false,
-            true,
-            c10::nullopt).squeeze(1);
-        lens_y = lens_y + cam_flare_strength.unsqueeze(1).unsqueeze(2) * flare;
-    }
-
-    auto exposure01 = exposure.clamp(0.0, 1.0);
-    auto iso01 = iso.clamp(0.0, 1.0);
-    auto t_cmd = cam_exposure_t_min + cam_exposure_t_span * exposure01;
-    auto t_ae = torch::exp(cam_ae_log_t);
-    auto t_eff = (t_cmd * t_ae).clamp(cam_exposure_eff_min, cam_exposure_eff_max);
-    auto iso_gain = cam_iso_gain_base + cam_iso_gain_scale * torch::pow(iso01, cam_iso_gain_gamma);
-
-    auto electrons = lens_y * t_eff.unsqueeze(1).unsqueeze(2) * cam_base_gain;
-    electrons = electrons * iso_gain.unsqueeze(1).unsqueeze(2);
-    auto raw = electrons * (1.0 + cam_prnu) + cam_dsnu;
-
-    auto x = torch::relu(raw - cam_black_level);
-    x = x / (1.0 + x);
-
-    auto denoise_strength = 0.08 + 0.28 * iso01;
-    auto smooth = at::avg_pool2d(
-        x.unsqueeze(1),
-        {3, 3},
-        {1, 1},
-        {1, 1},
-        false,
-        true,
-        c10::nullopt).squeeze(1);
-    x = x * (1.0 - denoise_strength.unsqueeze(1).unsqueeze(2)) + smooth * denoise_strength.unsqueeze(1).unsqueeze(2);
-
-    auto blur_small = at::avg_pool2d(
-        x.unsqueeze(1),
-        {3, 3},
-        {1, 1},
-        {1, 1},
-        false,
-        true,
-        c10::nullopt).squeeze(1);
-    x = x + cam_sharpen_amount * (x - blur_small);
-
-    auto gamma = cam_gamma.unsqueeze(1).unsqueeze(2).clamp_min(1e-3);
-    auto x_lin = x.clamp(0.0, 1.0);
-    auto x_safe = x_lin.clamp(1e-6, 1.0);
-    auto x_gamma = torch::pow(x_safe, 1.0 / gamma);
-    auto y = torch::where(x_lin > 0, x_gamma, torch::zeros_like(x_gamma));
-
-    if (cam_enable_motion_blur) {
-        auto speed = v.norm(2, -1);
-        auto t_norm = (t_cmd / 3.0).clamp(0.0, 1.0);
-        auto blur_alpha = (speed * cam_motion_blur_gain * t_norm).clamp(0.0, 0.72);
-
-        auto yg = y * (1.0 - blur_alpha.unsqueeze(1).unsqueeze(2)) + cam_prev_y * blur_alpha.unsqueeze(1).unsqueeze(2);
-
-        if (cam_enable_rolling) {
-            auto row = torch::linspace(0.0, 1.0, H, depth.options()).view({1, H, 1}).expand({B, H, W});
-            auto a_roll = blur_alpha.unsqueeze(1).unsqueeze(2) * row;
-            auto yr = y * (1.0 - a_roll) + cam_prev_y * a_roll;
-            auto use_roll = cam_use_rolling.unsqueeze(1).unsqueeze(2);
-            y = yg * (1.0 - use_roll) + yr * use_roll;
-        } else {
-            y = yg;
-        }
-    }
-
-    return y.clamp(0.0, 1.0);
-}
-
-static torch::Tensor build_y_from_depth_profiled(
-    torch::Tensor depth_raw,
-    torch::Tensor normals,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_flare_strength,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_prev_y,
-    torch::Tensor cam_use_rolling,
-    torch::Tensor v,
-    torch::Tensor cam_ae_log_t,
-    int64_t cam_profile_mask,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_motion_blur_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma) {
-    const int64_t mask = cam_profile_mask & 0x3f;
-    if (mask == 63) {
-        return build_y_from_depth_full(
-            depth_raw, normals, exposure, iso,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            true, true, true, true, true, true,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-    }
-    if (mask == 7) {
-        return build_y_from_depth_full(
-            depth_raw, normals, exposure, iso,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            true, true, true, false, false, false,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-    }
-    if (mask == 2) {
-        return build_y_from_depth_full(
-            depth_raw, normals, exposure, iso,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            false, true, false, false, false, false,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-    }
-
-    const bool cam_enable_shadow = (mask & (1 << 0)) != 0;
-    const bool cam_enable_specular = (mask & (1 << 1)) != 0;
-    const bool cam_enable_distortion = (mask & (1 << 2)) != 0;
-    const bool cam_enable_flare = (mask & (1 << 3)) != 0;
-    const bool cam_enable_motion_blur = (mask & (1 << 4)) != 0;
-    const bool cam_enable_rolling = (mask & (1 << 5)) != 0;
-
-    return build_y_from_depth_full(
-        depth_raw, normals, exposure, iso,
-        cam_light_dir, cam_ambient, cam_dir_intensity,
-        cam_fog_beta, cam_airlight,
-        cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-        cam_dist_k1, cam_dist_k2, cam_flare_strength,
-        cam_gamma, cam_prnu, cam_dsnu,
-        cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-        cam_enable_shadow, cam_enable_specular, cam_enable_distortion,
-        cam_enable_flare, cam_enable_motion_blur, cam_enable_rolling,
-        cam_vignette_a, cam_vignette_b,
-        cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-        cam_exposure_t_min, cam_exposure_t_span,
-        cam_exposure_eff_min, cam_exposure_eff_max,
-        cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-}
-
-std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
-    torch::Tensor fov_x_half_tan,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group,
-    int height,
-    int width,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_flare_strength,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_prev_y,
-    torch::Tensor cam_use_rolling,
-    torch::Tensor v,
-    torch::Tensor cam_ae_log_t,
-    int64_t cam_profile_mask,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_motion_blur_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma);
-
-torch::Tensor render_diff_yuv_y_cuda(
-    torch::Tensor fov_x_half_tan,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group,
-    int height,
-    int width) {
-    const auto B = pos.size(0);
-    auto opts = pos.options();
-    auto cam_light_dir = torch::zeros({B, 3}, opts);
-    cam_light_dir.select(1, 2).fill_(1.0);
-    auto cam_ambient = torch::full({B}, 0.2, opts);
-    auto cam_dir_intensity = torch::full({B}, 1.0, opts);
-    auto cam_fog_beta = torch::full({B}, 0.02, opts);
-    auto cam_airlight = torch::full({B}, 0.4, opts);
-    auto cam_mat_ground = torch::full({B}, 0.4, opts);
-    auto cam_mat_obstacle = torch::full({B}, 0.6, opts);
-    auto cam_mat_spec = torch::full({B}, 0.08, opts);
-    auto cam_dist_k1 = torch::zeros({B}, opts);
-    auto cam_dist_k2 = torch::zeros({B}, opts);
-    auto cam_flare_strength = torch::zeros({B}, opts);
-    auto cam_gamma = torch::full({B}, 2.2, opts);
-    auto cam_prnu = torch::zeros({B, height, width}, opts);
-    auto cam_dsnu = torch::zeros({B, height, width}, opts);
-    auto cam_prev_y = torch::zeros({B, height, width}, opts);
-    auto cam_use_rolling = torch::zeros({B}, opts);
-    auto v = torch::zeros({B, 3}, opts);
-    auto cam_ae_log_t = torch::zeros({B}, opts);
-
-    auto out = render_diff_yuv_y_forward_cuda(
-        fov_x_half_tan, exposure, iso,
-        R, pos, balls, cylinders, cylinders_h, voxels,
-        n_drones_per_group, height, width,
-        cam_light_dir, cam_ambient, cam_dir_intensity,
-        cam_fog_beta, cam_airlight,
-        cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-        cam_dist_k1, cam_dist_k2, cam_flare_strength,
-        cam_gamma, cam_prnu, cam_dsnu,
-        cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-        0,
-        0.28, 0.22,
-        0.01, 0.35, 0.14, 0.09,
-        0.25, 2.75,
-        0.15, 4.0,
-        1.0, 10.0, 1.2);
-    return out[0];
-}
-
-std::vector<torch::Tensor> render_diff_yuv_y_forward_cuda(
-    torch::Tensor fov_x_half_tan,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group,
-    int height,
-    int width,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_flare_strength,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_prev_y,
-    torch::Tensor cam_use_rolling,
-    torch::Tensor v,
-    torch::Tensor cam_ae_log_t,
-    int64_t cam_profile_mask,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_motion_blur_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma) {
-
-    const auto B = pos.size(0);
-    auto depth_raw = torch::empty({B, height, width}, pos.options());
-    auto normals = torch::empty({B, 3, height, width}, pos.options());
-    render_diff_fov_with_normal_cuda(
-        depth_raw, normals, balls, cylinders, cylinders_h, voxels,
-        R, pos, n_drones_per_group, fov_x_half_tan);
-
-    torch::Tensor y;
-    if (use_fused_camera_fast_path(cam_profile_mask)) {
-        y = render_camera_luma_fused_forward_cuda(
-            depth_raw, normals, exposure, iso,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2,
-            cam_gamma, cam_prnu, cam_dsnu, cam_ae_log_t,
-            cam_profile_mask,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-    } else {
-        y = build_y_from_depth_profiled(
-            depth_raw, normals, exposure, iso,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            cam_profile_mask,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-    }
-    return {y, depth_raw, normals};
-}
-
-std::vector<torch::Tensor> render_diff_yuv_y_backward_cuda(
-    torch::Tensor grad_output,
-    torch::Tensor depth_raw,
-    torch::Tensor fov_x_half_tan,
-    torch::Tensor exposure,
-    torch::Tensor iso,
-    torch::Tensor normals,
-    torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group,
-    int height,
-    int width,
-    torch::Tensor cam_light_dir,
-    torch::Tensor cam_ambient,
-    torch::Tensor cam_dir_intensity,
-    torch::Tensor cam_fog_beta,
-    torch::Tensor cam_airlight,
-    torch::Tensor cam_mat_ground,
-    torch::Tensor cam_mat_obstacle,
-    torch::Tensor cam_mat_spec,
-    torch::Tensor cam_dist_k1,
-    torch::Tensor cam_dist_k2,
-    torch::Tensor cam_flare_strength,
-    torch::Tensor cam_gamma,
-    torch::Tensor cam_prnu,
-    torch::Tensor cam_dsnu,
-    torch::Tensor cam_prev_y,
-    torch::Tensor cam_use_rolling,
-    torch::Tensor v,
-    torch::Tensor cam_ae_log_t,
-    int64_t cam_profile_mask,
-    double cam_vignette_a,
-    double cam_vignette_b,
-    double cam_black_level,
-    double cam_sharpen_amount,
-    double cam_base_gain,
-    double cam_motion_blur_gain,
-    double cam_exposure_t_min,
-    double cam_exposure_t_span,
-    double cam_exposure_eff_min,
-    double cam_exposure_eff_max,
-    double cam_iso_gain_base,
-    double cam_iso_gain_scale,
-    double cam_iso_gain_gamma,
-    bool need_grad_fov,
-    bool need_grad_exposure,
-    bool need_grad_iso) {
-
-    auto go = grad_output.contiguous();
-    auto d = depth_raw.contiguous();
-
-    torch::Tensor grad_depth = torch::zeros_like(d);
-    torch::Tensor grad_exposure = torch::zeros_like(exposure);
-    torch::Tensor grad_iso = torch::zeros_like(iso);
-
-    const bool have_geom_cache = depth_raw.numel() > 0 && normals.numel() > 0;
-    if (use_fused_camera_fast_path(cam_profile_mask)) {
-        torch::Tensor d_used = d;
-        torch::Tensor n_used = normals;
-        if (!have_geom_cache) {
-            d_used = torch::empty({pos.size(0), height, width}, pos.options());
-            n_used = torch::empty({pos.size(0), 3, height, width}, pos.options());
-            render_diff_fov_with_normal_cuda(
-                d_used, n_used,
-                balls, cylinders, cylinders_h, voxels,
-                R, pos,
-                n_drones_per_group,
-                fov_x_half_tan);
-        }
-        auto fused_grads = render_camera_luma_fused_backward_cuda(
-            go,
-            d_used,
-            n_used,
-            exposure,
-            iso,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_ae_log_t,
-            cam_profile_mask,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma,
-            need_grad_exposure, need_grad_iso);
-        grad_depth = fused_grads[0];
-        if (need_grad_exposure) grad_exposure = fused_grads[1];
-        if (need_grad_iso) grad_iso = fused_grads[2];
-    } else {
-
-    const bool need_depth = need_grad_fov;
-    if (need_depth || need_grad_exposure || need_grad_iso) {
-        torch::autograd::AutoGradMode enable_grad(true);
-
-        torch::Tensor d_var = need_depth ? d.detach() : d;
-        torch::Tensor e_var = need_grad_exposure ? exposure.detach() : exposure;
-        torch::Tensor i_var = need_grad_iso ? iso.detach() : iso;
-
-        if (need_depth) d_var.set_requires_grad(true);
-        if (need_grad_exposure) e_var.set_requires_grad(true);
-        if (need_grad_iso) i_var.set_requires_grad(true);
-
-        auto y_var = build_y_from_depth_profiled(
-            d_var, normals, e_var, i_var,
-            cam_light_dir, cam_ambient, cam_dir_intensity,
-            cam_fog_beta, cam_airlight,
-            cam_mat_ground, cam_mat_obstacle, cam_mat_spec,
-            cam_dist_k1, cam_dist_k2, cam_flare_strength,
-            cam_gamma, cam_prnu, cam_dsnu,
-            cam_prev_y, cam_use_rolling, v, cam_ae_log_t,
-            cam_profile_mask,
-            cam_vignette_a, cam_vignette_b,
-            cam_black_level, cam_sharpen_amount, cam_base_gain, cam_motion_blur_gain,
-            cam_exposure_t_min, cam_exposure_t_span,
-            cam_exposure_eff_min, cam_exposure_eff_max,
-            cam_iso_gain_base, cam_iso_gain_scale, cam_iso_gain_gamma);
-
-        std::vector<torch::Tensor> grad_inputs;
-        if (need_depth) grad_inputs.push_back(d_var);
-        if (need_grad_exposure) grad_inputs.push_back(e_var);
-        if (need_grad_iso) grad_inputs.push_back(i_var);
-
-        std::vector<torch::Tensor> grads = torch::autograd::grad(
-            {y_var},
-            grad_inputs,
-            {go},
-            false,
-            false,
-            true);
-
-        int gi = 0;
-        if (need_depth) {
-            grad_depth = grads[gi].defined() ? grads[gi] : torch::zeros_like(d);
-            gi++;
-        }
-        if (need_grad_exposure) {
-            grad_exposure = grads[gi].defined() ? grads[gi] : torch::zeros_like(exposure);
-            gi++;
-        }
-        if (need_grad_iso) {
-            grad_iso = grads[gi].defined() ? grads[gi] : torch::zeros_like(iso);
-        }
-    }
-    }
-
-    auto grad_fov = torch::zeros_like(fov_x_half_tan);
-    if (need_grad_fov) {
-        render_backward_fov_from_normal_cuda(
-            grad_fov,
-            grad_depth.contiguous(),
-            d,
-            normals,
-            R,
-            fov_x_half_tan);
-    }
-
-    return {grad_fov, grad_exposure, grad_iso};
-}
-
-// ============================================================================
-// C++ 接口函数：Active ToF 可微前向（CUDA高性能路径）
+// C++ 接口函数：diff_depth 可微前向（CUDA高性能路径）
 // 说明：
 // - 几何深度：复用 render_diff_fov_cuda（CUDA）
 // - 传感器与噪声：使用 ATen 张量算子（GPU 上执行）
-// - 返回：noisy_depth, confidence
+// - 返回：noisy_depth, quality
 // ============================================================================
-std::vector<torch::Tensor> render_active_tof_forward_cuda(
+std::vector<torch::Tensor> render_diff_depth_forward_cuda(
     torch::Tensor fov_x_half_tan,
     torch::Tensor power,
     torch::Tensor exposure,
@@ -2318,7 +1579,7 @@ std::vector<torch::Tensor> render_active_tof_forward_cuda(
     auto energy_recv = (power_scaled * exp_scaled) / (depth * depth + 0.1);
     energy_recv = energy_recv * gain_scaled * 100.0;
 
-    auto conf_raw = torch::tanh(energy_recv * 0.5);
+    auto quality_raw = torch::tanh(energy_recv * 0.5);
 
     auto speed = v.norm(2, -1);
     auto motion_blur_factor = (speed * exp_scaled.squeeze(2).squeeze(1) * 0.1).clamp(0.0, 1.0);
@@ -2334,7 +1595,7 @@ std::vector<torch::Tensor> render_active_tof_forward_cuda(
         c10::nullopt).squeeze(1);
     auto depth_blurred = depth * (1.0 - mbf) + blur_kernel * mbf;
 
-    auto conf = conf_raw * (1.0 - mbf * 0.8);
+    auto quality = quality_raw * (1.0 - mbf * 0.8);
 
     auto noise_std = (0.05 * gain_scaled) / (energy_recv + 1e-3);
     noise_std = noise_std.clamp(0.01, 1.0);
@@ -2342,14 +1603,14 @@ std::vector<torch::Tensor> render_active_tof_forward_cuda(
     auto noisy_depth = depth_blurred + torch::randn_like(depth_blurred) * noise_std;
     noisy_depth = noisy_depth.clamp(0.05, max_range);
 
-    return {noisy_depth, conf};
+    return {noisy_depth, quality};
 }
 
-std::vector<torch::Tensor> render_active_tof_backward_cuda(
+std::vector<torch::Tensor> render_diff_depth_backward_cuda(
     torch::Tensor grad_noisy_depth,
-    torch::Tensor grad_conf,
+    torch::Tensor grad_quality,
     torch::Tensor noisy_depth,
-    torch::Tensor conf,
+    torch::Tensor quality,
     torch::Tensor fov_x_half_tan,
     torch::Tensor power,
     torch::Tensor exposure,
@@ -2370,7 +1631,7 @@ std::vector<torch::Tensor> render_active_tof_backward_cuda(
     auto opts = pos.options();
 
     auto go_depth = grad_noisy_depth.contiguous();
-    auto go_conf = grad_conf.contiguous();
+    auto go_quality = grad_quality.contiguous();
 
     // 重新计算几何深度与中间量（与 forward 路径一致）
     auto depth = torch::empty({B, height, width}, opts);
@@ -2387,7 +1648,7 @@ std::vector<torch::Tensor> render_active_tof_backward_cuda(
     auto energy_recv = (ps * es) / (d2 + 0.1);
     energy_recv = energy_recv * gs * 100.0;
 
-    auto conf_raw = torch::tanh(energy_recv * 0.5);
+    auto quality_raw = torch::tanh(energy_recv * 0.5);
 
     auto speed = v.norm(2, -1); // (B,)
     auto mbf0 = speed * es.squeeze(2).squeeze(1) * 0.1; // unclamped motion blur factor
@@ -2418,13 +1679,13 @@ std::vector<torch::Tensor> render_active_tof_backward_cuda(
     auto g_depth_blurred = g_noisy;
     auto g_noise_std = g_noisy * eps;
 
-    // conf = conf_raw * (1 - 0.8 m)
-    auto g_conf_raw = go_conf * (1.0 - 0.8 * m);
-    auto g_m_from_conf = go_conf * (-0.8 * conf_raw);
+    // quality = quality_raw * (1 - 0.8 m)
+    auto g_quality_raw = go_quality * (1.0 - 0.8 * m);
+    auto g_m_from_quality = go_quality * (-0.8 * quality_raw);
 
     // depth_blurred = depth*(1-m) + blur*m
     auto g_m_from_blur = g_depth_blurred * (blur_kernel - depth);
-    auto g_m_total = g_m_from_conf + g_m_from_blur;
+    auto g_m_total = g_m_from_quality + g_m_from_blur;
 
     auto g_depth = g_depth_blurred * (1.0 - m);
     auto g_blur = g_depth_blurred * m;
@@ -2454,9 +1715,9 @@ std::vector<torch::Tensor> render_active_tof_backward_cuda(
     auto g_gs_from_ns = (g_noise_std0 * (0.05 / denomE)).sum({1, 2});
     auto g_E_from_ns = g_noise_std0 * (-0.05 * gs / (denomE * denomE));
 
-    // conf_raw = tanh(0.5E)
-    auto g_E_from_conf = g_conf_raw * (0.5 * (1.0 - conf_raw * conf_raw));
-    auto g_E = g_E_from_conf + g_E_from_ns;
+    // quality_raw = tanh(0.5E)
+    auto g_E_from_quality = g_quality_raw * (0.5 * (1.0 - quality_raw * quality_raw));
+    auto g_E = g_E_from_quality + g_E_from_ns;
 
     // E = 100 * ps * es * gs / (d^2 + 0.1)
     auto inv_den = 1.0 / (d2 + 0.1);
@@ -2479,7 +1740,7 @@ std::vector<torch::Tensor> render_active_tof_backward_cuda(
     auto grad_exposure = g_es_total * 0.95;
     auto grad_gain = g_gs_total * 9.0;
 
-    // 几何链路回传到 fov（供未来扩展；当前 active_tof 调用里 fov 通常不需梯度）
+    // 几何链路回传到 fov（供未来扩展；当前 diff_depth 调用里 fov 通常不需梯度）
     auto grad_fov = torch::zeros_like(fov_x_half_tan);
     render_backward_fov_cuda(
         grad_fov,

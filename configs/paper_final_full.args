@@ -4,7 +4,7 @@
 # 设计目标：
 # 1) 参数完整：覆盖 parser 中全部参数（便于查漏/审阅）
 # 2) 论文语义：保留“为什么开这个开关”的实验意图注释
-# 3) 可运行性：默认值偏向你当前实验（TBPTT + unified control + optical loss）
+# 3) 可运行性：默认值偏向你当前实验（diff_depth + direct_action；暂不开 TBPTT / dMPC / intent）
 # =========================================================================
 
 # ----------------- 断点恢复 (Checkpoint Resume) -----------------
@@ -17,7 +17,7 @@
 
 # ----------------- TBPTT + 混合调度 (Long-horizon Training) -----------------
 # 目的：解决长时域 BPTT 显存压力与梯度不稳问题
-# --tbptt_enable                      # 开启 TBPTT
+# --tbptt_enable                      # 开启 TBPTT，后续若显存/长时域稳定性不足再打开
 --tbptt_chunk_steps 10              # 每 xx 步截断一次图
 --tbptt_chunk_accum 1               # 每 1 个 chunk step 一次优化器
 --hybrid_full_bptt_every 0         # 每 20 iter 做一次完整 BPTT 校准
@@ -37,81 +37,71 @@
 --single                            # 单智能体模式
 # --gate                            # 门穿越场景
 --ground_voxels                     # 对齐原始 single_agent：复杂地形
---scaffold                        # 脚手架障碍
+## --scaffold                      # 第一阶段先关掉，避免基础随机场景过早变成密集细杆场
 --random_rotation                   # 对齐原始 single_agent：场景随机旋转
---yaw_drift                         # 对齐原始 single_agent：偏航漂移噪声
-# --no_odom                         # 关闭里程计输入
+## --yaw_drift                     # 第一阶段先关掉，后续再作为 harder setting
+## --no_odom                       # 第一阶段先保留 odom，先把飞行和相机调参学稳
 # --wall_slit                       # 狭缝场景
+# --scenarios sun_glare black_gap dark_slit_lite
+# 若先做 warmup，可改成：
+# --scenarios random_base sun_glare black_gap dark_slit_lite
+--scenarios random_base
 
 # --ellipsoid_collision               # 椭球碰撞体（更接近真实无人机外形）
 --drone_a 0.15                      # 椭球 a 半轴 (x/y)
 --drone_c 0.075                     # 椭球 c 半轴 (z)
 --coef_tilt 0.0                     # wall_slit 侧倾损失权重（当前实现默认可设 0）
 
---speed_mtp 6.0                     # 对齐原始 single_agent
+--speed_mtp 4.0                     # 第一阶段先降低速度上限，避免 blur/避障难度同时过高
 --fov_x_half_tan 0.82               # 对齐原始 single_agent
 --base_control_freq 15.0              # 基础控制频率 (Hz)，对应控制时间步长 ctl_dt = 1/base_control_freq
 --cam_angle 20                      # 对齐原始 single_agent
 
 # ----------------- 传感器分辨率 (Sensor Resolutions) -----------------
---imx_width 120                      # 主相机宽 (从 480 降至 120，解决 OOM)
---imx_height 90                     # 主相机高 (从 360 降至 90，解决 OOM)
 # --depth_width 480                   # 深度相机原始渲染宽（可微深度相机原始分辨率）
 # --depth_height 270                  # 深度相机原始渲染高（可微深度相机原始分辨率）
---depth_width 32                      # 深度相机原始渲染宽（可微深度相机原始分辨率）
---depth_height 24                     # 深度相机原始渲染高（可微深度相机原始分辨率）
---depth_nn_width 4                   # 输入策略网络的深度宽（流水线最终尺寸）
---depth_nn_height 4                  # 输入策略网络的深度高（流水线最终尺寸）
---depth_use_pipeline                  # 深度输入启用图像处理流水线（diff_depth 与 camera_luma_plus_depth 均生效）
+--depth_width 64                      # 深度相机原始渲染宽（可微深度相机原始分辨率）
+--depth_height 48                     # 深度相机原始渲染高（可微深度相机原始分辨率）
+--depth_min_valid 0.3                 # 深度图有效像素阈值；训练/评测/fill loss 统一按这个阈值解释
+--depth_max_range 6.0                 # 深度相机最大可靠量程；与渲染器和网络前处理保持一致
+--depth_nn_width 32                   # 输入策略网络的深度宽（流水线最终尺寸）
+--depth_nn_height 24                  # 输入策略网络的深度高（流水线最终尺寸）
+--depth_use_pipeline                  # 深度输入启用图像处理流水线（diff_depth 主链）
 # --no-depth_use_pipeline             # 关闭流水线，按各模式的直输逻辑输入网络
-# --diff_sensor_impl camera_luma=cuda diff_depth=cuda
---diff_sensor_impl camera_luma=cuda diff_depth=cuda
-
-# 已弃用（仅保留对照）：策略融合输入尺寸，当前代码会给 warning
-# --policy_input_width 80
-# --policy_input_height 60
+# --diff_sensor_impl diff_depth=cuda
+--diff_sensor_impl diff_depth=python
 
 # ----------------- 主损失权重 (Core Physical Losses) -----------------
 # 速度相关区别：
 # - coef_v      : 向量级主目标（方向+大小）
 # - coef_v_pred : 监督网络的速度预测头（表征辅助）
---coef_v 3.0                        # 速度向量跟踪主损失
+--coef_v 2.5                        # 降低速度项统治性，避免训练几乎只在追速度
 --coef_v_pred 0.0                   # 速度预测头监督损失
 
 --coef_d_acc 0.01                   # 动作能量/加速度正则
---coef_d_jerk 0.001                 # jerk 正则
+--coef_d_jerk 0.002                 # 略微加强平滑，抑制后期抖动
 
---coef_obj_avoidance 1.0            # 避障势能惩罚
---coef_collide 2                  # 对齐原始 single_agent
+--coef_obj_avoidance 4.0            # 提高避障势能项，让策略别只顾速度
+--coef_collide 10.0                 # 提高碰撞惩罚，强化安全优先级
 --coef_ground_affinity 0.0          # 地面亲和损失权重（遗留）
 
 # ----------------- 可微相机 + 主动感知 (Differentiable Camera) -----------------
 # Paper §2.1 + §2.3
-# 典型组合：include_camera_state_in_obs + enable_camera_quality_loss
 --include_camera_state_in_obs       # 观测中加入当前相机参数
 
 --coef_cam_smooth 0.01              # 相机参数时域平滑
---coef_fov_reg 0.005                # FOV 回归中心正则
+--coef_power_reg 0.005              # 首通道回归中心正则（diff_depth 中对应 power）
 --coef_cam_range 0.001              # 相机参数范围正则
 
-# 高保真可微相机渲染档位与开关（7层管线）
+# diff_depth 退化档位与开关
 --cam_realism_preset low           # low / medium / high / ultra
---cam_enable_shadow                 # 阴影近似
 --cam_enable_specular               # 镜面反射
---cam_enable_distortion             # 镜头径向畸变
---cam_enable_flare                # 光照强度缩放
---cam_ae_target 0.36                # 自动曝光目标亮度
 
-# 论文光学势能 (Optical Perception Potentials)
-# - coef_blur: 惩罚高速+长曝光+长焦导致的运动模糊
-# - coef_noise: 惩罚高 ISO /          # flare 近似
 --cam_enable_motion_blur            # 时序运动模糊
---cam_enable_rolling                # rolling shutter 混合
 --cam_noise_scale 1.0               # 传感器噪声强度缩放
 --cam_blur_scale 1.0                # 运动模糊强度缩放
 --cam_fog_scale 1.0                 # 大气散射/雾强度缩放
 --cam_lighting_scale 1.0            # 光照强度缩放
---cam_ae_target 0.36                # 自动曝光目标亮度
 
 # 相机语义映射常数（统一管理）
 --cam_exposure_t_min 0.25
@@ -123,12 +113,12 @@
 --cam_iso_gain_gamma 1.2
 --cam_shot_noise_base 0.03
 
-# 论文光学势能 (Optical Perception Potentials)
-# - coef_blur: 惩罚高速+长曝光+长焦导致的运动模糊
-# - coef_noise: 惩罚高 ISO / 低曝光条件下的噪声放大
---enable_camera_quality_loss        # 开启 blur/noise 光学损失
---coef_blur 0.03                     # 运动模糊损失权重
---coef_noise 0.02                   # 噪声损失权重
+# diff_depth 专用光学损失权重（diff_depth 模式下生效）
+--coef_diff_depth_power 0.02        # 第一阶段先弱化功率惩罚，避免直接学到“关激光”
+--coef_diff_depth_blur 0.003        # 统一曝光语义后，按有效曝光时间重标定 blur loss
+--coef_diff_depth_noise 0.01        # 降低增益惩罚，避免暗场下过早压制可用深度
+--coef_diff_depth_fill 4.0          # 防止策略把深度相机学到几乎全空洞/全黑
+--diff_depth_min_fill_rate 0.12     # 统一 fill 语义后采用更稳妥的下界，避免 stage-1 过早被 fill loss 卡住
 
 # ----------------- 教师-学生训练 (Paper §3) -----------------
 # 当前代码逻辑：若 tbptt_enable 与 enable_teacher_student_training 同时开，会提示复杂度风险并优先完整 BPTT 路径
@@ -143,14 +133,10 @@
 --student_noise_mode off            # 蒸馏阶段 student 前向是否加噪声：off=关闭, on=开启
 
 # ----------------- 传感模式 + 控制架构 (Sensor & Control) -----------------
---sensor_mode camera_luma_plus_depth #（主视觉 + 深度）
-# --sensor_mode camera_luma  # depth / camera_luma / camera_luma_plus_depth / diff_depth
-
 # dMPC/dLQR 相关：
 # 只有 use_dmpc + policy_output_intent 同时开启时，才走意图域 LQR 路径
 # 当前你若只开 policy_output_intent 会回退动作域（代码会 warning）
 # --use_dmpc
---policy_direct_action             # 与 policy_output_intent 互斥
 # --policy_output_intent              # 策略输出意图向量（速度参考 + 代价权重参数）
 # --inject_depth_into_lqr           # 仅 use_dmpc 时生效；当前 direct_action 配置下关闭以避免歧义
 --lqr_horizon 5                     # dLQR 有限时域长度（前瞻步数）
@@ -159,10 +145,7 @@
 --depth_repel_gain 1.0              # 安全距离内的排斥增益系数
 
 # 深度输入通道配置
-# 当前实现仅使用深度通道，不再提供 confidence 通道开关。
-
-# 已弃用（保留对照）：
-# --dual_encoder                    # 代码会 warning：结构由 sensor_mode 自动决定
+# 当前实现仅使用深度通道。
 
 # ----------------- 可视化与日志 (Visualization & Logging) -----------------
 # 可视化会影响训练吞吐；做长跑实验时可适当降低采样频率
@@ -177,4 +160,5 @@
 
 # WandB
 # --wandb_disabled                  # 关闭在线日志
+# --wandb_log_raw_loss_terms        # 默认关闭，避免和 loss_contrib/loss_share 重复
 # --no-amp                           # 对齐原始项目：关闭混合精度

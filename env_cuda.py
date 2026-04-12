@@ -9,10 +9,8 @@ from utils import g_decay
 from autograd_ops import (
     run,
     diff_render,
-    diff_render_yuv_y_with_depth_aux,
     diff_render_diff_depth,
 )
-from camera_utils import apply_camera_effects, _safe_normalize, _make_separable_gaussian_kernel1d, _separable_gaussian_blur
 from camera_semantics import CameraSemantics
 
 
@@ -21,24 +19,22 @@ class Env:
     无人机物理仿真环境类。
     负责管理无人机状态、障碍物生成、碰撞检测、可微渲染以及物理步进。
     支持大规模并行仿真 (Batch processing)。
+
+    当前分支为 diff_depth-only：
+    - 仅维护可微深度相机主链
+    - 非 diff_depth 的公共渲染接口会直接报错
     """
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.53,
                  single=False, gate=False, ground_voxels=False, scaffold=False, speed_mtp=1,
                  random_rotation=False, cam_angle=10,
                  wall_slit=False, ellipsoid_a=0.0, ellipsoid_c=0.0,
-                 depth_width=None, depth_height=None,
                  camera_preset='high',
-                 cam_enable_shadow=True,
                  cam_enable_specular=True,
-                 cam_enable_distortion=True,
-                 cam_enable_flare=True,
                  cam_enable_motion_blur=True,
-                 cam_enable_rolling=True,
                  cam_noise_scale=1.0,
                  cam_blur_scale=1.0,
                  cam_fog_scale=1.0,
                  cam_lighting_scale=1.0,
-                 cam_ae_target=0.42,
                  cam_exposure_t_min=0.25,
                  cam_exposure_t_span=2.75,
                  cam_exposure_eff_min=0.15,
@@ -47,13 +43,31 @@ class Env:
                  cam_iso_gain_scale=10.0,
                  cam_iso_gain_gamma=1.2,
                  cam_shot_noise_base=0.03,
+                 depth_min_valid=0.3,
+                 depth_max_range=6.0,
+                 scenarios=None,
                  diff_sensor_impl=None) -> None:
         self.device = device
         self.batch_size = batch_size
-        self.width = width      # 主相机渲染宽度
-        self.height = height    # 主相机渲染高度
+        self.width = max(int(width), 1)      # diff_depth 渲染宽度
+        self.height = max(int(height), 1)    # diff_depth 渲染高度
         self.grad_decay = grad_decay # 梯度衰减系数
         self.wall_slit = wall_slit   # 是否启用狭缝穿越环境
+        self.depth_min_valid = max(float(depth_min_valid), 1e-3)
+        self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
+        self.supported_scenarios = ('random_base', 'sun_glare', 'black_gap', 'dark_slit_lite')
+        self.scene_name_to_id = {
+            'random_base': 0,
+            'sun_glare': 1,
+            'black_gap': 2,
+            'dark_slit_lite': 3,
+            'wall_slit': 4,
+        }
+        self.scenarios = self._normalize_scenarios(scenarios)
+        self.current_scene_name = 'random_base'
+        self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
+        self.current_scene_has_opening = False
+        self._clear_opening_scene_metadata()
         
         # 椭球体碰撞模型参数 (用于更精确的无人机碰撞检测)
         self.ellipsoid_a = ellipsoid_a # 椭球体 XY 半轴 (螺旋桨平面半径)
@@ -92,7 +106,7 @@ class Env:
         ], device=device).repeat(batch_size // 8 + 7, 1)[:batch_size]
         
         # 光流张量 (当前未使用，预留接口)
-        self.flow = torch.empty((batch_size, 0, height, width), device=device)
+        self.flow = torch.empty((batch_size, 0, self.height, self.width), device=device)
         
         # 环境配置标志
         self.single = single             # 是否单机模式
@@ -103,42 +117,22 @@ class Env:
         self.random_rotation = random_rotation # 是否随机旋转整个场景
         self.cam_angle = cam_angle       # 相机俯仰角
         self.fov_x_half_tan = fov_x_half_tan # 基础视场角 (tan(FOV/2))
-        _impl = {'camera_luma': 'python', 'diff_depth': 'python'}
+        _impl = {'diff_depth': 'python'}
         if diff_sensor_impl is not None:
             _impl.update({str(k): str(v).lower() for k, v in dict(diff_sensor_impl).items()})
         self.diff_sensor_impl = _impl
-        if depth_width is not None:
-            self.depth_width = max(int(depth_width), 1)
-        if depth_height is not None:
-            self.depth_height = max(int(depth_height), 1)
         
         if wall_slit:
             self.single = True  # 狭缝穿越任务强制使用单机模式
 
         # ==================== 高保真可微相机参数（7层管线） ====================
         self.camera_preset = str(camera_preset).lower()
-        self.cam_enable_shadow = bool(cam_enable_shadow)
         self.cam_enable_specular = bool(cam_enable_specular)
-        self.cam_enable_distortion = bool(cam_enable_distortion)
-        self.cam_enable_flare = bool(cam_enable_flare)
         self.cam_enable_motion_blur = bool(cam_enable_motion_blur)
-        self.cam_enable_rolling = bool(cam_enable_rolling)
-        self.cam_profile_mask = self._build_camera_profile_mask(
-            self.cam_enable_shadow,
-            self.cam_enable_specular,
-            self.cam_enable_distortion,
-            self.cam_enable_flare,
-            self.cam_enable_motion_blur,
-            self.cam_enable_rolling,
-        )
         self.cam_noise_scale = float(cam_noise_scale)
         self.cam_blur_scale = float(cam_blur_scale)
         self.cam_fog_scale = float(cam_fog_scale)
         self.cam_lighting_scale = float(cam_lighting_scale)
-
-        # 几何/材质层
-        self.cam_ground_z = -1.0
-        self.cam_ground_soft_band = 0.08
 
         # 光照层
         self.cam_ambient_min = 0.08
@@ -150,33 +144,11 @@ class Env:
         self.cam_airlight_min = 0.2
         self.cam_airlight_max = 0.8
 
-        # 镜头层
-        self.cam_vignette_a = 0.28
-        self.cam_vignette_b = 0.22
-        self.cam_dist_k1_range = (-0.12, 0.08)
-        self.cam_dist_k2_range = (-0.06, 0.04)
-        self.cam_flare_strength_max = 0.16
-
         # 传感器层
-        self.cam_base_gain = 0.14
         self.cam_read_noise = 0.0025
-        self.cam_black_level = 0.01
-        self.cam_prnu_std = 0.02
-        self.cam_dsnu_std = 0.005
 
-        # ISP 层
-        self.cam_gamma_min = 1.9
-        self.cam_gamma_max = 2.4
-        self.cam_sharpen_amount = 0.35
-
-        # 时序层（自动曝光 + 运动模糊）
-        self.cam_ae_target = float(cam_ae_target)
-        self.cam_ae_kp = 0.18
-        self.cam_ae_ki = 0.015
-        self.cam_ae_log_t_min = math.log(0.2)
-        self.cam_ae_log_t_max = math.log(3.0)
+        # 时序层（运动模糊）
         self.cam_motion_blur_gain = 0.09
-        self.cam_rolling_blur_prob = 0.5
 
         # 统一相机语义常数（曝光/ISO/噪声映射）
         self.cam_sem = CameraSemantics(
@@ -193,91 +165,44 @@ class Env:
         self._configure_camera_preset(self.camera_preset)
 
         # 相机状态容器（在 reset 中刷新为随机状态）
-        self._cam_light_dir = torch.tensor([[0.0, 0.0, 1.0]], device=device).repeat(batch_size, 1)
         self._cam_ambient = torch.full((batch_size,), 0.2, device=device)
         self._cam_dir_intensity = torch.full((batch_size,), 1.0, device=device)
         self._cam_fog_beta = torch.full((batch_size,), 0.02, device=device)
         self._cam_airlight = torch.full((batch_size,), 0.4, device=device)
-        self._cam_mat_ground = torch.full((batch_size,), 0.4, device=device)
         self._cam_mat_obstacle = torch.full((batch_size,), 0.6, device=device)
         self._cam_mat_spec = torch.full((batch_size,), 0.08, device=device)
-        self._cam_dist_k1 = torch.zeros((batch_size,), device=device)
-        self._cam_dist_k2 = torch.zeros((batch_size,), device=device)
-        self._cam_flare_strength = torch.zeros((batch_size,), device=device)
-        self._cam_gamma = torch.full((batch_size,), 2.2, device=device)
-        self._cam_prnu = torch.zeros((batch_size, height, width), device=device)
-        self._cam_dsnu = torch.zeros((batch_size, height, width), device=device)
-        self._cam_prev_y = torch.zeros((batch_size, height, width), device=device)
-        self._cam_ae_log_t = torch.zeros((batch_size,), device=device)
-        self._cam_ae_integral = torch.zeros((batch_size,), device=device)
-        self._cam_use_rolling = torch.zeros((batch_size,), device=device)
             
         # 初始化环境状态
         self.reset()
 
-    @staticmethod
-    def _build_camera_profile_mask(enable_shadow: bool,
-                                   enable_specular: bool,
-                                   enable_distortion: bool,
-                                   enable_flare: bool,
-                                   enable_motion_blur: bool,
-                                   enable_rolling: bool) -> int:
-        mask = 0
-        if enable_shadow:
-            mask |= 1 << 0
-        if enable_specular:
-            mask |= 1 << 1
-        if enable_distortion:
-            mask |= 1 << 2
-        if enable_flare:
-            mask |= 1 << 3
-        if enable_motion_blur:
-            mask |= 1 << 4
-        if enable_rolling:
-            mask |= 1 << 5
-        return int(mask)
-
     def _configure_camera_preset(self, preset: str):
-        """根据档位配置高保真可微相机强度。"""
+        """根据档位配置 diff_depth 传感器退化强度。"""
         p = preset.lower()
         if p == 'low':
             self.cam_ambient_min, self.cam_ambient_max = 0.12, 0.28
             self.cam_dir_min, self.cam_dir_max = 0.45, 1.0
             self.cam_fog_beta_min, self.cam_fog_beta_max = 0.005, 0.06
-            self.cam_vignette_a, self.cam_vignette_b = 0.18, 0.12
             self.cam_read_noise = 0.0018
-            self.cam_prnu_std, self.cam_dsnu_std = 0.012, 0.003
-            self.cam_sharpen_amount = 0.20
             self.cam_motion_blur_gain = 0.05
         elif p == 'medium':
             self.cam_ambient_min, self.cam_ambient_max = 0.10, 0.32
             self.cam_dir_min, self.cam_dir_max = 0.4, 1.3
             self.cam_fog_beta_min, self.cam_fog_beta_max = 0.008, 0.09
-            self.cam_vignette_a, self.cam_vignette_b = 0.24, 0.16
             self.cam_read_noise = 0.0022
-            self.cam_prnu_std, self.cam_dsnu_std = 0.016, 0.004
-            self.cam_sharpen_amount = 0.28
             self.cam_motion_blur_gain = 0.075
         elif p == 'ultra':
             self.cam_ambient_min, self.cam_ambient_max = 0.06, 0.42
             self.cam_dir_min, self.cam_dir_max = 0.5, 1.9
             self.cam_fog_beta_min, self.cam_fog_beta_max = 0.015, 0.15
-            self.cam_vignette_a, self.cam_vignette_b = 0.34, 0.26
             self.cam_read_noise = 0.0032
-            self.cam_prnu_std, self.cam_dsnu_std = 0.028, 0.006
-            self.cam_sharpen_amount = 0.42
             self.cam_motion_blur_gain = 0.11
         else:  # high
             self.cam_ambient_min, self.cam_ambient_max = 0.08, 0.35
             self.cam_dir_min, self.cam_dir_max = 0.4, 1.6
             self.cam_fog_beta_min, self.cam_fog_beta_max = 0.01, 0.12
-            self.cam_vignette_a, self.cam_vignette_b = 0.28, 0.22
             self.cam_read_noise = 0.0025
-            self.cam_prnu_std, self.cam_dsnu_std = 0.02, 0.005
-            self.cam_sharpen_amount = 0.35
             self.cam_motion_blur_gain = 0.09
 
-        # 全局缩放
         self.cam_dir_min *= self.cam_lighting_scale
         self.cam_dir_max *= self.cam_lighting_scale
         self.cam_ambient_min *= self.cam_lighting_scale
@@ -285,304 +210,188 @@ class Env:
         self.cam_fog_beta_min *= self.cam_fog_scale
         self.cam_fog_beta_max *= self.cam_fog_scale
         self.cam_read_noise *= self.cam_noise_scale
-        self.cam_prnu_std *= self.cam_noise_scale
-        self.cam_dsnu_std *= self.cam_noise_scale
         self.cam_motion_blur_gain *= self.cam_blur_scale
-        self.cam_rolling_blur_prob = self.cam_rolling_blur_prob if self.cam_enable_rolling else 0.0
+
+    def _normalize_scenarios(self, scenarios):
+        if scenarios is None:
+            return ['random_base']
+        out = []
+        for raw in scenarios:
+            name = str(raw).strip().lower()
+            if not name:
+                continue
+            if name not in self.supported_scenarios:
+                raise ValueError(
+                    f"不支持的场景 '{name}'，仅支持: {list(self.supported_scenarios)}"
+                )
+            if name not in out:
+                out.append(name)
+        return out or ['random_base']
 
     def _reset_camera_states(self):
-        """重置高保真可微相机的随机参数与时序状态。"""
+        """重置 diff_depth 传感器随机环境参数。"""
         B = self.batch_size
         device = self.device
 
-        # 光照参数
-        light = torch.randn((B, 3), device=device)
-        light[:, 2] = torch.abs(light[:, 2]) + 0.2  # 主光源更多来自“上方”
-        self._cam_light_dir = _safe_normalize(light, -1)
         self._cam_ambient = torch.empty((B,), device=device).uniform_(self.cam_ambient_min, self.cam_ambient_max)
         self._cam_dir_intensity = torch.empty((B,), device=device).uniform_(self.cam_dir_min, self.cam_dir_max)
         self._cam_fog_beta = torch.empty((B,), device=device).uniform_(self.cam_fog_beta_min, self.cam_fog_beta_max)
         self._cam_airlight = torch.empty((B,), device=device).uniform_(self.cam_airlight_min, self.cam_airlight_max)
-
-        # 材质先验
-        self._cam_mat_ground = torch.empty((B,), device=device).uniform_(0.30, 0.55)
         self._cam_mat_obstacle = torch.empty((B,), device=device).uniform_(0.45, 0.85)
         self._cam_mat_spec = torch.empty((B,), device=device).uniform_(0.02, 0.18)
 
-        # 镜头参数
-        k1_lo, k1_hi = self.cam_dist_k1_range
-        k2_lo, k2_hi = self.cam_dist_k2_range
-        self._cam_dist_k1 = torch.empty((B,), device=device).uniform_(k1_lo, k1_hi)
-        self._cam_dist_k2 = torch.empty((B,), device=device).uniform_(k2_lo, k2_hi)
-        self._cam_flare_strength = torch.empty((B,), device=device).uniform_(0.0, self.cam_flare_strength_max)
+    def _clear_opening_scene_metadata(self):
+        self.wall_x = None
+        self.slit_y_center = None
+        self.slit_z_center = None
+        self.slit_half_w = None
+        self.slit_half_h = None
+        self.wall_thickness = None
 
-        # ISP 参数
-        self._cam_gamma = torch.empty((B,), device=device).uniform_(self.cam_gamma_min, self.cam_gamma_max)
+    def _choose_scene_name(self, scene_name=None):
+        if self.wall_slit:
+            return 'wall_slit'
+        if scene_name is not None:
+            name = str(scene_name).strip().lower()
+            if name not in self.supported_scenarios:
+                raise ValueError(
+                    f"reset(scene_name={scene_name!r}) 不支持；仅支持 {list(self.supported_scenarios)}"
+                )
+            return name
+        return random.choice(self.scenarios)
 
-        # 固定图样噪声
-        self._cam_prnu = torch.randn((B, self.height, self.width), device=device) * self.cam_prnu_std
-        self._cam_dsnu = torch.randn((B, self.height, self.width), device=device) * self.cam_dsnu_std
+    def _set_scene_name(self, scene_name):
+        self.current_scene_name = str(scene_name)
+        self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
+        self.current_scene_has_opening = self.current_scene_name in {'black_gap', 'dark_slit_lite', 'wall_slit'}
 
-        # 时序状态
-        self._cam_prev_y = torch.zeros((B, self.height, self.width), device=device)
-        self._cam_ae_log_t = torch.zeros((B,), device=device)
-        self._cam_ae_integral = torch.zeros((B,), device=device)
-        self._cam_use_rolling = (torch.rand((B,), device=device) < self.cam_rolling_blur_prob).float()
+    def _sample_scene_tensor(self, lo, hi):
+        return torch.empty((self.batch_size,), device=self.device).uniform_(float(lo), float(hi))
 
-    def _build_camera_rays(self, fov_tensor, R_cam_world):
-        """
-        构造每个像素在世界坐标系下的单位光线方向。
-        Returns:
-            dir_world: (B, H, W, 3)
-            dir_cam:   (B, H, W, 3)
-        """
-        B = R_cam_world.shape[0]
-        H, W = self.height, self.width
-        device = R_cam_world.device
-        dtype = R_cam_world.dtype
+    def _apply_scene_sensor_profile(self, scene_name):
+        if scene_name == 'sun_glare':
+            self._cam_ambient = self._sample_scene_tensor(0.30, 0.52)
+            self._cam_dir_intensity = self._sample_scene_tensor(1.8, 3.0)
+            self._cam_fog_beta = self._sample_scene_tensor(0.03, 0.12)
+            self._cam_airlight = self._sample_scene_tensor(0.65, 1.00)
+            self._cam_mat_obstacle = self._sample_scene_tensor(0.55, 0.95)
+            self._cam_mat_spec = self._sample_scene_tensor(0.04, 0.18)
+        elif scene_name == 'black_gap':
+            self._cam_ambient = self._sample_scene_tensor(0.02, 0.09)
+            self._cam_dir_intensity = self._sample_scene_tensor(0.08, 0.35)
+            self._cam_fog_beta = self._sample_scene_tensor(0.005, 0.03)
+            self._cam_airlight = self._sample_scene_tensor(0.04, 0.14)
+            self._cam_mat_obstacle = self._sample_scene_tensor(0.03, 0.12)
+            self._cam_mat_spec = self._sample_scene_tensor(0.00, 0.03)
+        elif scene_name == 'dark_slit_lite':
+            self._cam_ambient = self._sample_scene_tensor(0.03, 0.12)
+            self._cam_dir_intensity = self._sample_scene_tensor(0.12, 0.50)
+            self._cam_fog_beta = self._sample_scene_tensor(0.006, 0.04)
+            self._cam_airlight = self._sample_scene_tensor(0.05, 0.18)
+            self._cam_mat_obstacle = self._sample_scene_tensor(0.07, 0.20)
+            self._cam_mat_spec = self._sample_scene_tensor(0.01, 0.05)
 
-        u = torch.arange(H, device=device, dtype=dtype)
-        v = torch.arange(W, device=device, dtype=dtype)
-        uu, vv = torch.meshgrid(u, v, indexing='ij')
-        uu = uu[None].expand(B, -1, -1)
-        vv = vv[None].expand(B, -1, -1)
+    def _reset_rect_opening_scene(self, B, device, scene_name,
+                                  slit_half_w_range, slit_half_h_range,
+                                  dist_from_wall_range, max_speed_range,
+                                  lateral_noise, vertical_noise,
+                                  margin, drone_radius, wind_scale):
+        wall_x = random.uniform(2.2, 5.2)
+        slit_y_center = random.uniform(-1.2, 1.2)
+        slit_z_center = random.uniform(0.35, 1.45)
+        slit_half_w = random.uniform(*slit_half_w_range)
+        slit_half_h = random.uniform(*slit_half_h_range)
+        wall_thickness = 0.16
 
-        fov = fov_tensor[:, None, None]
-        fov_y = fov / W * H
-        fu = (2.0 * (uu + 0.5) / H - 1.0) * fov_y
-        fv = (2.0 * (vv + 0.5) / W - 1.0) * fov
+        self.wall_x = wall_x
+        self.slit_y_center = slit_y_center
+        self.slit_z_center = slit_z_center
+        self.slit_half_w = slit_half_w
+        self.slit_half_h = slit_half_h
+        self.wall_thickness = wall_thickness
 
-        dir_cam = torch.stack([
-            torch.ones_like(fu),
-            -fv,
-            -fu,
+        big = 10.0
+        wall_voxels = torch.zeros((B, 4, 6), device=device)
+        wall_voxels[:, 0, 0] = wall_x
+        wall_voxels[:, 0, 1] = slit_y_center - slit_half_w - big
+        wall_voxels[:, 0, 2] = slit_z_center
+        wall_voxels[:, 0, 3] = wall_thickness
+        wall_voxels[:, 0, 4] = big
+        wall_voxels[:, 0, 5] = big
+
+        wall_voxels[:, 1, 0] = wall_x
+        wall_voxels[:, 1, 1] = slit_y_center + slit_half_w + big
+        wall_voxels[:, 1, 2] = slit_z_center
+        wall_voxels[:, 1, 3] = wall_thickness
+        wall_voxels[:, 1, 4] = big
+        wall_voxels[:, 1, 5] = big
+
+        wall_voxels[:, 2, 0] = wall_x
+        wall_voxels[:, 2, 1] = slit_y_center
+        wall_voxels[:, 2, 2] = slit_z_center + slit_half_h + big
+        wall_voxels[:, 2, 3] = wall_thickness
+        wall_voxels[:, 2, 4] = slit_half_w
+        wall_voxels[:, 2, 5] = big
+
+        wall_voxels[:, 3, 0] = wall_x
+        wall_voxels[:, 3, 1] = slit_y_center
+        wall_voxels[:, 3, 2] = slit_z_center - slit_half_h - big
+        wall_voxels[:, 3, 3] = wall_thickness
+        wall_voxels[:, 3, 4] = slit_half_w
+        wall_voxels[:, 3, 5] = big
+
+        self.balls[:, :, 2] = -200
+        self.cyl[:, :, 2] = 0.001
+        self.cyl_h[:, :, 2] = 0.001
+        self.voxels = wall_voxels
+
+        dist_from_wall = random.uniform(*dist_from_wall_range)
+        noise_y = torch.randn(B, device=device) * lateral_noise
+        noise_z = torch.randn(B, device=device) * vertical_noise
+        self.p = torch.stack([
+            torch.full((B,), wall_x - dist_from_wall, device=device),
+            torch.full((B,), slit_y_center, device=device) + noise_y,
+            torch.full((B,), slit_z_center, device=device) + noise_z,
         ], -1)
-        dir_cam = _safe_normalize(dir_cam, -1)
+        self.p_target = torch.stack([
+            torch.full((B,), wall_x + dist_from_wall, device=device),
+            torch.full((B,), slit_y_center, device=device) + noise_y * 0.4,
+            torch.full((B,), slit_z_center, device=device) + noise_z * 0.4,
+        ], -1)
 
-        dir_world = torch.einsum('bij,bhwj->bhwi', R_cam_world, dir_cam)
-        dir_world = _safe_normalize(dir_world, -1)
-        return dir_world, dir_cam
+        self.n_drones_per_group = 1
+        self.drone_radius = drone_radius
+        self.max_speed = torch.full(
+            (B, 1), random.uniform(*max_speed_range), device=device
+        ) * self.speed_mtp
+        self.margin = torch.full((B,), margin, device=device)
 
-    def _estimate_normals_from_depth(self, depth):
-        """
-        改进版：从深度图估计近似法线，并处理边缘深度突变，防止梯度爆炸。
-        """
-        x = depth[:, None]
-        # Sobel 算子计算 X 和 Y 方向的梯度
-        sobel_x = torch.tensor([[1., 0., -1.], [2., 0., -2.], [1., 0., -1.]], device=depth.device, dtype=depth.dtype) / 8.0
-        sobel_y = torch.tensor([[1., 2., 1.], [0., 0., 0.], [-1., -2., -1.]], device=depth.device, dtype=depth.dtype) / 8.0
-        
-        dx = F.conv2d(F.pad(x, (1, 1, 1, 1), mode='replicate'), sobel_x.view(1, 1, 3, 3))[:, 0]
-        dy = F.conv2d(F.pad(x, (1, 1, 1, 1), mode='replicate'), sobel_y.view(1, 1, 3, 3))[:, 0]
-        
-        # 【核心修改点】：限制深度梯度的最大幅值 (比如最大允许斜率为 1.0)
-        # 这意味着我们假设场景中极其陡峭的表面（视线几乎平行于表面）是不反光的，
-        # 从而避免在断崖边缘产生无穷大的梯度。
-        max_grad = 1.0 
-        dx = torch.clamp(dx, min=-max_grad, max=max_grad)
-        dy = torch.clamp(dy, min=-max_grad, max=max_grad)
-        
-        # 组装法线并归一化
-        n = torch.stack([-dx, -dy, torch.ones_like(depth)], -1)
-        return _safe_normalize(n, -1)
+        self.v = torch.randn((B, 3), device=device) * 0.08
+        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * wind_scale
+        self.act = torch.randn_like(self.v) * 0.04
+        self.a = self.act
+        self.dg = torch.randn((B, 3), device=device) * 0.08
 
-    def _material_prior(self, points_world, normals_world):
-        """根据几何位置 + 法线估计材质反照率与镜面先验。"""
-        z = points_world[..., 2]
-        nz = torch.abs(normals_world[..., 2])
+        R = torch.zeros((B, 3, 3), device=device)
+        v_dir = F.normalize(self.p_target - self.p, 2, -1)
+        self.R = quadsim_cuda.update_state_vec(
+            R, self.act, torch.randn((B, 3), device=device) * 0.1 + v_dir,
+            torch.zeros_like(self.yaw_ctl_delay), 5)
+        self.R_old = self.R.clone()
+        self.p_old = self.p
+        self._current_scale = 1.0
+        self._current_y_stretch = 1.0
 
-        # 地面软分类：接近 z=-1 且法线接近竖直
-        near_ground = torch.exp(-((z - self.cam_ground_z) ** 2) / (2 * self.cam_ground_soft_band ** 2))
-        flatness = torch.clamp((nz - 0.55) / 0.45, 0.0, 1.0)
-        w_ground = torch.clamp(near_ground * flatness, 0.0, 1.0)
-
-        w_obs = 1.0 - w_ground
-        # 变量 albedo (反照率/固有色)：物体在没有任何光照影响下，原本的明暗程度。
-        albedo = (
-            w_ground * self._cam_mat_ground[:, None, None]
-            + w_obs * self._cam_mat_obstacle[:, None, None]
-        )
-        # 变量 spec (Specular, 镜面反射系数)：决定了这个物体反不反光。
-        spec = w_obs * self._cam_mat_spec[:, None, None]
-        return albedo, spec
-
-    def _screen_space_shadow(self, depth, light_dir_cam):
-        """
-        屏幕空间阴影近似：沿主光方向在图像平面采样更近深度作为遮挡证据。
-        """
-        if not self.cam_enable_shadow:
-            return torch.ones_like(depth)
-        B, H, W = depth.shape
-        device = depth.device
-        in_dtype = depth.dtype
-        work_dtype = torch.float16 if depth.is_cuda else in_dtype
-
-        depth_w = depth.to(work_dtype)
-        light_w = light_dir_cam.to(work_dtype)
-
-        base_y = torch.linspace(-1, 1, H, device=device, dtype=work_dtype)
-        base_x = torch.linspace(-1, 1, W, device=device, dtype=work_dtype)
-        gy, gx = torch.meshgrid(base_y, base_x, indexing='ij')
-        gx = gx[None].expand(B, -1, -1)
-        gy = gy[None].expand(B, -1, -1)
-
-        # 光线在成像面上的方向（x: 水平, y: 垂直）
-        lx = light_w[:, 1]
-        ly = light_w[:, 2]
-        lz = torch.clamp(light_w[:, 0].abs(), min=0.15)
-        dir_u = -(ly / lz)[:, None, None]
-        dir_v = -(lx / lz)[:, None, None]
-
-        d = depth_w[:, None]
-        occ = 0.0
-        for t in (1.5, 3.0):
-            sx = gx + dir_v * (2.0 * t / max(W, 1))
-            sy = gy + dir_u * (2.0 * t / max(H, 1))
-            grid = torch.stack([sx, sy], -1)
-            d_shift = F.grid_sample(d, grid, mode='bilinear', padding_mode='border', align_corners=True)[:, 0]
-            # 若偏移位置更“近”，说明可能遮挡主光
-            occ = occ + torch.sigmoid((depth_w - d_shift - 0.03) / 0.02)
-        occ = occ / 2.0
-        shadow = torch.clamp(1.0 - 0.65 * occ, 0.2, 1.0)
-        return shadow.to(in_dtype)
-
-    def _apply_lens_model(self, y):
-        """镜头层：暗角 + 畸变 + flare 近似。"""
-        B, H, W = y.shape
-        device = y.device
-        dtype = y.dtype
-
-        # 暗角（vignetting）
-        yy = torch.linspace(-1, 1, H, device=device, dtype=dtype)
-        xx = torch.linspace(-1, 1, W, device=device, dtype=dtype)
-        gy, gx = torch.meshgrid(yy, xx, indexing='ij')
-        r2 = gx * gx + gy * gy
-        vignette = torch.clamp(1.0 - self.cam_vignette_a * r2 - self.cam_vignette_b * (r2 ** 2), 0.25, 1.0)
-        y = y * vignette[None]
-
-        # 畸变（radial distortion）
-        if self.cam_enable_distortion:
-            gx = gx[None].expand(B, -1, -1)
-            gy = gy[None].expand(B, -1, -1)
-            r2b = gx * gx + gy * gy
-            scale = 1.0 + self._cam_dist_k1[:, None, None] * r2b + self._cam_dist_k2[:, None, None] * (r2b ** 2)
-            sx = torch.clamp(gx * scale, -1.2, 1.2)
-            sy = torch.clamp(gy * scale, -1.2, 1.2)
-            grid = torch.stack([sx, sy], -1)
-            y = F.grid_sample(y[:, None], grid, mode='bilinear', padding_mode='border', align_corners=True)[:, 0]
-
-        # flare（对高亮区域大核扩散）
-        if self.cam_enable_flare:
-            bright = torch.relu(y - 0.82)
-            flare = _separable_gaussian_blur(bright, sigma=4.0)
-            y = y + self._cam_flare_strength[:, None, None] * flare
-        return y
-
-    def _apply_sensor_model(self, irradiance, exposure, iso):
-        """传感器层：曝光积分 + shot/read noise + PRNU/DSNU。"""
-        exposure01 = exposure.clamp(0.0, 1.0)
-        iso01 = iso.clamp(0.0, 1.0)
-
-        # 命令曝光（ms 标度化到比例）+ AE 动态乘子
-        t_cmd = self.cam_sem.exposure_to_time(exposure01)
-        t_ae = torch.exp(self._cam_ae_log_t)
-        t_eff = torch.clamp(t_cmd * t_ae, self.cam_sem.exposure_eff_min, self.cam_sem.exposure_eff_max)
-
-        # 基础电子计数
-        electrons = irradiance * t_eff[:, None, None] * self.cam_base_gain
-
-        # ISO 提升（模拟模拟/数字增益）
-        iso_gain = self.cam_sem.iso_to_gain(iso01)
-        electrons = electrons * iso_gain[:, None, None]
-
-        # Shot noise（泊松高斯近似）
-        shot_std = torch.sqrt(torch.clamp(electrons, min=1e-6)) * self.cam_sem.shot_noise_base * self.cam_noise_scale
-        # Read noise
-        read_std = self.cam_read_noise * (1.0 + 2.5 * iso01)
-
-        noisy = electrons + torch.randn_like(electrons) * shot_std
-        noisy = noisy + torch.randn_like(electrons) * read_std[:, None, None]
-
-        # 固定图样噪声
-        noisy = noisy * (1.0 + self._cam_prnu) + self._cam_dsnu
-        return noisy, iso01
-
-    def _apply_isp(self, raw, iso01):
-        """ISP层：黑电平、增益、tone mapping、gamma、锐化/去噪近似。"""
-        # 黑电平与归一化
-        x = torch.relu(raw - self.cam_black_level)
-
-        # tone mapping（Reinhard）
-        x = x / (1.0 + x)
-
-        # 降噪（高 ISO 时更强）
-        denoise_strength = 0.08 + 0.28 * iso01
-        smooth = _separable_gaussian_blur(x, sigma=1.0)
-        x = x * (1.0 - denoise_strength[:, None, None]) + smooth * denoise_strength[:, None, None]
-
-        # 锐化（unsharp）
-        blur_small = _separable_gaussian_blur(x, sigma=0.8)
-        x = x + self.cam_sharpen_amount * (x - blur_small)
-
-        # gamma
-        gamma = self._cam_gamma[:, None, None].clamp_min(1e-3)
-        x_lin = torch.clamp(x, 0.0, 1.0)
-        # 数值稳定：当指数 < 1 时，pow 在 x=0 处导数会发散，导致 PowBackward NaN。
-        x_safe = torch.clamp(x_lin, min=1e-6, max=1.0)
-        x_gamma = x_safe ** (1.0 / gamma)
-        x = torch.where(x_lin > 0, x_gamma, torch.zeros_like(x_gamma))
-        return torch.clamp(x, 0.0, 1.0)
-
-    def _update_ae_state(self, y):
-        """自动曝光 PI 状态机（时序层）。"""
-        with torch.no_grad():
-            mean_luma = y.detach().flatten(1).mean(-1)
-            err = self.cam_ae_target - mean_luma
-            self._cam_ae_integral = torch.clamp(self._cam_ae_integral + err, -4.0, 4.0)
-            self._cam_ae_log_t = torch.clamp(
-                self._cam_ae_log_t + self.cam_ae_kp * err + self.cam_ae_ki * self._cam_ae_integral,
-                self.cam_ae_log_t_min,
-                self.cam_ae_log_t_max,
-            )
-
-    def _apply_motion_blur(self, y, exposure01):
-        """时序层：全局/滚动快门风格运动模糊。"""
-        if not self.cam_enable_motion_blur:
-            self._cam_prev_y = y.detach()
-            return y
-        with torch.no_grad():
-            speed = torch.norm(self.v, 2, -1)
-            t_cmd = self.cam_sem.exposure_to_time(exposure01.clamp(0.0, 1.0))
-            t_norm = (t_cmd / 3.0).clamp(0.0, 1.0)
-            blur_alpha = torch.clamp(speed * self.cam_motion_blur_gain * t_norm, 0.0, 0.72)
-
-        prev = self._cam_prev_y
-        if prev is None:
-            self._cam_prev_y = y.detach()
-            return y
-
-        B, H, W = y.shape
-        row = torch.linspace(0.0, 1.0, H, device=y.device, dtype=y.dtype)[None, :, None]
-        row = row.expand(B, -1, W)
-
-        # global shutter blur
-        yg = y * (1.0 - blur_alpha[:, None, None]) + prev * blur_alpha[:, None, None]
-        # rolling shutter blur（底部行受到更晚曝光影响）
-        a_roll = blur_alpha[:, None, None] * row
-        yr = y * (1.0 - a_roll) + prev * a_roll
-
-        use_roll = self._cam_use_rolling[:, None, None] if self.cam_enable_rolling else torch.zeros_like(row)
-        out = yg * (1.0 - use_roll) + yr * use_roll
-        self._cam_prev_y = out.detach()
-        return out
-
-    def reset(self):
+    def reset(self, scene_name=None):
         """
         重置环境状态。
         在每个 episode 开始时调用，随机生成障碍物、无人机初始状态、目标点等。
         """
         B = self.batch_size
         device = self.device
+        scene_name = self._choose_scene_name(scene_name)
+        self._set_scene_name(scene_name)
+        self._clear_opening_scene_metadata()
 
         # 1. 初始化相机旋转矩阵 (R_cam)
         # 相机默认有一个向下的俯仰角 (cam_angle)，并加入少量随机噪声
@@ -596,7 +405,7 @@ class Env:
         ], -1).reshape(B, 3, 3)
 
         # 2. 随机生成环境障碍物
-        # balls: 球体 (x, y,_cam_use_rolling z, r)
+        # balls: 球体 (x, y, z, r)
         # voxels: 立方体 (x, y, z, rx, ry, rz)
         # cyl: 垂直圆柱体 (x, y, r)
         # cyl_h: 水平圆柱体 (x, z, r)
@@ -765,8 +574,34 @@ class Env:
         # 碰撞安全边距 (margin)
         self.margin = torch.rand((B,), device=device) * 0.2 + 0.1
 
-        # ==================== 论文 §4.2 狭缝穿越环境 (Wall-Slit Environment) ====================
-        if self.wall_slit:
+        # ==================== 论文场景：开口墙几何 ====================
+        if scene_name == 'black_gap':
+            self._reset_rect_opening_scene(
+                B, device, scene_name,
+                slit_half_w_range=(0.38, 0.70),
+                slit_half_h_range=(0.34, 0.58),
+                dist_from_wall_range=(1.8, 3.0),
+                max_speed_range=(0.18, 0.32),
+                lateral_noise=0.14,
+                vertical_noise=0.10,
+                margin=0.04,
+                drone_radius=0.13,
+                wind_scale=0.20,
+            )
+        elif scene_name == 'dark_slit_lite':
+            self._reset_rect_opening_scene(
+                B, device, scene_name,
+                slit_half_w_range=(0.22, 0.32),
+                slit_half_h_range=(0.34, 0.55),
+                dist_from_wall_range=(1.8, 2.8),
+                max_speed_range=(0.14, 0.24),
+                lateral_noise=0.10,
+                vertical_noise=0.08,
+                margin=0.03,
+                drone_radius=0.12,
+                wind_scale=0.16,
+            )
+        elif self.wall_slit:
             self._reset_wall_slit(B, device)
 
         # 11. 初始化空气阻力系数
@@ -776,120 +611,27 @@ class Env:
 
         # 12. 保存场景缩放参数（用于可视化AABB计算）
         # 这些值在reset时计算，用于log_environment中的动态AABB
-        self._current_scale = scene_scale.reshape(-1)[0].item() if isinstance(scene_scale, torch.Tensor) else float(scene_scale)
-        self._current_y_stretch = scene_y_stretch.reshape(-1)[0].item() if isinstance(scene_y_stretch, torch.Tensor) else float(scene_y_stretch)
+        if not self.current_scene_has_opening:
+            self._current_scale = scene_scale.reshape(-1)[0].item() if isinstance(scene_scale, torch.Tensor) else float(scene_scale)
+            self._current_y_stretch = scene_y_stretch.reshape(-1)[0].item() if isinstance(scene_y_stretch, torch.Tensor) else float(scene_y_stretch)
 
         # 13. 初始化高保真可微相机状态
         self._reset_camera_states()
+        self._apply_scene_sensor_profile(scene_name)
 
     def _reset_wall_slit(self, B, device):
-        """
-        重写障碍物和无人机位置，用于狭缝穿越 (Wall-Slit) 场景。
-        创建一个带有狭窄垂直缝隙的墙壁 (沿 YZ 平面)。
-        缝隙的高度大于宽度，因此无人机必须侧向翻滚 (Roll/Tilt) 才能穿过。
-        无人机从墙的一侧起飞，目标点在墙的另一侧。
-        """
-        # 墙壁参数 (每次 reset 随机生成，但在同一个 batch 内共享)
-        wall_x = 2.0 + random.random() * 4.0      # 墙壁的 X 坐标位置 [2, 6]
-        slit_y_center = random.uniform(-1.0, 1.0)  # 缝隙的 Y 轴中心
-        slit_z_center = random.uniform(0.0, 1.5)   # 缝隙的 Z 轴中心 (离地高度)
-        slit_half_w = random.uniform(0.10, 0.18)    # 缝隙半宽 (非常窄, 总宽 ~0.20-0.36m)
-        slit_half_h = random.uniform(0.35, 0.60)    # 缝隙半高 (较高, 总高 ~0.70-1.20m)
-        wall_thickness = 0.15                        # 墙壁的半厚度 (X 轴方向)
-
-        # 保存墙壁参数，用于评估和日志记录
-        self.wall_x = wall_x
-        self.slit_y_center = slit_y_center
-        self.slit_z_center = slit_z_center
-        self.slit_half_w = slit_half_w
-        self.slit_half_h = slit_half_h
-
-        # 使用 4 个 voxel 拼接成一面带有矩形开口的墙:
-        #   左墙: 开口左侧的所有区域
-        #   右墙: 开口右侧的所有区域
-        #   顶墙: 开口上方的区域 (Y 跨度与开口相同)
-        #   底墙: 开口下方的区域 (Y 跨度与开口相同)
-        big = 10.0  # 足够大的半跨度，以覆盖整个场景
-
-        wall_voxels = torch.zeros((B, 4, 6), device=device)
-        # 左墙: center_y = slit_y - slit_half_w - big, ry = big
-        wall_voxels[:, 0, 0] = wall_x
-        wall_voxels[:, 0, 1] = slit_y_center - slit_half_w - big
-        wall_voxels[:, 0, 2] = slit_z_center
-        wall_voxels[:, 0, 3] = wall_thickness
-        wall_voxels[:, 0, 4] = big
-        wall_voxels[:, 0, 5] = big
-
-        # 右墙: center_y = slit_y + slit_half_w + big, ry = big
-        wall_voxels[:, 1, 0] = wall_x
-        wall_voxels[:, 1, 1] = slit_y_center + slit_half_w + big
-        wall_voxels[:, 1, 2] = slit_z_center
-        wall_voxels[:, 1, 3] = wall_thickness
-        wall_voxels[:, 1, 4] = big
-        wall_voxels[:, 1, 5] = big
-
-        # 顶墙: center_z = slit_z + slit_half_h + big, rz = big, ry = slit_half_w
-        wall_voxels[:, 2, 0] = wall_x
-        wall_voxels[:, 2, 1] = slit_y_center
-        wall_voxels[:, 2, 2] = slit_z_center + slit_half_h + big
-        wall_voxels[:, 2, 3] = wall_thickness
-        wall_voxels[:, 2, 4] = slit_half_w
-        wall_voxels[:, 2, 5] = big
-
-        # 底墙: center_z = slit_z - slit_half_h - big, rz = big, ry = slit_half_w
-        wall_voxels[:, 3, 0] = wall_x
-        wall_voxels[:, 3, 1] = slit_y_center
-        wall_voxels[:, 3, 2] = slit_z_center - slit_half_h - big
-        wall_voxels[:, 3, 3] = wall_thickness
-        wall_voxels[:, 3, 4] = slit_half_w
-        wall_voxels[:, 3, 5] = big
-
-        # 用墙壁 voxel 替换掉所有其他随机生成的障碍物
-        # 将原有的障碍物移出场景
-        self.balls[:, :, 2] = -200  # 移到地下深处
-        self.cyl[:, :, 2] = 0.001   # 缩小到忽略不计
-        self.cyl_h[:, :, 2] = 0.001
-        self.voxels = wall_voxels
-
-        # 无人机放置: 起点在墙前，终点在墙后
-        dist_from_wall = 1.5 + random.random() * 1.5  # 距离墙 1.5-3.0m
-        noise_y = torch.randn(B, device=device) * 0.3
-        noise_z = torch.randn(B, device=device) * 0.2
-        self.p = torch.stack([
-            torch.full((B,), wall_x - dist_from_wall, device=device),
-            torch.full((B,), slit_y_center, device=device) + noise_y,
-            torch.full((B,), slit_z_center, device=device) + noise_z,
-        ], -1)
-        self.p_target = torch.stack([
-            torch.full((B,), wall_x + dist_from_wall, device=device),
-            torch.full((B,), slit_y_center, device=device) + noise_y * 0.5,
-            torch.full((B,), slit_z_center, device=device) + noise_z * 0.5,
-        ], -1)
-
-        # 强制单机模式
-        self.n_drones_per_group = 1
-        self.drone_radius = 0.15
-
-        # 降低最大速度，以便进行精确的机动
-        self.max_speed = torch.full((B, 1), 0.5 + random.random() * 1.0, device=device) * self.speed_mtp
-
-        # 减小安全边距 (因为缝隙很窄，允许无人机贴近障碍物)
-        self.margin = torch.full((B,), 0.02, device=device)
-
-        # 使用更新后的位置重新初始化速度、姿态等
-        self.v = torch.randn((B, 3), device=device) * 0.1
-        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * 0.3  # 减小风扰动
-        self.act = torch.randn_like(self.v) * 0.05
-        self.a = self.act
-        self.dg = torch.randn((B, 3), device=device) * 0.1
-
-        R = torch.zeros((B, 3, 3), device=device)
-        self.R = quadsim_cuda.update_state_vec(
-            R, self.act,
-            torch.randn((B, 3), device=device) * 0.2 + F.normalize(self.p_target - self.p),
-            torch.zeros_like(self.yaw_ctl_delay), 5)
-        self.R_old = self.R.clone()
-        self.p_old = self.p
+        self._reset_rect_opening_scene(
+            B, device, 'wall_slit',
+            slit_half_w_range=(0.10, 0.18),
+            slit_half_h_range=(0.35, 0.60),
+            dist_from_wall_range=(1.5, 3.0),
+            max_speed_range=(0.08, 0.20),
+            lateral_noise=0.30,
+            vertical_noise=0.20,
+            margin=0.02,
+            drone_radius=0.15,
+            wind_scale=0.30,
+        )
 
     @staticmethod
     @torch.no_grad()
@@ -934,21 +676,6 @@ class Env:
                             self._fov_x_half_tan)
         return canvas, None
 
-    def render_depth_passive(self, ctl_dt):
-        """
-        被动深度渲染（独立深度分辨率）。
-        返回:
-            depth: (B, depth_height, depth_width)
-        """
-        canvas = torch.empty((self.batch_size, self.depth_height, self.depth_width), device=self.device)
-        depth_flow = torch.empty((self.batch_size, 0, self.depth_height, self.depth_width), device=self.device)
-        quadsim_cuda.render(
-            canvas, depth_flow, self.balls, self.cyl, self.cyl_h,
-            self.voxels, self.R @ self.R_cam, self.R_old, self.p,
-            self.p_old, self.drone_radius, self.n_drones_per_group,
-            self._fov_x_half_tan)
-        return canvas
-
     def render_diff(self, fov_tensor):
         """
         可微渲染函数 (Differentiable Rendering)。
@@ -960,222 +687,147 @@ class Env:
                              self.n_drones_per_group, self.height, self.width)
         return canvas
 
-    def render_main_luma(self, ctl_dt):
-        """
-        主相机亮度图 (Y) 渲染（非可微相机参数路径）。
-        该路径要求 CUDA 扩展提供原生 YUV/Y 渲染实现，不使用任何代理转换。
-        返回:
-            y: (B, H, W)
-        """
-        y = torch.empty((self.batch_size, self.height, self.width), device=self.device)
-        quadsim_cuda.render_yuv_y(
-            y, self.flow, self.balls, self.cyl, self.cyl_h,
-            self.voxels, self.R @ self.R_cam, self.R_old, self.p,
-            self.p_old, self.drone_radius, self.n_drones_per_group,
-            self._fov_x_half_tan)
-        return y
-
-    def render_main_luma_diff(self, fov_tensor, exposure, iso, return_depth_raw=False):
-        """
-        主相机亮度图 (Y) 渲染（可微相机参数路径）。
-        训练时用于模拟 IMX279 RAW->ISP->YUV420 后仅取 Y 通道。
-        该路径要求 CUDA 扩展提供原生可微 Y 渲染实现，不使用任何代理转换。
-        (由于无人机使用固定焦距，我们去除了 focus 参数)
-        返回:
-            - return_depth_raw=False: y: (B, H, W)
-            - return_depth_raw=True:  (y, depth_raw)
-        """
-        impl = self.diff_sensor_impl.get('camera_luma', 'python')
-        if impl == 'cuda':
-            if not hasattr(quadsim_cuda, 'render_diff_yuv_y_forward') or not hasattr(quadsim_cuda, 'render_diff_yuv_y_backward'):
-                raise RuntimeError("diff_sensor_impl[camera_luma]=cuda 但 quadsim_cuda 未实现 render_diff_yuv_y_forward/backward")
-            y, depth_raw = diff_render_yuv_y_with_depth_aux(
-                fov_tensor.contiguous(),
-                exposure.contiguous(),
-                iso.contiguous(),
-                (self.R @ self.R_cam).contiguous(),
-                self.p.contiguous(),
-                self.balls,
-                self.cyl,
-                self.cyl_h,
-                self.voxels,
-                self.n_drones_per_group,
-                self.height,
-                self.width,
-                self._cam_light_dir,
-                self._cam_ambient,
-                self._cam_dir_intensity,
-                self._cam_fog_beta,
-                self._cam_airlight,
-                self._cam_mat_ground,
-                self._cam_mat_obstacle,
-                self._cam_mat_spec,
-                self._cam_dist_k1,
-                self._cam_dist_k2,
-                self._cam_flare_strength,
-                self._cam_gamma,
-                self._cam_prnu,
-                self._cam_dsnu,
-                self._cam_prev_y,
-                self._cam_use_rolling,
-                self.v,
-                self._cam_ae_log_t,
-                self.cam_profile_mask,
-                self.cam_vignette_a,
-                self.cam_vignette_b,
-                self.cam_black_level,
-                self.cam_sharpen_amount,
-                self.cam_base_gain,
-                self.cam_motion_blur_gain,
-                self.cam_sem.exposure_t_min,
-                self.cam_sem.exposure_t_span,
-                self.cam_sem.exposure_eff_min,
-                self.cam_sem.exposure_eff_max,
-                self.cam_sem.iso_gain_base,
-                self.cam_sem.iso_gain_scale,
-                self.cam_sem.iso_gain_gamma,
-            )
-            if y is None:
-                raise RuntimeError("render_main_luma_diff(cuda) 返回了空的 y")
-            self._update_ae_state(y)
-            self._cam_prev_y = y.detach()
-            y_out = torch.clamp(y, 0.0, 1.0)
-            if not return_depth_raw:
-                return y_out
-            if depth_raw.shape[-2:] != (self.depth_height, self.depth_width):
-                depth_raw = F.interpolate(
-                    depth_raw[:, None],
-                    size=(self.depth_height, self.depth_width),
-                    mode='area',
-                )[:, 0]
-            return y_out, depth_raw.detach()
-        if impl != 'python':
-            raise ValueError(f"不支持的 diff_sensor_impl[camera_luma]={impl}，仅支持 python/cuda")
-
-        # ==================== 1) 几何层：深度 + 近似法线 + 材质先验 ====================
-        fov_tensor = fov_tensor.contiguous()
-        exposure = exposure.contiguous()
-        iso = iso.contiguous()
-        R_cam_world = (self.R @ self.R_cam).contiguous()
-        pos = self.p.contiguous()
-
-        depth = diff_render(
-            fov_tensor,
-            R_cam_world,
-            pos,
-            self.balls,
-            self.cyl,
-            self.cyl_h,
-            self.voxels,
-            self.n_drones_per_group,
-            self.height,
-            self.width,
-        )
-        depth = torch.clamp(depth, min=0.03, max=24.0)
-
-        
-        # 【核心修改点】：注册反向传播钩子
-        # 无论后面的光照、镜头、ISP 怎么搞出爆炸的梯度，
-        # 只要传回到 depth 这里，强行限制在 [-1.0, 1.0] 之间。
-        # if depth.requires_grad:
-        #     depth.register_hook(lambda grad: torch.clamp(grad, min=-1.0, max=1.0))
-
-        dir_world, _ = self._build_camera_rays(fov_tensor, R_cam_world)
-        points_world = pos[:, None, None, :] + depth[..., None] * dir_world
-
-        n_cam = self._estimate_normals_from_depth(depth)
-        n_world = torch.einsum('bij,bhwj->bhwi', R_cam_world, n_cam)
-        n_world = _safe_normalize(n_world, -1)
-
-        albedo, specular_prior = self._material_prior(points_world, n_world)
-
-        # ==================== 2) 光照层：环境光 + 主光源 + 阴影近似 + 大气散射 ====================
-        L = self._cam_light_dir[:, None, None, :]
-        ambient = self._cam_ambient[:, None, None]
-        dir_int = self._cam_dir_intensity[:, None, None]
-
-        ndotl = torch.clamp((n_world * L).sum(-1), min=0.0)
-
-        light_cam = torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), self._cam_light_dir)
-        shadow = self._screen_space_shadow(depth, light_cam)
-
-        # ==================== 3) 反射层：Lambert + 轻量镜面 ====================
-        view_dir = _safe_normalize(-dir_world, -1)
-        half_vec = _safe_normalize(L + view_dir, -1)
-        ndoth = torch.clamp((n_world * half_vec).sum(-1), min=0.0)
-        specular = specular_prior * (ndoth ** 24.0) if self.cam_enable_specular else torch.zeros_like(ndoth)
-
-        irradiance = albedo * (ambient + dir_int * ndotl * shadow) + specular
-
-        # 大气散射（airlight + Beer-Lambert）
-        trans = torch.exp(-self._cam_fog_beta[:, None, None] * depth)
-        irradiance = irradiance * trans + self._cam_airlight[:, None, None] * (1.0 - trans)
-        irradiance = torch.clamp(irradiance, 0.0, 4.0)
-
-        # ==================== 4) 镜头层：vignetting + 畸变 + flare ====================
-        lens_y = self._apply_lens_model(irradiance)
-
-        # ==================== 5) 传感器层：曝光 + shot/read + PRNU/DSNU ====================
-        raw, iso01 = self._apply_sensor_model(lens_y, exposure, iso)
-
-        # ==================== 6) ISP层：black/gain/tone/gamma/sharpen/denoise ====================
-        y = self._apply_isp(raw, iso01)
-
-        # ==================== 7) 时序层：AE状态机 + 运动模糊（rolling/global） ====================
-        self._update_ae_state(y)
-        y = self._apply_motion_blur(y, exposure.clamp(0.0, 1.0))
-        y_out = torch.clamp(y, 0.0, 1.0)
-        if not return_depth_raw:
-            return y_out
-        depth_aux = depth
-        if depth_aux.shape[-2:] != (self.depth_height, self.depth_width):
-            depth_aux = F.interpolate(
-                depth_aux[:, None],
-                size=(self.depth_height, self.depth_width),
-                mode='area',
-            )[:, 0]
-        return y_out, depth_aux.detach()
-
-
-    def render_diff_depth(self, power, exposure, gain, max_range=6.0):
+    def render_diff_depth(self, power, exposure, gain, max_range=None):
         """
         可微主动深度相机渲染（Diff Depth Sensor）。
-        优先使用 CUDA 扩展高性能路径；失败时回退到 Python 实现。
+        说明：
+        - 几何层统一使用 CUDA 可微几何渲染 `diff_render`
+        - 其后的 D455 风格传感器链使用 Torch 张量算子实现，保证不同实现后端下的物理语义一致
+        - 历史上的 fused diff_depth CUDA 后处理路径保留在扩展中，但默认不再走该分支，
+          以避免训练/评估在 power / exposure / gain 梯度上出现不一致
         """
         impl = self.diff_sensor_impl.get('diff_depth', 'python')
-        if impl == 'cuda':
-            if (not hasattr(quadsim_cuda, 'render_active_tof_forward')) or (not hasattr(quadsim_cuda, 'render_active_tof_backward')):
-                raise RuntimeError(
-                    "diff_sensor_impl[diff_depth]=cuda 但 quadsim_cuda 未实现 render_active_tof_forward/backward"
-                )
-            B = power.shape[0]
-            device = power.device
-            fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
-            R_cam_world = (self.R @ self.R_cam).contiguous()
-            pos = self.p.contiguous()
-            noisy_depth, _ = diff_render_diff_depth(
-                fov_tensor,
-                power,
-                exposure,
-                gain,
-                self.v,
-                R_cam_world,
-                pos,
-                self.balls,
-                self.cyl,
-                self.cyl_h,
-                self.voxels,
-                self.n_drones_per_group,
-                int(self.depth_height),
-                int(self.depth_width),
-                float(max_range),
-            )
-            return noisy_depth
         if impl == 'python':
             return self._render_diff_depth_python(power, exposure, gain, max_range=max_range)
-        raise ValueError(f"不支持的 diff_sensor_impl[diff_depth]={impl}，仅支持 python/cuda")
+        if impl == 'cuda':
+            return self._render_diff_depth_cuda(power, exposure, gain, max_range=max_range)
+        else:
+            raise ValueError(f"不支持的 diff_sensor_impl[diff_depth]={impl}，仅支持 python/cuda")
 
-    def _render_diff_depth_python(self, power, exposure, gain, max_range=6.0):
+    def _diff_depth_exposure_scale(self, exposure):
+        return self.cam_sem.exposure_to_time(exposure)
+
+    def _apply_diff_depth_sensor_model(self, depth, power, exposure, gain, max_range=None):
+        """
+        D455 风格主动双目深度观测模型。
+        目标不是逐寄存器复刻，而是把以下关键失效模式做对：
+        - 激光功率 / 曝光 / 增益三者的非对称 trade-off
+        - 远距离与弱纹理场景下的软退化
+        - 高速运动时沿相机速度方向的拖影
+        - 深度边缘 flying pixels、镜面高光失效与空洞输出
+        - 环境红外（ambient IR）对主动散斑的淹没
+        """
+        max_range = float(self.depth_max_range if max_range is None else max_range)
+        min_valid = float(self.depth_min_valid)
+        depth = depth.clamp(max(min_valid * 0.1, 0.03), max(float(max_range) * 2.0, 12.0))
+
+        power01 = power.clamp(0.0, 1.0)
+        exposure_s = self._diff_depth_exposure_scale(exposure)
+        gain01 = gain.clamp(0.0, 1.0)
+        gain_scale = self.cam_sem.iso_to_gain(gain01).clamp_min(1.0)
+
+        ps = power01[:, None, None]
+        es = exposure_s[:, None, None]
+        gs = gain_scale[:, None, None]
+
+        depth4 = depth[:, None]
+        depth_far = F.max_pool2d(depth4, 3, stride=1, padding=1)[:, 0]
+        depth_near = -F.max_pool2d(-depth4, 3, stride=1, padding=1)[:, 0]
+
+        edge = ((depth_far - depth_near) / (depth + 0.15)).clamp(0.0, 1.5)
+        frontality = torch.exp(-1.2 * edge)
+        fog_trans = torch.exp(-self._cam_fog_beta[:, None, None] * depth)
+
+        ambient_ir = (
+            0.12
+            + 0.55 * self._cam_ambient[:, None, None]
+            + 0.25 * self._cam_dir_intensity[:, None, None]
+            + 0.18 * self._cam_airlight[:, None, None]
+        ) * (1.0 + 1.5 * self._cam_fog_beta[:, None, None])
+        albedo = (0.25 + 0.75 * self._cam_mat_obstacle[:, None, None]).clamp(0.1, 1.0)
+        if self.cam_enable_specular:
+            spec = self._cam_mat_spec[:, None, None].clamp(0.0, 1.0)
+        else:
+            spec = torch.zeros_like(albedo)
+
+        signal_active = 5.0 * ps * es * albedo * frontality * fog_trans / (depth.square() + 0.08)
+        signal_passive = (
+            es * ambient_ir * (0.15 + 0.85 * edge) * (0.35 + 0.65 * albedo) * torch.sqrt(gs)
+        )
+        spec_bloom = spec * ps * (0.6 + 0.4 * ambient_ir) * (1.0 + edge)
+
+        if self.cam_enable_motion_blur:
+            speed = self.v.norm(2, -1)
+            motion = (speed[:, None, None] * es * self.cam_motion_blur_gain).clamp(0.0, 1.25)
+        else:
+            motion = torch.zeros_like(depth)
+
+        gain_boost = torch.log(gs).clamp_min(0.0)
+        active_range = (
+            0.9
+            + float(max_range) * (0.15 + 0.85 * torch.sqrt((ps * es).clamp_min(1e-6)))
+            + 0.35 * gain_boost
+        )
+        passive_range = 0.7 + float(max_range) * (0.08 + 0.18 * es * ambient_ir)
+        active_gate = torch.sigmoid((active_range - depth) / 0.22)
+        passive_gate = torch.sigmoid((passive_range - depth) / 0.28)
+
+        signal = signal_active * active_gate + 0.45 * signal_passive * passive_gate
+        washout = ambient_ir / (signal_active + 0.12)
+        snr = signal / (0.08 + 0.45 * ambient_ir + 0.12 * gs + 0.35 * spec_bloom + 0.25 * motion)
+        far = torch.relu(depth / (active_range + 1e-3) - 0.9)
+        quality = torch.sigmoid(
+            2.6 * snr
+            + 0.9 * signal_passive
+            - 1.4 * washout
+            - 2.0 * spec_bloom
+            - 1.6 * motion * edge
+            - 2.2 * far
+        )
+
+        R_cam_world = (self.R @ self.R_cam).contiguous()
+        v_cam = torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), self.v)
+        motion_h = v_cam[:, 1].abs()
+        motion_v = v_cam[:, 2].abs()
+        motion_sum = (motion_h + motion_v).clamp_min(1e-6)
+        w_h = (motion_h / motion_sum)[:, None, None]
+        w_v = (motion_v / motion_sum)[:, None, None]
+
+        pad = F.pad(depth4, (1, 1, 1, 1), mode='replicate')
+        left = pad[:, 0, 1:-1, :-2]
+        right = pad[:, 0, 1:-1, 2:]
+        up = pad[:, 0, :-2, 1:-1]
+        down = pad[:, 0, 2:, 1:-1]
+        blur_h = 0.25 * (left + 2.0 * depth + right)
+        blur_v = 0.25 * (up + 2.0 * depth + down)
+        directional_blur = blur_h * w_h + blur_v * w_v
+
+        if self.cam_enable_motion_blur:
+            motion_blend = (0.55 * motion).clamp(0.0, 0.85)
+            depth_blur = depth * (1.0 - motion_blend) + directional_blur * motion_blend
+        else:
+            depth_blur = depth
+
+        flying = (0.12 + 0.88 * (1.0 - quality)) * edge * (0.35 + 0.65 * (motion + spec_bloom).clamp(0.0, 1.5))
+        flying = flying.clamp(0.0, 1.0)
+        depth_corrupt = depth_blur + flying * (depth_far - depth_blur)
+
+        range_ratio = (depth / max(float(max_range), 1e-6)).clamp(0.0, 1.5)
+        shot_noise_scale = float(self.cam_sem.shot_noise_base / 0.03)
+        noise_floor = self.cam_read_noise * (1.0 + 0.18 * gs)
+        noise_signal = 0.018 * shot_noise_scale * (1.0 + 0.8 * range_ratio.square()) / (signal + 0.08)
+        noise_motion = 0.03 * motion * (0.3 + 0.7 * edge)
+        noise_spec = 0.05 * spec_bloom
+        noise_std = (noise_floor + noise_signal + noise_motion + noise_spec).clamp(0.002, 0.75)
+
+        noisy_depth = depth_corrupt + torch.randn_like(depth_corrupt) * noise_std
+        noisy_depth = noisy_depth.clamp(min_valid, float(max_range))
+        valid = torch.sigmoid((quality - 0.45) / 0.08)
+        noisy_depth = noisy_depth * valid
+        quality = quality * valid
+        return noisy_depth, quality
+
+    def _render_diff_depth_python(self, power, exposure, gain, max_range=None):
         """
         可微主动深度相机渲染（Diff Depth Sensor）。
         输入:
@@ -1202,45 +854,45 @@ class Env:
             self.cyl_h,
             self.voxels,
             self.n_drones_per_group,
-            self.depth_height,
-            self.depth_width,
+            self.height,
+            self.width,
         )
-        depth = torch.clamp(depth, min=0.03, max=120.0)
-            
-        # 2. 物理衰减模型 (Inverse Square Law)
-        # E_recv ∝ (Power * Exposure) / z^2
-        # 我们假设一个基准缩放系数，使得 power=0.5, exp=0.5 在 3米处能得到勉强满意的能量
-        power_scaled = 0.01 + power * 0.99
-        exp_scaled = 0.05 + exposure * 0.95
-        gain_scaled = 1.0 + gain * 9.0  # Gain from 1 to 10
-        
-        energy_recv = (power_scaled[:, None, None] * exp_scaled[:, None, None]) / (depth ** 2 + 0.1)
-        energy_recv = energy_recv * gain_scaled[:, None, None] * 100.0
-        
-        # 4. 运动模糊惩罚 (Flying Pixels)
-        # 如果速度快且曝光长，置信度下降，深度被“拉长”平均（用均值滤波模拟拖尾）
-        speed = torch.norm(self.v, 2, -1)
-        motion_blur_factor = (speed * exp_scaled * 0.1).clamp(0.0, 1.0)
-        
-        # # 如果速度过快，我们施加一些空间模糊表示 Flying Pixels
-        # # _separable_gaussian_blur(depth, sigma=1.0)
-        # if hasattr(self, '_apply_motion_blur_depth'):
-        #     depth_blurred = self._apply_motion_blur_depth(depth, motion_blur_factor)
-        # else:
-        # 简化版：直接加上与速度和曝光成正比的随机拉伸或利用 pooling 混合
-        blur_kernel = F.avg_pool2d(depth[:, None], 3, stride=1, padding=1)[:, 0]
-        depth_blurred = depth * (1 - motion_blur_factor[:, None, None]) + blur_kernel * motion_blur_factor[:, None, None]
-            
-        # 5. 可微噪声注入 (Reparameterization Trick)
-        # 噪声幅度与信号强度成反比，与 Gain 成正比
-        noise_std_base = 0.05
-        # 能量越大，std 越小；gain 越大，std 越大
-        noise_std = noise_std_base * gain_scaled[:, None, None] / (energy_recv + 1e-3)
-        noise_std = noise_std.clamp(0.01, 1.0) # 最大允许 1 米的标准差
-        
-        noisy_depth = depth_blurred + torch.randn_like(depth_blurred) * noise_std
-        noisy_depth = noisy_depth.clamp(min=0.05, max=max_range)
-        
+        noisy_depth, _ = self._apply_diff_depth_sensor_model(
+            depth,
+            power,
+            exposure,
+            gain,
+            max_range=max_range,
+        )
+        return noisy_depth
+
+    def _render_diff_depth_cuda(self, power, exposure, gain, max_range=None):
+        """可微主动深度相机渲染（CUDA backend）。"""
+        B = power.shape[0]
+        device = power.device
+        max_range = float(self.depth_max_range if max_range is None else max_range)
+
+        fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
+        R_cam_world = (self.R @ self.R_cam).contiguous()
+        pos = self.p.contiguous()
+
+        noisy_depth, _ = diff_render_diff_depth(
+            fov_tensor,
+            power,
+            exposure,
+            gain,
+            self.v.contiguous(),
+            R_cam_world,
+            pos,
+            self.balls,
+            self.cyl,
+            self.cyl_h,
+            self.voxels,
+            self.n_drones_per_group,
+            self.height,
+            self.width,
+            float(max_range),
+        )
         return noisy_depth
 
     def find_vec_to_nearest_pt(self):
@@ -1358,4 +1010,3 @@ class Env:
         alpha = torch.exp(-self.yaw_ctl_delay * ctl_dt)
         self.R_old = self.R.clone()
         self.R = quadsim_cuda.update_state_vec(self.R, self.act, v_pred, alpha, 5)
-

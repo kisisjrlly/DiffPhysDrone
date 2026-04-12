@@ -5,82 +5,110 @@ All functions are stateless / pure, taking explicit arguments.
 """
 import torch
 import torch.nn.functional as F
+
 from camera_semantics import CameraSemantics
 
 
-_DEFAULT_CAM_SEM = CameraSemantics()
+_DEFAULT_CAMERA_SEMANTICS = CameraSemantics()
 
 
-def camera_exposure_to_time(exposure01, cam_sem: CameraSemantics = _DEFAULT_CAM_SEM):
-    """Map normalized exposure [0,1] to the same t_cmd used by Env."""
+def diff_depth_exposure_to_time(exposure01, camera_semantics=None):
+    """Map normalized diff_depth exposure [0,1] to a unified effective exposure time."""
+    cam_sem = camera_semantics if camera_semantics is not None else _DEFAULT_CAMERA_SEMANTICS
     return cam_sem.exposure_to_time(exposure01)
 
 
-def camera_iso_to_gain(iso01, cam_sem: CameraSemantics = _DEFAULT_CAM_SEM):
-    """Map normalized ISO [0,1] to the same iso_gain used by Env."""
-    return cam_sem.iso_to_gain(iso01)
+def diff_depth_fill_softness(min_valid_depth: float) -> float:
+    """Choose a smooth fill-proxy transition around the valid-depth threshold."""
+    return max(0.04, 0.15 * float(min_valid_depth))
+
+
+def compute_depth_fill_rate(depth_obs, min_valid_depth: float = 0.3, softness=None):
+    """Return diff_depth fill rate using the same validity semantics everywhere."""
+    threshold = float(min_valid_depth)
+    if softness is None:
+        return (depth_obs >= threshold).float().mean()
+    softness = float(softness)
+    if softness <= 0.0:
+        return (depth_obs >= threshold).float().mean()
+    return torch.sigmoid((depth_obs - threshold) / softness).mean()
+
+
+def _stack_history_or_tensor(values):
+    if values is None:
+        return None
+    if isinstance(values, torch.Tensor):
+        return values
+    if len(values) == 0:
+        return None
+    return torch.stack([
+        x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x
+        for x in values
+    ])
+
+
+def compute_camera_param_stats(power_seq, exposure_seq, gain_seq):
+    """Return mean/std/min/max for power / exposure / gain histories."""
+    power_seq = _stack_history_or_tensor(power_seq)
+    exposure_seq = _stack_history_or_tensor(exposure_seq)
+    gain_seq = _stack_history_or_tensor(gain_seq)
+
+    if power_seq is None or exposure_seq is None or gain_seq is None:
+        return {}
+
+    out = {}
+    stats = {
+        'power': power_seq,
+        'exposure': exposure_seq,
+        'gain': gain_seq,
+    }
+    for name, seq in stats.items():
+        out[f'{name}_mean'] = float(seq.mean().item())
+        out[f'{name}_std'] = float(seq.std(unbiased=False).item())
+        out[f'{name}_min'] = float(seq.min().item())
+        out[f'{name}_max'] = float(seq.max().item())
+    return out
+
+
+def compute_diff_depth_proxies(power_seq, exposure_seq, gain_seq, speed_seq, camera_semantics=None):
+    """Shared diff_depth proxy metrics for training/evaluation."""
+    power_seq = _stack_history_or_tensor(power_seq)
+    exposure_seq = _stack_history_or_tensor(exposure_seq)
+    gain_seq = _stack_history_or_tensor(gain_seq)
+    speed_seq = _stack_history_or_tensor(speed_seq)
+
+    if power_seq is None or exposure_seq is None or gain_seq is None or speed_seq is None:
+        return {}
+
+    exp_phys = diff_depth_exposure_to_time(exposure_seq, camera_semantics=camera_semantics)
+    return {
+        'energy_proxy': float(power_seq.pow(2).mean().item()),
+        'blur_proxy': float((speed_seq * exp_phys).pow(2).mean().item()),
+        'noise_proxy': float(gain_seq.pow(2).mean().item()),
+    }
+
+
+def init_camera_params(env, B, device):
+    """Initial diff_depth sensor-control state: power / exposure / gain."""
+    _ = env
+    power = torch.full((B,), 0.5, device=device)
+    exposure = torch.full((B,), 0.5, device=device)
+    gain = torch.full((B,), 0.5, device=device)
+    return power, exposure, gain
 
 
 # ---------------------------------------------------------------------------
 # 1. Sensor rendering
 # ---------------------------------------------------------------------------
-def render_sensors(env, ctl_dt, cam_fov, cam_exposure, cam_iso,
-                   use_depth_only, use_camera_luma, use_diff_depth,
-                   use_depth_aux, use_camera_control,
-                   differentiable=False):
-    """Render main observation and optional depth branch.
-
-    Args:
-        differentiable: If True, keep the computation graph for the main camera
-                        path (required for student's camera-control gradient).
-                        If False, wrap everything in torch.no_grad().
-    Returns:
-        main_obs, depth_obs
-    """
-    main_obs = None
-    depth_obs = None
-
-    if differentiable and use_camera_luma and use_camera_control:
-        # camera_luma differentiable main path
-        if use_depth_aux:
-            main_obs, depth_obs = env.render_main_luma_diff(
-                cam_fov, cam_exposure, cam_iso, return_depth_raw=True)
-        else:
-            main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
-        return main_obs, depth_obs
-
-    if differentiable and use_diff_depth and use_camera_control:
-        active_power, active_exposure, active_gain = cam_fov, cam_exposure, cam_iso
-        depth_obs = env.render_diff_depth(active_power, active_exposure, active_gain)
-        return main_obs, depth_obs
-
-    # Non-differentiable / teacher paths
-    with torch.no_grad():
-        if use_depth_only:
-            main_depth = env.render_depth_passive(ctl_dt)
-            main_obs = main_depth
-        elif use_camera_luma:
-            if use_camera_control:
-                if use_depth_aux:
-                    main_obs, depth_obs = env.render_main_luma_diff(
-                        cam_fov, cam_exposure, cam_iso, return_depth_raw=True)
-                else:
-                    main_obs = env.render_main_luma_diff(cam_fov, cam_exposure, cam_iso)
-            else:
-                main_obs = env.render_main_luma(ctl_dt)
-        elif use_diff_depth:
-            if use_camera_control:
-                active_power, active_exposure, active_gain = cam_fov, cam_exposure, cam_iso
-                depth_obs = env.render_diff_depth(active_power, active_exposure, active_gain)
-            else:
-                raise NotImplementedError("diff_depth requires camera control to be enabled")
-
-        if use_depth_aux and not use_diff_depth:
-            if depth_obs is None:
-                depth_obs = env.render_depth_passive(ctl_dt)
-
-
-    return main_obs, depth_obs
+def render_sensors(env, ctl_dt, power, exposure, gain, differentiable=False):
+    """Render diff_depth observations only."""
+    _ = ctl_dt
+    if differentiable:
+        depth_obs = env.render_diff_depth(power, exposure, gain)
+    else:
+        with torch.no_grad():
+            depth_obs = env.render_diff_depth(power, exposure, gain)
+    return depth_obs
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +125,8 @@ def build_local_frame(env):
     return R
 
 
-def build_state_vector(env, target_v, R, cam_fov, cam_exposure, cam_iso,
-                       no_odom, include_camera_state, use_camera_control):
+def build_state_vector(env, target_v, R, power, exposure, gain,
+                       no_odom, include_camera_state):
     """Construct the observation vector fed to the policy network.
 
     Returns:
@@ -110,11 +138,12 @@ def build_state_vector(env, target_v, R, cam_fov, cam_exposure, cam_iso,
     st = [tv_local, env.R[:, 2], env.margin[:, None]]
     if not no_odom:
         st.insert(0, local_v)
-    if include_camera_state and use_camera_control:
+    if include_camera_state:
+        _ = env
         co = torch.stack([
-            cam_fov / env._fov_x_half_tan - 1.0,
-            cam_exposure,
-            cam_iso,
+            power * 2.0 - 1.0,
+            exposure * 2.0 - 1.0,
+            gain * 2.0 - 1.0,
         ], -1)
         st.append(co)
     return torch.cat(st, -1), local_v
@@ -190,20 +219,20 @@ def decode_action_lqr(intent, R, env, local_v, B,
 # ---------------------------------------------------------------------------
 # 5. Camera parameter update
 # ---------------------------------------------------------------------------
-def update_camera_params(cam_params, cam_fov, cam_exposure, cam_iso,
-                         env):
-    """Apply policy camera output and return updated params + history entry.
+def update_camera_params(cam_params, power, exposure, gain, env):
+    """Apply diff_depth camera output and return updated params + history entry.
 
     Returns:
-        cam_fov, cam_exposure, cam_iso, cam_hist_entry (or None)
+        power, exposure, gain, cam_hist_entry
     """
     if cam_params is None:
-        return cam_fov, cam_exposure, cam_iso, None
+        raise ValueError('diff_depth-only 路径要求 cam_params 不为空')
 
-    fd, ex, iso_v = cam_params.unbind(-1)
-    cam_fov = env._fov_x_half_tan * 0.08 + fd * env._fov_x_half_tan * 1.42
-    cam_exposure = ex.clamp(0.0, 1.0)
-    cam_iso = iso_v.clamp(0.0, 1.0)
-    hist = cam_params
+    _ = env
+    power, exposure, gain = cam_params.unbind(-1)
+    power = power.clamp(0.0, 1.0)
+    exposure = exposure.clamp(0.0, 1.0)
+    gain = gain.clamp(0.0, 1.0)
+    hist = torch.stack([power, exposure, gain], -1)
 
-    return cam_fov, cam_exposure, cam_iso, hist
+    return power, exposure, gain, hist
