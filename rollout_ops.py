@@ -101,14 +101,26 @@ def init_camera_params(env, B, device):
 # 1. Sensor rendering
 # ---------------------------------------------------------------------------
 def render_sensors(env, ctl_dt, power, exposure, gain, differentiable=False):
-    """Render diff_depth observations only."""
+    """Render diff_depth observations only.
+
+    Returns:
+        depth_obs: (B, H, W) noisy depth image
+        quality: (B, H, W) deterministic quality map (no randn), differentiable
+                 w.r.t. power/exposure/gain — use this for fill-rate loss
+    """
     _ = ctl_dt
     if differentiable:
-        depth_obs = env.render_diff_depth(power, exposure, gain)
+        result = env.render_diff_depth(power, exposure, gain)
     else:
         with torch.no_grad():
-            depth_obs = env.render_diff_depth(power, exposure, gain)
-    return depth_obs
+            result = env.render_diff_depth(power, exposure, gain)
+    # render_diff_depth returns (noisy_depth, quality) for python impl
+    if isinstance(result, tuple):
+        depth_obs, quality = result
+    else:
+        depth_obs = result
+        quality = None
+    return depth_obs, quality
 
 
 # ---------------------------------------------------------------------------
@@ -222,17 +234,28 @@ def decode_action_lqr(intent, R, env, local_v, B,
 def update_camera_params(cam_params, power, exposure, gain, env):
     """Apply diff_depth camera output and return updated params + history entry.
 
+    EMA 平滑传感器状态（alpha=0.7），让物理传感器参数有时间连续性。
+    history entry 存储网络原始输出 cam_params（未经 EMA），使 loss_cam_range /
+    loss_cam_smooth 的梯度能完整流回网络，不被 EMA 的 detach 截断。
+
     Returns:
-        power, exposure, gain, cam_hist_entry
+        power, exposure, gain, cam_hist_entry (= raw cam_params, shape [B, 3])
     """
     if cam_params is None:
         raise ValueError('diff_depth-only 路径要求 cam_params 不为空')
 
     _ = env
-    power, exposure, gain = cam_params.unbind(-1)
-    power = power.clamp(0.0, 1.0)
-    exposure = exposure.clamp(0.0, 1.0)
-    gain = gain.clamp(0.0, 1.0)
-    hist = torch.stack([power, exposure, gain], -1)
+    alpha = 0.7
+    p_new, e_new, g_new = cam_params.unbind(-1)
+    p_new = p_new.clamp(0.0, 1.0)
+    e_new = e_new.clamp(0.0, 1.0)
+    g_new = g_new.clamp(0.0, 1.0)
 
+    # EMA 平滑物理传感器状态（detach 历史，只保留当前步梯度）
+    power = alpha * power.detach() + (1.0 - alpha) * p_new
+    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_new
+    gain = alpha * gain.detach() + (1.0 - alpha) * g_new
+
+    # hist 存原始网络输出，让 loss_cam_range/loss_cam_smooth 梯度完整流回网络
+    hist = cam_params  # shape: [B, 3]
     return power, exposure, gain, hist

@@ -12,205 +12,6 @@
 namespace {
 
 // ============================================================================
-// 深度图渲染 CUDA 内核 (Depth Rendering CUDA Kernel)
-// 
-// 该内核通过光线追踪 (Ray Tracing) 的方式，为每个无人机渲染深度图。
-// 它计算从相机中心发出的光线与场景中各种几何体（地面、其他无人机、球体、圆柱体、体素）的交点，
-// 并记录最近的交点距离作为深度值。
-// ============================================================================
-template <typename scalar_t>
-__global__ void render_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,      // 输出：深度图画布 (Output: Depth map canvas) [B, H, W]
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> flow,        // 输出：光流图 (Output: Optical flow) [B, H, W, 2] (当前未使用)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,       // 场景中的球体障碍物 (Spherical obstacles)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,   // 场景中的垂直圆柱体障碍物 (Vertical cylindrical obstacles)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h, // 场景中的水平圆柱体障碍物 (Horizontal cylindrical obstacles)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,      // 场景中的体素/长方体障碍物 (Voxel/Box obstacles)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,           // 当前相机的旋转矩阵 (Current camera rotation matrix)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R_old,       // 上一帧相机的旋转矩阵 (Previous camera rotation matrix)
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,         // 当前相机的位置 (Current camera position)
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos_old,     // 上一帧相机的位置 (Previous camera position)
-    float drone_radius,                                                                  // 无人机半径 (Drone radius)
-    int n_drones_per_group,                                                              // 每组无人机数量 (Number of drones per group)
-    float fov_x_half_tan) {                                                              // 水平视场角一半的正切值 (Tan of half horizontal FOV)
-
-    // 计算当前线程对应的像素坐标和批次索引 (Calculate pixel coordinates and batch index for current thread)
-    const int c = blockIdx.x * blockDim.x + threadIdx.x;
-    const int B = canvas.size(0);
-    const int H = canvas.size(1);
-    const int W = canvas.size(2);
-    if (c >= B * H * W) return;
-    const int b = c / (H * W);           // 批次索引 (Batch index)
-    const int u = (c % (H * W)) / W;     // 像素行索引 (Pixel row index)
-    const int v = c % W;                 // 像素列索引 (Pixel column index)
-    
-    // 计算相机坐标系下的光线方向 (Calculate ray direction in camera frame)
-    const scalar_t fov_y_half_tan = fov_x_half_tan / W * H;
-    const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_half_tan - 1e-5;
-    const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov_x_half_tan - 1e-5;
-    
-    // 将光线方向转换到世界坐标系 (Transform ray direction to world frame)
-    scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
-    scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
-    scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
-    
-    // 光线起点 (Ray origin)
-    const scalar_t ox = pos[b][0];
-    const scalar_t oy = pos[b][1];
-    const scalar_t oz = pos[b][2];
-
-    // 初始化最小距离为无穷大 (Initialize minimum distance to infinity)
-    scalar_t min_dist = 100;
-    
-    // 1. 与地面的交点 (Intersection with ground plane z = -1)
-    const scalar_t kEps = (scalar_t)1e-8;
-    if (abs(dz) > kEps) {
-        scalar_t t = (-1 - oz) / dz;
-        if (t > 0) min_dist = t;
-    }
-
-    // 2. 与其他无人机的交点 (Intersection with other drones in the same group)
-    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
-    for (int i = batch_base; i < batch_base + n_drones_per_group; i++) {
-        if (i == b || i >= B) continue; // 跳过自己 (Skip self)
-        scalar_t cx = pos[i][0];
-        scalar_t cy = pos[i][1];
-        scalar_t cz = pos[i][2];
-        scalar_t r = 0.15; // 假设其他无人机为半径 0.15 的椭球体 (Assume other drones are ellipsoids)
-        
-        // 解一元二次方程求交点 (Solve quadratic equation for intersection)
-        // (ox + t dx)^2 + (oy + t dy)^2 + 4 (oz + t dz)^2 = r^2
-        scalar_t a = dx * dx + dy * dy + 4 * dz * dz;
-        scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy) + 4 * dz * (oz - cz));
-        scalar_t c = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + 4 * (oz - cz) * (oz - cz) - r * r;
-        scalar_t d = b * b - 4 * a * c;
-        if (a > kEps && d >= 0) {
-            r = (-b-sqrt(d)) / (2 * a);
-            if (r > 1e-5) {
-                min_dist = min(min_dist, r);
-            } else {
-                r = (-b+sqrt(d)) / (2 * a);
-                if (r > 1e-5) min_dist = min(min_dist, r);
-            }
-        }
-    }
-
-    // 3. 与球体障碍物的交点 (Intersection with spherical obstacles)
-    for (int i = 0; i < balls.size(1); i++) {
-        scalar_t cx = balls[batch_base][i][0];
-        scalar_t cy = balls[batch_base][i][1];
-        scalar_t cz = balls[batch_base][i][2];
-        scalar_t r = balls[batch_base][i][3];
-        scalar_t a = dx * dx + dy * dy + dz * dz;
-        scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy) + dz * (oz - cz));
-        scalar_t c = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + (oz - cz) * (oz - cz) - r * r;
-        scalar_t d = b * b - 4 * a * c;
-        if (a > kEps && d >= 0) {
-            r = (-b-sqrt(d)) / (2 * a);
-            if (r > 1e-5) {
-                min_dist = min(min_dist, r);
-            } else {
-                r = (-b+sqrt(d)) / (2 * a);
-                if (r > 1e-5) min_dist = min(min_dist, r);
-            }
-        }
-    }
-
-    // 4. 与垂直圆柱体障碍物的交点 (Intersection with vertical cylindrical obstacles)
-    for (int i = 0; i < cylinders.size(1); i++) {
-        scalar_t cx = cylinders[batch_base][i][0];
-        scalar_t cy = cylinders[batch_base][i][1];
-        scalar_t r = cylinders[batch_base][i][2];
-        scalar_t a = dx * dx + dy * dy;
-        scalar_t b = 2 * (dx * (ox - cx) + dy * (oy - cy));
-        scalar_t c = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) - r * r;
-        scalar_t d = b * b - 4 * a * c;
-        if (a > kEps && d >= 0) {
-            r = (-b-sqrt(d)) / (2 * a);
-            if (r > 1e-5) {
-                min_dist = min(min_dist, r);
-            } else {
-                r = (-b+sqrt(d)) / (2 * a);
-                if (r > 1e-5) min_dist = min(min_dist, r);
-            }
-        }
-    }
-    
-    // 5. 与水平圆柱体障碍物的交点 (Intersection with horizontal cylindrical obstacles)
-    for (int i = 0; i < cylinders_h.size(1); i++) {
-        scalar_t cx = cylinders_h[batch_base][i][0];
-        scalar_t cz = cylinders_h[batch_base][i][1];
-        scalar_t r = cylinders_h[batch_base][i][2];
-        scalar_t a = dx * dx + dz * dz;
-        scalar_t b = 2 * (dx * (ox - cx) + dz * (oz - cz));
-        scalar_t c = (ox - cx) * (ox - cx) + (oz - cz) * (oz - cz) - r * r;
-        scalar_t d = b * b - 4 * a * c;
-        if (a > kEps && d >= 0) {
-            r = (-b-sqrt(d)) / (2 * a);
-            if (r > 1e-5) {
-                min_dist = min(min_dist, r);
-            } else {
-                r = (-b+sqrt(d)) / (2 * a);
-                if (r > 1e-5) min_dist = min(min_dist, r);
-            }
-        }
-    }
-
-    // 6. 与体素/长方体障碍物的交点 (Intersection with voxel/box obstacles using AABB ray intersection)
-    for (int i = 0; i < voxels.size(1); i++) {
-        scalar_t cx = voxels[batch_base][i][0];
-        scalar_t cy = voxels[batch_base][i][1];
-        scalar_t cz = voxels[batch_base][i][2];
-        scalar_t rx = voxels[batch_base][i][3];
-        scalar_t ry = voxels[batch_base][i][4];
-        scalar_t rz = voxels[batch_base][i][5];
-        
-        // 计算与各个面的交点参数 t (Calculate intersection parameters t for each face)
-        scalar_t tx_min, tx_max, ty_min, ty_max, tz_min, tz_max;
-        if (abs(dx) <= kEps) {
-            if (ox < cx - rx || ox > cx + rx) continue;
-            tx_min = -1e20; tx_max = 1e20;
-        } else {
-            scalar_t tx1 = (cx - rx - ox) / dx;
-            scalar_t tx2 = (cx + rx - ox) / dx;
-            tx_min = min(tx1, tx2);
-            tx_max = max(tx1, tx2);
-        }
-
-        if (abs(dy) <= kEps) {
-            if (oy < cy - ry || oy > cy + ry) continue;
-            ty_min = -1e20; ty_max = 1e20;
-        } else {
-            scalar_t ty1 = (cy - ry - oy) / dy;
-            scalar_t ty2 = (cy + ry - oy) / dy;
-            ty_min = min(ty1, ty2);
-            ty_max = max(ty1, ty2);
-        }
-
-        if (abs(dz) <= kEps) {
-            if (oz < cz - rz || oz > cz + rz) continue;
-            tz_min = -1e20; tz_max = 1e20;
-        } else {
-            scalar_t tz1 = (cz - rz - oz) / dz;
-            scalar_t tz2 = (cz + rz - oz) / dz;
-            tz_min = min(tz1, tz2);
-            tz_max = max(tz1, tz2);
-        }
-        
-        // 找到进入和离开长方体的 t 值 (Find entry and exit t values for the box)
-        scalar_t t_min = max(max(tx_min, ty_min), tz_min);
-        scalar_t t_max = min(min(tx_max, ty_max), tz_max);
-        
-        // 如果光线与长方体相交且在相机前方 (If ray intersects box and is in front of camera)
-        if (t_min < min_dist && t_min < t_max && t_min > 0)
-            min_dist = t_min;
-    }
-
-    // 将最小距离写入深度图画布 (Write minimum distance to depth map canvas)
-    canvas[b][u][v] = min_dist;
-}
-
-// ============================================================================
 // 最近点计算 CUDA 内核 (Nearest Point CUDA Kernel)
 // 
 // 该内核用于计算无人机到场景中各个障碍物的最近点，用于碰撞检测和惩罚计算。
@@ -946,14 +747,11 @@ __device__ __forceinline__ scalar_t trace_ray_with_normal_device(
     return min_dist;
 }
 
-
 // ============================================================================
-// 可微视场前向渲染 CUDA 内核 (Differentiable FOV Forward Rendering CUDA Kernel)
-// 
-// 使用每个批次独立的 FOV 张量进行渲染，使得渲染过程对 FOV 可微。
+// 深度图渲染 CUDA 内核 (Depth Rendering CUDA Kernel)
 // ============================================================================
 template <typename scalar_t>
-__global__ void render_diff_fov_cuda_kernel(
+__global__ void render_depth_kernel(
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
@@ -962,7 +760,7 @@ __global__ void render_diff_fov_cuda_kernel(
     torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
     torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
     int n_drones_per_group,
-    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) { // 每个批次的 FOV (Per-batch FOV)
+    float fov_x_half_tan) {
 
     const int c = blockIdx.x * blockDim.x + threadIdx.x;
     const int B = canvas.size(0);
@@ -973,11 +771,9 @@ __global__ void render_diff_fov_cuda_kernel(
     const int u = (c % (H * W)) / W;
     const int v = c % W;
 
-    // 获取当前批次的 FOV (Get FOV for current batch)
-    const scalar_t fov = fov_x_half_tan[b];
+    const scalar_t fov = (scalar_t)fov_x_half_tan;
     const scalar_t fov_y_ht = fov / W * H;
-    
-    // 计算光线方向 (Calculate ray direction)
+
     const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_ht - 1e-5;
     const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
     scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
@@ -985,341 +781,14 @@ __global__ void render_diff_fov_cuda_kernel(
     scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
 
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
-    
-    // 调用设备函数进行光线追踪 (Call device function for ray tracing)
+
     canvas[b][u][v] = trace_ray_device(dx, dy, dz,
         pos[b][0], pos[b][1], pos[b][2],
         balls, cylinders, cylinders_h, voxels, pos,
         n_drones_per_group, batch_base, b, B);
 }
 
-
-// ============================================================================
-// 可微视场前向渲染 CUDA 内核（含法线输出）
-// (Differentiable FOV forward kernel with normal map output)
-// ============================================================================
-template <typename scalar_t>
-__global__ void render_diff_fov_with_normal_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> normals,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
-    int n_drones_per_group,
-    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
-
-    const int c = blockIdx.x * blockDim.x + threadIdx.x;
-    const int B = canvas.size(0);
-    const int H = canvas.size(1);
-    const int W = canvas.size(2);
-    if (c >= B * H * W) return;
-    const int b = c / (H * W);
-    const int u = (c % (H * W)) / W;
-    const int v = c % W;
-
-    const scalar_t fov = fov_x_half_tan[b];
-    const scalar_t fov_y_ht = fov / W * H;
-    const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_ht - 1e-5;
-    const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
-
-    scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
-    scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
-    scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
-
-    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
-
-    scalar_t nx = (scalar_t)0, ny = (scalar_t)0, nz = (scalar_t)0;
-    scalar_t depth = trace_ray_with_normal_device(
-        dx, dy, dz,
-        pos[b][0], pos[b][1], pos[b][2],
-        balls, cylinders, cylinders_h, voxels, pos,
-        n_drones_per_group, batch_base, b, B,
-        &nx, &ny, &nz);
-
-    canvas[b][u][v] = depth;
-    normals[b][0][u][v] = nx;
-    normals[b][1][u][v] = ny;
-    normals[b][2][u][v] = nz;
-}
-
-
-// ============================================================================
-// 可微视场反向传播 CUDA 内核 (Differentiable FOV Backward CUDA Kernel)
-// 
-// 通过有限差分法计算深度对 FOV 的梯度: d(depth)/d(fov)，
-// 并使用 atomicAdd 累加每个批次的梯度。
-// ============================================================================
-template <typename scalar_t>
-__global__ void render_backward_fov_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_output, // 输入：来自下游的梯度 (Input: gradient from downstream)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,      // 输入：原始深度图 (Input: original depth map)
-    scalar_t* __restrict__ grad_fov,                                                     // 输出：对 FOV 的梯度 (Output: gradient w.r.t FOV)
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
-    int n_drones_per_group,
-    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
-
-    // 3D Grid: x->W, y->H, z->B
-    const int v = blockIdx.x * blockDim.x + threadIdx.x;
-    const int u = blockIdx.y * blockDim.y + threadIdx.y;
-    const int b = blockIdx.z;
-
-    const int B = canvas.size(0);
-    const int H = canvas.size(1);
-    const int W = canvas.size(2);
-
-    // blockDim = (16,16,1) => 256 threads per block
-    __shared__ scalar_t s_grad[256];
-    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-    s_grad[tid] = (scalar_t)0;
-
-    if (b < B && u < H && v < W) {
-        const scalar_t go = grad_output[b][u][v];
-        if (abs(go) >= (scalar_t)1e-8) {
-            const scalar_t fov = fov_x_half_tan[b];
-            const scalar_t ox = pos[b][0], oy = pos[b][1], oz = pos[b][2];
-
-            // 原始光线方向 d
-            const scalar_t fov_y = fov / W * H;
-            const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y - 1e-5;
-            const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
-            const scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
-            const scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
-            const scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
-
-            // d / d(fov)
-            const scalar_t d_fv_d_fov = (2 * (v + 0.5) / W - 1);
-            const scalar_t d_fu_d_fov = (2 * (u + 0.5) / H - 1) * ((scalar_t)H / W);
-            const scalar_t d_dx_d_fov = -d_fu_d_fov * R[b][0][2] - d_fv_d_fov * R[b][0][1];
-            const scalar_t d_dy_d_fov = -d_fu_d_fov * R[b][1][2] - d_fv_d_fov * R[b][1][1];
-            const scalar_t d_dz_d_fov = -d_fu_d_fov * R[b][2][2] - d_fv_d_fov * R[b][2][1];
-
-            const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
-            scalar_t nx = (scalar_t)0, ny = (scalar_t)0, nz = (scalar_t)0;
-
-            // 单次追踪原始光线并拿到命中法线
-            scalar_t depth_hit = trace_ray_with_normal_device(
-                dx, dy, dz, ox, oy, oz,
-                balls, cylinders, cylinders_h, voxels, pos,
-                n_drones_per_group, batch_base, b, B,
-                &nx, &ny, &nz);
-
-            // 使用前向缓存深度作为 D（与计算图保持一致）
-            scalar_t D = canvas[b][u][v];
-            if (D < (scalar_t)99.0 && depth_hit < (scalar_t)99.0) {
-                scalar_t n_dot_d = nx * dx + ny * dy + nz * dz;
-                if (abs(n_dot_d) > (scalar_t)5e-2) {
-                    scalar_t n_dot_dd_dfov = nx * d_dx_d_fov + ny * d_dy_d_fov + nz * d_dz_d_fov;
-                    scalar_t local_grad = -D * (n_dot_dd_dfov / n_dot_d);
-                    local_grad = max((scalar_t)-500.0, min((scalar_t)500.0, local_grad));
-                    s_grad[tid] = go * local_grad;
-                }
-            }
-        }
-    }
-
-    __syncthreads();
-
-    // Tree reduction in shared memory
-    for (int s = (blockDim.x * blockDim.y) / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            s_grad[tid] += s_grad[tid + s];
-        }
-        __syncthreads();
-    }
-
-    // Single atomic add per block
-    if (tid == 0 && s_grad[0] != (scalar_t)0) {
-        atomicAdd(&grad_fov[b], s_grad[0]);
-    }
-}
-
-
-// ============================================================================
-// 可微视场反向传播 CUDA 内核（基于法线图解析梯度）
-// (Differentiable FOV backward kernel from normal map, analytical)
-// ============================================================================
-template <typename scalar_t>
-__global__ void render_backward_fov_from_normal_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_output,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> canvas,
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> normals,
-    scalar_t* __restrict__ grad_fov,
-    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
-    torch::PackedTensorAccessor<scalar_t,1,torch::RestrictPtrTraits,size_t> fov_x_half_tan) {
-
-    const int v = blockIdx.x * blockDim.x + threadIdx.x;
-    const int u = blockIdx.y * blockDim.y + threadIdx.y;
-    const int b = blockIdx.z;
-
-    const int B = canvas.size(0);
-    const int H = canvas.size(1);
-    const int W = canvas.size(2);
-
-    __shared__ scalar_t s_grad[256];
-    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-    s_grad[tid] = (scalar_t)0;
-
-    if (b < B && u < H && v < W) {
-        const scalar_t go = grad_output[b][u][v];
-        const scalar_t D = canvas[b][u][v];
-
-        if (abs(go) >= (scalar_t)1e-8 && D < (scalar_t)99.0) {
-            const scalar_t fov = fov_x_half_tan[b];
-
-            // 当前光线方向
-            const scalar_t fov_y = fov / W * H;
-            const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y - 1e-5;
-            const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
-            const scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
-            const scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
-            const scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
-
-            // d(d)/d(fov)
-            const scalar_t d_fv_d_fov = (2 * (v + 0.5) / W - 1);
-            const scalar_t d_fu_d_fov = (2 * (u + 0.5) / H - 1) * ((scalar_t)H / W);
-            const scalar_t d_dx_d_fov = -d_fu_d_fov * R[b][0][2] - d_fv_d_fov * R[b][0][1];
-            const scalar_t d_dy_d_fov = -d_fu_d_fov * R[b][1][2] - d_fv_d_fov * R[b][1][1];
-            const scalar_t d_dz_d_fov = -d_fu_d_fov * R[b][2][2] - d_fv_d_fov * R[b][2][1];
-
-            const scalar_t nx = normals[b][0][u][v];
-            const scalar_t ny = normals[b][1][u][v];
-            const scalar_t nz = normals[b][2][u][v];
-
-            const scalar_t n_dot_d = nx * dx + ny * dy + nz * dz;
-            if (abs(n_dot_d) > (scalar_t)5e-2) {
-                const scalar_t n_dot_dd_dfov = nx * d_dx_d_fov + ny * d_dy_d_fov + nz * d_dz_d_fov;
-                scalar_t local_grad = -D * (n_dot_dd_dfov / n_dot_d);
-                local_grad = max((scalar_t)-500.0, min((scalar_t)500.0, local_grad));
-                s_grad[tid] = go * local_grad;
-            }
-        }
-    }
-
-    __syncthreads();
-    for (int s = (blockDim.x * blockDim.y) / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            s_grad[tid] += s_grad[tid + s];
-        }
-        __syncthreads();
-    }
-
-    if (tid == 0 && s_grad[0] != (scalar_t)0) {
-        atomicAdd(&grad_fov[b], s_grad[0]);
-    }
-}
-
-// ============================================================================
-// 深度图重渲染反向传播 CUDA 内核 (Rerender Backward CUDA Kernel)
-// 
-// 计算深度图对相机位姿的导数 (dddp)。
-// ============================================================================
-template <typename scalar_t>
-__global__ void rerender_backward_cuda_kernel(
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> depth, // 输入：深度图 (Input: depth map)
-    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> dddp,  // 输出：深度对位姿的导数 (Output: derivative of depth w.r.t pose)
-    float fov_x_half_tan) {
-
-    const int c = blockIdx.x * blockDim.x + threadIdx.x;
-    const int B = dddp.size(0);
-    const int H = dddp.size(2);
-    const int W = dddp.size(3);
-    if (c >= B * H * W) return;
-    const int b = c / (H * W);
-    const int u = (c % (H * W)) / W;
-    const int v = c % W;
-
-    const scalar_t unit = fov_x_half_tan / W;
-    
-    // 计算 2x2 像素块的平均深度 (Calculate average depth of 2x2 pixel block)
-    const scalar_t d = (depth[b][0][u*2][v*2] + depth[b][0][u*2+1][v*2] + depth[b][0][u*2][v*2+1] + depth[b][0][u*2+1][v*2+1]) / 4 * unit;
-    
-    // 计算深度在 y 和 z 方向的梯度 (Calculate depth gradients in y and z directions)
-    const scalar_t dddy = (depth[b][0][u*2][v*2] + depth[b][0][u*2+1][v*2] - depth[b][0][u*2][v*2+1] - depth[b][0][u*2+1][v*2+1]) / 2 / d;
-    const scalar_t dddz = (depth[b][0][u*2][v*2] - depth[b][0][u*2+1][v*2] + depth[b][0][u*2][v*2+1] - depth[b][0][u*2+1][v*2+1]) / 2 / d;
-    
-    // 归一化梯度向量 (Normalize gradient vector)
-    const scalar_t dddp_norm = max(8., sqrt(1 + dddy * dddy + dddz * dddz));
-    dddp[b][0][u][v] = -1. / dddp_norm;
-    dddp[b][1][u][v] = dddy / dddp_norm;
-    dddp[b][2][u][v] = dddz / dddp_norm;
-}
-
 } // namespace
-
-// ============================================================================
-// C++ 接口函数：深度图渲染 (C++ Interface: Depth Rendering)
-// 
-// 负责计算线程块数量并启动 render_cuda_kernel。
-// ============================================================================
-void render_cuda(
-    torch::Tensor canvas,
-    torch::Tensor flow,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    torch::Tensor R,
-    torch::Tensor R_old,
-    torch::Tensor pos,
-    torch::Tensor pos_old,
-    float drone_radius,
-    int n_drones_per_group,
-    float fov_x_half_tan) {
-    
-    const int threads = 1024; // 每个 block 的线程数 (Threads per block)
-    size_t state_size = canvas.numel(); // 总像素数 (Total number of pixels)
-    const dim3 blocks((state_size + threads - 1) / threads); // 计算 block 数量 (Calculate number of blocks)
-
-    // 启动 CUDA 内核 (Launch CUDA kernel)
-    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_cuda", ([&] {
-        render_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
-            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            flow.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
-            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            R_old.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            pos_old.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            drone_radius,
-            n_drones_per_group,
-            fov_x_half_tan);
-    }));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-    at::cuda::getCurrentCUDAStream().synchronize();
-}
-
-// ============================================================================
-// C++ 接口函数：深度图重渲染反向传播 (C++ Interface: Rerender Backward)
-// ============================================================================
-void rerender_backward_cuda(
-    torch::Tensor depth,
-    torch::Tensor dddp,
-    float fov_x_half_tan) {
-    
-    const int threads = 1024;
-    size_t state_size = dddp.numel();
-    const dim3 blocks((state_size + threads - 1) / threads);
-
-    AT_DISPATCH_FLOATING_TYPES(depth.type(), "rerender_backward_cuda", ([&] {
-        rerender_backward_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
-            depth.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
-            dddp.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
-            fov_x_half_tan);
-    }));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-    at::cuda::getCurrentCUDAStream().synchronize();
-}
 
 // ============================================================================
 // C++ 接口函数：寻找最近点 (C++ Interface: Find Nearest Point)
@@ -1392,9 +861,9 @@ void find_nearest_pt_ellipsoid_cuda(
 }
 
 // ============================================================================
-// C++ 接口函数：可微视场前向渲染 (C++ Interface: Differentiable FOV Forward Rendering)
+// C++ 接口函数：深度图渲染 (C++ Interface: Depth Rendering)
 // ============================================================================
-void render_diff_fov_cuda(
+void render_depth_cuda(
     torch::Tensor canvas,
     torch::Tensor balls,
     torch::Tensor cylinders,
@@ -1403,51 +872,15 @@ void render_diff_fov_cuda(
     torch::Tensor R,
     torch::Tensor pos,
     int n_drones_per_group,
-    torch::Tensor fov_x_half_tan) {
-    
-    const int threads = 1024;
-    size_t state_size = canvas.numel();
-    const dim3 blocks((state_size + threads - 1) / threads);
-
-    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_diff_fov_cuda", ([&] {
-        render_diff_fov_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
-            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            n_drones_per_group,
-            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
-    }));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-    at::cuda::getCurrentCUDAStream().synchronize();
-}
-
-// ============================================================================
-// C++ 接口函数：可微视场前向渲染（含法线输出）
-// ============================================================================
-void render_diff_fov_with_normal_cuda(
-    torch::Tensor canvas,
-    torch::Tensor normals,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    torch::Tensor R,
-    torch::Tensor pos,
-    int n_drones_per_group,
-    torch::Tensor fov_x_half_tan) {
+    float fov_x_half_tan) {
 
     const int threads = 1024;
     size_t state_size = canvas.numel();
     const dim3 blocks((state_size + threads - 1) / threads);
 
-    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_diff_fov_with_normal_cuda", ([&] {
-        render_diff_fov_with_normal_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_depth_cuda", ([&] {
+        render_depth_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            normals.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
@@ -1455,100 +888,22 @@ void render_diff_fov_with_normal_cuda(
             R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             n_drones_per_group,
-            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
+            fov_x_half_tan);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     at::cuda::getCurrentCUDAStream().synchronize();
 }
 
-// ============================================================================
-// C++ 接口函数：可微视场反向传播 (C++ Interface: Differentiable FOV Backward)
-// ============================================================================
-void render_backward_fov_cuda(
-    torch::Tensor grad_fov,
-    torch::Tensor grad_output,
-    torch::Tensor canvas,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    torch::Tensor R,
-    torch::Tensor pos,
-    int n_drones_per_group,
-    torch::Tensor fov_x_half_tan) {
-
-    const int B = canvas.size(0);
-    const int H = canvas.size(1);
-    const int W = canvas.size(2);
-
-    // 2D block + 3D grid to reduce atomic contention within each batch
-    const dim3 threads(16, 16, 1);
-    const dim3 blocks(
-        (W + threads.x - 1) / threads.x,
-        (H + threads.y - 1) / threads.y,
-        B);
-
-    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_backward_fov_cuda", ([&] {
-        render_backward_fov_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
-            grad_output.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            grad_fov.data_ptr<scalar_t>(),
-            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            n_drones_per_group,
-            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
-    }));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-    at::cuda::getCurrentCUDAStream().synchronize();
-}
-
-// ============================================================================
-// C++ 接口函数：可微视场反向传播（基于法线图解析梯度）
-// ============================================================================
-void render_backward_fov_from_normal_cuda(
-    torch::Tensor grad_fov,
-    torch::Tensor grad_output,
-    torch::Tensor canvas,
-    torch::Tensor normals,
-    torch::Tensor R,
-    torch::Tensor fov_x_half_tan) {
-
-    const int B = canvas.size(0);
-    const int H = canvas.size(1);
-    const int W = canvas.size(2);
-
-    const dim3 threads(16, 16, 1);
-    const dim3 blocks(
-        (W + threads.x - 1) / threads.x,
-        (H + threads.y - 1) / threads.y,
-        B);
-
-    AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_backward_fov_from_normal_cuda", ([&] {
-        render_backward_fov_from_normal_cuda_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
-            grad_output.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            normals.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
-            grad_fov.data_ptr<scalar_t>(),
-            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            fov_x_half_tan.packed_accessor<scalar_t,1,torch::RestrictPtrTraits,size_t>());
-    }));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-    at::cuda::getCurrentCUDAStream().synchronize();
-}
 
 // ============================================================================
 // C++ 接口函数：diff_depth 可微前向（CUDA高性能路径）
 // 说明：
-// - 几何深度：复用 render_diff_fov_cuda（CUDA）
+// - 几何深度：复用 render_depth_cuda（CUDA）
 // - 传感器与噪声：使用 ATen 张量算子（GPU 上执行）
 // - 返回：noisy_depth, quality
 // ============================================================================
 std::vector<torch::Tensor> render_diff_depth_forward_cuda(
-    torch::Tensor fov_x_half_tan,
+    float fov_x_half_tan,
     torch::Tensor power,
     torch::Tensor exposure,
     torch::Tensor gain,
@@ -1566,7 +921,7 @@ std::vector<torch::Tensor> render_diff_depth_forward_cuda(
 
     const auto B = pos.size(0);
     auto depth = torch::empty({B, height, width}, pos.options());
-    render_diff_fov_cuda(
+    render_depth_cuda(
         depth, balls, cylinders, cylinders_h, voxels,
         R, pos, n_drones_per_group, fov_x_half_tan);
 
@@ -1578,6 +933,7 @@ std::vector<torch::Tensor> render_diff_depth_forward_cuda(
 
     auto energy_recv = (power_scaled * exp_scaled) / (depth * depth + 0.1);
     energy_recv = energy_recv * gain_scaled * 100.0;
+    energy_recv = energy_recv.clamp_max(1e6);  // 防止 Inf → NaN
 
     auto quality_raw = torch::tanh(energy_recv * 0.5);
 
@@ -1611,7 +967,7 @@ std::vector<torch::Tensor> render_diff_depth_backward_cuda(
     torch::Tensor grad_quality,
     torch::Tensor noisy_depth,
     torch::Tensor quality,
-    torch::Tensor fov_x_half_tan,
+    float fov_x_half_tan,
     torch::Tensor power,
     torch::Tensor exposure,
     torch::Tensor gain,
@@ -1635,7 +991,7 @@ std::vector<torch::Tensor> render_diff_depth_backward_cuda(
 
     // 重新计算几何深度与中间量（与 forward 路径一致）
     auto depth = torch::empty({B, height, width}, opts);
-    render_diff_fov_cuda(
+    render_depth_cuda(
         depth, balls, cylinders, cylinders_h, voxels,
         R, pos, n_drones_per_group, fov_x_half_tan);
     depth = torch::clamp(depth, 0.03, 120.0);
@@ -1740,20 +1096,5 @@ std::vector<torch::Tensor> render_diff_depth_backward_cuda(
     auto grad_exposure = g_es_total * 0.95;
     auto grad_gain = g_gs_total * 9.0;
 
-    // 几何链路回传到 fov（供未来扩展；当前 diff_depth 调用里 fov 通常不需梯度）
-    auto grad_fov = torch::zeros_like(fov_x_half_tan);
-    render_backward_fov_cuda(
-        grad_fov,
-        g_depth.contiguous(),
-        depth.contiguous(),
-        balls,
-        cylinders,
-        cylinders_h,
-        voxels,
-        R,
-        pos,
-        n_drones_per_group,
-        fov_x_half_tan);
-
-    return {grad_fov, grad_power, grad_exposure, grad_gain};
+    return {grad_power, grad_exposure, grad_gain};
 }

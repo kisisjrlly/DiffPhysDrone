@@ -19,7 +19,7 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-03-20-21-45-04/checkpoint0049.pth} # 向后退
 # ckpt_path=${CKPT:-checkpoint/2026-03-24-22-56-19/checkpoint0045.pth} 
 # ckpt_path=${CKPT:-checkpoint/2026-03-31-21-03-07/checkpoint0005.pth} 
-ckpt_path=${CKPT:-checkpoint/2026-04-11-11-56-49/checkpoint0049.pth} # 继续往后退
+ckpt_path=${CKPT:-checkpoint/2026-04-15-11-15-54/checkpoint0011.pth} # 继续往后退
 
 
 # 评估 episode 数（默认 1）

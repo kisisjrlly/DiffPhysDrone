@@ -71,7 +71,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
 
     if vis.enabled:
         # 每个 episode 开始时清理上一轮可视化实体，避免画面残留。
-        vis.begin_iter(ep_idx, reset_scene=True, step_base=ep_step_base)
+        vis.begin_episode(ep_idx)
         j = int(min(max(args.vis_env_idx, 0), B - 1))
         # 从环境中提取缩放参数（用于动态AABB计算）
         y_stretch_j = getattr(env, '_current_y_stretch', None)
@@ -86,7 +86,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
             target=env.p_target[j].detach().cpu().numpy(),
             y_stretch=y_stretch_j,
             scale=scale_j,
-            step_idx=ep_step_base,
+            step_idx=0,
         )
 
     h = None
@@ -119,7 +119,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
         )) * 0.01
         ctl_dt = base_dt + exposure_delay
 
-        depth_obs = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=False)
+        depth_obs, quality = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=False)
         fill_rate_hist.append(compute_depth_fill_rate(
             depth_obs,
             min_valid_depth=args.depth_min_valid,
@@ -234,8 +234,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
 
             vis.log_step(
                 phase='student',
-                # 使用全局单调 step，避免 episode 间 step 从 0 回绕导致 viewer 停在旧帧。
-                step_idx=ep_step_base + t,
+                step_idx=t,
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=None,

@@ -91,8 +91,8 @@ def _teacher_initial_guess(env, model, args, B, device, use_amp, yaw_drift_R):
             args.base_control_freq,
             camera_semantics=env.cam_sem,
         )
-        depth_obs = render_sensors(env, dt, power, exposure, gain, differentiable=False)
-        # torch.cuda.synchronize() 
+        depth_obs, _ = render_sensors(env, dt, power, exposure, gain, differentiable=False)
+        # torch.cuda.synchronize()
         if args.yaw_drift and yaw_drift_R is not None:
             tv_raw = torch.squeeze(tv_raw[:, None] @ yaw_drift_R, 1)
         else:
@@ -185,9 +185,9 @@ def _teacher_inner_loop(env, env_snapshot, args,
                 args.base_control_freq,
                 camera_semantics=env.cam_sem,
             )
-            depth_obs_k = render_sensors(env, dt_k, power_k, exposure_k, gain_k, differentiable=True)
+            depth_obs_k, quality_k = render_sensors(env, dt_k, power_k, exposure_k, gain_k, differentiable=True)
             fill_rate_k = compute_depth_fill_rate(
-                depth_obs_k,
+                quality_k if quality_k is not None else depth_obs_k,
                 min_valid_depth=args.depth_min_valid,
                 softness=diff_depth_fill_softness(args.depth_min_valid),
             )
@@ -393,14 +393,18 @@ def student_rollout(env, model, args, B, device, use_amp,
         ctl_dt = base_dt + exposure_delay
         student_add_noise = (args.student_noise_mode == 'on') if args.enable_teacher_student_training else True
 
-        depth_obs = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=True)
+        depth_obs, depth_quality = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=True)
         depth_vis = depth_obs
+        # fill_rate 用 quality 张量计算（而非 noisy_depth）：
+        # quality 是确定性的（无 randn），对 power/exposure/gain 可微，
+        # 避免了 noisy_depth 中随机噪声污染梯度，也消除了 depth_obs 双路径冲突。
+        fill_src = depth_quality if depth_quality is not None else depth_obs.detach()
         fill_rate_t = compute_depth_fill_rate(
-            depth_obs,
+            fill_src,
             min_valid_depth=args.depth_min_valid,
         )
         fill_rate_soft_t = compute_depth_fill_rate(
-            depth_obs,
+            fill_src,
             min_valid_depth=args.depth_min_valid,
             softness=diff_depth_fill_softness(args.depth_min_valid),
         )

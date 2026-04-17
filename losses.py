@@ -12,12 +12,13 @@ def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int
     """速度主任务损失（平滑版）。
 
     先对真实速度做时间窗口平均，再和目标速度比较。
+    v_avg[i] = mean(v_hist[i:i+win])，对应目标速度 tv_hist[i+win]。
     """
     if v_hist.shape[0] <= win:
         return torch.zeros((), device=v_hist.device, dtype=v_hist.dtype)
     v_cum = v_hist.cumsum(0)
-    v_avg = (v_cum[win:] - v_cum[:-win]) / win
-    tv_ref = tv_hist[1:1 - win]
+    v_avg = (v_cum[win:] - v_cum[:-win]) / win   # shape: [T-win, B, 3]
+    tv_ref = tv_hist[win:]                         # 对齐：v_avg[i] 对应 tv_hist[i+win]
     m = min(v_avg.shape[0], tv_ref.shape[0])
     if m <= 0:
         return torch.zeros((), device=v_hist.device, dtype=v_hist.dtype)
@@ -109,8 +110,10 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
     if cam_hist is not None and cam_hist.shape[0] > 1:
         cam_diff = cam_hist.diff(1, 0)
         result['loss_cam_smooth'] = cam_diff.pow(2).mean()
+        # loss_power_reg 单独惩罚 power 偏离 0.5
         result['loss_power_reg'] = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
-        result['loss_cam_range'] = (cam_hist - 0.5).pow(2).mean()
+        # loss_cam_range 只惩罚 exposure(1) 和 gain(2) 偏离中心，避免与 loss_power_reg 重复惩罚 power
+        result['loss_cam_range'] = (cam_hist[:, :, 1:] - 0.5).pow(2).mean()
 
     # diff_depth 光学损失
     if exposure_seq is not None:
@@ -118,7 +121,8 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
             exposure_seq,
             camera_semantics=camera_semantics,
         )
-        result['loss_diff_depth_power'] = power_seq.pow(2).mean()
+        # 惩罚功率偏高（超过 0.5 的部分），鼓励节能但不强迫关激光
+        result['loss_diff_depth_power'] = F.relu(power_seq - 0.5).pow(2).mean()
         result['loss_diff_depth_blur'] = (speed_seq * exp_phys).pow(2).mean()
         result['loss_diff_depth_noise'] = gain_seq.pow(2).mean()
     if fill_rate_seq is not None:

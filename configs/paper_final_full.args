@@ -11,7 +11,7 @@
 # --resume /home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-03-10-22-18-02/checkpoint0049.pth      # 从已有权重恢复训练
 
 # ----------------- 训练规模 (Training Scale) -----------------
---batch_size 76                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
+--batch_size 126                      # 并行环境数（在 CAM_PROFILE=ultra + 当前GPU占用下优先保证可运行）
 --num_iters 50000                   # 总迭代数
 --timesteps 120                     # 每个 rollout 的物理步数
 
@@ -90,8 +90,8 @@
 --include_camera_state_in_obs       # 观测中加入当前相机参数
 
 --coef_cam_smooth 0.01              # 相机参数时域平滑
---coef_power_reg 0.005              # 首通道回归中心正则（diff_depth 中对应 power）
---coef_cam_range 0.001              # 相机参数范围正则
+--coef_power_reg 0.001              # 降低：power 正则不能压制 fill loss 驱动的 power 上升
+--coef_cam_range 0.0001             # 大幅降低：exposure/gain 正则不能阻止相机主动调参
 
 # diff_depth 退化档位与开关
 --cam_realism_preset low           # low / medium / high / ultra
@@ -114,11 +114,11 @@
 --cam_shot_noise_base 0.03
 
 # diff_depth 专用光学损失权重（diff_depth 模式下生效）
---coef_diff_depth_power 0.02        # 第一阶段先弱化功率惩罚，避免直接学到“关激光”
---coef_diff_depth_blur 0.003        # 统一曝光语义后，按有效曝光时间重标定 blur loss
---coef_diff_depth_noise 0.01        # 降低增益惩罚，避免暗场下过早压制可用深度
---coef_diff_depth_fill 4.0          # 防止策略把深度相机学到几乎全空洞/全黑
---diff_depth_min_fill_rate 0.12     # 统一 fill 语义后采用更稳妥的下界，避免 stage-1 过早被 fill loss 卡住
+--coef_diff_depth_power 0.02        # 惩罚 power>0.5 的部分，鼓励节能但不强迫关激光
+--coef_diff_depth_blur 0.001        # 降低 blur 惩罚，避免与 fill loss 对抗（曝光长→blur大→fill好，两者天然矛盾）
+--coef_diff_depth_noise 0.005       # 降低 noise 惩罚，避免压制 gain 导致暗场 depth 全黑
+--coef_diff_depth_fill 3.0          # 大幅提高：fill loss 是驱动相机主动调参的核心信号，必须强于速度 loss
+--diff_depth_min_fill_rate 0.35     # 提高下界：强迫模型必须维持足够的 depth 覆盖率，否则无法飞行
 
 # ----------------- 教师-学生训练 (Paper §3) -----------------
 # 当前代码逻辑：若 tbptt_enable 与 enable_teacher_student_training 同时开，会提示复杂度风险并优先完整 BPTT 路径
@@ -149,6 +149,8 @@
 
 # ----------------- 可视化与日志 (Visualization & Logging) -----------------
 # 可视化会影响训练吞吐；做长跑实验时可适当降低采样频率
+# 注意：vis_spawn 会在同一块 RTX 4080 上启动 Vulkan/WGPU 窗口，与 CUDA 训练争抢 GPU 资源，
+#       导致系统 hang 死（GPU 级死锁）。长跑训练时必须关闭。
 # --vis_enable                      # 关闭可视化以节省显存/提升吞吐；需要观测时再临时开启
 --vis_backend rerun                 # 可视化后端（当前支持 rerun）
 --vis_env_idx 0                     # 可视化的环境索引（batch 内第几个）
@@ -156,7 +158,7 @@
 --vis_every_steps 10                # 单次迭代内每多少步采样一次可视化
 --vis_teacher                       # 在教师-学生训练时显示 Teacher 轨迹
 --vis_student                       # 显示 Student 执行轨迹
---vis_spawn                         # 自动拉起可视化窗口
+# --vis_spawn                       # 禁用：Vulkan 窗口与 CUDA 共用 RTX 4080 会导致系统 hang
 
 # WandB
 # --wandb_disabled                  # 关闭在线日志

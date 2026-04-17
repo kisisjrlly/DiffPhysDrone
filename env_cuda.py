@@ -8,8 +8,7 @@ import quadsim_cuda
 from utils import g_decay
 from autograd_ops import (
     run,
-    diff_render,
-    diff_render_diff_depth,
+    diff_depth,
 )
 from camera_semantics import CameraSemantics
 
@@ -676,22 +675,11 @@ class Env:
                             self._fov_x_half_tan)
         return canvas, None
 
-    def render_diff(self, fov_tensor):
-        """
-        可微渲染函数 (Differentiable Rendering)。
-        允许梯度从深度图回传到 fov_tensor (视场角参数)。
-        用于训练主动感知 (Active Perception) 策略。
-        """
-        canvas = diff_render(fov_tensor, self.R @ self.R_cam, self.p,
-                             self.balls, self.cyl, self.cyl_h, self.voxels,
-                             self.n_drones_per_group, self.height, self.width)
-        return canvas
-
     def render_diff_depth(self, power, exposure, gain, max_range=None):
         """
         可微主动深度相机渲染（Diff Depth Sensor）。
         说明：
-        - 几何层统一使用 CUDA 可微几何渲染 `diff_render`
+        - 几何层使用 CUDA 深度渲染 `quadsim_cuda.render_depth`
         - 其后的 D455 风格传感器链使用 Torch 张量算子实现，保证不同实现后端下的物理语义一致
         - 历史上的 fused diff_depth CUDA 后处理路径保留在扩展中，但默认不再走该分支，
           以避免训练/评估在 power / exposure / gain 梯度上出现不一致
@@ -751,6 +739,7 @@ class Env:
             spec = torch.zeros_like(albedo)
 
         signal_active = 5.0 * ps * es * albedo * frontality * fog_trans / (depth.square() + 0.08)
+        signal_active = signal_active.clamp_max(1e6)  # 防止 depth 极小时 Inf → NaN
         signal_passive = (
             es * ambient_ir * (0.15 + 0.85 * edge) * (0.35 + 0.65 * albedo) * torch.sqrt(gs)
         )
@@ -841,30 +830,28 @@ class Env:
         device = power.device
         
         # 1. 基础几何渲染
-        fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
         R_cam_world = (self.R @ self.R_cam).contiguous()
         pos = self.p.contiguous()
-        
-        depth = diff_render(
-            fov_tensor,
-            R_cam_world,
-            pos,
+        depth = torch.empty((B, self.height, self.width), device=device, dtype=power.dtype)
+        quadsim_cuda.render_depth(
+            depth,
             self.balls,
             self.cyl,
             self.cyl_h,
             self.voxels,
+            R_cam_world,
+            pos,
             self.n_drones_per_group,
-            self.height,
-            self.width,
+            float(self._fov_x_half_tan),
         )
-        noisy_depth, _ = self._apply_diff_depth_sensor_model(
+        noisy_depth, quality = self._apply_diff_depth_sensor_model(
             depth,
             power,
             exposure,
             gain,
             max_range=max_range,
         )
-        return noisy_depth
+        return noisy_depth, quality
 
     def _render_diff_depth_cuda(self, power, exposure, gain, max_range=None):
         """可微主动深度相机渲染（CUDA backend）。"""
@@ -872,12 +859,11 @@ class Env:
         device = power.device
         max_range = float(self.depth_max_range if max_range is None else max_range)
 
-        fov_tensor = torch.full((B,), self._fov_x_half_tan, device=device)
         R_cam_world = (self.R @ self.R_cam).contiguous()
         pos = self.p.contiguous()
 
-        noisy_depth, _ = diff_render_diff_depth(
-            fov_tensor,
+        noisy_depth, _ = diff_depth(
+            self._fov_x_half_tan,
             power,
             exposure,
             gain,
@@ -893,7 +879,7 @@ class Env:
             self.width,
             float(max_range),
         )
-        return noisy_depth
+        return noisy_depth, None  # CUDA path does not expose quality separately
 
     def find_vec_to_nearest_pt(self):
         """

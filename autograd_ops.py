@@ -10,9 +10,6 @@ _SYNC_BACKWARD = os.getenv("DIFFPHYS_SYNC_BACKWARD", "0") == "1"
 
 def _maybe_sync_backward():
     # Disabled: C++ layer already handles synchronization
-    # To restore old behavior: set DIFFPHYS_SYNC_BACKWARD=1 and uncomment below
-    # if _SYNC_BACKWARD:
-    #     torch.cuda.synchronize()
     pass
 
 
@@ -43,55 +40,18 @@ class RunFunction(torch.autograd.Function):
 run = RunFunction.apply
 
 
-class DiffRenderFunction(torch.autograd.Function):
+class DiffDepthFunction(torch.autograd.Function):
     """
-    可微渲染函数 (Differentiable Rendering)。
-    支持对每个 batch 的 FOV (视场角) 张量进行求导。
-    """
-    @staticmethod
-    def forward(ctx, fov_x_half_tan, R_cam, pos, balls, cyl, cyl_h, voxels,
-                n_drones_per_group, height, width):
-        B = pos.shape[0]
-        fov_x_half_tan = fov_x_half_tan.contiguous()
-        R_cam = R_cam.contiguous()
-        pos = pos.contiguous()
-        canvas = torch.empty((B, height, width), device=pos.device)
-        normals = torch.empty((B, 3, height, width), device=pos.device)
-        quadsim_cuda.render_diff_fov_with_normal(canvas, normals, balls, cyl, cyl_h, voxels,
-                             R_cam, pos, n_drones_per_group, fov_x_half_tan)
-        ctx.save_for_backward(fov_x_half_tan, canvas, normals, R_cam)
-        ctx.n_drones_per_group = n_drones_per_group
-        return canvas
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        fov, canvas, normals, R_cam = ctx.saved_tensors
-        grad_fov = torch.zeros_like(fov)
-        quadsim_cuda.render_backward_fov_from_normal(
-            grad_fov,
-            grad_output.contiguous(),
-            canvas,
-            normals,
-            R_cam,
-            fov,
-        )
-        _maybe_sync_backward()
-        return grad_fov, None, None, None, None, None, None, None, None, None
-
-
-diff_render = DiffRenderFunction.apply
-
-
-class DiffRenderDiffDepthFunction(torch.autograd.Function):
-    """
-    Diff depth 可微渲染（CUDA 路径）。
+    可微深度传感器模型 (Differentiable Depth Sensor Model)。
+    对 power/exposure/gain 三个传感器参数可微。
+    fov_x_half_tan 为固定标量，不参与梯度计算。
     """
     @staticmethod
     def forward(ctx, fov_x_half_tan, power, exposure, gain, v,
                 R_cam, pos, balls, cyl, cyl_h, voxels,
                 n_drones_per_group, height, width, max_range):
         out = quadsim_cuda.render_diff_depth_forward(
-            fov_x_half_tan.contiguous(),
+            float(fov_x_half_tan),
             power.contiguous(),
             exposure.contiguous(),
             gain.contiguous(),
@@ -104,8 +64,9 @@ class DiffRenderDiffDepthFunction(torch.autograd.Function):
         noisy_depth, quality = out[0], out[1]
         ctx.save_for_backward(
             noisy_depth, quality,
-            fov_x_half_tan, power, exposure, gain, v,
+            power, exposure, gain, v,
             R_cam, pos, balls, cyl, cyl_h, voxels)
+        ctx.fov_x_half_tan = float(fov_x_half_tan)
         ctx.n_drones_per_group = int(n_drones_per_group)
         ctx.height = int(height)
         ctx.width = int(width)
@@ -115,23 +76,23 @@ class DiffRenderDiffDepthFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_noisy_depth, grad_quality):
         (noisy_depth, quality,
-         fov_x_half_tan, power, exposure, gain, v,
+         power, exposure, gain, v,
          R_cam, pos, balls, cyl, cyl_h, voxels) = ctx.saved_tensors
 
         grad_noisy_depth = grad_noisy_depth.contiguous()
         grad_quality = grad_quality.contiguous()
 
-        grad_fov, grad_power, grad_exposure, grad_gain = quadsim_cuda.render_diff_depth_backward(
+        grad_power, grad_exposure, grad_gain = quadsim_cuda.render_diff_depth_backward(
             grad_noisy_depth, grad_quality, noisy_depth, quality,
-            fov_x_half_tan, power, exposure, gain, v,
+            ctx.fov_x_half_tan, power, exposure, gain, v,
             R_cam, pos, balls, cyl, cyl_h, voxels,
             int(ctx.n_drones_per_group), int(ctx.height), int(ctx.width), float(ctx.max_range),
         )
         _maybe_sync_backward()
         return (
-            grad_fov, grad_power, grad_exposure, grad_gain,
+            None, grad_power, grad_exposure, grad_gain,
             None, None, None, None, None, None, None, None, None, None, None,
         )
 
 
-diff_render_diff_depth = DiffRenderDiffDepthFunction.apply
+diff_depth = DiffDepthFunction.apply

@@ -66,15 +66,15 @@ class RerunVis:
                             ],
                             name="student_3d",
                         ),
-                        rrb.Vertical(
-                            rrb.Spatial2DView(origin="/student/camera/main", contents=["/student/camera/main"], name="main_y"),
-                            rrb.Spatial2DView(origin="/student/camera/depth_aux", contents=["/student/camera/depth_aux"], name="depth_aux"),
-                            name="cameras",
+                        rrb.Spatial2DView(
+                            origin="/student/camera/depth_aux",
+                            contents=["/student/camera/depth_aux", "/student/camera/depth"],
+                            name="depth",
                         ),
                         rrb.Vertical(
-                            rrb.TimeSeriesView(origin="/student/camera/fov", contents=["/student/camera/fov"], name="fov"),
+                            rrb.TimeSeriesView(origin="/student/camera/power", contents=["/student/camera/power"], name="power"),
                             rrb.TimeSeriesView(origin="/student/camera/exposure", contents=["/student/camera/exposure"], name="exposure"),
-                            rrb.TimeSeriesView(origin="/student/camera/iso", contents=["/student/camera/iso"], name="iso"),
+                            rrb.TimeSeriesView(origin="/student/camera/gain", contents=["/student/camera/gain"], name="gain"),
                             name="camera_params",
                         ),
                         name="top_row",
@@ -148,6 +148,35 @@ class RerunVis:
         ], dtype=np.float32)
         
         return scene_min, scene_max
+
+    def begin_episode(self, ep_idx: int):
+        """Reset all per-episode data in rerun at the start of a new episode.
+
+        Clears 3D scene entities, flight path, camera params, and metrics so
+        the viewer only shows the current episode's data.
+        """
+        if not self.enabled or self._rr is None:
+            return
+        rr = self._rr
+        self._paths["teacher"].clear()
+        self._paths["student"].clear()
+
+        # Clear all student entities (3D scene, path, metrics, camera params)
+        for ns in ("student", "teacher"):
+            try:
+                rr.log(ns, rr.Clear(recursive=True))
+            except Exception:
+                pass
+
+        # Reset step timeline to 0 for this episode
+        try:
+            rr.set_time_sequence("step", 0)
+        except Exception:
+            pass
+        try:
+            rr.set_time_sequence("iter", int(ep_idx))
+        except Exception:
+            pass
 
     def begin_iter(self, iter_idx: int, reset_scene: bool = False, step_base: int = 0):
         if not self.enabled or self._rr is None:
@@ -616,17 +645,38 @@ class RerunVis:
             x = np.clip(x, 0.0, 1.0)
             return (x * 255.0).astype(np.uint8)
         if mode == "depth_aux":
-            x = np.clip(x, 0.3, 24.0)
-            finite = x[np.isfinite(x)]
-            if finite.size >= 16:
-                lo = float(np.percentile(finite, 2.0))
-                hi = float(np.percentile(finite, 98.0))
-                if hi - lo < 1e-3:
-                    lo, hi = 0.3, 24.0
+            # 关键修复：diff_depth 无效像素常为 0。若先全图 clip 到 0.3，
+            # 再做分位数拉伸，会被大量无效值主导而整帧接近黑屏。
+            # 这里改为：
+            # 1) 只在有效深度(>=0.3m)上估计对比度区间
+            # 2) 无效像素单独着色为暗灰，既不黑屏也能看出空洞区域
+            min_valid = 0.3
+            valid = np.isfinite(x) & (x >= min_valid)
+
+            if not np.any(valid):
+                # 全无效帧：返回暗灰底图，避免“纯黑=像挂了”的误解
+                return np.full_like(x, 18, dtype=np.uint8)
+
+            vals = x[valid]
+            if vals.size >= 16:
+                lo = float(np.percentile(vals, 2.0))
+                hi = float(np.percentile(vals, 98.0))
             else:
-                lo, hi = 0.3, 24.0
-            x = np.clip((x - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
-            return (x * 255.0).astype(np.uint8)
+                lo = float(vals.min())
+                hi = float(vals.max())
+
+            if hi - lo < 1e-4:
+                mid = float(np.median(vals))
+                lo = max(min_valid, mid - 1.0)
+                hi = mid + 1.0
+
+            y = np.zeros_like(x, dtype=np.float32)
+            norm = np.clip((x[valid] - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
+            # 近处高亮、远处变暗，便于观察障碍轮廓
+            y[valid] = 0.25 + 0.75 * np.power(1.0 - norm, 0.8)
+            # 无效像素用中灰底色，避免窗口“纯黑像无数据”
+            y[~valid] = 0.16
+            return (y * 255.0).astype(np.uint8)
         # depth by default
         x = np.clip(x, 0.05, 10.0)
         x = (x - 0.05) / (10.0 - 0.05)
@@ -823,10 +873,10 @@ class RerunVis:
             rr.log(f"{phase}/camera/depth", rr.Image(self._img_u8(depth, mode="depth")))
 
         if cam is not None:
-            fov, exp, iso = [float(x) for x in cam]
-            rr.log(f"{phase}/camera/fov", self._scalar_msg(fov))
-            rr.log(f"{phase}/camera/exposure", self._scalar_msg(exp))
-            rr.log(f"{phase}/camera/iso", self._scalar_msg(iso))
+            power, exposure, gain = [float(x) for x in cam]
+            rr.log(f"{phase}/camera/power", self._scalar_msg(power))
+            rr.log(f"{phase}/camera/exposure", self._scalar_msg(exposure))
+            rr.log(f"{phase}/camera/gain", self._scalar_msg(gain))
 
         if scalars is not None:
             for k, v in scalars.items():
