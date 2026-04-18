@@ -45,16 +45,13 @@ class MetricSmoother:
         out = dict(log)
         args = self._args
 
-        wall_keys = {'slit_crossed', 'slit_pass_rate', 'roll_at_wall_deg'}
-        has_opening_scene = bool(getattr(args, 'wall_slit', False) or any(
-            name in OPENING_SCENES for name in getattr(args, 'scenarios', [])
-        ))
-
+        wall_keys = {'slit_pass_rate'}
+        has_opening_scene = any(name in OPENING_SCENES for name in getattr(args, 'scenarios', []))
         if not has_opening_scene:
             for k in wall_keys:
                 out.pop(k, None)
 
-        if len(getattr(args, 'scenarios', ['random_base'])) <= 1 and not getattr(args, 'wall_slit', False):
+        if len(getattr(args, 'scenarios', ['random_base'])) <= 1:
             for k in list(out.keys()):
                 if k.startswith('scene/'):
                     out.pop(k, None)
@@ -209,11 +206,8 @@ def build_env(batch_size: int, args, device) -> Env:
 
     return Env(
         batch_size, dw, dh, args.grad_decay, device,
-        fov_x_half_tan=args.fov_x_half_tan, single=args.single,
-        gate=args.gate, ground_voxels=args.ground_voxels,
-        scaffold=args.scaffold, speed_mtp=args.speed_mtp,
-        random_rotation=args.random_rotation, cam_angle=args.cam_angle,
-        wall_slit=args.wall_slit,
+        fov_x_half_tan=args.fov_x_half_tan,
+        cam_angle=args.cam_angle,
         ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
         ellipsoid_c=args.drone_c if args.ellipsoid_collision else 0.0,
         camera_preset=args.cam_realism_preset,
@@ -234,6 +228,7 @@ def build_env(batch_size: int, args, device) -> Env:
         depth_min_valid=args.depth_min_valid,
         depth_max_range=args.depth_max_range,
         scenarios=args.scenarios,
+        scene_fit_profiles_path=args.scene_fit_profiles_path,
         diff_sensor_impl=args.diff_sensor_impl,
     )
 

@@ -68,7 +68,7 @@ class RerunVis:
                         ),
                         rrb.Spatial2DView(
                             origin="/student/camera/depth_aux",
-                            contents=["/student/camera/depth_aux", "/student/camera/depth"],
+                            contents=["/student/camera/depth_aux"],
                             name="depth",
                         ),
                         rrb.Vertical(
@@ -89,64 +89,10 @@ class RerunVis:
             print(f"[warn] failed to send rerun blueprint, fallback to auto layout: {e}")
 
     def _compute_scene_bounds(self, max_speed=None, y_stretch=None, scale=None):
-        """从环境参数动态计算AABB（回退到常数如果参数缺失）。
-        
-        Args:
-            max_speed: unused (kept for API compatibility)
-            y_stretch: Y轴拉伸系数（前后距离的拉伸比例），可选
-            scale:     X轴场景缩放系数，可选
-        
-        Returns:
-            (scene_min, scene_max): numpy arrays of shape (3,)
-        """
-        # 基础范围（来自env_cuda.py参数）
-        x_lo_base, x_hi_base = 0.0, 8.0
-        y_lo_base, y_hi_base = -9.0, 9.0
-        z_lo_base, z_hi_base = -1.5, 5.0
-        
-        # 安全地提取标量值
-        def _safe_float(val):
-            if val is None:
-                return None
-            try:
-                # torch.Tensor (including CUDA tensor) support without hard dependency
-                if hasattr(val, "detach") and hasattr(val, "reshape") and hasattr(val, "item"):
-                    return float(val.detach().reshape(-1)[0].item())
-                if isinstance(val, np.ndarray):
-                    return float(val.item() if val.ndim == 0 else val.flat[0])
-                return float(val)
-            except Exception:
-                return None
-        
-        scale_val = _safe_float(scale)
-        y_stretch_val = _safe_float(y_stretch)
-        
-        # 应用缩放因子
-        if scale_val is not None and scale_val > 0:
-            x_lo_base *= scale_val
-            x_hi_base *= scale_val
-        
-        if y_stretch_val is not None and y_stretch_val > 0:
-            y_lo_base *= y_stretch_val
-            y_hi_base *= y_stretch_val
-        
-        # 添加安全边距
-        margin_x = max(0.5, 0.15 * (x_hi_base - x_lo_base))
-        margin_y = max(0.5, 0.1 * abs(y_hi_base - y_lo_base))
-        margin_z = 1.0
-        
-        scene_min = np.array([
-            x_lo_base - margin_x,
-            y_lo_base - margin_y,
-            z_lo_base - margin_z,
-        ], dtype=np.float32)
-        
-        scene_max = np.array([
-            x_hi_base + margin_x,
-            y_hi_base + margin_y,
-            z_hi_base + margin_z,
-        ], dtype=np.float32)
-        
+        """固定最小验证地图的 AABB。"""
+        _ = max_speed, y_stretch, scale
+        scene_min = np.array([-5.8, -5.8, -0.5], dtype=np.float32)
+        scene_max = np.array([5.8, 5.8, 4.0], dtype=np.float32)
         return scene_min, scene_max
 
     def begin_episode(self, ep_idx: int):
@@ -865,12 +811,13 @@ class RerunVis:
         # 新接口：分别记录主相机和深度相机
         if main_img is not None:
             rr.log(f"{phase}/camera/main", rr.Image(self._img_u8(main_img, mode=main_img_mode)))
-        if depth_img is not None:
-            rr.log(f"{phase}/camera/depth_aux", rr.Image(self._img_u8(depth_img, mode="depth_aux")))
-
-        # 兼容旧接口
-        if (main_img is None) and (depth is not None):
-            rr.log(f"{phase}/camera/depth", rr.Image(self._img_u8(depth, mode="depth")))
+        # 深度窗口统一为 depth_aux（近亮远暗 + 无效深度暗灰），避免双映射语义冲突。
+        depth_for_view = depth_img
+        if depth_for_view is None and (main_img is None) and (depth is not None):
+            # 兼容旧接口：仅传 depth 时，也统一写入 depth_aux 路径。
+            depth_for_view = depth
+        if depth_for_view is not None:
+            rr.log(f"{phase}/camera/depth_aux", rr.Image(self._img_u8(depth_for_view, mode="depth_aux")))
 
         if cam is not None:
             power, exposure, gain = [float(x) for x in cam]

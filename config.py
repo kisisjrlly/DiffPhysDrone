@@ -7,13 +7,13 @@ import torch
 
 
 SUPPORTED_SCENARIOS = (
-    'random_base',
+    'base',
     'sun_glare',
-    'black_gap',
-    'dark_slit_lite',
+    'specular_trap',
+    'vantablack_gap',
+    'dark_morphing',
 )
-OPENING_SCENES = {'black_gap', 'dark_slit_lite'}
-HARD_SCENES = {'sun_glare', 'black_gap', 'dark_slit_lite'}
+OPENING_SCENES = {'vantablack_gap', 'dark_morphing'}
 
 
 def build_parser():
@@ -47,7 +47,6 @@ def build_parser():
     parser.add_argument('--seed', type=int, default=42, help='随机数种子')
     parser.add_argument('--deterministic', default=False, action=argparse.BooleanOptionalAction,
                         help='是否启用确定性算法')
-    parser.add_argument('--speed_mtp', type=float, default=1.0, help='环境最大速度乘数')
     parser.add_argument('--fov_x_half_tan', type=float, default=0.53, help='相机基础视场角')
     parser.add_argument('--timesteps', type=int, default=150, help='每个 episode 的物理步数')
     parser.add_argument('--base_control_freq', type=float, default=15.0, help='基础控制频率 (Hz)')
@@ -65,17 +64,13 @@ def build_parser():
     parser.add_argument('--diff_sensor_impl', nargs='*', default=['diff_depth=python'],
                         help='diff_depth 可微传感实现后端列表')
 
-    # --- 环境变体开关 ---
-    parser.add_argument('--single', default=False, action='store_true', help='单机模式')
-    parser.add_argument('--gate', default=False, action='store_true', help='启用穿越门环境')
-    parser.add_argument('--ground_voxels', default=False, action='store_true', help='启用复杂地面环境')
-    parser.add_argument('--scaffold', default=False, action='store_true', help='启用脚手架环境')
-    parser.add_argument('--random_rotation', default=False, action='store_true', help='随机旋转整个场景')
+    # --- 环境与状态感知 ---
     parser.add_argument('--yaw_drift', default=False, action='store_true', help='模拟偏航角漂移')
     parser.add_argument('--no_odom', default=False, action='store_true', help='无里程计模式')
-    parser.add_argument('--wall_slit', default=False, action='store_true', help='狭缝穿越环境')
-    parser.add_argument('--scenarios', nargs='*', default=['random_base'],
-                        help='diff_depth 论文场景列表；训练时每个 episode 从中采样，评测时按顺序轮转')
+    parser.add_argument('--scenarios', nargs='*', default=['base'],
+                        help='固定小地图上的 diff_depth 场景列表；训练随机采样，评测顺序轮转')
+    parser.add_argument('--scene_fit_profiles_path', type=str, default=None,
+                        help='可选：加载 D455 标定反推得到的场景 profile JSON，自动覆盖 diff_depth 场景参数')
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
@@ -191,24 +186,25 @@ def parse_diff_sensor_impl(items):
 
 
 def parse_scenarios(items):
-    """解析论文场景列表。支持空格或逗号分隔。"""
+    """解析固定小地图场景列表。支持空格或逗号分隔。"""
     if items is None:
-        return ['random_base']
+        return ['base']
 
     aliases = {
-        'base': 'random_base',
-        'random': 'random_base',
-        'random_scene': 'random_base',
+        'random_base': 'base',
+        'random': 'base',
+        'random_scene': 'base',
+        'black_gap': 'vantablack_gap',
+        'dark_slit_lite': 'dark_morphing',
     }
     scenarios = []
     for raw in items:
         if raw is None:
             continue
         for token in str(raw).split(','):
-            name = token.strip().lower()
+            name = aliases.get(token.strip().lower(), token.strip().lower())
             if not name:
                 continue
-            name = aliases.get(name, name)
             if name not in SUPPORTED_SCENARIOS:
                 raise ValueError(
                     f"--scenarios 不支持 '{name}'，仅支持: {list(SUPPORTED_SCENARIOS)}"
@@ -216,9 +212,8 @@ def parse_scenarios(items):
             scenarios.append(name)
 
     if not scenarios:
-        return ['random_base']
+        return ['base']
 
-    # 保持用户给定顺序，但去重，避免 eval 轮转时重复。
     dedup = []
     seen = set()
     for name in scenarios:
@@ -278,8 +273,6 @@ def validate_args(args):
         raise ValueError('--depth_nn_width/--depth_nn_height 必须 >= 1')
     if not getattr(args, 'scenarios', None):
         raise ValueError('--scenarios 至少需要一个场景')
-    if args.no_odom and (args.wall_slit or any(scene in HARD_SCENES for scene in args.scenarios)):
-        print('[warn] 当前配置为 no_odom + hard scenarios；建议先在带 odom 或更简单场景上热启动，再逐步加难度')
 
 
 def print_runtime_mode(args):
@@ -303,6 +296,7 @@ def print_runtime_mode(args):
     print(f"distill_coef              : {args.distill_coef} -> {args.distill_coef * args.distill_final_ratio}")
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
     print(f"scenarios                 : {args.scenarios}")
+    print("environment               : fixed_small_map_with_perception_scenarios")
     print("sensor_control_semantics  : power/exposure/gain")
     print("=" * 75)
 

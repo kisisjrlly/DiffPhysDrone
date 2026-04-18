@@ -720,12 +720,10 @@ def full_bptt_losses(rollout, env, args, device, u_star, y_star, u_star_cam, dis
 # =====================================================================
 
 def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
-    """Compute and log emerging-behavior metrics (roll, correlations, slit)."""
+    """Compute and log emerging-behavior metrics for the fixed small-map scenarios."""
     p_history = loss_dict.get('p_history')
     vec_to_pt_history = loss_dict.get('vec_to_pt_history')
     distance = loss_dict.get('distance')
-    speed_history = loss_dict.get('speed_history')
-    B = p_history.shape[1] if p_history is not None else 1
 
     # Roll angle
     if rollout['R_up_history']:
@@ -733,11 +731,6 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
         roll_angle = torch.acos(up_hist[:, :, 2].clamp(-1, 1))
         roll_deg = roll_angle * 180 / math.pi
         smoother.add({'roll_max_deg': roll_deg.max().item(), 'roll_mean_deg': roll_deg.mean().item()})
-        if env.current_scene_has_opening and p_history is not None and env.wall_x is not None:
-            dx = (p_history[..., 0] - env.wall_x).abs()
-            near_wall = dx < 1.0
-            if near_wall.any():
-                smoother.add({'roll_at_wall_deg': roll_deg[near_wall].mean().item()})
 
     # Speed-exposure correlation
     if rollout['exposure_history']:
@@ -757,13 +750,11 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
         dn_s = (_dn - dn_m).pow(2).mean(0).sqrt().clamp(min=1e-6)
         smoother.add({'power_obstacle_corr': (cov_pd / (pw_s * dn_s)).mean().item()})
 
-    # Wall slit
-    if env.current_scene_has_opening and p_history is not None and distance is not None and env.wall_x is not None:
+    if env.current_scene_has_opening and p_history is not None and distance is not None:
         final_x = p_history[-1, :, 0]
         success = torch.all(distance.flatten(0, 1) > 0, 0)
-        crossed = (final_x > env.wall_x).float()
+        crossed = (final_x > 0.0).float()
         smoother.add({
-            'slit_crossed': crossed.mean().item(),
             'slit_pass_rate': (crossed * success.float()).mean().item(),
         })
 
@@ -945,10 +936,6 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         if should_vis:
             vis.begin_iter(i)
             j = int(min(max(args.vis_env_idx, 0), B - 1))
-            # 从环境中提取缩放参数（用于动态AABB计算）
-            max_speed_j = env.max_speed[j:j+1] if hasattr(env, 'max_speed') else None
-            y_stretch_j = getattr(env, '_current_y_stretch', None)
-            scale_j = getattr(env, '_current_scale', None)
             vis.log_environment(
                 phase='student',
                 balls=env.balls[j].detach().cpu().numpy(),
@@ -956,10 +943,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 cyl=env.cyl[j].detach().cpu().numpy(),
                 cyl_h=env.cyl_h[j].detach().cpu().numpy(),
                 start=env.p[j].detach().cpu().numpy(),
-                target=env.p_target[j].detach().cpu().numpy(),
-                max_speed=max_speed_j,
-                y_stretch=y_stretch_j,
-                scale=scale_j)
+                target=env.p_target[j].detach().cpu().numpy())
 
         # Teacher phase
         u_star, y_star, u_star_cam = None, None, None

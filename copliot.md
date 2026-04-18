@@ -1,3 +1,5 @@
+> **免责声明**：当前md中的描述并不完全等价项目中的代码实现，真实的实现以代码为准。
+
 当前项目的conda 运行环境是mappo-mpc
 conda activate mappo-mpc
 

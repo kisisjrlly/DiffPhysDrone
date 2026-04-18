@@ -1,3 +1,5 @@
+> **免责声明**：当前md中的描述并不完全等价项目中的代码实现，真实的实现以代码为准。
+
 # DiffPhysDrone diff_depth-only
 
 本分支已经收敛为 `diff_depth` 的单主线版本。

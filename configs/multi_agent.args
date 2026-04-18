@@ -1,23 +1,6 @@
-# Environment
---gate
-
-# Loss weights
---coef_collide 5.0
---coef_obj_avoidance 2.0
-
-# Training
---batch 256
-
-# Camera / rollout
---fov_x_half_tan 0.82
---timesteps 180
-
-# Camera semantic mapping constants
---cam_exposure_t_min 0.25
---cam_exposure_t_span 2.75
---cam_exposure_eff_min 0.15
---cam_exposure_eff_max 4.0
---cam_iso_gain_base 1.0
---cam_iso_gain_scale 10.0
---cam_iso_gain_gamma 1.2
---cam_shot_noise_base 0.03
+# Deprecated.
+#
+# 当前分支已经切换为固定地图最小验证版，不再支持旧的 multi_agent 随机场景配置。
+# 请改用：
+# - configs/paper_final_full.args
+# - configs/paper_ablate_diff_depth.args

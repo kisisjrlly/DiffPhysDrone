@@ -1,37 +1,4 @@
-# Environment
---single
---wall_slit
---ellipsoid_collision
---drone_a 0.15
---drone_c 0.075
---speed_mtp 0.5
-
-# Dynamics regularization
---coef_d_acc 0.01
---coef_d_jerk 0.001
-
-# Core losses
---coef_collide 10.0
---coef_obj_avoidance 5.0
---coef_v 1.0
---coef_v_pred 2.0
-
-# Camera
---cam_angle 10
---fov_x_half_tan 0.82
-
-# Camera semantic mapping constants
---cam_exposure_t_min 0.25
---cam_exposure_t_span 2.75
---cam_exposure_eff_min 0.15
---cam_exposure_eff_max 4.0
---cam_iso_gain_base 1.0
---cam_iso_gain_scale 10.0
---cam_iso_gain_gamma 1.2
---cam_shot_noise_base 0.03
-
-# Training
---timesteps 120
---batch_size 64
---num_iters 50000
---grad_decay 0.4
+# Deprecated.
+#
+# 当前分支已经切换为固定地图最小验证版，不再支持 wall_slit 场景配置。
+# 如需恢复 opening / slit 类任务，请在 TODO.md 中对应条目完成后再基于新环境语义重建。

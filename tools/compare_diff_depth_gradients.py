@@ -74,7 +74,6 @@ def run_one(
         height=depth_h,
         grad_decay=0.4,
         device=device,
-        single=True,
         diff_sensor_impl={"diff_depth": impl},
     )
 
@@ -82,7 +81,7 @@ def run_one(
     exposure = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
     gain = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
 
-    depth = env.render_diff_depth(power, exposure, gain)
+    depth, _ = env.render_diff_depth(power, exposure, gain)
     loss = depth.mean()
 
     loss.backward()

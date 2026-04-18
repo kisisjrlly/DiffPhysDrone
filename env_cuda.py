@@ -1,6 +1,7 @@
 import math
+import json
+import os
 import random
-import time
 import torch
 import torch.nn.functional as F
 import quadsim_cuda
@@ -15,18 +16,24 @@ from camera_semantics import CameraSemantics
 
 class Env:
     """
-    无人机物理仿真环境类。
-    负责管理无人机状态、障碍物生成、碰撞检测、可微渲染以及物理步进。
-    支持大规模并行仿真 (Batch processing)。
+    diff_depth-only 的固定小地图场景环境。
 
-    当前分支为 diff_depth-only：
-    - 仅维护可微深度相机主链
-    - 非 diff_depth 的公共渲染接口会直接报错
+    当前版本保留 `scenarios` 作为“可微感知能力测试”开关，但所有场景都共享：
+    地图语义如下：
+    - 地图中心: (0, 0, 0)
+    - 地图范围: x/y 均为 [-5, 5]
+    - 起点: (-5, 0, 1.5)
+    - 终点: (5, 0, 1.5)
+    - 几何主骨架固定且小型，不要求复杂避障
+
+    当前版本的设计目标是：
+    - 让飞行/避障任务足够简单
+    - 让 `sun_glare` / `specular_trap` / `vantablack_gap` / `dark_morphing`
+      这些论文场景在仿真中对应到局部光照、材质与几何事件
+    - 避免回退到旧的大地图随机世界
     """
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.53,
-                 single=False, gate=False, ground_voxels=False, scaffold=False, speed_mtp=1,
-                 random_rotation=False, cam_angle=10,
-                 wall_slit=False, ellipsoid_a=0.0, ellipsoid_c=0.0,
+                 cam_angle=10, ellipsoid_a=0.0, ellipsoid_c=0.0,
                  camera_preset='high',
                  cam_enable_specular=True,
                  cam_enable_motion_blur=True,
@@ -45,86 +52,66 @@ class Env:
                  depth_min_valid=0.3,
                  depth_max_range=6.0,
                  scenarios=None,
+                 scene_fit_profiles_path=None,
                  diff_sensor_impl=None) -> None:
         self.device = device
         self.batch_size = batch_size
-        self.width = max(int(width), 1)      # diff_depth 渲染宽度
-        self.height = max(int(height), 1)    # diff_depth 渲染高度
-        self.grad_decay = grad_decay # 梯度衰减系数
-        self.wall_slit = wall_slit   # 是否启用狭缝穿越环境
+        self.width = max(int(width), 1)
+        self.height = max(int(height), 1)
+        self.grad_decay = grad_decay
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
-        self.supported_scenarios = ('random_base', 'sun_glare', 'black_gap', 'dark_slit_lite')
-        self.scene_name_to_id = {
-            'random_base': 0,
-            'sun_glare': 1,
-            'black_gap': 2,
-            'dark_slit_lite': 3,
-            'wall_slit': 4,
-        }
+        self.fov_x_half_tan = float(fov_x_half_tan)
+        self.cam_angle = float(cam_angle)
+
+        # 椭球体碰撞模型参数
+        self.ellipsoid_a = ellipsoid_a
+        self.ellipsoid_c = ellipsoid_c
+        self.use_ellipsoid = ellipsoid_a > 0 and ellipsoid_c > 0
+
+        self.g_std = torch.tensor([0.0, 0.0, -9.80665], device=device)
+        self.v_wind_w = torch.tensor([1.0, 1.0, 0.2], device=device)
+        self.sub_div = torch.linspace(0, 1. / 15, 10, device=device).reshape(-1, 1, 1)
+
+        self.flow = torch.empty((batch_size, 0, self.height, self.width), device=device)
+
+        # 固定地图定义
+        self.map_half_extent_x = 5.0
+        self.map_half_extent_y = 5.0
+        self.scene_min = torch.tensor([-5.0, -5.0, 0.0], device=device)
+        self.scene_max = torch.tensor([5.0, 5.0, 3.0], device=device)
+        self.start_position = torch.tensor([-5.0, 0.0, 1.5], device=device)
+        self.goal_position = torch.tensor([5.0, 0.0, 1.5], device=device)
+        self.fixed_max_speed = 1.8
+        self.fixed_drone_radius = 0.12
+        self.fixed_margin = 0.05
+        self.fixed_pitch_ctl_delay = 12.0
+        self.fixed_yaw_ctl_delay = 6.0
+        self.fixed_drag_linear = 0.35
+        self.fixed_wind_scale = 0.03
+        self.supported_scenarios = (
+            'base',
+            'sun_glare',
+            'specular_trap',
+            'vantablack_gap',
+            'dark_morphing',
+        )
+        self.scene_name_to_id = {name: idx for idx, name in enumerate(self.supported_scenarios)}
         self.scenarios = self._normalize_scenarios(scenarios)
-        self.current_scene_name = 'random_base'
+        self.current_scene_name = self.scenarios[0]
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
         self.current_scene_has_opening = False
-        self._clear_opening_scene_metadata()
-        
-        # 椭球体碰撞模型参数 (用于更精确的无人机碰撞检测)
-        self.ellipsoid_a = ellipsoid_a # 椭球体 XY 半轴 (螺旋桨平面半径)
-        self.ellipsoid_c = ellipsoid_c # 椭球体 Z 半轴 (无人机半高)
-        self.use_ellipsoid = ellipsoid_a > 0 and ellipsoid_c > 0
-        
-        # 障碍物生成的基准参数 (w: 范围/宽度, b: 偏移/基准值)
-        self.ball_w = torch.tensor([8., 18, 6, 0.2], device=device) # 球体障碍物
-        self.ball_b = torch.tensor([0., -9, -1, 0.4], device=device)
-        self.voxel_w = torch.tensor([8., 18, 6, 0.1, 0.1, 0.1], device=device) # 立方体障碍物
-        self.voxel_b = torch.tensor([0., -9, -1, 0.2, 0.2, 0.2], device=device)
-        self.ground_voxel_w = torch.tensor([8., 18,  0, 2.9, 2.9, 1.9], device=device) # 地面障碍物
-        self.ground_voxel_b = torch.tensor([0., -9, -1, 0.1, 0.1, 0.1], device=device)
-        self.cyl_w = torch.tensor([8., 18, 0.35], device=device) # 垂直圆柱体
-        self.cyl_b = torch.tensor([0., -9, 0.05], device=device)
-        self.cyl_h_w = torch.tensor([8., 6, 0.1], device=device) # 水平圆柱体
-        self.cyl_h_b = torch.tensor([0., 0, 0.05], device=device)
-        self.gate_w = torch.tensor([2.,  2,  1.0, 0.5], device=device) # 穿越门
-        self.gate_b = torch.tensor([3., -1,  0.0, 0.5], device=device)
-        
-        self.v_wind_w = torch.tensor([1,  1,  0.2], device=device) # 风扰动权重
-        self.g_std = torch.tensor([0., 0, -9.80665], device=device) # 标准重力加速度
-        self.roof_add = torch.tensor([0., 0., 2.5, 1.5, 1.5, 1.5], device=device) # 屋顶障碍物附加值
-        
-        # 物理步进的子步划分 (用于更精确的碰撞检测)
-        self.sub_div = torch.linspace(0, 1. / 15, 10, device=device).reshape(-1, 1, 1)
-        
-        # 无人机初始位置和目标位置的基准点 (支持多机编队)
-        self.p_init = torch.as_tensor([
-            [-1.5, -3.,  1], [ 9.5, -3.,  1], [-0.5,  1.,  1], [ 8.5,  1.,  1],
-            [ 0.0,  3.,  1], [ 8.0,  3.,  1], [-1.0, -1.,  1], [ 9.0, -1.,  1],
-        ], device=device).repeat(batch_size // 8 + 7, 1)[:batch_size]
-        self.p_end = torch.as_tensor([
-            [8.,  3.,  1], [0.,  3.,  1], [8., -1.,  1], [0., -1.,  1],
-            [8., -3.,  1], [0., -3.,  1], [8.,  1.,  1], [0.,  1.,  1],
-        ], device=device).repeat(batch_size // 8 + 7, 1)[:batch_size]
-        
-        # 光流张量 (当前未使用，预留接口)
-        self.flow = torch.empty((batch_size, 0, self.height, self.width), device=device)
-        
-        # 环境配置标志
-        self.single = single             # 是否单机模式
-        self.gate = gate                 # 是否生成穿越门
-        self.ground_voxels = ground_voxels # 是否生成地面复杂地形
-        self.scaffold = scaffold         # 是否生成脚手架障碍物
-        self.speed_mtp = speed_mtp       # 速度乘数
-        self.random_rotation = random_rotation # 是否随机旋转整个场景
-        self.cam_angle = cam_angle       # 相机俯仰角
-        self.fov_x_half_tan = fov_x_half_tan # 基础视场角 (tan(FOV/2))
+        self.current_scene_effects = {}
+        self.scene_fit_profiles_path = None
+        self.scene_sensor_profile_overrides = {}
+        self.scene_effect_overrides = {}
+        self.base_voxels_template = self._build_base_voxel_layout()
+
         _impl = {'diff_depth': 'python'}
         if diff_sensor_impl is not None:
             _impl.update({str(k): str(v).lower() for k, v in dict(diff_sensor_impl).items()})
         self.diff_sensor_impl = _impl
-        
-        if wall_slit:
-            self.single = True  # 狭缝穿越任务强制使用单机模式
 
-        # ==================== 高保真可微相机参数（7层管线） ====================
         self.camera_preset = str(camera_preset).lower()
         self.cam_enable_specular = bool(cam_enable_specular)
         self.cam_enable_motion_blur = bool(cam_enable_motion_blur)
@@ -133,7 +120,6 @@ class Env:
         self.cam_fog_scale = float(cam_fog_scale)
         self.cam_lighting_scale = float(cam_lighting_scale)
 
-        # 光照层
         self.cam_ambient_min = 0.08
         self.cam_ambient_max = 0.35
         self.cam_dir_min = 0.4
@@ -143,13 +129,10 @@ class Env:
         self.cam_airlight_min = 0.2
         self.cam_airlight_max = 0.8
 
-        # 传感器层
         self.cam_read_noise = 0.0025
 
-        # 时序层（运动模糊）
         self.cam_motion_blur_gain = 0.09
 
-        # 统一相机语义常数（曝光/ISO/噪声映射）
         self.cam_sem = CameraSemantics(
             exposure_t_min=float(cam_exposure_t_min),
             exposure_t_span=float(cam_exposure_t_span),
@@ -163,15 +146,16 @@ class Env:
 
         self._configure_camera_preset(self.camera_preset)
 
-        # 相机状态容器（在 reset 中刷新为随机状态）
         self._cam_ambient = torch.full((batch_size,), 0.2, device=device)
         self._cam_dir_intensity = torch.full((batch_size,), 1.0, device=device)
         self._cam_fog_beta = torch.full((batch_size,), 0.02, device=device)
         self._cam_airlight = torch.full((batch_size,), 0.4, device=device)
         self._cam_mat_obstacle = torch.full((batch_size,), 0.6, device=device)
         self._cam_mat_spec = torch.full((batch_size,), 0.08, device=device)
-            
-        # 初始化环境状态
+        self._img_grid_u = torch.linspace(-1.0, 1.0, self.width, device=device)[None, None, :]
+        self._img_grid_v = torch.linspace(-1.0, 1.0, self.height, device=device)[None, :, None]
+
+        self._load_scene_fit_profiles(scene_fit_profiles_path)
         self.reset()
 
     def _configure_camera_preset(self, preset: str):
@@ -211,22 +195,6 @@ class Env:
         self.cam_read_noise *= self.cam_noise_scale
         self.cam_motion_blur_gain *= self.cam_blur_scale
 
-    def _normalize_scenarios(self, scenarios):
-        if scenarios is None:
-            return ['random_base']
-        out = []
-        for raw in scenarios:
-            name = str(raw).strip().lower()
-            if not name:
-                continue
-            if name not in self.supported_scenarios:
-                raise ValueError(
-                    f"不支持的场景 '{name}'，仅支持: {list(self.supported_scenarios)}"
-                )
-            if name not in out:
-                out.append(name)
-        return out or ['random_base']
-
     def _reset_camera_states(self):
         """重置 diff_depth 传感器随机环境参数。"""
         B = self.batch_size
@@ -239,17 +207,106 @@ class Env:
         self._cam_mat_obstacle = torch.empty((B,), device=device).uniform_(0.45, 0.85)
         self._cam_mat_spec = torch.empty((B,), device=device).uniform_(0.02, 0.18)
 
-    def _clear_opening_scene_metadata(self):
-        self.wall_x = None
-        self.slit_y_center = None
-        self.slit_z_center = None
-        self.slit_half_w = None
-        self.slit_half_h = None
-        self.wall_thickness = None
+    def _normalize_scenarios(self, scenarios):
+        if scenarios is None:
+            return ['base']
+        out = []
+        aliases = {
+            'random_base': 'base',
+            'random': 'base',
+            'random_scene': 'base',
+            'black_gap': 'vantablack_gap',
+            'dark_slit_lite': 'dark_morphing',
+        }
+        for raw in scenarios:
+            if raw is None:
+                continue
+            for token in str(raw).split(','):
+                name = aliases.get(token.strip().lower(), token.strip().lower())
+                if not name:
+                    continue
+                if name not in self.supported_scenarios:
+                    raise ValueError(
+                        f"不支持的场景 '{name}'，仅支持: {list(self.supported_scenarios)}"
+                    )
+                if name not in out:
+                    out.append(name)
+        return out or ['base']
+
+    def _canonical_scene_name(self, name):
+        aliases = {
+            'random_base': 'base',
+            'random': 'base',
+            'random_scene': 'base',
+            'black_gap': 'vantablack_gap',
+            'dark_slit_lite': 'dark_morphing',
+        }
+        return aliases.get(str(name).strip().lower(), str(name).strip().lower())
+
+    def _normalize_profile_dict(self, data):
+        out = {}
+        if not isinstance(data, dict):
+            return out
+        for raw_name, payload in data.items():
+            name = self._canonical_scene_name(raw_name)
+            if name not in self.supported_scenarios or not isinstance(payload, dict):
+                continue
+            out[name] = dict(payload)
+        return out
+
+    def _load_scene_fit_profiles(self, scene_fit_profiles_path):
+        self.scene_fit_profiles_path = None
+        self.scene_sensor_profile_overrides = {}
+        self.scene_effect_overrides = {}
+        if not scene_fit_profiles_path:
+            return
+
+        path = os.path.expanduser(str(scene_fit_profiles_path))
+        if not os.path.isfile(path):
+            print(f"[warn] scene_fit_profiles 文件不存在，忽略: {path}")
+            return
+
+        with open(path, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+
+        self.scene_fit_profiles_path = path
+        self.scene_sensor_profile_overrides = self._normalize_profile_dict(
+            payload.get('sensor_profiles', {})
+        )
+
+        effect_payload = payload.get('scene_effects', {})
+        if not effect_payload and isinstance(payload.get('scene_profiles'), dict):
+            effect_payload = payload.get('scene_profiles', {})
+        self.scene_effect_overrides = self._normalize_profile_dict(effect_payload)
+
+    def _scene_profile_range(self, scene_name, key, default_lo, default_hi):
+        profile = self.scene_sensor_profile_overrides.get(scene_name, {})
+        if key not in profile:
+            return float(default_lo), float(default_hi)
+        value = profile[key]
+        if isinstance(value, (int, float)):
+            val = float(value)
+            return val, val
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            lo = float(value[0])
+            hi = float(value[1])
+            if hi < lo:
+                lo, hi = hi, lo
+            return lo, hi
+        return float(default_lo), float(default_hi)
+
+    def _sample_scene_profile(self, scene_name, key, default_lo, default_hi):
+        lo, hi = self._scene_profile_range(scene_name, key, default_lo, default_hi)
+        if abs(hi - lo) <= 1e-9:
+            return torch.full((self.batch_size,), lo, device=self.device)
+        return self._sample_scene_tensor(lo, hi)
+
+    def _merge_scene_effects(self, scene_name, effects):
+        merged = dict(effects)
+        merged.update(self.scene_effect_overrides.get(scene_name, {}))
+        return merged
 
     def _choose_scene_name(self, scene_name=None):
-        if self.wall_slit:
-            return 'wall_slit'
         if scene_name is not None:
             name = str(scene_name).strip().lower()
             if name not in self.supported_scenarios:
@@ -262,139 +319,374 @@ class Env:
     def _set_scene_name(self, scene_name):
         self.current_scene_name = str(scene_name)
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
-        self.current_scene_has_opening = self.current_scene_name in {'black_gap', 'dark_slit_lite', 'wall_slit'}
+        self.current_scene_has_opening = self.current_scene_name in {'vantablack_gap', 'dark_morphing'}
 
     def _sample_scene_tensor(self, lo, hi):
         return torch.empty((self.batch_size,), device=self.device).uniform_(float(lo), float(hi))
 
     def _apply_scene_sensor_profile(self, scene_name):
         if scene_name == 'sun_glare':
-            self._cam_ambient = self._sample_scene_tensor(0.30, 0.52)
-            self._cam_dir_intensity = self._sample_scene_tensor(1.8, 3.0)
-            self._cam_fog_beta = self._sample_scene_tensor(0.03, 0.12)
-            self._cam_airlight = self._sample_scene_tensor(0.65, 1.00)
-            self._cam_mat_obstacle = self._sample_scene_tensor(0.55, 0.95)
-            self._cam_mat_spec = self._sample_scene_tensor(0.04, 0.18)
-        elif scene_name == 'black_gap':
-            self._cam_ambient = self._sample_scene_tensor(0.02, 0.09)
-            self._cam_dir_intensity = self._sample_scene_tensor(0.08, 0.35)
-            self._cam_fog_beta = self._sample_scene_tensor(0.005, 0.03)
-            self._cam_airlight = self._sample_scene_tensor(0.04, 0.14)
-            self._cam_mat_obstacle = self._sample_scene_tensor(0.03, 0.12)
-            self._cam_mat_spec = self._sample_scene_tensor(0.00, 0.03)
-        elif scene_name == 'dark_slit_lite':
-            self._cam_ambient = self._sample_scene_tensor(0.03, 0.12)
-            self._cam_dir_intensity = self._sample_scene_tensor(0.12, 0.50)
-            self._cam_fog_beta = self._sample_scene_tensor(0.006, 0.04)
-            self._cam_airlight = self._sample_scene_tensor(0.05, 0.18)
-            self._cam_mat_obstacle = self._sample_scene_tensor(0.07, 0.20)
-            self._cam_mat_spec = self._sample_scene_tensor(0.01, 0.05)
+            self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
+            self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.35, 0.75)
+            self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.010, 0.030)
+            self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.12, 0.25)
+            self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.52, 0.78)
+            self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.04, 0.10)
+        elif scene_name == 'specular_trap':
+            self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.08, 0.16)
+            self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.18, 0.42)
+            self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.006, 0.018)
+            self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.05, 0.12)
+            self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.45, 0.72)
+            self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.18, 0.38)
+        elif scene_name == 'vantablack_gap':
+            self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.02, 0.06)
+            self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.05, 0.16)
+            self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.003, 0.015)
+            self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.02, 0.08)
+            self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.30, 0.48)
+            self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.00, 0.02)
+        elif scene_name == 'dark_morphing':
+            self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.006, 0.020)
+            self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.015, 0.070)
+            self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.004, 0.020)
+            self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.005, 0.020)
+            self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.22, 0.38)
+            self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.00, 0.01)
+        elif scene_name == 'base':
+            self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', self.cam_ambient_min, self.cam_ambient_max)
+            self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', self.cam_dir_min, self.cam_dir_max)
+            self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', self.cam_fog_beta_min, self.cam_fog_beta_max)
+            self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', self.cam_airlight_min, self.cam_airlight_max)
+            self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.45, 0.85)
+            self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.02, 0.18)
 
-    def _reset_rect_opening_scene(self, B, device, scene_name,
-                                  slit_half_w_range, slit_half_h_range,
-                                  dist_from_wall_range, max_speed_range,
-                                  lateral_noise, vertical_noise,
-                                  margin, drone_radius, wind_scale):
-        wall_x = random.uniform(2.2, 5.2)
-        slit_y_center = random.uniform(-1.2, 1.2)
-        slit_z_center = random.uniform(0.35, 1.45)
-        slit_half_w = random.uniform(*slit_half_w_range)
-        slit_half_h = random.uniform(*slit_half_h_range)
-        wall_thickness = 0.16
+    def _build_base_voxels_layout(self):
+        return self._build_base_voxel_layout()
 
-        self.wall_x = wall_x
-        self.slit_y_center = slit_y_center
-        self.slit_z_center = slit_z_center
-        self.slit_half_w = slit_half_w
-        self.slit_half_h = slit_half_h
-        self.wall_thickness = wall_thickness
+    def _build_base_voxel_layout(self):
+        """
+        基础小地图：6 个交错立方体。
 
-        big = 10.0
-        wall_voxels = torch.zeros((B, 4, 6), device=device)
-        wall_voxels[:, 0, 0] = wall_x
-        wall_voxels[:, 0, 1] = slit_y_center - slit_half_w - big
-        wall_voxels[:, 0, 2] = slit_z_center
-        wall_voxels[:, 0, 3] = wall_thickness
-        wall_voxels[:, 0, 4] = big
-        wall_voxels[:, 0, 5] = big
+        这张图故意做得很轻，只要求策略学会轻量级 slalom，
+        把主要学习难点留给可微感知调参而不是复杂机动。
+        """
+        voxel_half_w = 0.25
+        voxel_half_h = 1.5
+        layout = torch.tensor([
+            [-3.4,  0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-2.0, -0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-0.6,  0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 0.8, -0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 2.2,  0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 3.6, -0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+        ], device=self.device)
+        return layout
 
-        wall_voxels[:, 1, 0] = wall_x
-        wall_voxels[:, 1, 1] = slit_y_center + slit_half_w + big
-        wall_voxels[:, 1, 2] = slit_z_center
-        wall_voxels[:, 1, 3] = wall_thickness
-        wall_voxels[:, 1, 4] = big
-        wall_voxels[:, 1, 5] = big
+    def _build_voxels(self, rows):
+        if not rows:
+            return torch.empty((0, 6), device=self.device)
+        return torch.tensor(rows, device=self.device, dtype=torch.float32)
 
-        wall_voxels[:, 2, 0] = wall_x
-        wall_voxels[:, 2, 1] = slit_y_center
-        wall_voxels[:, 2, 2] = slit_z_center + slit_half_h + big
-        wall_voxels[:, 2, 3] = wall_thickness
-        wall_voxels[:, 2, 4] = slit_half_w
-        wall_voxels[:, 2, 5] = big
+    def _build_opening_wall(self, wall_x, gap_y_center, gap_z_center, gap_half_w, gap_half_h):
+        big = 4.0
+        wall_thickness = 0.15
+        device = self.device
+        return torch.tensor([
+            [wall_x, gap_y_center - gap_half_w - big, gap_z_center, wall_thickness, big, big],
+            [wall_x, gap_y_center + gap_half_w + big, gap_z_center, wall_thickness, big, big],
+            [wall_x, gap_y_center, gap_z_center + gap_half_h + big, wall_thickness, gap_half_w, big],
+            [wall_x, gap_y_center, gap_z_center - gap_half_h - big, wall_thickness, gap_half_w, big],
+        ], device=device)
 
-        wall_voxels[:, 3, 0] = wall_x
-        wall_voxels[:, 3, 1] = slit_y_center
-        wall_voxels[:, 3, 2] = slit_z_center - slit_half_h - big
-        wall_voxels[:, 3, 3] = wall_thickness
-        wall_voxels[:, 3, 4] = slit_half_w
-        wall_voxels[:, 3, 5] = big
+    def _build_sun_glare_voxel_layout(self):
+        wall_t = 0.18
+        wall_h = 1.5
+        rows = [
+            [-1.45, -1.55, 1.5, 3.10, wall_t, wall_h],
+            [-1.45,  1.55, 1.5, 3.10, wall_t, wall_h],
+            [ 2.10, -1.55, 1.5, 1.15, wall_t, wall_h],
+            [ 2.10,  1.55, 1.5, 1.15, wall_t, wall_h],
+            [ 3.45, -1.08, 1.5, 0.12, 0.46, wall_h],
+            [ 3.45,  1.08, 1.5, 0.12, 0.46, wall_h],
+            [ 3.45,  0.00, 2.55, 0.12, 0.62, 0.35],
+        ]
+        return self._build_voxels(rows)
 
-        self.balls[:, :, 2] = -200
-        self.cyl[:, :, 2] = 0.001
-        self.cyl_h[:, :, 2] = 0.001
-        self.voxels = wall_voxels
+    def _build_specular_trap_layout(self):
+        rows = [
+            [-2.8,  0.95, 1.5, 0.25, 0.25, 1.5],
+            [-1.4, -0.95, 1.5, 0.25, 0.25, 1.5],
+            [ 0.0,  0.00, 1.45, 0.05, 0.95, 1.15],
+            [ 1.8,  1.00, 1.5, 0.25, 0.25, 1.5],
+            [ 3.2, -1.00, 1.5, 0.25, 0.25, 1.5],
+        ]
+        return self._build_voxels(rows)
 
-        dist_from_wall = random.uniform(*dist_from_wall_range)
-        noise_y = torch.randn(B, device=device) * lateral_noise
-        noise_z = torch.randn(B, device=device) * vertical_noise
-        self.p = torch.stack([
-            torch.full((B,), wall_x - dist_from_wall, device=device),
-            torch.full((B,), slit_y_center, device=device) + noise_y,
-            torch.full((B,), slit_z_center, device=device) + noise_z,
-        ], -1)
-        self.p_target = torch.stack([
-            torch.full((B,), wall_x + dist_from_wall, device=device),
-            torch.full((B,), slit_y_center, device=device) + noise_y * 0.4,
-            torch.full((B,), slit_z_center, device=device) + noise_z * 0.4,
-        ], -1)
+    def _project_world_point(self, point, R_cam_world, dtype):
+        point_t = torch.as_tensor(point, device=self.device, dtype=dtype)
+        if point_t.ndim == 1:
+            point_t = point_t.unsqueeze(0).expand(self.batch_size, -1)
+        elif point_t.ndim == 2 and point_t.shape[0] == 1:
+            point_t = point_t.expand(self.batch_size, -1)
+        rel = point_t - self.p.to(dtype)
+        cam = torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), rel)
+        cam_x = cam[:, 0]
+        fov_x_half = max(float(self._fov_x_half_tan), 1e-4)
+        fov_y_half = max(fov_x_half * float(self.height) / max(float(self.width), 1.0), 1e-4)
+        denom = cam_x.abs().clamp_min(1e-4)
+        u = (cam[:, 1] / (denom * fov_x_half)).clamp(-4.0, 4.0)
+        v = (cam[:, 2] / (denom * fov_y_half)).clamp(-4.0, 4.0)
+        visible = (cam_x > 0.05).to(dtype)
+        return u, v, cam_x, visible
 
-        self.n_drones_per_group = 1
-        self.drone_radius = drone_radius
-        self.max_speed = torch.full(
-            (B, 1), random.uniform(*max_speed_range), device=device
-        ) * self.speed_mtp
-        self.margin = torch.full((B,), margin, device=device)
+    def _project_rect_half_extents(self, cam_x, half_y, half_z, dtype):
+        fov_x_half = max(float(self._fov_x_half_tan), 1e-4)
+        fov_y_half = max(fov_x_half * float(self.height) / max(float(self.width), 1.0), 1e-4)
+        forward = cam_x.abs().clamp_min(0.25)
+        half_u = (float(half_y) / (forward * fov_x_half)).clamp(0.04, 1.25)
+        half_v = (float(half_z) / (forward * fov_y_half)).clamp(0.04, 1.25)
+        return half_u.to(dtype=dtype), half_v.to(dtype=dtype)
 
-        self.v = torch.randn((B, 3), device=device) * 0.08
-        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * wind_scale
-        self.act = torch.randn_like(self.v) * 0.04
-        self.a = self.act
-        self.dg = torch.randn((B, 3), device=device) * 0.08
+    def _make_gaussian_mask(self, center_u, center_v, sigma_u, sigma_v, dtype):
+        grid_u = self._img_grid_u.to(dtype=dtype)
+        grid_v = self._img_grid_v.to(dtype=dtype)
+        sigma_u = max(float(sigma_u), 1e-3)
+        sigma_v = max(float(sigma_v), 1e-3)
+        du = (grid_u - center_u[:, None, None]) / sigma_u
+        dv = (grid_v - center_v[:, None, None]) / sigma_v
+        return torch.exp(-0.5 * (du.square() + dv.square()))
 
-        R = torch.zeros((B, 3, 3), device=device)
-        v_dir = F.normalize(self.p_target - self.p, 2, -1)
-        self.R = quadsim_cuda.update_state_vec(
-            R, self.act, torch.randn((B, 3), device=device) * 0.1 + v_dir,
-            torch.zeros_like(self.yaw_ctl_delay), 5)
-        self.R_old = self.R.clone()
-        self.p_old = self.p
-        self._current_scale = 1.0
-        self._current_y_stretch = 1.0
+    def _make_box_mask(self, center_u, center_v, half_u, half_v, softness, dtype):
+        grid_u = self._img_grid_u.to(dtype=dtype)
+        grid_v = self._img_grid_v.to(dtype=dtype)
+        half_u = half_u[:, None, None]
+        half_v = half_v[:, None, None]
+        softness = max(float(softness), 1e-4)
+        mask_u = torch.sigmoid((half_u - (grid_u - center_u[:, None, None]).abs()) / softness)
+        mask_v = torch.sigmoid((half_v - (grid_v - center_v[:, None, None]).abs()) / softness)
+        return mask_u * mask_v
+
+    def _scene_sensor_adjustments(self, depth, power01, exposure_s, gain_scale, motion, R_cam_world):
+        dtype = depth.dtype
+        zeros = torch.zeros_like(depth)
+        ones = torch.ones_like(depth)
+        adj = {
+            'ambient_mul': ones,
+            'ambient_add': zeros,
+            'albedo_mul': ones,
+            'active_mul': ones,
+            'passive_mul': ones,
+            'spec_add': zeros,
+            'motion_mul': ones,
+            'quality_add': zeros,
+            'far_override': zeros,
+            'valid_bias': zeros,
+        }
+
+        fx = self.current_scene_effects or {}
+        scene_name = self.current_scene_name
+
+        if scene_name == 'sun_glare':
+            center_u, center_v, _, visible = self._project_world_point(
+                fx['sun_anchor'], R_cam_world, dtype)
+            sun_mask = self._make_gaussian_mask(
+                center_u, center_v,
+                fx.get('sun_sigma_u', 0.30),
+                fx.get('sun_sigma_v', 0.24),
+                dtype,
+            )
+            zone_gate = torch.sigmoid(
+                (self.p[:, 0].to(dtype) - float(fx.get('zone_enter_x', 1.8))) /
+                float(fx.get('zone_softness', 0.35))
+            )[:, None, None]
+            strength = sun_mask * zone_gate * visible[:, None, None]
+            glare_penalty = strength * (0.30 + 2.10 * exposure_s[:, None, None]) / (
+                0.35 + 0.95 * power01[:, None, None]
+            )
+            adj['ambient_add'] = adj['ambient_add'] + strength * float(fx.get('ambient_add', 2.2))
+            adj['active_mul'] = adj['active_mul'] * (1.0 - float(fx.get('active_drop', 0.50)) * strength)
+            adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.8)) * glare_penalty
+            adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * strength
+
+        elif scene_name == 'specular_trap':
+            center_u, center_v, cam_x, visible = self._project_world_point(
+                fx['panel_center'], R_cam_world, dtype)
+            half_u, half_v = self._project_rect_half_extents(
+                cam_x,
+                fx.get('panel_half_y', 0.95),
+                fx.get('panel_half_z', 1.15),
+                dtype,
+            )
+            panel_mask = self._make_box_mask(center_u, center_v, half_u, half_v, 0.06, dtype)
+            x_gate = torch.sigmoid(
+                (float(fx.get('interaction_radius_x', 1.5)) - (self.p[:, 0].to(dtype) - float(fx['panel_center'][0])).abs()) /
+                0.25
+            )[:, None, None]
+            panel_mask = panel_mask * x_gate * visible[:, None, None]
+            laser_harm = power01[:, None, None].pow(1.35)
+            passive_rescue = (
+                (1.0 - power01[:, None, None]) *
+                exposure_s[:, None, None] *
+                torch.sqrt(gain_scale[:, None, None])
+            ).clamp(0.0, 1.5)
+            spec_boost = (
+                float(fx.get('spec_boost_base', 0.45)) +
+                float(fx.get('spec_boost_scale', 0.90)) * laser_harm
+            )
+            adj['spec_add'] = adj['spec_add'] + panel_mask * spec_boost
+            adj['passive_mul'] = adj['passive_mul'] * (
+                1.0 + float(fx.get('passive_rescue_scale', 0.35)) * panel_mask * passive_rescue
+            )
+            adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.85)) * panel_mask * laser_harm
+            adj['far_override'] = torch.maximum(
+                adj['far_override'],
+                (
+                    float(fx.get('far_override_scale', 0.92)) *
+                    panel_mask *
+                    laser_harm *
+                    (1.0 - float(fx.get('far_override_rescue_discount', 0.45)) * passive_rescue)
+                ).clamp(0.0, 1.0),
+            )
+            adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.25)) * panel_mask * laser_harm
+
+        elif scene_name == 'vantablack_gap':
+            center_u, center_v, cam_x, visible = self._project_world_point(
+                fx['gap_center'], R_cam_world, dtype)
+            gap_half_u, gap_half_v = self._project_rect_half_extents(
+                cam_x,
+                fx.get('gap_half_w', 0.55),
+                fx.get('gap_half_h', 0.95),
+                dtype,
+            )
+            outer = self._make_box_mask(center_u, center_v, gap_half_u * 1.55, gap_half_v * 1.20, 0.07, dtype)
+            inner = self._make_box_mask(center_u, center_v, gap_half_u * 0.72, gap_half_v * 0.72, 0.07, dtype)
+            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None]
+            adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - float(fx.get('albedo_drop', 0.88)) * frame_mask)
+            adj['ambient_mul'] = adj['ambient_mul'] * (1.0 - float(fx.get('ambient_drop', 0.45)) * frame_mask)
+            adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.72)) * frame_mask)
+            adj['motion_mul'] = adj['motion_mul'] * (1.0 + float(fx.get('motion_boost', 1.10)) * frame_mask)
+            adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 0.30)) * frame_mask * exposure_s[:, None, None]
+
+        elif scene_name == 'dark_morphing':
+            center_u, center_v, cam_x, visible = self._project_world_point(
+                fx['slit_center'], R_cam_world, dtype)
+            slit_half_u, slit_half_v = self._project_rect_half_extents(
+                cam_x,
+                fx.get('gap_half_w', 0.32),
+                fx.get('gap_half_h', 0.88),
+                dtype,
+            )
+            outer = self._make_box_mask(center_u, center_v, slit_half_u * 1.70, slit_half_v * 1.25, 0.06, dtype)
+            inner = self._make_box_mask(center_u, center_v, slit_half_u * 0.78, slit_half_v * 0.76, 0.06, dtype)
+            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None]
+            slit_mask = inner * visible[:, None, None]
+            adj['ambient_mul'] = adj['ambient_mul'] * float(fx.get('ambient_global_mul', 0.40))
+            adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - float(fx.get('albedo_drop', 0.78)) * frame_mask)
+            adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.82)) * frame_mask)
+            motion_mix = frame_mask + float(fx.get('slit_motion_mix', 0.30)) * slit_mask
+            adj['motion_mul'] = adj['motion_mul'] * (1.0 + float(fx.get('motion_boost', 1.45)) * motion_mix)
+            adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 0.42)) * frame_mask * exposure_s[:, None, None]
+            adj['quality_add'] = adj['quality_add'] + float(fx.get('slit_power_bonus', 0.18)) * slit_mask * power01[:, None, None]
+
+        return adj
+
+    def _build_scene_geometry(self, scene_name):
+        start = self.start_position
+        goal = self.goal_position
+        max_speed = self.fixed_max_speed
+        margin = self.fixed_margin
+        effects = {}
+
+        if scene_name == 'base':
+            voxels = self.base_voxels_template
+        elif scene_name == 'sun_glare':
+            voxels = self._build_sun_glare_voxel_layout()
+            effects = {
+                'sun_anchor': [7.2, 0.0, 1.8],
+                'zone_enter_x': 1.8,
+                'zone_softness': 0.35,
+                'sun_sigma_u': 0.34,
+                'sun_sigma_v': 0.26,
+                'ambient_add': 2.4,
+                'active_drop': 0.50,
+                'quality_penalty': 1.9,
+                'valid_bias_scale': 0.08,
+            }
+        elif scene_name == 'specular_trap':
+            voxels = self._build_specular_trap_layout()
+            effects = {
+                'panel_center': [0.0, 0.0, 1.45],
+                'panel_half_y': 0.95,
+                'panel_half_z': 1.15,
+                'interaction_radius_x': 1.6,
+                'spec_boost_base': 0.45,
+                'spec_boost_scale': 0.90,
+                'passive_rescue_scale': 0.35,
+                'quality_penalty': 1.85,
+                'far_override_scale': 0.92,
+                'far_override_rescue_discount': 0.45,
+                'valid_bias_scale': 0.25,
+            }
+        elif scene_name == 'vantablack_gap':
+            voxels = self._build_opening_wall(
+                wall_x=0.0,
+                gap_y_center=0.85,
+                gap_z_center=1.5,
+                gap_half_w=0.58,
+                gap_half_h=0.95,
+            )
+            max_speed = 1.35
+            effects = {
+                'gap_center': [0.0, 0.85, 1.5],
+                'gap_half_w': 0.58,
+                'gap_half_h': 0.95,
+                'albedo_drop': 0.88,
+                'ambient_drop': 0.45,
+                'passive_drop': 0.72,
+                'motion_boost': 1.10,
+                'quality_penalty': 0.30,
+            }
+        elif scene_name == 'dark_morphing':
+            voxels = self._build_opening_wall(
+                wall_x=0.0,
+                gap_y_center=-0.80,
+                gap_z_center=1.5,
+                gap_half_w=0.32,
+                gap_half_h=0.88,
+            )
+            max_speed = 0.95
+            margin = 0.03
+            effects = {
+                'slit_center': [0.0, -0.80, 1.5],
+                'gap_half_w': 0.32,
+                'gap_half_h': 0.88,
+                'ambient_global_mul': 0.40,
+                'albedo_drop': 0.78,
+                'passive_drop': 0.82,
+                'motion_boost': 1.45,
+                'quality_penalty': 0.42,
+                'slit_motion_mix': 0.30,
+                'slit_power_bonus': 0.18,
+            }
+        else:
+            raise ValueError(f'未知场景: {scene_name}')
+
+        effects = self._merge_scene_effects(scene_name, effects)
+        return voxels, start, goal, max_speed, margin, effects
 
     def reset(self, scene_name=None):
-        """
-        重置环境状态。
-        在每个 episode 开始时调用，随机生成障碍物、无人机初始状态、目标点等。
-        """
+        """重置为固定小地图任务，并按 `scenarios` 选择简化场景。"""
         B = self.batch_size
         device = self.device
         scene_name = self._choose_scene_name(scene_name)
         self._set_scene_name(scene_name)
-        self._clear_opening_scene_metadata()
 
-        # 1. 初始化相机旋转矩阵 (R_cam)
-        # 相机默认有一个向下的俯仰角 (cam_angle)，并加入少量随机噪声
-        cam_angle = (self.cam_angle + torch.randn(B, device=device)) * math.pi / 180
+        cam_angle = torch.full(
+            (B,),
+            float(self.cam_angle) * math.pi / 180.0,
+            device=device,
+        )
         zeros = torch.zeros_like(cam_angle)
         ones = torch.ones_like(cam_angle)
         self.R_cam = torch.stack([
@@ -402,235 +694,49 @@ class Env:
             zeros, ones, zeros,
             torch.sin(cam_angle), zeros, torch.cos(cam_angle),
         ], -1).reshape(B, 3, 3)
+        self._fov_x_half_tan = float(self.fov_x_half_tan)
 
-        # 2. 随机生成环境障碍物
-        # balls: 球体 (x, y, z, r)
-        # voxels: 立方体 (x, y, z, rx, ry, rz)
-        # cyl: 垂直圆柱体 (x, y, r)
-        # cyl_h: 水平圆柱体 (x, z, r)
-        self.balls = torch.rand((B, 30, 4), device=device) * self.ball_w + self.ball_b
-        self.voxels = torch.rand((B, 30, 6), device=device) * self.voxel_w + self.voxel_b
-        self.cyl = torch.rand((B, 30, 3), device=device) * self.cyl_w + self.cyl_b
-        self.cyl_h = torch.rand((B, 2, 3), device=device) * self.cyl_h_w + self.cyl_h_b
+        self.n_drones_per_group = 1
+        self.drone_radius = self.fixed_drone_radius
+        voxels, start, goal, max_speed, margin, effects = self._build_scene_geometry(scene_name)
+        self.current_scene_effects = effects
+        self.max_speed = torch.full((B, 1), max_speed, device=device)
+        self.margin = torch.full((B,), margin, device=device)
+        self.thr_est_error = torch.ones((B,), device=device)
+        self.pitch_ctl_delay = torch.full((B, 1), self.fixed_pitch_ctl_delay, device=device)
+        self.yaw_ctl_delay = torch.full((B, 1), self.fixed_yaw_ctl_delay, device=device)
+        self.drag_2 = torch.zeros((B, 2), device=device)
+        self.drag_2[:, 1] = self.fixed_drag_linear
+        self.z_drag_coef = torch.ones((B, 1), device=device)
 
-        # 随机化基础 FOV
-        self._fov_x_half_tan = (0.95 + 0.1 * random.random()) * self.fov_x_half_tan
-        
-        # 确定每组无人机的数量 (编队飞行)
-        self.n_drones_per_group = random.choice([4, 8])
-        self.drone_radius = random.uniform(0.1, 0.15) # 无人机碰撞半径
-        if self.single:
-            self.n_drones_per_group = 1 # 单机模式
+        self.balls = torch.empty((B, 0, 4), device=device)
+        self.cyl = torch.empty((B, 0, 3), device=device)
+        self.cyl_h = torch.empty((B, 0, 3), device=device)
+        self.voxels = voxels.unsqueeze(0).repeat(B, 1, 1).clone()
 
-        # 随机生成最大飞行速度限制
-        rd = torch.rand((B // self.n_drones_per_group, 1), device=device).repeat_interleave(self.n_drones_per_group, 0)
-        self.max_speed = (0.75 + 2.5 * rd) * self.speed_mtp
-        scene_scale = (self.max_speed - 0.5).clamp_min(1) # 根据速度缩放场景大小
-        scene_y_stretch = (self.max_speed + 4) / scene_scale   # Y 轴拉伸系数（用于障碍物与起终点保持一致）
+        self.p = start.unsqueeze(0).repeat(B, 1).clone()
+        self.p_target = goal.unsqueeze(0).repeat(B, 1).clone()
 
-        # 推力估计误差 (模拟真实世界中电机推力的不确定性)
-        self.thr_est_error = 1 + torch.randn(B, device=device) * 0.01
+        self.v = torch.zeros((B, 3), device=device)
+        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * self.fixed_wind_scale
+        self.act = torch.zeros((B, 3), device=device)
+        self.a = torch.zeros((B, 3), device=device)
+        self.dg = torch.randn((B, 3), device=device) * 0.03
 
-        # 3. 场景变体：屋顶环境 (Roof)
-        # 50% 的概率生成带有屋顶的受限空间，迫使无人机在低空飞行
-        roof = torch.rand((B,)) < 0.5
-        self.balls[~roof, :15, :2] = self.cyl[~roof, :15, :2]
-        self.voxels[~roof, :15, :2] = self.cyl[~roof, 15:, :2]
-        self.balls[~roof, :15] = self.balls[~roof, :15] + self.roof_add[:4]
-        self.voxels[~roof, :15] = self.voxels[~roof, :15] + self.roof_add
-        # 限制障碍物的 X 坐标范围，确保起点和终点有足够的空间
-        self.balls[..., 0] = torch.minimum(torch.maximum(self.balls[..., 0], self.balls[..., 3] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.balls[..., 3])
-        self.voxels[..., 0] = torch.minimum(torch.maximum(self.voxels[..., 0], self.voxels[..., 3] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.voxels[..., 3])
-        self.cyl[..., 0] = torch.minimum(torch.maximum(self.cyl[..., 0], self.cyl[..., 2] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.cyl[..., 2])
-        self.cyl_h[..., 0] = torch.minimum(torch.maximum(self.cyl_h[..., 0], self.cyl_h[..., 2] + 0.3 / scene_scale), 8 - 0.3 / scene_scale - self.cyl_h[..., 2])
-        # 设置屋顶的高度
-        self.voxels[roof, 0, 2] = self.voxels[roof, 0, 2] * 0.5 + 201
-        self.voxels[roof, 0, 3:] = 200
-
-        # 4. 场景变体：复杂地面 (Ground Voxels)
-        ground_balls_r_ground = torch.zeros((B, 2), device=device)
-        if self.ground_voxels:
-            # 生成起伏的地面球体和平台
-            ground_balls_r = 8 + torch.rand((B, 2), device=device) * 6
-            ground_balls_r_ground = 2 + torch.rand((B, 2), device=device) * 4
-            ground_balls_h = ground_balls_r - (ground_balls_r.pow(2) - ground_balls_r_ground.pow(2)).sqrt()
-            # |   ground_balls_h
-            # ----- ground_balls_r_ground
-            # |  /
-            # | / ground_balls_r
-            # |/
-            self.balls[:, :2, 3] = ground_balls_r
-            self.balls[:, :2, 2] = ground_balls_h - ground_balls_r - 1
-
-            # planner shape in (0.1-2.0) times (0.1-2.0)
-            ground_voxels = torch.rand((B, 10, 6), device=device) * self.ground_voxel_w + self.ground_voxel_b
-            ground_voxels[:, :, 2] = ground_voxels[:, :, 5] - 1
-            self.voxels = torch.cat([self.voxels, ground_voxels], 1)
-
-        # 根据最大速度拉伸场景的 Y 轴 (速度越快，场景越长)
-        self.voxels[:, :, 1] *= scene_y_stretch
-        self.balls[:, :, 1] *= scene_y_stretch
-        self.cyl[:, :, 1] *= scene_y_stretch
-
-        # 5. 场景变体：穿越门 (Gates)
-        if self.gate:
-            # 随机生成门的位置和大小
-            gate = torch.rand((B, 4), device=device) * self.gate_w + self.gate_b
-            p = gate[None, :, :3]
-            nearest_pt = torch.empty_like(p)
-            # 检查门是否与其他障碍物重叠，如果重叠则将其移出场景 (x=-50)
-            quadsim_cuda.find_nearest_pt(nearest_pt, self.balls, self.cyl, self.cyl_h, self.voxels, p, self.drone_radius, 1)
-            gate_x, gate_y, gate_z, gate_r = gate.unbind(-1)
-            gate_x[(nearest_pt - p).norm(2, -1)[0] < 0.5] = -50
-            ones = torch.ones_like(gate_x)
-            # 用 4 个长条形 voxel 拼成一个方形的门框
-            gate = torch.stack([
-                torch.stack([gate_x, gate_y + gate_r + 5, gate_z, ones * 0.05, ones * 5, ones * 5], -1), # 上边框
-                torch.stack([gate_x, gate_y, gate_z + gate_r + 5, ones * 0.05, ones * 5, ones * 5], -1), # 右边框
-                torch.stack([gate_x, gate_y - gate_r - 5, gate_z, ones * 0.05, ones * 5, ones * 5], -1), # 下边框
-                torch.stack([gate_x, gate_y, gate_z - gate_r - 5, ones * 0.05, ones * 5, ones * 5], -1), # 左边框
-            ], 1)
-
-            self.voxels = torch.cat([self.voxels, gate], 1)
-            
-        # 根据 scale 缩放所有障碍物的 X 坐标
-        self.voxels[..., 0] *= scene_scale
-        self.balls[..., 0] *= scene_scale
-        self.cyl[..., 0] *= scene_scale
-        self.cyl_h[..., 0] *= scene_scale
-        if self.ground_voxels:
-            self.balls[:, :2, 0] = torch.minimum(torch.maximum(self.balls[:, :2, 0], ground_balls_r_ground + 0.3), scene_scale * 8 - 0.3 - ground_balls_r_ground)
-
-        # 6. 初始化无人机动力学参数
-        # 俯仰/滚转控制延迟 (模拟底层飞控的响应时间)
-        self.pitch_ctl_delay = 12 + 1.2 * torch.randn((B, 1), device=device)
-        # 偏航控制延迟
-        self.yaw_ctl_delay = 6 + 0.6 * torch.randn((B, 1), device=device)
-
-        # 7. 初始化无人机位置 (p) 和目标位置 (p_target)
-        pos_scale = torch.cat([
-            scene_scale,
-            scene_y_stretch,
-            torch.rand_like(scene_scale) - 0.5], -1)
-        self.p = self.p_init * pos_scale + torch.randn_like(pos_scale) * 0.1
-        self.p_target = self.p_end * pos_scale + torch.randn_like(pos_scale) * 0.1
-
-        # 8. 场景变体：随机旋转整个场景 (增加泛化能力)
-        if self.random_rotation:
-            yaw_bias = torch.rand(B//self.n_drones_per_group, device=device).repeat_interleave(self.n_drones_per_group, 0) * 1.5 - 0.75
-            c = torch.cos(yaw_bias)
-            s = torch.sin(yaw_bias)
-            l = torch.ones_like(yaw_bias)
-            o = torch.zeros_like(yaw_bias)
-            R = torch.stack([c,-s, o, s, c, o, o, o, l], -1).reshape(B, 3, 3)
-            # 旋转无人机位置、目标位置和所有障碍物
-            self.p = torch.squeeze(R @ self.p[..., None], -1)
-            self.p_target = torch.squeeze(R @ self.p_target[..., None], -1)
-            self.voxels[..., :3] = (R @ self.voxels[..., :3].transpose(1, 2)).transpose(1, 2)
-            self.balls[..., :3] = (R @ self.balls[..., :3].transpose(1, 2)).transpose(1, 2)
-            self.cyl[..., :3] = (R @ self.cyl[..., :3].transpose(1, 2)).transpose(1, 2)
-
-        # 9. 场景变体：脚手架 (Scaffold) - 密集的细小障碍物
-        if self.scaffold and random.random() < 0.5:
-            x = torch.arange(1, 6, dtype=torch.float, device=device)
-            y = torch.arange(-3, 4, dtype=torch.float, device=device)
-            z = torch.arange(1, 4, dtype=torch.float, device=device)
-            _x, _y = torch.meshgrid(x, y)
-            # 生成垂直脚手架杆
-            scaf_v = torch.stack([_x, _y, torch.full_like(_x, 0.02)], -1).flatten(0, 1)
-            x_bias = torch.rand_like(self.max_speed) * self.max_speed
-            scaf_scale = 1 + torch.rand((B, 1, 1), device=device)
-            scaf_v = scaf_v * scaf_scale + torch.stack([
-                x_bias,
-                torch.randn_like(self.max_speed),
-                torch.rand_like(self.max_speed) * 0.01
-            ], -1)
-            self.cyl = torch.cat([self.cyl, scaf_v], 1)
-            # 生成水平脚手架杆
-            _x, _z = torch.meshgrid(x, z)
-            scaf_h = torch.stack([_x, _z, torch.full_like(_x, 0.02)], -1).flatten(0, 1)
-            scaf_h = scaf_h * scaf_scale + torch.stack([
-                x_bias,
-                torch.randn_like(self.max_speed) * 0.1,
-                torch.rand_like(self.max_speed) * 0.01
-            ], -1)
-            self.cyl_h = torch.cat([self.cyl_h, scaf_h], 1)
-
-        # 10. 初始化无人机运动状态
-        self.v = torch.randn((B, 3), device=device) * 0.2 # 初始速度
-        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w # 初始风速
-        self.act = torch.randn_like(self.v) * 0.1 # 初始动作 (推力加速度)
-        self.a = self.act # 初始加速度
-        self.dg = torch.randn((B, 3), device=device) * 0.2 # 初始重力/风阻扰动
-
-        # 初始化姿态矩阵 R (机体坐标系到世界坐标系的旋转矩阵)
         R = torch.zeros((B, 3, 3), device=device)
-        self.R = quadsim_cuda.update_state_vec(R, self.act, torch.randn((B, 3), device=device) * 0.2 + F.normalize(self.p_target - self.p),
-            torch.zeros_like(self.yaw_ctl_delay), 5)
+        v_dir = F.normalize(self.p_target - self.p, 2, -1)
+        self.R = quadsim_cuda.update_state_vec(
+            R,
+            self.act,
+            v_dir,
+            torch.zeros_like(self.yaw_ctl_delay),
+            5,
+        )
         self.R_old = self.R.clone()
-        self.p_old = self.p
-        
-        # 碰撞安全边距 (margin)
-        self.margin = torch.rand((B,), device=device) * 0.2 + 0.1
+        self.p_old = self.p.clone()
 
-        # ==================== 论文场景：开口墙几何 ====================
-        if scene_name == 'black_gap':
-            self._reset_rect_opening_scene(
-                B, device, scene_name,
-                slit_half_w_range=(0.38, 0.70),
-                slit_half_h_range=(0.34, 0.58),
-                dist_from_wall_range=(1.8, 3.0),
-                max_speed_range=(0.18, 0.32),
-                lateral_noise=0.14,
-                vertical_noise=0.10,
-                margin=0.04,
-                drone_radius=0.13,
-                wind_scale=0.20,
-            )
-        elif scene_name == 'dark_slit_lite':
-            self._reset_rect_opening_scene(
-                B, device, scene_name,
-                slit_half_w_range=(0.22, 0.32),
-                slit_half_h_range=(0.34, 0.55),
-                dist_from_wall_range=(1.8, 2.8),
-                max_speed_range=(0.14, 0.24),
-                lateral_noise=0.10,
-                vertical_noise=0.08,
-                margin=0.03,
-                drone_radius=0.12,
-                wind_scale=0.16,
-            )
-        elif self.wall_slit:
-            self._reset_wall_slit(B, device)
-
-        # 11. 初始化空气阻力系数
-        self.drag_2 = torch.rand((B, 2), device=device) * 0.15 + 0.3 # 二次阻力系数
-        self.drag_2[:, 0] = 0
-        self.z_drag_coef = torch.ones((B, 1), device=device) # Z轴阻力系数
-
-        # 12. 保存场景缩放参数（用于可视化AABB计算）
-        # 这些值在reset时计算，用于log_environment中的动态AABB
-        if not self.current_scene_has_opening:
-            self._current_scale = scene_scale.reshape(-1)[0].item() if isinstance(scene_scale, torch.Tensor) else float(scene_scale)
-            self._current_y_stretch = scene_y_stretch.reshape(-1)[0].item() if isinstance(scene_y_stretch, torch.Tensor) else float(scene_y_stretch)
-
-        # 13. 初始化高保真可微相机状态
         self._reset_camera_states()
         self._apply_scene_sensor_profile(scene_name)
-
-    def _reset_wall_slit(self, B, device):
-        self._reset_rect_opening_scene(
-            B, device, 'wall_slit',
-            slit_half_w_range=(0.10, 0.18),
-            slit_half_h_range=(0.35, 0.60),
-            dist_from_wall_range=(1.5, 3.0),
-            max_speed_range=(0.08, 0.20),
-            lateral_noise=0.30,
-            vertical_noise=0.20,
-            margin=0.02,
-            drone_radius=0.15,
-            wind_scale=0.30,
-        )
 
     @staticmethod
     @torch.no_grad()
@@ -738,18 +844,34 @@ class Env:
         else:
             spec = torch.zeros_like(albedo)
 
-        signal_active = 5.0 * ps * es * albedo * frontality * fog_trans / (depth.square() + 0.08)
-        signal_active = signal_active.clamp_max(1e6)  # 防止 depth 极小时 Inf → NaN
-        signal_passive = (
-            es * ambient_ir * (0.15 + 0.85 * edge) * (0.35 + 0.65 * albedo) * torch.sqrt(gs)
-        )
-        spec_bloom = spec * ps * (0.6 + 0.4 * ambient_ir) * (1.0 + edge)
-
         if self.cam_enable_motion_blur:
             speed = self.v.norm(2, -1)
             motion = (speed[:, None, None] * es * self.cam_motion_blur_gain).clamp(0.0, 1.25)
         else:
             motion = torch.zeros_like(depth)
+
+        R_cam_world = (self.R @ self.R_cam).contiguous()
+        scene_adj = self._scene_sensor_adjustments(
+            depth,
+            power01,
+            exposure_s,
+            gain_scale,
+            motion,
+            R_cam_world,
+        )
+        ambient_ir = ambient_ir * scene_adj['ambient_mul'] + scene_adj['ambient_add']
+        albedo = (albedo * scene_adj['albedo_mul']).clamp(0.01, 1.0)
+        spec = (spec + scene_adj['spec_add']).clamp(0.0, 1.5)
+        motion = motion * scene_adj['motion_mul']
+
+        signal_active = 5.0 * ps * es * albedo * frontality * fog_trans / (depth.square() + 0.08)
+        signal_active = signal_active.clamp_max(1e6)  # 防止 depth 极小时 Inf → NaN
+        signal_active = signal_active * scene_adj['active_mul']
+        signal_passive = (
+            es * ambient_ir * (0.15 + 0.85 * edge) * (0.35 + 0.65 * albedo) * torch.sqrt(gs)
+        )
+        signal_passive = signal_passive * scene_adj['passive_mul']
+        spec_bloom = spec * ps * (0.6 + 0.4 * ambient_ir) * (1.0 + edge)
 
         gain_boost = torch.log(gs).clamp_min(0.0)
         active_range = (
@@ -773,8 +895,8 @@ class Env:
             - 1.6 * motion * edge
             - 2.2 * far
         )
+        quality = (quality + scene_adj['quality_add']).clamp(0.0, 1.0)
 
-        R_cam_world = (self.R @ self.R_cam).contiguous()
         v_cam = torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), self.v)
         motion_h = v_cam[:, 1].abs()
         motion_v = v_cam[:, 2].abs()
@@ -810,8 +932,15 @@ class Env:
         noise_std = (noise_floor + noise_signal + noise_motion + noise_spec).clamp(0.002, 0.75)
 
         noisy_depth = depth_corrupt + torch.randn_like(depth_corrupt) * noise_std
+        far_override = scene_adj['far_override'].clamp(0.0, 1.0)
+        noisy_depth = torch.lerp(
+            noisy_depth,
+            torch.full_like(noisy_depth, float(max_range)),
+            far_override,
+        )
         noisy_depth = noisy_depth.clamp(min_valid, float(max_range))
-        valid = torch.sigmoid((quality - 0.45) / 0.08)
+        valid_threshold = 0.45 + scene_adj['valid_bias'].clamp(0.0, 0.35)
+        valid = torch.sigmoid((quality - valid_threshold) / 0.08)
         noisy_depth = noisy_depth * valid
         quality = quality * valid
         return noisy_depth, quality

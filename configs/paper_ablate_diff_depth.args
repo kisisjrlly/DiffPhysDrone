@@ -1,50 +1,32 @@
 # =========================================================================
-# 消融实验：纯可微深度模式 (Ablation: Differentiable Depth Only)
+# Ablation config for fixed-map diff_depth validation
 #
-# 设计目标：
-# 1) 策略仅依赖可微主动深度相机
-# 2) 传感器控制参数：Power / Exposure / Gain（通过 fc_cam 头输出）
-# 3) 损失权重针对 diff_depth 调优
+# 与 paper_final_full.args 相比，更偏向“更轻量、更快验证”的训练设置。
 # =========================================================================
 
-# ----------------- 断点恢复 -----------------
-# --resume checkpoint/xxx/checkpointNNNN.pth
-
-# ----------------- 训练规模 -----------------
 --batch_size 64
 --num_iters 50000
 --timesteps 80
 
-# ----------------- TBPTT -----------------
 --tbptt_chunk_steps 15
 --tbptt_chunk_accum 1
 --hybrid_full_bptt_every 0
 --hybrid_full_bptt_batch_size 64
 
-# ----------------- 优化器 -----------------
 --lr 1e-4
 --grad_decay 0.4
 --max_acc_cmd 20.0
-
-# ----------------- 随机性 -----------------
 --seed 42
 
-# ----------------- 环境 -----------------
---single
---ground_voxels
-## --scaffold
---random_rotation
-## --yaw_drift
-## --no_odom
---scenarios random_base sun_glare black_gap dark_slit_lite
---drone_a 0.15
---drone_c 0.075
---speed_mtp 3.5
 --fov_x_half_tan 0.82
 --base_control_freq 15.0
 --cam_angle 20
+--scenarios base sun_glare specular_trap vantablack_gap dark_morphing
+--scene_fit_profiles_path configs/scene_fit_profiles.json
 
-# ----------------- 传感器配置 -----------------
+--drone_a 0.15
+--drone_c 0.075
+
 --diff_sensor_impl diff_depth=python
 --depth_width 32
 --depth_height 24
@@ -52,29 +34,23 @@
 --depth_nn_height 12
 --depth_use_pipeline
 
-# ----------------- 主损失权重 -----------------
 --coef_v 2.3
 --coef_collide 7.5
 --coef_obj_avoidance 3.0
 --coef_d_acc 0.01
 --coef_d_jerk 0.001
 
-# ----------------- 可微深度传感器控制 -----------------
 --include_camera_state_in_obs
-
-# 传感器参数正则化
 --coef_cam_smooth 0.01
---coef_power_reg 0.005         # 首通道(Power)偏离中心正则
+--coef_power_reg 0.005
 --coef_cam_range 0.001
 
-# diff_depth 专用光学损失（权重相比默认 0.01 提升）
---coef_diff_depth_power 0.02   # 惩罚高激光功率
---coef_diff_depth_blur 0.02    # 惩罚速度×曝光导致的运动模糊
---coef_diff_depth_noise 0.01   # 惩罚高增益导致的噪声放大
---coef_diff_depth_fill 4.0     # 防止传感器被策略学到近乎失效
+--coef_diff_depth_power 0.02
+--coef_diff_depth_blur 0.02
+--coef_diff_depth_noise 0.01
+--coef_diff_depth_fill 4.0
 --diff_depth_min_fill_rate 0.18
 
-# ----------------- 相机渲染档位（供 diff_depth 传感器模型使用） -----------------
 --cam_realism_preset low
 --cam_enable_specular
 --no-cam_enable_motion_blur
@@ -83,7 +59,6 @@
 --cam_fog_scale 0.6
 --cam_lighting_scale 0.9
 
-# ----------------- 相机语义映射常数 -----------------
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
 --cam_exposure_eff_min 0.15
@@ -93,9 +68,6 @@
 --cam_iso_gain_gamma 1.2
 --cam_shot_noise_base 0.03
 
-# ----------------- 可视化与日志 -----------------
 --no-vis_enable
 --wandb_disabled
-
-# ----------------- AMP -----------------
 --amp

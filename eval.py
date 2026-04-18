@@ -67,15 +67,10 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
 
     env.reset(scene_name=scene_name)
     model.reset()
-    ep_step_base = ep_idx * args.timesteps
 
     if vis.enabled:
-        # 每个 episode 开始时清理上一轮可视化实体，避免画面残留。
         vis.begin_episode(ep_idx)
         j = int(min(max(args.vis_env_idx, 0), B - 1))
-        # 从环境中提取缩放参数（用于动态AABB计算）
-        y_stretch_j = getattr(env, '_current_y_stretch', None)
-        scale_j = getattr(env, '_current_scale', None)
         vis.log_environment(
             phase='student',
             balls=env.balls[j].detach().cpu().numpy(),
@@ -84,8 +79,6 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
             cyl_h=env.cyl_h[j].detach().cpu().numpy(),
             start=env.p[j].detach().cpu().numpy(),
             target=env.p_target[j].detach().cpu().numpy(),
-            y_stretch=y_stretch_j,
-            scale=scale_j,
             step_idx=0,
         )
 
@@ -376,7 +369,7 @@ def main():
 
     with torch.no_grad():
         ep_metrics = []
-        eval_scenes = ['wall_slit'] if args.wall_slit else list(args.scenarios)
+        eval_scenes = list(args.scenarios)
         for ep_idx in range(args.eval_episodes):
             scene_name = eval_scenes[ep_idx % len(eval_scenes)]
             ep_metrics.append(run_one_episode(ep_idx, scene_name, args, model, env, vis, device))

@@ -1,26 +1,6 @@
-# Environment
---single
---speed_mtp 4
---coef_d_acc 0.01
---coef_d_jerk 0.001
---ground_voxels
---random_rotation
---yaw_drift
-
-# Loss weights
---coef_collide 7.5
---coef_obj_avoidance 3.0
-
-# Camera
---cam_angle 20
---fov_x_half_tan 0.82
-
-# Camera semantic mapping constants
---cam_exposure_t_min 0.25
---cam_exposure_t_span 2.75
---cam_exposure_eff_min 0.15
---cam_exposure_eff_max 4.0
---cam_iso_gain_base 1.0
---cam_iso_gain_scale 10.0
---cam_iso_gain_gamma 1.2
---cam_shot_noise_base 0.03
+# Deprecated.
+#
+# 当前分支已经切换为固定地图最小验证版，不再支持旧的 single_agent 随机场景配置。
+# 请改用：
+# - configs/paper_final_full.args
+# - configs/paper_ablate_diff_depth.args
