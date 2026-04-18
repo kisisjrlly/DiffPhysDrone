@@ -56,17 +56,17 @@
 # ----------------- Core losses -----------------
 --coef_v 2.5
 --coef_v_pred 0.0
---coef_d_acc 0.01
---coef_d_jerk 0.002
+--coef_d_acc 0.1
+--coef_d_jerk 0.2
 --coef_obj_avoidance 4.0
 --coef_collide 10.0
 --coef_ground_affinity 0.0
 
 # ----------------- Active sensing -----------------
 --include_camera_state_in_obs
---coef_cam_smooth 0.01
---coef_power_reg 0.001
---coef_cam_range 0.0001
+--coef_cam_smooth 100
+--coef_power_reg 100
+--coef_cam_range 1
 
 --cam_realism_preset low
 --cam_enable_specular
@@ -85,10 +85,10 @@
 --cam_iso_gain_gamma 1.2
 --cam_shot_noise_base 0.03
 
---coef_diff_depth_power 0.02
---coef_diff_depth_blur 0.001
---coef_diff_depth_noise 0.005
---coef_diff_depth_fill 3.0
+--coef_diff_depth_power 20
+--coef_diff_depth_blur 0.1
+--coef_diff_depth_noise 5
+--coef_diff_depth_fill 30.0
 --diff_depth_min_fill_rate 0.35
 
 # ----------------- Teacher-student -----------------

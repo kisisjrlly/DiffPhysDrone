@@ -102,6 +102,7 @@ class Env:
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
         self.current_scene_has_opening = False
         self.current_scene_effects = {}
+        self.last_diff_depth_debug = None
         self.scene_fit_profiles_path = None
         self.scene_sensor_profile_overrides = {}
         self.scene_effect_overrides = {}
@@ -324,6 +325,61 @@ class Env:
     def _sample_scene_tensor(self, lo, hi):
         return torch.empty((self.batch_size,), device=self.device).uniform_(float(lo), float(hi))
 
+    def _spatial_mean(self, x):
+        if x is None:
+            return None
+        if not torch.is_tensor(x):
+            return x
+        if x.ndim < 3:
+            return x
+        return x.mean(dim=(-2, -1))
+
+    def _store_last_diff_depth_debug(self, debug):
+        if debug is None:
+            self.last_diff_depth_debug = None
+            return
+
+        stored = {}
+        for key, value in debug.items():
+            if isinstance(value, dict):
+                inner = {}
+                for sub_key, sub_value in value.items():
+                    if torch.is_tensor(sub_value):
+                        inner[sub_key] = sub_value.detach()
+                    else:
+                        inner[sub_key] = sub_value
+                stored[key] = inner
+            elif torch.is_tensor(value):
+                stored[key] = value.detach()
+            else:
+                stored[key] = value
+        self.last_diff_depth_debug = stored
+
+    def export_last_diff_depth_debug(self, env_idx=0):
+        debug = self.last_diff_depth_debug or {}
+        out = {
+            'scene_name': str(debug.get('scene_name', self.current_scene_name)),
+            'images': {},
+            'scalars': {},
+        }
+
+        for key in ('quality_map', 'invalid_mask', 'scene_effect_map', 'scene_mask'):
+            value = debug.get(key, None)
+            if torch.is_tensor(value) and value.ndim >= 3 and value.shape[0] > 0:
+                idx = int(min(max(env_idx, 0), value.shape[0] - 1))
+                out['images'][key] = value[idx].detach().cpu().numpy()
+
+        for key, value in (debug.get('scalars', {}) or {}).items():
+            if torch.is_tensor(value):
+                if value.ndim == 0:
+                    out['scalars'][key] = float(value.detach().cpu().item())
+                elif value.shape[0] > 0:
+                    idx = int(min(max(env_idx, 0), value.shape[0] - 1))
+                    out['scalars'][key] = float(value[idx].detach().cpu().item())
+            elif isinstance(value, (int, float)):
+                out['scalars'][key] = float(value)
+        return out
+
     def _apply_scene_sensor_profile(self, scene_name):
         if scene_name == 'sun_glare':
             self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
@@ -483,6 +539,9 @@ class Env:
             'quality_add': zeros,
             'far_override': zeros,
             'valid_bias': zeros,
+            'debug_scene_mask': zeros,
+            'debug_effect_map': zeros,
+            'debug_scalars': {},
         }
 
         fx = self.current_scene_effects or {}
@@ -509,6 +568,12 @@ class Env:
             adj['active_mul'] = adj['active_mul'] * (1.0 - float(fx.get('active_drop', 0.50)) * strength)
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.8)) * glare_penalty
             adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * strength
+            adj['debug_scene_mask'] = strength
+            adj['debug_effect_map'] = glare_penalty.clamp(0.0, 1.0)
+            adj['debug_scalars'] = {
+                'scene_mask_mean': self._spatial_mean(strength),
+                'scene_effect_mean': self._spatial_mean(glare_penalty),
+            }
 
         elif scene_name == 'specular_trap':
             center_u, center_v, cam_x, visible = self._project_world_point(
@@ -550,6 +615,12 @@ class Env:
                 ).clamp(0.0, 1.0),
             )
             adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.25)) * panel_mask * laser_harm
+            adj['debug_scene_mask'] = panel_mask
+            adj['debug_effect_map'] = (panel_mask * laser_harm).clamp(0.0, 1.0)
+            adj['debug_scalars'] = {
+                'scene_mask_mean': self._spatial_mean(panel_mask),
+                'scene_effect_mean': self._spatial_mean(panel_mask * laser_harm),
+            }
 
         elif scene_name == 'vantablack_gap':
             center_u, center_v, cam_x, visible = self._project_world_point(
@@ -568,6 +639,12 @@ class Env:
             adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.72)) * frame_mask)
             adj['motion_mul'] = adj['motion_mul'] * (1.0 + float(fx.get('motion_boost', 1.10)) * frame_mask)
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 0.30)) * frame_mask * exposure_s[:, None, None]
+            adj['debug_scene_mask'] = frame_mask
+            adj['debug_effect_map'] = frame_mask
+            adj['debug_scalars'] = {
+                'scene_mask_mean': self._spatial_mean(frame_mask),
+                'scene_effect_mean': self._spatial_mean(frame_mask),
+            }
 
         elif scene_name == 'dark_morphing':
             center_u, center_v, cam_x, visible = self._project_world_point(
@@ -589,6 +666,12 @@ class Env:
             adj['motion_mul'] = adj['motion_mul'] * (1.0 + float(fx.get('motion_boost', 1.45)) * motion_mix)
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 0.42)) * frame_mask * exposure_s[:, None, None]
             adj['quality_add'] = adj['quality_add'] + float(fx.get('slit_power_bonus', 0.18)) * slit_mask * power01[:, None, None]
+            adj['debug_scene_mask'] = torch.maximum(frame_mask, slit_mask)
+            adj['debug_effect_map'] = motion_mix.clamp(0.0, 1.0)
+            adj['debug_scalars'] = {
+                'scene_mask_mean': self._spatial_mean(torch.maximum(frame_mask, slit_mask)),
+                'scene_effect_mean': self._spatial_mean(motion_mix),
+            }
 
         return adj
 
@@ -682,6 +765,7 @@ class Env:
         device = self.device
         scene_name = self._choose_scene_name(scene_name)
         self._set_scene_name(scene_name)
+        self.last_diff_depth_debug = None
 
         cam_angle = torch.full(
             (B,),
@@ -944,6 +1028,29 @@ class Env:
         valid = torch.sigmoid((quality - valid_threshold) / 0.08)
         noisy_depth = noisy_depth * valid
         quality = quality * valid
+        scene_mask = scene_adj.get('debug_scene_mask', torch.zeros_like(depth))
+        scene_effect_map = scene_adj.get('debug_effect_map', torch.zeros_like(depth))
+        invalid_mask = (1.0 - valid).clamp(0.0, 1.0)
+        debug_scalars = dict(scene_adj.get('debug_scalars', {}))
+        debug_scalars.update({
+            'quality_mean': self._spatial_mean(quality),
+            'invalid_rate': self._spatial_mean(invalid_mask),
+            'ambient_ir_mean': self._spatial_mean(ambient_ir),
+            'signal_active_mean': self._spatial_mean(signal_active),
+            'signal_passive_mean': self._spatial_mean(signal_passive),
+            'spec_bloom_mean': self._spatial_mean(spec_bloom),
+            'motion_blur_mean': self._spatial_mean(motion),
+            'washout_mean': self._spatial_mean(washout),
+            'far_override_mean': self._spatial_mean(far_override),
+        })
+        self._store_last_diff_depth_debug({
+            'scene_name': self.current_scene_name,
+            'quality_map': quality,
+            'invalid_mask': invalid_mask,
+            'scene_effect_map': scene_effect_map,
+            'scene_mask': scene_mask,
+            'scalars': debug_scalars,
+        })
         return noisy_depth, quality
 
     def _render_diff_depth_python(self, power, exposure, gain, max_range=None):
@@ -1009,6 +1116,7 @@ class Env:
             self.width,
             float(max_range),
         )
+        self.last_diff_depth_debug = None
         return noisy_depth, None  # CUDA path does not expose quality separately
 
     def find_vec_to_nearest_pt(self):

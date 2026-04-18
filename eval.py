@@ -79,6 +79,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
             cyl_h=env.cyl_h[j].detach().cpu().numpy(),
             start=env.p[j].detach().cpu().numpy(),
             target=env.p_target[j].detach().cpu().numpy(),
+            scene_name=getattr(env, 'current_scene_name', None),
+            scene_effects=getattr(env, 'current_scene_effects', None),
             step_idx=0,
         )
 
@@ -224,6 +226,9 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
                 'accel_norm_mps2': accel_norm_mps2,
                 'dist_to_goal_m': dist_to_goal_m,
             }
+            scene_debug = env.export_last_diff_depth_debug(j)
+            step_scalars.update(scene_debug.get('scalars', {}))
+            step_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
 
             vis.log_step(
                 phase='student',
@@ -236,6 +241,9 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
                 main_img=main_img_np,
                 main_img_mode=main_img_mode,
                 depth_img=depth_img_np,
+                quality_img=scene_debug.get('images', {}).get('quality_map'),
+                invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
+                scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
                 drone_R=env.R[j].detach().cpu().numpy(),
                 cam_R=env.R_cam[j].detach().cpu().numpy(),
                 main_fov_half_tan=float(env._fov_x_half_tan),

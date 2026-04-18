@@ -244,11 +244,17 @@ def _teacher_inner_loop(env, env_snapshot, args,
                 cam_vals = (float(power_k[j].detach().cpu()),
                             float(exposure_k[j].detach().cpu()),
                             float(gain_k[j].detach().cpu()))
+                scene_debug = env.export_last_diff_depth_debug(j)
+                scene_scalars = dict(scene_debug.get('scalars', {}))
+                scene_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
                 vis.log_step(
                     phase='teacher', step_idx=t,
                     pos=env.p[j].detach().cpu().numpy(),
                     target=env.p_target[j].detach().cpu().numpy(),
-                    depth=None, cam=cam_vals,
+                    depth=None, cam=cam_vals, scalars=scene_scalars,
+                    quality_img=scene_debug.get('images', {}).get('quality_map'),
+                    invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
+                    scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
                     drone_R=env.R[j].detach().cpu().numpy(),
                     cam_R=env.R_cam[j].detach().cpu().numpy(),
                     main_fov_half_tan=float(env._fov_x_half_tan),
@@ -608,13 +614,19 @@ def student_rollout(env, model, args, B, device, use_amp,
             main_img_np = None
             main_img_mode = 'depth'
             depth_img_np = depth_obs[j].detach().cpu().numpy()
+            scene_debug = env.export_last_diff_depth_debug(j)
+            step_scalars = dict(scene_debug.get('scalars', {}))
+            step_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
             vis.log_step(
                 phase='student', step_idx=t,
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=depth_vis[j].detach().cpu().numpy(),
-                cam=cam_vals, main_img=main_img_np,
+                cam=cam_vals, scalars=step_scalars, main_img=main_img_np,
                 main_img_mode=main_img_mode, depth_img=depth_img_np,
+                quality_img=scene_debug.get('images', {}).get('quality_map'),
+                invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
+                scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
                 drone_R=env.R[j].detach().cpu().numpy(),
                 cam_R=env.R_cam[j].detach().cpu().numpy(),
                 main_fov_half_tan=float(env._fov_x_half_tan),
@@ -943,7 +955,9 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 cyl=env.cyl[j].detach().cpu().numpy(),
                 cyl_h=env.cyl_h[j].detach().cpu().numpy(),
                 start=env.p[j].detach().cpu().numpy(),
-                target=env.p_target[j].detach().cpu().numpy())
+                target=env.p_target[j].detach().cpu().numpy(),
+                scene_name=getattr(env, 'current_scene_name', None),
+                scene_effects=getattr(env, 'current_scene_effects', None))
 
         # Teacher phase
         u_star, y_star, u_star_cam = None, None, None

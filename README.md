@@ -75,3 +75,7 @@ CAM_PROFILE=low bash run.sh
 - 当前论文主线建议使用 `diff_sensor_impl diff_depth=python`
 - `diff_depth=cuda` 仍可用于对照与梯度检查，但论文主结果默认使用 `python`
 - 本分支的目标是围绕 `diff_depth` 论文主线继续精简与强化
+- 当前版本render_depth是不可微的，如果你想做的是：动作改变位姿
+位姿改变下一帧看到的东西
+再把“未来看见什么”的梯度反传回动作
+那 render_depth 就必须至少对 pos / R 近似可微，否则这条“通过改变视角改善感知”的梯度链会断掉。

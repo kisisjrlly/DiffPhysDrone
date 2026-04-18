@@ -72,6 +72,24 @@ class RerunVis:
                             name="depth",
                         ),
                         rrb.Vertical(
+                            rrb.Spatial2DView(
+                                origin="/student/camera/quality",
+                                contents=["/student/camera/quality"],
+                                name="quality",
+                            ),
+                            rrb.Spatial2DView(
+                                origin="/student/camera/invalid",
+                                contents=["/student/camera/invalid"],
+                                name="invalid",
+                            ),
+                            rrb.Spatial2DView(
+                                origin="/student/camera/scene_effect",
+                                contents=["/student/camera/scene_effect"],
+                                name="scene_effect",
+                            ),
+                            name="scene_maps",
+                        ),
+                        rrb.Vertical(
                             rrb.TimeSeriesView(origin="/student/camera/power", contents=["/student/camera/power"], name="power"),
                             rrb.TimeSeriesView(origin="/student/camera/exposure", contents=["/student/camera/exposure"], name="exposure"),
                             rrb.TimeSeriesView(origin="/student/camera/gain", contents=["/student/camera/gain"], name="gain"),
@@ -149,6 +167,7 @@ class RerunVis:
     def log_environment(self, phase: str,
                         balls=None, voxels=None, cyl=None, cyl_h=None,
                         start=None, target=None,
+                        scene_name=None, scene_effects=None,
                         max_speed=None, y_stretch=None, scale=None,
                         step_idx: int = 0):
         """Log one environment snapshot for global 3D inspection.
@@ -570,6 +589,71 @@ class RerunVis:
             )
             rr.log(f"{phase}/world/start_goal_distance_m", self._scalar_msg(dist))
 
+        scene_name = None if scene_name is None else str(scene_name)
+        fx = scene_effects or {}
+        if scene_name == 'sun_glare' and 'sun_anchor' in fx:
+            sun = np.asarray(fx['sun_anchor'], dtype=np.float32).reshape(3)
+            rr.log(
+                f"{phase}/world/scene/sun_anchor",
+                rr.Points3D([sun], radii=[0.16], colors=[[255, 220, 80]], labels=["SUN"], show_labels=True),
+            )
+            rr.log(
+                f"{phase}/world/scene/sun_rays",
+                rr.Arrows3D(
+                    origins=[sun.tolist()],
+                    vectors=[[-1.5, 0.0, -0.2]],
+                    colors=[[255, 220, 80]],
+                    radii=[0.025],
+                    labels=["SUN_RAY"],
+                    show_labels=False,
+                ),
+            )
+        elif scene_name == 'specular_trap' and 'panel_center' in fx:
+            panel_center = np.asarray(fx['panel_center'], dtype=np.float32).reshape(3)
+            half_y = float(fx.get('panel_half_y', 0.95))
+            half_z = float(fx.get('panel_half_z', 1.15))
+            rr.log(
+                f"{phase}/world/scene/specular_panel",
+                rr.Boxes3D(
+                    centers=[panel_center.tolist()],
+                    half_sizes=[[0.03, half_y, half_z]],
+                    colors=[[255, 180, 120, 120]],
+                    radii=[0.004],
+                    labels=["SPECULAR_PANEL"],
+                    show_labels=True,
+                ),
+            )
+        elif scene_name == 'vantablack_gap' and 'gap_center' in fx:
+            gap_center = np.asarray(fx['gap_center'], dtype=np.float32).reshape(3)
+            half_y = float(fx.get('gap_half_w', 0.58))
+            half_z = float(fx.get('gap_half_h', 0.95))
+            rr.log(
+                f"{phase}/world/scene/vantablack_gap",
+                rr.Boxes3D(
+                    centers=[gap_center.tolist()],
+                    half_sizes=[[0.03, half_y, half_z]],
+                    colors=[[30, 30, 30, 210]],
+                    radii=[0.004],
+                    labels=["VANTABLACK_GAP"],
+                    show_labels=True,
+                ),
+            )
+        elif scene_name == 'dark_morphing' and 'slit_center' in fx:
+            slit_center = np.asarray(fx['slit_center'], dtype=np.float32).reshape(3)
+            half_y = float(fx.get('gap_half_w', 0.32))
+            half_z = float(fx.get('gap_half_h', 0.88))
+            rr.log(
+                f"{phase}/world/scene/dark_slit",
+                rr.Boxes3D(
+                    centers=[slit_center.tolist()],
+                    half_sizes=[[0.03, half_y, half_z]],
+                    colors=[[90, 90, 130, 190]],
+                    radii=[0.004],
+                    labels=["DARK_SLIT"],
+                    show_labels=True,
+                ),
+            )
+
     def _scalar_msg(self, v: float):
         """API compatibility: rerun-sdk uses Scalars, older variants may expose Scalar."""
         rr = self._rr
@@ -588,6 +672,9 @@ class RerunVis:
         """
         x = np.asarray(img, dtype=np.float32)
         if mode == "luma":
+            x = np.clip(x, 0.0, 1.0)
+            return (x * 255.0).astype(np.uint8)
+        if mode == "mask":
             x = np.clip(x, 0.0, 1.0)
             return (x * 255.0).astype(np.uint8)
         if mode == "depth_aux":
@@ -757,6 +844,9 @@ class RerunVis:
                  depth=None, cam=None, scalars=None,
                  main_img=None, main_img_mode: str = "depth",
                  depth_img=None,
+                 quality_img=None,
+                 invalid_img=None,
+                 scene_effect_img=None,
                  drone_R=None,
                  cam_R=None,
                  main_fov_half_tan: float = 0.53,
@@ -818,6 +908,12 @@ class RerunVis:
             depth_for_view = depth
         if depth_for_view is not None:
             rr.log(f"{phase}/camera/depth_aux", rr.Image(self._img_u8(depth_for_view, mode="depth_aux")))
+        if quality_img is not None:
+            rr.log(f"{phase}/camera/quality", rr.Image(self._img_u8(quality_img, mode="mask")))
+        if invalid_img is not None:
+            rr.log(f"{phase}/camera/invalid", rr.Image(self._img_u8(invalid_img, mode="mask")))
+        if scene_effect_img is not None:
+            rr.log(f"{phase}/camera/scene_effect", rr.Image(self._img_u8(scene_effect_img, mode="mask")))
 
         if cam is not None:
             power, exposure, gain = [float(x) for x in cam]

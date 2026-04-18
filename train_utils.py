@@ -139,8 +139,8 @@ def filter_active_loss_scalars(loss_scalars: dict, args) -> dict:
 
 def periodic_tail_ops(iter_idx: int, checkpoint_dir: str, model, smoother: MetricSmoother):
     """Checkpoint saving + smoothed-scalar flush (branch-agnostic)."""
-    if (iter_idx + 1) % 1000 == 0:
-        ckpt_path = os.path.join(checkpoint_dir, f'checkpoint{iter_idx // 1000:04d}.pth')
+    if (iter_idx + 1) % 200 == 0:
+        ckpt_path = os.path.join(checkpoint_dir, f'checkpoint{iter_idx // 200:04d}.pth')
         print("save checkpoint to:", ckpt_path)
         torch.save(model.state_dict(), ckpt_path)
         wandb.save(ckpt_path)
