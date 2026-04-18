@@ -8,7 +8,7 @@
 # =========================================================================
 
 # ----------------- Training scale -----------------
---batch_size 126
+--batch_size 156
 --num_iters 50000
 --timesteps 80
 
@@ -120,6 +120,6 @@
 --vis_student
 # --vis_spawn
 
---wandb_disabled
+# --wandb_disabled
 # --wandb_log_raw_loss_terms
 # --no-amp

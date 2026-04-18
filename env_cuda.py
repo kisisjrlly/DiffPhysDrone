@@ -366,20 +366,21 @@ class Env:
 
     def _build_base_voxel_layout(self):
         """
-        基础小地图：6 个交错立方体。
+        基础小地图：6 个等尺寸、左右交替的高柱体。
 
-        这张图故意做得很轻，只要求策略学会轻量级 slalom，
-        把主要学习难点留给可微感知调参而不是复杂机动。
+        设计目标是保持“简洁固定柱体地图”的同时，让从 (-5, 0) 到 (5, 0)
+        的直线路径被连续切断，迫使无人机在左右两侧交替绕行，形成明显
+        的 S 型避障轨迹。
         """
         voxel_half_w = 0.25
         voxel_half_h = 1.5
         layout = torch.tensor([
-            [-3.4,  0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [-2.0, -0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [-0.6,  0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [ 0.8, -0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [ 2.2,  0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [ 3.6, -0.95, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-3.80,  0.10, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-2.20, -0.80, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-0.60,  0.50, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 1.00, -0.80, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 2.60,  0.50, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 4.20, -0.50, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
         ], device=self.device)
         return layout
 
