@@ -284,6 +284,8 @@ def _teacher_inner_loop(env, env_snapshot, args,
                     _stack_or_none(c_fill),
                     min_fill_rate=args.diff_depth_min_fill_rate,
                     camera_semantics=env.cam_sem,
+                    power_nominal=args.cam_power_nominal,
+                    power_penalty_threshold=args.cam_power_penalty_threshold,
                 )
                 chunk_loss, _ = aggregate_loss(
                     physics_losses,
@@ -366,6 +368,7 @@ def student_rollout(env, model, args, B, device, use_amp,
     speed_for_depth_history, R_up_history = [], []
     depth_fill_history = []
     depth_fill_soft_history = []
+    sun_glare_local_quality_history = []
     h = None
 
     # TBPTT state
@@ -416,6 +419,11 @@ def student_rollout(env, model, args, B, device, use_amp,
         )
         depth_fill_history.append(fill_rate_t.detach() if tbptt_this_iter else fill_rate_t)
         depth_fill_soft_history.append(fill_rate_soft_t.detach() if tbptt_this_iter else fill_rate_soft_t)
+        glare_quality_t = env.get_last_diff_depth_train_aux().get('sun_glare_local_quality')
+        if glare_quality_t is not None:
+            sun_glare_local_quality_history.append(
+                glare_quality_t.detach() if tbptt_this_iter else glare_quality_t
+            )
 
         vec_now = env.find_vec_to_nearest_pt()
         if tbptt_this_iter:
@@ -534,6 +542,13 @@ def student_rollout(env, model, args, B, device, use_amp,
                     _stack_or_none(c_fill),
                     min_fill_rate=args.diff_depth_min_fill_rate,
                     camera_semantics=env.cam_sem,
+                    power_nominal=args.cam_power_nominal,
+                    power_penalty_threshold=args.cam_power_penalty_threshold,
+                    power_reg_deadband=args.cam_power_reg_deadband,
+                    sun_glare_local_quality_seq=_stack_or_none(
+                        sun_glare_local_quality_history[-len(c_fill):]
+                    ) if sun_glare_local_quality_history else None,
+                    sun_glare_local_quality_target=args.sun_glare_local_quality_target,
                 )
 
                 loss_distill_c = None
@@ -656,6 +671,7 @@ def student_rollout(env, model, args, B, device, use_amp,
         'speed_for_depth_history': speed_for_depth_history,
         'depth_fill_history': depth_fill_history,
         'depth_fill_soft_history': depth_fill_soft_history,
+        'sun_glare_local_quality_history': sun_glare_local_quality_history,
         'R_up_history': R_up_history,
     }
 
@@ -692,6 +708,11 @@ def full_bptt_losses(rollout, env, args, device, u_star, y_star, u_star_cam, dis
         _stack_or_none(rollout['depth_fill_soft_history']),
         min_fill_rate=args.diff_depth_min_fill_rate,
         camera_semantics=env.cam_sem,
+        power_nominal=args.cam_power_nominal,
+        power_penalty_threshold=args.cam_power_penalty_threshold,
+        power_reg_deadband=args.cam_power_reg_deadband,
+        sun_glare_local_quality_seq=_stack_or_none(rollout.get('sun_glare_local_quality_history')),
+        sun_glare_local_quality_target=args.sun_glare_local_quality_target,
     )
 
     loss_distill = None
@@ -789,6 +810,14 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
         smoother.add({
             'diff_depth_fill_rate_soft': float(fill_soft_mean.item()),
             'diff_depth_hole_rate_soft': float((1.0 - fill_soft_mean).item()),
+        })
+    if rollout.get('sun_glare_local_quality_history'):
+        glare_quality_hist = torch.stack([
+            x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x
+            for x in rollout['sun_glare_local_quality_history']
+        ])
+        smoother.add({
+            'sun_glare/local_quality_mean': float(glare_quality_hist.mean().item()),
         })
 
     cam_stats = compute_camera_param_stats(

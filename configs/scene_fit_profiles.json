@@ -138,14 +138,19 @@
         0.0,
         1.8
       ],
-      "zone_enter_x": 1.8,
-      "zone_softness": 0.35,
-      "sun_sigma_u": 0.34,
-      "sun_sigma_v": 0.26,
-      "ambient_add": 2.4,
-      "active_drop": 0.50,
-      "quality_penalty": 1.9,
-      "valid_bias_scale": 0.08
+      "zone_enter_x": 1.65,
+      "zone_softness": 0.30,
+      "sun_sigma_u": 0.40,
+      "sun_sigma_v": 0.30,
+      "ambient_add": 3.4,
+      "active_drop": 0.62,
+      "active_recover": 0.72,
+      "glare_exposure_gain": 1.85,
+      "glare_power_gain": 1.85,
+      "power_quality_bonus": 0.48,
+      "power_rescue_exposure_gain": 0.75,
+      "quality_penalty": 2.35,
+      "valid_bias_scale": 0.12
     },
     "specular_trap": {
       "panel_center": [
@@ -197,10 +202,10 @@
   },
   "scene_profiles": {
     "sun_glare": {
-      "ambient_add": 2.4,
-      "active_drop": 0.50,
-      "quality_penalty": 1.9,
-      "valid_bias_scale": 0.08
+      "ambient_add": 3.4,
+      "active_drop": 0.62,
+      "quality_penalty": 2.35,
+      "valid_bias_scale": 0.12
     },
     "specular_trap": {
       "spec_boost_base": 0.45,

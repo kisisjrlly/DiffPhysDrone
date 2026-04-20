@@ -22,7 +22,11 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-15-11-15-54/checkpoint0011.pth} # 继续往后退
 # ckpt_path=${CKPT:-checkpoint/2026-04-02-10-51-57/checkpoint0049.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-18-17-18-00/checkpoint0000.pth}
-ckpt_path=${CKPT:-checkpoint/2026-04-18-21-15-21/checkpoint0008.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-18-22-36-37/checkpoint0008.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-19-16-24-40/checkpoint0008.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-19-17-11-20/checkpoint0006.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-19-17-33-06/checkpoint0005.pth}
+ckpt_path=${CKPT:-checkpoint/2026-04-20-09-53-25/checkpoint0007.pth}
 
 
 # 评估 episode 数（默认 1）

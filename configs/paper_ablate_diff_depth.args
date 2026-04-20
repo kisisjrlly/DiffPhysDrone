@@ -58,6 +58,10 @@
 --cam_blur_scale 0.55
 --cam_fog_scale 0.6
 --cam_lighting_scale 0.9
+--cam_model_randomize
+--cam_model_randomize_scale 0.08
+--cam_power_nominal 0.416667
+--cam_power_penalty_threshold 0.416667
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75

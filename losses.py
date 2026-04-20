@@ -93,9 +93,17 @@ def _infer_loss_device(*items):
 
 def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq,
                           fill_rate_seq=None, min_fill_rate=0.18,
-                          camera_semantics=None):
+                          camera_semantics=None,
+                          power_nominal: float = 0.5,
+                          power_penalty_threshold: float = 0.5,
+                          power_reg_deadband: float = 0.0,
+                          sun_glare_local_quality_seq=None,
+                          sun_glare_local_quality_target: float = 0.55):
     """计算 diff_depth-only 分支的相机控制损失。"""
     device = _infer_loss_device(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq)
+    power_nominal = float(power_nominal)
+    power_penalty_threshold = float(power_penalty_threshold)
+    power_reg_deadband = max(float(power_reg_deadband), 0.0)
     result = {
         'loss_cam_smooth': torch.zeros((), device=device),
         'loss_power_reg': torch.zeros((), device=device),
@@ -104,14 +112,16 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
         'loss_diff_depth_blur': torch.zeros((), device=device),
         'loss_diff_depth_noise': torch.zeros((), device=device),
         'loss_diff_depth_fill': torch.zeros((), device=device),
+        'loss_sun_glare_local_quality': torch.zeros((), device=device),
     }
 
     # 相机平滑度与正则化
     if cam_hist is not None and cam_hist.shape[0] > 1:
         cam_diff = cam_hist.diff(1, 0)
         result['loss_cam_smooth'] = cam_diff.pow(2).mean()
-        # loss_power_reg 单独惩罚 power 偏离 0.5
-        result['loss_power_reg'] = (cam_hist[:, :, 0] - 0.5).pow(2).mean()
+        # 允许 power 在默认档位附近有一段自由调节区，否则策略很难学到“必要时升功率”
+        power_delta = (cam_hist[:, :, 0] - power_nominal).abs()
+        result['loss_power_reg'] = F.relu(power_delta - power_reg_deadband).pow(2).mean()
         # loss_cam_range 只惩罚 exposure(1) 和 gain(2) 偏离中心，避免与 loss_power_reg 重复惩罚 power
         result['loss_cam_range'] = (cam_hist[:, :, 1:] - 0.5).pow(2).mean()
 
@@ -121,13 +131,16 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
             exposure_seq,
             camera_semantics=camera_semantics,
         )
-        # 惩罚功率偏高（超过 0.5 的部分），鼓励节能但不强迫关激光
-        result['loss_diff_depth_power'] = F.relu(power_seq - 0.5).pow(2).mean()
+        # 惩罚功率偏高（超过可配置阈值的部分），鼓励节能但不强迫关激光
+        result['loss_diff_depth_power'] = F.relu(power_seq - power_penalty_threshold).pow(2).mean()
         result['loss_diff_depth_blur'] = (speed_seq * exp_phys).pow(2).mean()
         result['loss_diff_depth_noise'] = gain_seq.pow(2).mean()
     if fill_rate_seq is not None:
         fill_gap = F.relu(float(min_fill_rate) - fill_rate_seq)
         result['loss_diff_depth_fill'] = fill_gap.pow(2).mean()
+    if sun_glare_local_quality_seq is not None:
+        glare_gap = F.relu(float(sun_glare_local_quality_target) - sun_glare_local_quality_seq)
+        result['loss_sun_glare_local_quality'] = glare_gap.pow(2).mean()
 
     return result
 
@@ -222,6 +235,7 @@ def aggregate_loss(physics_losses, camera_losses, args,
         + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
         + args.coef_diff_depth_noise * camera_losses['loss_diff_depth_noise']
         + args.coef_diff_depth_fill * camera_losses['loss_diff_depth_fill']
+        + args.coef_sun_glare_local_quality * camera_losses['loss_sun_glare_local_quality']
     )
 
     if args.enable_teacher_student_training and distill_coef_iter is not None:
@@ -247,6 +261,7 @@ def aggregate_loss(physics_losses, camera_losses, args,
         'loss_diff_depth_blur': camera_losses['loss_diff_depth_blur'],
         'loss_diff_depth_noise': camera_losses['loss_diff_depth_noise'],
         'loss_diff_depth_fill': camera_losses['loss_diff_depth_fill'],
+        'loss_sun_glare_local_quality': camera_losses['loss_sun_glare_local_quality'],
         'loss_distill': loss_distill,
     }
 

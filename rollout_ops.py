@@ -90,8 +90,8 @@ def compute_diff_depth_proxies(power_seq, exposure_seq, gain_seq, speed_seq, cam
 
 def init_camera_params(env, B, device):
     """Initial diff_depth sensor-control state: power / exposure / gain."""
-    _ = env
-    power = torch.full((B,), 0.5, device=device)
+    power_nominal = float(getattr(env, 'cam_power_nominal', 0.5))
+    power = torch.full((B,), power_nominal, device=device)
     exposure = torch.full((B,), 0.5, device=device)
     gain = torch.full((B,), 0.5, device=device)
     return power, exposure, gain

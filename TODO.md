@@ -52,11 +52,15 @@
 
 - [ ] 重新检查 `power / blur / noise` 三项的数值尺度，避免某项天然过强。
 - [ ] 把 active-depth 损失的物理解释整理成可直接写进论文 methods 的版本。
+- [ ] 为 `sun_glare` 增加局部区域目标，不只盯整图全局 fill。
+  优先实现 `glare_quality_mean`，直接复用当前可微 `quality` 链路；
+  若有效，再补 `glare_fill_rate` 和 `glare_invalid_rate`。
 
 ### `trainer.py`
 
 - [ ] 为论文图准备统一导出接口，自动保存 `speed/power/exposure/gain/fill_rate` 时序数据。
 - [ ] 增加“固定参数相机基线”和“启发式参数基线”的统一对比日志。
+- [ ] 把 `sun_glare` 局部区域指标接入训练日志与 `rerun`，用于判断策略是否真的在救 glare 灾区。
 
 ### `rollout_ops.py`
 

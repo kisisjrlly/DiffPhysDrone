@@ -23,6 +23,98 @@ python3 tools/test_d455_depth.py
 - 确认深度流模式可以启动
 - 确认曝光/增益/激光功率能被手动写入
 
+如果你想先把当前项目里的 `cam_exposure_* / cam_iso_gain_*` 语义参数，和你手边这台 D455 的真实量程做一个初步对齐，可以直接运行：
+
+```bash
+python3 tools/recommend_d455_semantics.py
+```
+
+或者使用某次采集结果里的 `meta.json` 离线推导：
+
+```bash
+python3 tools/recommend_d455_semantics.py \
+  --meta-json artifacts/d455_calibration/<run>/meta.json
+```
+
+它会输出一段可以直接粘进 `.args` 的推荐参数，例如：
+
+- `--cam_power_nominal`
+- `--cam_power_penalty_threshold`
+- `--cam_exposure_t_min`
+- `--cam_exposure_t_span`
+- `--cam_exposure_eff_min`
+- `--cam_exposure_eff_max`
+- `--cam_iso_gain_base`
+- `--cam_iso_gain_scale`
+- `--cam_iso_gain_gamma`
+- `--cam_shot_noise_base`
+
+注意：
+
+- `cam_exposure_*` 与 D455 真机曝光时间最容易直接对齐。
+- `cam_iso_gain_*` 和 `cam_shot_noise_base` 目前仍是“语义近似”和“工程初值”，不是驱动寄存器的一一复刻；最好再结合静态墙面数据做二次细调。
+
+## 静态墙面噪声标定
+
+如果你想专门反推：
+
+- `cam_shot_noise_base`
+- `cam_iso_gain_scale`
+- `cam_iso_gain_gamma`
+
+推荐使用新加的静态墙面标定脚本：
+
+```bash
+python3 tools/calibrate_d455_static_noise.py
+```
+
+推荐布置：
+
+- D455 固定在三脚架或稳定支架上
+- 正对一面普通哑光平整墙面
+- 距离建议 `1.0m ~ 2.0m`
+- 采集时视野内不要有人经过，也不要有强反光或强阳光变化
+
+脚本会：
+
+- 固定 `laser_power`
+- 扫一组 `exposure`
+- 扫一组 `gain`
+- 在中心 ROI 上统计多帧时间噪声
+- 输出：
+  - `summary.csv`
+  - `fit_result.json`
+  - 一段可直接粘进 `.args` 的推荐参数
+
+默认输出目录：
+
+```text
+artifacts/d455_static_noise/<timestamp>/
+```
+
+常用示例：
+
+```bash
+python3 tools/calibrate_d455_static_noise.py \
+  --frames-per-setting 90 \
+  --exposure-us-values 3000,10000,30000 \
+  --gain-values 16,32,64,128,248 \
+  --laser-power 150
+```
+
+如果只想离线分析已有结果：
+
+```bash
+python3 tools/calibrate_d455_static_noise.py \
+  --analyze-csv artifacts/d455_static_noise/<timestamp>/summary.csv
+```
+
+说明：
+
+- `cam_shot_noise_base` 是按静态墙面上的 temporal depth noise 反推的全局 shot-noise 尺度。
+- `cam_iso_gain_scale/gamma` 这里主要拟合“gain 增大时深度噪声如何上升”。
+- 这套拟合优先服务当前 `diff_depth` 仿真，不是对 D455 ISP/立体匹配链路的完整物理复刻。
+
 ## 正式采集
 
 示例：

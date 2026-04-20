@@ -2,6 +2,7 @@ import math
 import json
 import os
 import random
+from collections import OrderedDict
 import torch
 import torch.nn.functional as F
 import quadsim_cuda
@@ -41,6 +42,9 @@ class Env:
                  cam_blur_scale=1.0,
                  cam_fog_scale=1.0,
                  cam_lighting_scale=1.0,
+                 cam_model_randomize=True,
+                 cam_model_randomize_scale=0.08,
+                 cam_power_nominal=0.5,
                  cam_exposure_t_min=0.25,
                  cam_exposure_t_span=2.75,
                  cam_exposure_eff_min=0.15,
@@ -103,6 +107,7 @@ class Env:
         self.current_scene_has_opening = False
         self.current_scene_effects = {}
         self.last_diff_depth_debug = None
+        self.last_diff_depth_train_aux = None
         self.scene_fit_profiles_path = None
         self.scene_sensor_profile_overrides = {}
         self.scene_effect_overrides = {}
@@ -120,6 +125,9 @@ class Env:
         self.cam_blur_scale = float(cam_blur_scale)
         self.cam_fog_scale = float(cam_fog_scale)
         self.cam_lighting_scale = float(cam_lighting_scale)
+        self.cam_model_randomize = bool(cam_model_randomize)
+        self.cam_model_randomize_scale = float(cam_model_randomize_scale)
+        self.cam_power_nominal = float(cam_power_nominal)
 
         self.cam_ambient_min = 0.08
         self.cam_ambient_max = 0.35
@@ -155,6 +163,9 @@ class Env:
         self._cam_mat_spec = torch.full((batch_size,), 0.08, device=device)
         self._img_grid_u = torch.linspace(-1.0, 1.0, self.width, device=device)[None, None, :]
         self._img_grid_v = torch.linspace(-1.0, 1.0, self.height, device=device)[None, :, None]
+        self._sensor_model_base_params = OrderedDict()
+        self._sensor_model_params = OrderedDict()
+        self._build_sensor_model_base_params()
 
         self._load_scene_fit_profiles(scene_fit_profiles_path)
         self.reset()
@@ -207,6 +218,112 @@ class Env:
         self._cam_airlight = torch.empty((B,), device=device).uniform_(self.cam_airlight_min, self.cam_airlight_max)
         self._cam_mat_obstacle = torch.empty((B,), device=device).uniform_(0.45, 0.85)
         self._cam_mat_spec = torch.empty((B,), device=device).uniform_(0.02, 0.18)
+
+    def _build_sensor_model_base_params(self):
+        """收口 diff_depth 传感器模型魔数为少量分组参数。"""
+        self._sensor_model_base_params = OrderedDict([
+            ('edge_depth_bias', 0.15),
+            ('edge_gain', 1.0),
+            ('frontality_edge_slope', 1.2),
+            ('active_signal_gain', 5.0),
+            ('active_signal_depth_bias', 0.08),
+            ('passive_edge_base', 0.15),
+            ('passive_edge_gain', 0.85),
+            ('passive_albedo_base', 0.35),
+            ('passive_albedo_gain', 0.65),
+            ('active_range_base', 0.9),
+            ('active_range_min_frac', 0.15),
+            ('active_range_gain_frac', 0.85),
+            ('active_range_gain_boost', 0.35),
+            ('passive_range_base', 0.7),
+            ('passive_range_exposure_frac', 0.08),
+            ('passive_range_ambient_frac', 0.18),
+            ('active_gate_width', 0.22),
+            ('passive_gate_width', 0.28),
+            ('signal_passive_mix', 0.45),
+            ('washout_bias', 0.12),
+            ('snr_ambient_weight', 0.45),
+            ('snr_gain_weight', 0.12),
+            ('snr_spec_weight', 0.35),
+            ('snr_motion_weight', 0.25),
+            ('quality_snr_gain', 2.6),
+            ('quality_passive_gain', 0.9),
+            ('quality_washout_penalty', 1.4),
+            ('quality_spec_penalty', 2.0),
+            ('quality_motion_penalty', 1.6),
+            ('quality_far_penalty', 2.2),
+            ('motion_blend_gain', 0.55),
+            ('motion_blend_max', 0.85),
+            ('flying_base', 0.12),
+            ('flying_quality_gain', 0.88),
+            ('flying_motion_base', 0.35),
+            ('flying_motion_gain', 0.65),
+            ('noise_floor_gain_weight', 0.18),
+            ('noise_signal_gain', 0.018),
+            ('noise_signal_range_gain', 0.8),
+            ('noise_signal_bias', 0.08),
+            ('noise_motion_gain', 0.03),
+            ('noise_motion_edge_base', 0.3),
+            ('noise_motion_edge_gain', 0.7),
+            ('noise_spec_gain', 0.05),
+            ('noise_std_min', 0.002),
+            ('noise_std_max', 0.75),
+            ('valid_threshold_base', 0.45),
+            ('valid_bias_max', 0.35),
+            ('valid_sigmoid_width', 0.08),
+        ])
+        self._sensor_model_params = OrderedDict(self._sensor_model_base_params)
+
+    def _sensor_model_randomizable_keys(self):
+        """仅对结构性缩放项做轻微随机化，避免把稳定项扰乱过头。"""
+        return {
+            'edge_depth_bias',
+            'frontality_edge_slope',
+            'active_signal_gain',
+            'active_signal_depth_bias',
+            'active_range_gain_boost',
+            'passive_range_exposure_frac',
+            'passive_range_ambient_frac',
+            'active_gate_width',
+            'passive_gate_width',
+            'signal_passive_mix',
+            'snr_ambient_weight',
+            'snr_gain_weight',
+            'snr_spec_weight',
+            'snr_motion_weight',
+            'quality_snr_gain',
+            'quality_passive_gain',
+            'quality_washout_penalty',
+            'quality_spec_penalty',
+            'quality_motion_penalty',
+            'quality_far_penalty',
+            'motion_blend_gain',
+            'flying_quality_gain',
+            'noise_floor_gain_weight',
+            'noise_signal_gain',
+            'noise_signal_range_gain',
+            'noise_motion_gain',
+            'noise_spec_gain',
+            'valid_threshold_base',
+            'valid_sigmoid_width',
+        }
+
+    def _sample_sensor_model_params(self):
+        scale = max(float(self.cam_model_randomize_scale), 0.0)
+        randomized = OrderedDict()
+        randomizable = self._sensor_model_randomizable_keys()
+        for key, value in self._sensor_model_base_params.items():
+            v = float(value)
+            if self.cam_model_randomize and scale > 0.0 and key in randomizable:
+                jitter = 1.0 + random.uniform(-scale, scale)
+                if key in {'active_gate_width', 'passive_gate_width', 'valid_sigmoid_width'}:
+                    jitter = 1.0 + random.uniform(-0.5 * scale, 0.5 * scale)
+                v = max(v * jitter, 1e-6)
+            randomized[key] = float(v)
+        self._sensor_model_params = randomized
+
+    def _sensor_param(self, key: str) -> float:
+        return float(self._sensor_model_params.get(key, self._sensor_model_base_params[key]))
 
     def _normalize_scenarios(self, scenarios):
         if scenarios is None:
@@ -354,6 +471,12 @@ class Env:
             else:
                 stored[key] = value
         self.last_diff_depth_debug = stored
+
+    def _store_last_diff_depth_train_aux(self, aux):
+        self.last_diff_depth_train_aux = aux
+
+    def get_last_diff_depth_train_aux(self):
+        return self.last_diff_depth_train_aux or {}
 
     def export_last_diff_depth_debug(self, env_idx=0):
         debug = self.last_diff_depth_debug or {}
@@ -561,12 +684,25 @@ class Env:
                 float(fx.get('zone_softness', 0.35))
             )[:, None, None]
             strength = sun_mask * zone_gate * visible[:, None, None]
-            glare_penalty = strength * (0.30 + 2.10 * exposure_s[:, None, None]) / (
-                0.35 + 0.95 * power01[:, None, None]
+            glare_penalty = strength * (
+                float(fx.get('glare_bias', 0.24)) +
+                float(fx.get('glare_exposure_gain', 1.70)) * exposure_s[:, None, None]
+            ) / (
+                float(fx.get('glare_power_bias', 0.18)) +
+                float(fx.get('glare_power_gain', 1.55)) * power01[:, None, None]
+            )
+            power_rescue = strength * power01[:, None, None] / (
+                float(fx.get('power_rescue_bias', 0.22)) +
+                float(fx.get('power_rescue_exposure_gain', 0.85)) * exposure_s[:, None, None]
             )
             adj['ambient_add'] = adj['ambient_add'] + strength * float(fx.get('ambient_add', 2.2))
-            adj['active_mul'] = adj['active_mul'] * (1.0 - float(fx.get('active_drop', 0.50)) * strength)
+            adj['active_mul'] = adj['active_mul'] * (
+                1.0
+                - float(fx.get('active_drop', 0.50)) * strength
+                + float(fx.get('active_recover', 0.55)) * power01[:, None, None] * strength
+            ).clamp_min(0.05)
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.8)) * glare_penalty
+            adj['quality_add'] = adj['quality_add'] + float(fx.get('power_quality_bonus', 0.38)) * power_rescue
             adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * strength
             adj['debug_scene_mask'] = strength
             adj['debug_effect_map'] = glare_penalty.clamp(0.0, 1.0)
@@ -766,6 +902,7 @@ class Env:
         scene_name = self._choose_scene_name(scene_name)
         self._set_scene_name(scene_name)
         self.last_diff_depth_debug = None
+        self.last_diff_depth_train_aux = None
 
         cam_angle = torch.full(
             (B,),
@@ -822,6 +959,7 @@ class Env:
 
         self._reset_camera_states()
         self._apply_scene_sensor_profile(scene_name)
+        self._sample_sensor_model_params()
 
     @staticmethod
     @torch.no_grad()
@@ -904,6 +1042,7 @@ class Env:
         exposure_s = self._diff_depth_exposure_scale(exposure)
         gain01 = gain.clamp(0.0, 1.0)
         gain_scale = self.cam_sem.iso_to_gain(gain01).clamp_min(1.0)
+        sp = self._sensor_param
 
         ps = power01[:, None, None]
         es = exposure_s[:, None, None]
@@ -913,8 +1052,11 @@ class Env:
         depth_far = F.max_pool2d(depth4, 3, stride=1, padding=1)[:, 0]
         depth_near = -F.max_pool2d(-depth4, 3, stride=1, padding=1)[:, 0]
 
-        edge = ((depth_far - depth_near) / (depth + 0.15)).clamp(0.0, 1.5)
-        frontality = torch.exp(-1.2 * edge)
+        edge = (
+            sp('edge_gain') * (depth_far - depth_near) /
+            (depth + sp('edge_depth_bias'))
+        ).clamp(0.0, 1.5)
+        frontality = torch.exp(-sp('frontality_edge_slope') * edge)
         fog_trans = torch.exp(-self._cam_fog_beta[:, None, None] * depth)
 
         ambient_ir = (
@@ -949,36 +1091,57 @@ class Env:
         spec = (spec + scene_adj['spec_add']).clamp(0.0, 1.5)
         motion = motion * scene_adj['motion_mul']
 
-        signal_active = 5.0 * ps * es * albedo * frontality * fog_trans / (depth.square() + 0.08)
+        signal_active = (
+            sp('active_signal_gain') * ps * es * albedo * frontality * fog_trans /
+            (depth.square() + sp('active_signal_depth_bias'))
+        )
         signal_active = signal_active.clamp_max(1e6)  # 防止 depth 极小时 Inf → NaN
         signal_active = signal_active * scene_adj['active_mul']
         signal_passive = (
-            es * ambient_ir * (0.15 + 0.85 * edge) * (0.35 + 0.65 * albedo) * torch.sqrt(gs)
+            es * ambient_ir *
+            (sp('passive_edge_base') + sp('passive_edge_gain') * edge) *
+            (sp('passive_albedo_base') + sp('passive_albedo_gain') * albedo) *
+            torch.sqrt(gs)
         )
         signal_passive = signal_passive * scene_adj['passive_mul']
         spec_bloom = spec * ps * (0.6 + 0.4 * ambient_ir) * (1.0 + edge)
 
         gain_boost = torch.log(gs).clamp_min(0.0)
         active_range = (
-            0.9
-            + float(max_range) * (0.15 + 0.85 * torch.sqrt((ps * es).clamp_min(1e-6)))
-            + 0.35 * gain_boost
+            sp('active_range_base')
+            + float(max_range) * (
+                sp('active_range_min_frac') +
+                sp('active_range_gain_frac') * torch.sqrt((ps * es).clamp_min(1e-6))
+            )
+            + sp('active_range_gain_boost') * gain_boost
         )
-        passive_range = 0.7 + float(max_range) * (0.08 + 0.18 * es * ambient_ir)
-        active_gate = torch.sigmoid((active_range - depth) / 0.22)
-        passive_gate = torch.sigmoid((passive_range - depth) / 0.28)
+        passive_range = (
+            sp('passive_range_base') +
+            float(max_range) * (
+                sp('passive_range_exposure_frac') +
+                sp('passive_range_ambient_frac') * es * ambient_ir
+            )
+        )
+        active_gate = torch.sigmoid((active_range - depth) / sp('active_gate_width'))
+        passive_gate = torch.sigmoid((passive_range - depth) / sp('passive_gate_width'))
 
-        signal = signal_active * active_gate + 0.45 * signal_passive * passive_gate
-        washout = ambient_ir / (signal_active + 0.12)
-        snr = signal / (0.08 + 0.45 * ambient_ir + 0.12 * gs + 0.35 * spec_bloom + 0.25 * motion)
+        signal = signal_active * active_gate + sp('signal_passive_mix') * signal_passive * passive_gate
+        washout = ambient_ir / (signal_active + sp('washout_bias'))
+        snr = signal / (
+            0.08
+            + sp('snr_ambient_weight') * ambient_ir
+            + sp('snr_gain_weight') * gs
+            + sp('snr_spec_weight') * spec_bloom
+            + sp('snr_motion_weight') * motion
+        )
         far = torch.relu(depth / (active_range + 1e-3) - 0.9)
         quality = torch.sigmoid(
-            2.6 * snr
-            + 0.9 * signal_passive
-            - 1.4 * washout
-            - 2.0 * spec_bloom
-            - 1.6 * motion * edge
-            - 2.2 * far
+            sp('quality_snr_gain') * snr
+            + sp('quality_passive_gain') * signal_passive
+            - sp('quality_washout_penalty') * washout
+            - sp('quality_spec_penalty') * spec_bloom
+            - sp('quality_motion_penalty') * motion * edge
+            - sp('quality_far_penalty') * far
         )
         quality = (quality + scene_adj['quality_add']).clamp(0.0, 1.0)
 
@@ -999,22 +1162,37 @@ class Env:
         directional_blur = blur_h * w_h + blur_v * w_v
 
         if self.cam_enable_motion_blur:
-            motion_blend = (0.55 * motion).clamp(0.0, 0.85)
+            motion_blend = (sp('motion_blend_gain') * motion).clamp(0.0, sp('motion_blend_max'))
             depth_blur = depth * (1.0 - motion_blend) + directional_blur * motion_blend
         else:
             depth_blur = depth
 
-        flying = (0.12 + 0.88 * (1.0 - quality)) * edge * (0.35 + 0.65 * (motion + spec_bloom).clamp(0.0, 1.5))
+        flying = (
+            sp('flying_base') +
+            sp('flying_quality_gain') * (1.0 - quality)
+        ) * edge * (
+            sp('flying_motion_base') +
+            sp('flying_motion_gain') * (motion + spec_bloom).clamp(0.0, 1.5)
+        )
         flying = flying.clamp(0.0, 1.0)
         depth_corrupt = depth_blur + flying * (depth_far - depth_blur)
 
         range_ratio = (depth / max(float(max_range), 1e-6)).clamp(0.0, 1.5)
         shot_noise_scale = float(self.cam_sem.shot_noise_base / 0.03)
-        noise_floor = self.cam_read_noise * (1.0 + 0.18 * gs)
-        noise_signal = 0.018 * shot_noise_scale * (1.0 + 0.8 * range_ratio.square()) / (signal + 0.08)
-        noise_motion = 0.03 * motion * (0.3 + 0.7 * edge)
-        noise_spec = 0.05 * spec_bloom
-        noise_std = (noise_floor + noise_signal + noise_motion + noise_spec).clamp(0.002, 0.75)
+        noise_floor = self.cam_read_noise * (1.0 + sp('noise_floor_gain_weight') * gs)
+        noise_signal = (
+            sp('noise_signal_gain') * shot_noise_scale *
+            (1.0 + sp('noise_signal_range_gain') * range_ratio.square()) /
+            (signal + sp('noise_signal_bias'))
+        )
+        noise_motion = sp('noise_motion_gain') * motion * (
+            sp('noise_motion_edge_base') + sp('noise_motion_edge_gain') * edge
+        )
+        noise_spec = sp('noise_spec_gain') * spec_bloom
+        noise_std = (noise_floor + noise_signal + noise_motion + noise_spec).clamp(
+            sp('noise_std_min'),
+            sp('noise_std_max'),
+        )
 
         noisy_depth = depth_corrupt + torch.randn_like(depth_corrupt) * noise_std
         far_override = scene_adj['far_override'].clamp(0.0, 1.0)
@@ -1024,15 +1202,25 @@ class Env:
             far_override,
         )
         noisy_depth = noisy_depth.clamp(min_valid, float(max_range))
-        valid_threshold = 0.45 + scene_adj['valid_bias'].clamp(0.0, 0.35)
-        valid = torch.sigmoid((quality - valid_threshold) / 0.08)
+        valid_threshold = sp('valid_threshold_base') + scene_adj['valid_bias'].clamp(0.0, sp('valid_bias_max'))
+        valid = torch.sigmoid((quality - valid_threshold) / sp('valid_sigmoid_width'))
         noisy_depth = noisy_depth * valid
         quality = quality * valid
         scene_mask = scene_adj.get('debug_scene_mask', torch.zeros_like(depth))
         scene_effect_map = scene_adj.get('debug_effect_map', torch.zeros_like(depth))
         invalid_mask = (1.0 - valid).clamp(0.0, 1.0)
         debug_scalars = dict(scene_adj.get('debug_scalars', {}))
+        train_aux = {}
+        if self.current_scene_name == 'sun_glare':
+            glare_mass = scene_mask.sum(dim=(-2, -1)).clamp_min(1e-6)
+            glare_quality = (quality * scene_mask).sum(dim=(-2, -1)) / glare_mass
+            glare_invalid = (invalid_mask * scene_mask).sum(dim=(-2, -1)) / glare_mass
+            train_aux['sun_glare_local_quality'] = glare_quality
+            train_aux['sun_glare_local_invalid_rate'] = glare_invalid
+            debug_scalars['glare_quality_mean'] = glare_quality.detach()
+            debug_scalars['glare_invalid_rate'] = glare_invalid.detach()
         debug_scalars.update({
+            **{f'sensor/{k}': float(v) for k, v in self._sensor_model_params.items()},
             'quality_mean': self._spatial_mean(quality),
             'invalid_rate': self._spatial_mean(invalid_mask),
             'ambient_ir_mean': self._spatial_mean(ambient_ir),
@@ -1043,6 +1231,7 @@ class Env:
             'washout_mean': self._spatial_mean(washout),
             'far_override_mean': self._spatial_mean(far_override),
         })
+        self._store_last_diff_depth_train_aux(train_aux)
         self._store_last_diff_depth_debug({
             'scene_name': self.current_scene_name,
             'quality_map': quality,

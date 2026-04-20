@@ -8,8 +8,8 @@
 # =========================================================================
 
 # ----------------- Training scale -----------------
---batch_size 156
---num_iters 50000
+--batch_size 150
+--num_iters 5000
 --timesteps 80
 
 # ----------------- TBPTT / schedule -----------------
@@ -66,6 +66,7 @@
 --include_camera_state_in_obs
 --coef_cam_smooth 100
 --coef_power_reg 100
+--cam_power_reg_deadband 0.18
 --coef_cam_range 1
 
 --cam_realism_preset low
@@ -75,21 +76,27 @@
 --cam_blur_scale 1.0
 --cam_fog_scale 1.0
 --cam_lighting_scale 1.0
+--cam_model_randomize
+--cam_model_randomize_scale 0.08
+--cam_power_nominal 0.416667
+--cam_power_penalty_threshold 0.416667
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
---cam_exposure_eff_min 0.15
---cam_exposure_eff_max 4.0
+--cam_exposure_eff_min 0.25
+--cam_exposure_eff_max 3.0
 --cam_iso_gain_base 1.0
 --cam_iso_gain_scale 10.0
 --cam_iso_gain_gamma 1.2
 --cam_shot_noise_base 0.03
 
 --coef_diff_depth_power 20
---coef_diff_depth_blur 0.1
+--coef_diff_depth_blur 0.05
 --coef_diff_depth_noise 5
 --coef_diff_depth_fill 30.0
---diff_depth_min_fill_rate 0.35
+--diff_depth_min_fill_rate 0.25
+--coef_sun_glare_local_quality 30.0
+--sun_glare_local_quality_target 0.05
 
 # ----------------- Teacher-student -----------------
 # --enable_teacher_student_training

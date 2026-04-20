@@ -82,7 +82,13 @@ def build_parser():
     parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
     parser.add_argument('--coef_power_reg', type=float, default=0.005,
                         help='首个相机控制通道偏离中心值的正则化权重（diff_depth 分支中对应 power）')
+    parser.add_argument('--cam_power_reg_deadband', type=float, default=0.0,
+                        help='power 相对中性值的免罚区间半宽；在该 deadband 内允许策略按环境调节 power')
     parser.add_argument('--coef_cam_range', type=float, default=0.001, help='相机参数范围正则化权重')
+    parser.add_argument('--cam_power_nominal', type=float, default=0.5,
+                        help='diff_depth power 的中性/默认参考值；建议按真实 D455 默认 laser_power/max 对齐')
+    parser.add_argument('--cam_power_penalty_threshold', type=float, default=0.5,
+                        help='高功率惩罚的起始阈值；超过该值才触发 loss_diff_depth_power')
     parser.add_argument('--wandb_disabled', default=False, action='store_true', help='禁用 wandb 日志记录')
     parser.add_argument('--wandb_log_raw_loss_terms', default=False, action=argparse.BooleanOptionalAction,
                         help='是否把未加权的各 loss 分量单独写入 wandb；默认关闭以避免与 loss_contrib 重复')
@@ -96,6 +102,10 @@ def build_parser():
     parser.add_argument('--cam_blur_scale', type=float, default=1.0)
     parser.add_argument('--cam_fog_scale', type=float, default=1.0)
     parser.add_argument('--cam_lighting_scale', type=float, default=1.0)
+    parser.add_argument('--cam_model_randomize', default=True, action=argparse.BooleanOptionalAction,
+                        help='训练时对 diff_depth 传感器模型分组参数做小范围 domain randomization；评测默认自动关闭')
+    parser.add_argument('--cam_model_randomize_scale', type=float, default=0.08,
+                        help='diff_depth 传感器模型分组随机化幅度；0 表示关闭，0.08 表示每组约 ±8%')
 
     # --- 相机语义映射常数（统一管理，避免散落魔数） ---
     parser.add_argument('--cam_exposure_t_min', type=float, default=0.25,
@@ -133,6 +143,10 @@ def build_parser():
                         help='惩罚 fill rate 低于阈值的 blackout 现象，防止策略把深度相机关到近乎失效')
     parser.add_argument('--diff_depth_min_fill_rate', type=float, default=0.18,
                         help='深度 fill rate 的最低目标阈值；低于它时会触发 blackout penalty')
+    parser.add_argument('--coef_sun_glare_local_quality', type=float, default=0.0,
+                        help='sun_glare 场景局部炫光区域质量恢复损失权重；用于鼓励 power/exposure 联合调节')
+    parser.add_argument('--sun_glare_local_quality_target', type=float, default=0.55,
+                        help='sun_glare 局部炫光区域的目标 quality 均值')
     parser.add_argument('--use_dmpc', default=False, action='store_true')
     parser.add_argument('--policy_output_intent', default=False, action='store_true')
     parser.add_argument('--inject_depth_into_lqr', default=False, action='store_true')
@@ -271,6 +285,16 @@ def validate_args(args):
         raise ValueError('--depth_width/--depth_height 必须 >= 1')
     if args.depth_nn_width < 1 or args.depth_nn_height < 1:
         raise ValueError('--depth_nn_width/--depth_nn_height 必须 >= 1')
+    if not (0.0 <= args.cam_power_nominal <= 1.0):
+        raise ValueError('--cam_power_nominal 必须在 [0,1] 内')
+    if not (0.0 <= args.cam_power_penalty_threshold <= 1.0):
+        raise ValueError('--cam_power_penalty_threshold 必须在 [0,1] 内')
+    if args.cam_power_reg_deadband < 0.0 or args.cam_power_reg_deadband > 1.0:
+        raise ValueError('--cam_power_reg_deadband 必须在 [0,1] 内')
+    if args.sun_glare_local_quality_target < 0.0 or args.sun_glare_local_quality_target > 1.0:
+        raise ValueError('--sun_glare_local_quality_target 必须在 [0,1] 内')
+    if args.cam_model_randomize_scale < 0.0 or args.cam_model_randomize_scale > 0.5:
+        raise ValueError('--cam_model_randomize_scale 建议在 [0, 0.5] 内')
     if not getattr(args, 'scenarios', None):
         raise ValueError('--scenarios 至少需要一个场景')
 

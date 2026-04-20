@@ -22,6 +22,39 @@ from train_utils import build_env, estimate_optimizer_steps
 from trainer import train
 
 
+def _print_cuda_failure_summary(args, device, exc: Exception):
+    if device.type != 'cuda' or not torch.cuda.is_available():
+        return
+    dev_idx = device.index if device.index is not None else torch.cuda.current_device()
+    props = torch.cuda.get_device_properties(dev_idx)
+    mib = 1024 ** 2
+    allocated = torch.cuda.memory_allocated(dev_idx) / mib
+    reserved = torch.cuda.memory_reserved(dev_idx) / mib
+    peak_alloc = torch.cuda.max_memory_allocated(dev_idx) / mib
+    peak_reserved = torch.cuda.max_memory_reserved(dev_idx) / mib
+    print("\n[diag] CUDA failure summary")
+    print(f"[diag] exception: {exc}")
+    print(f"[diag] device: {props.name}, total={props.total_memory / mib:.0f} MiB")
+    print(
+        f"[diag] allocated={allocated:.0f} MiB reserved={reserved:.0f} MiB "
+        f"peak_allocated={peak_alloc:.0f} MiB peak_reserved={peak_reserved:.0f} MiB"
+    )
+    print(
+        f"[diag] config: batch_size={args.batch_size}, timesteps={args.timesteps}, "
+        f"depth_hw={args.depth_height}x{args.depth_width}, amp={args.amp}, "
+        f"scenarios={args.scenarios}"
+    )
+    print(
+        "[diag] 当前 diff_depth python 渲染 + full BPTT 会把整段 rollout 的计算图保留在显存里，"
+        "在 16GB GPU 上 batch 太大时容易先触发 OOM，随后表现成 cuDNN 初始化失败。"
+    )
+    print(
+        "[diag] 建议优先尝试：1) 降低 --batch_size 到 64~80；"
+        "2) 需要更大等效 batch 时再考虑 TBPTT；"
+        "3) 如果仍吃紧，再降低深度分辨率。"
+    )
+
+
 def main():
     # ── 1. Parse arguments & validate ────────────────────────────────────
     args = parse_args()
@@ -103,8 +136,16 @@ def main():
     sched = CosineAnnealingLR(optim, estimate_optimizer_steps(args), args.lr * 0.01)
 
     # ── 9. Train ─────────────────────────────────────────────────────────
-    train(args, model, env_train, env_full,
-          optim, sched, scaler, vis, checkpoint_dir, device)
+    try:
+        train(args, model, env_train, env_full,
+              optim, sched, scaler, vis, checkpoint_dir, device)
+    except RuntimeError as exc:
+        msg = str(exc).lower()
+        if device.type == 'cuda' and (
+            'out of memory' in msg or 'cudnn_status_not_initialized' in msg
+        ):
+            _print_cuda_failure_summary(args, device, exc)
+        raise
 
 
 if __name__ == '__main__':

@@ -109,6 +109,7 @@ def active_loss_term_specs(args, distill_coef_iter=None):
     add('diff_depth_blur', 'loss_diff_depth_blur', args.coef_diff_depth_blur)
     add('diff_depth_noise', 'loss_diff_depth_noise', args.coef_diff_depth_noise)
     add('diff_depth_fill', 'loss_diff_depth_fill', args.coef_diff_depth_fill)
+    add('sun_glare_local_quality', 'loss_sun_glare_local_quality', args.coef_sun_glare_local_quality)
 
     if getattr(args, 'enable_teacher_student_training', False) and distill_coef_iter is not None:
         add('distill', 'loss_distill', distill_coef_iter)
@@ -199,10 +200,11 @@ def estimate_optimizer_steps(args) -> int:
 
 # ── Environment factory ──────────────────────────────────────────────────
 
-def build_env(batch_size: int, args, device) -> Env:
+def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
     """Create a diff_depth-only Env instance from parsed args."""
     dw = int(args.depth_width)
     dh = int(args.depth_height)
+    cam_model_randomize = bool(args.cam_model_randomize) and (not eval_mode)
 
     return Env(
         batch_size, dw, dh, args.grad_decay, device,
@@ -217,6 +219,9 @@ def build_env(batch_size: int, args, device) -> Env:
         cam_blur_scale=args.cam_blur_scale,
         cam_fog_scale=args.cam_fog_scale,
         cam_lighting_scale=args.cam_lighting_scale,
+        cam_model_randomize=cam_model_randomize,
+        cam_model_randomize_scale=args.cam_model_randomize_scale,
+        cam_power_nominal=args.cam_power_nominal,
         cam_exposure_t_min=args.cam_exposure_t_min,
         cam_exposure_t_span=args.cam_exposure_t_span,
         cam_exposure_eff_min=args.cam_exposure_eff_min,

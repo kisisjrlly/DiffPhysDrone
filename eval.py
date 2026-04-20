@@ -344,7 +344,7 @@ def main():
     print("=" * 80 + "\n")
     print_runtime_mode(args)
 
-    env = build_env(args.batch_size, args, device)
+    env = build_env(args.batch_size, args, device, eval_mode=True)
 
     obs_dim = 7 if args.no_odom else 10
     model = Model(
