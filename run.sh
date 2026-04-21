@@ -5,7 +5,8 @@
 set -euo pipefail
 # set -x
 
-export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
+# export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
+export all_proxy=http://127.0.0.1:7890
 
 # 设置要运行的任务名称 (Set the task to run)
 # 可通过环境变量覆盖，例如：TASK=paper_ablate_diff_depth bash run.sh

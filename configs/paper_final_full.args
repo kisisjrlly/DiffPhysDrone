@@ -8,9 +8,9 @@
 # =========================================================================
 
 # ----------------- Training scale -----------------
---batch_size 150
+--batch_size 96
 --num_iters 5000
---timesteps 80
+--timesteps 120
 
 # ----------------- TBPTT / schedule -----------------
 # --tbptt_enable
@@ -22,7 +22,7 @@
 # ----------------- Optimization -----------------
 --lr 5e-5
 --grad_decay 0.3
---max_acc_cmd 20.0
+--max_acc_cmd 2.0
 
 # ----------------- Reproducibility -----------------
 --seed 42
@@ -54,11 +54,12 @@
 --diff_sensor_impl diff_depth=python
 
 # ----------------- Core losses -----------------
---coef_v 2.5
+--coef_v 5.5
+--loss_v_window 12
 --coef_v_pred 0.0
 --coef_d_acc 0.1
 --coef_d_jerk 0.2
---coef_obj_avoidance 4.0
+--coef_obj_avoidance 0.5
 --coef_collide 10.0
 --coef_ground_affinity 0.0
 
@@ -93,10 +94,10 @@
 --coef_diff_depth_power 20
 --coef_diff_depth_blur 0.05
 --coef_diff_depth_noise 5
---coef_diff_depth_fill 30.0
+--coef_diff_depth_fill 5.0
 --diff_depth_min_fill_rate 0.25
 --coef_sun_glare_local_quality 30.0
---sun_glare_local_quality_target 0.05
+--sun_glare_local_quality_target 0.20
 
 # ----------------- Teacher-student -----------------
 # --enable_teacher_student_training

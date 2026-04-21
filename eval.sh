@@ -26,11 +26,17 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-19-16-24-40/checkpoint0008.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-19-17-11-20/checkpoint0006.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-19-17-33-06/checkpoint0005.pth}
-ckpt_path=${CKPT:-checkpoint/2026-04-20-09-53-25/checkpoint0007.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-20-09-53-25/checkpoint0007.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-20-16-37-07/checkpoint0007.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-20-17-43-33/checkpoint0024.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-20-21-04-10/checkpoint0009.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-20-22-03-47/checkpoint0007.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-20-22-43-01/checkpoint0024.pth}
+ckpt_path=${CKPT:-checkpoint/2026-04-21-09-30-15/checkpoint0004.pth}
 
 
 # 评估 episode 数（默认 1）
-eval_episodes=${EVAL_EPISODES:-10}
+eval_episodes=${EVAL_EPISODES:-1}
 
 # 评估 batch 大小（默认 1，只看单机/单轨迹结果）
 eval_batch_size=${EVAL_BATCH_SIZE:-1}
@@ -103,7 +109,7 @@ done
 # - 禁用 wandb
 # - 仅运行 eval.py 前向推理
 # common_cmd="python -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes --batch_size $eval_batch_size --timesteps 300"
-common_cmd="$py_bin -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes --batch_size $eval_batch_size --timesteps 120"
+common_cmd="$py_bin -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes --batch_size $eval_batch_size"
 
 if [ "$log_to_file" = "1" ]; then
 	eval "$common_cmd" > "$log_file" 2>&1

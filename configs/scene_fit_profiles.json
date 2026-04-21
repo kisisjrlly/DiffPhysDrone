@@ -134,23 +134,37 @@
   "scene_effects": {
     "sun_glare": {
       "sun_anchor": [
-        7.2,
+        2.8,
         0.0,
-        1.8
+        1.65
       ],
-      "zone_enter_x": 1.65,
-      "zone_softness": 0.30,
-      "sun_sigma_u": 0.40,
-      "sun_sigma_v": 0.30,
-      "ambient_add": 3.4,
-      "active_drop": 0.62,
-      "active_recover": 0.72,
-      "glare_exposure_gain": 1.85,
-      "glare_power_gain": 1.85,
-      "power_quality_bonus": 0.48,
-      "power_rescue_exposure_gain": 0.75,
-      "quality_penalty": 2.35,
-      "valid_bias_scale": 0.12
+      "zone_enter_x": 0.45,
+      "zone_softness": 0.18,
+      "sun_sigma_u": 0.30,
+      "sun_sigma_v": 0.23,
+      "ambient_add": 4.2,
+      "active_drop": 0.72,
+      "active_recover": 0.95,
+      "glare_bias": 0.30,
+      "glare_exposure_gain": 2.30,
+      "glare_power_bias": 0.16,
+      "glare_power_gain": 1.45,
+      "power_rescue_bias": 0.16,
+      "power_rescue_exposure_gain": 0.60,
+      "power_quality_bonus": 0.78,
+      "quality_penalty": 2.75,
+      "valid_bias_scale": 0.16,
+      "hazard_center": [
+        1.45,
+        0.0,
+        1.5
+      ],
+      "hazard_half_y": 0.32,
+      "hazard_half_z": 1.35,
+      "hazard_softness": 0.055,
+      "hazard_focus_weight": 0.85,
+      "glare_focus_floor": 0.20,
+      "hazard_effect_boost": 0.35
     },
     "specular_trap": {
       "panel_center": [
@@ -202,10 +216,29 @@
   },
   "scene_profiles": {
     "sun_glare": {
-      "ambient_add": 3.4,
-      "active_drop": 0.62,
-      "quality_penalty": 2.35,
-      "valid_bias_scale": 0.12
+      "ambient_add": 4.2,
+      "active_drop": 0.72,
+      "active_recover": 0.95,
+      "glare_bias": 0.30,
+      "glare_exposure_gain": 2.30,
+      "glare_power_bias": 0.16,
+      "glare_power_gain": 1.45,
+      "power_rescue_bias": 0.16,
+      "power_rescue_exposure_gain": 0.60,
+      "power_quality_bonus": 0.78,
+      "quality_penalty": 2.75,
+      "valid_bias_scale": 0.16,
+      "hazard_center": [
+        1.45,
+        0.0,
+        1.5
+      ],
+      "hazard_half_y": 0.32,
+      "hazard_half_z": 1.35,
+      "hazard_softness": 0.055,
+      "hazard_focus_weight": 0.85,
+      "glare_focus_floor": 0.20,
+      "hazard_effect_boost": 0.35
     },
     "specular_trap": {
       "spec_boost_base": 0.45,

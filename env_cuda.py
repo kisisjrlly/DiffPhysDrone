@@ -86,7 +86,7 @@ class Env:
         self.scene_max = torch.tensor([5.0, 5.0, 3.0], device=device)
         self.start_position = torch.tensor([-5.0, 0.0, 1.5], device=device)
         self.goal_position = torch.tensor([5.0, 0.0, 1.5], device=device)
-        self.fixed_max_speed = 1.8
+        self.fixed_max_speed = 1
         self.fixed_drone_radius = 0.12
         self.fixed_margin = 0.05
         self.fixed_pitch_ctl_delay = 12.0
@@ -580,16 +580,24 @@ class Env:
         ], device=device)
 
     def _build_sun_glare_voxel_layout(self):
-        wall_t = 0.18
-        wall_h = 1.5
+        """
+        最小 Sun Glare 论文场景：少量固定柱体 + 一个逆光区关键障碍。
+
+        真机复现语义：
+        - 不使用走廊墙、门框或复杂开口，只需要几根 0.5m 宽的高柱体。
+        - 光源放在目标方向，使无人机进入 x>约 1.2m 后处于逆光观测。
+        - 关键柱体位于逆光区中心线附近；固定相机/不可微感知更容易在局部
+          深度失效时停下或撞上它，可微主动感知则有机会通过 power/exposure/gain
+          的联合调节恢复该区域的深度质量。
+        """
+        voxel_half_w = 0.25
+        voxel_half_h = 1.5
         rows = [
-            [-1.45, -1.55, 1.5, 3.10, wall_t, wall_h],
-            [-1.45,  1.55, 1.5, 3.10, wall_t, wall_h],
-            [ 2.10, -1.55, 1.5, 1.15, wall_t, wall_h],
-            [ 2.10,  1.55, 1.5, 1.15, wall_t, wall_h],
-            [ 3.45, -1.08, 1.5, 0.12, 0.46, wall_h],
-            [ 3.45,  1.08, 1.5, 0.12, 0.46, wall_h],
-            [ 3.45,  0.00, 2.55, 0.12, 0.62, 0.35],
+            [-1.25, -0.2, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-0.25,  0.85, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 0.75, -1.15, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 1.25,  0.40, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [ 3.00,  0.00, 1.5, 0.10, 0.95, voxel_half_h],
         ]
         return self._build_voxels(rows)
 
@@ -684,31 +692,62 @@ class Env:
                 float(fx.get('zone_softness', 0.35))
             )[:, None, None]
             strength = sun_mask * zone_gate * visible[:, None, None]
-            glare_penalty = strength * (
+
+            hazard_mask = zeros
+            if 'hazard_center' in fx:
+                hazard_u, hazard_v, hazard_x, hazard_visible = self._project_world_point(
+                    fx['hazard_center'], R_cam_world, dtype)
+                half_u, half_v = self._project_rect_half_extents(
+                    hazard_x,
+                    fx.get('hazard_half_y', 0.32),
+                    fx.get('hazard_half_z', 1.35),
+                    dtype,
+                )
+                hazard_mask = self._make_box_mask(
+                    hazard_u,
+                    hazard_v,
+                    half_u,
+                    half_v,
+                    fx.get('hazard_softness', 0.055),
+                    dtype,
+                ) * hazard_visible[:, None, None]
+
+            # 全局强光负责制造逆光退化；局部 mask 负责把训练/评测指标聚焦到
+            # 逆光区中必须看清的关键障碍，而不是整幅图平均值。
+            focus_floor = float(fx.get('glare_focus_floor', 0.20))
+            focus_weight = float(fx.get('hazard_focus_weight', 0.85))
+            local_focus = strength * (focus_floor + focus_weight * hazard_mask).clamp(0.0, 1.0)
+            effect_strength = strength * (
+                1.0 + float(fx.get('hazard_effect_boost', 0.35)) * hazard_mask
+            )
+
+            glare_penalty = effect_strength * (
                 float(fx.get('glare_bias', 0.24)) +
                 float(fx.get('glare_exposure_gain', 1.70)) * exposure_s[:, None, None]
             ) / (
                 float(fx.get('glare_power_bias', 0.18)) +
                 float(fx.get('glare_power_gain', 1.55)) * power01[:, None, None]
             )
-            power_rescue = strength * power01[:, None, None] / (
+            power_rescue = effect_strength * power01[:, None, None] / (
                 float(fx.get('power_rescue_bias', 0.22)) +
                 float(fx.get('power_rescue_exposure_gain', 0.85)) * exposure_s[:, None, None]
             )
             adj['ambient_add'] = adj['ambient_add'] + strength * float(fx.get('ambient_add', 2.2))
             adj['active_mul'] = adj['active_mul'] * (
                 1.0
-                - float(fx.get('active_drop', 0.50)) * strength
-                + float(fx.get('active_recover', 0.55)) * power01[:, None, None] * strength
+                - float(fx.get('active_drop', 0.50)) * effect_strength
+                + float(fx.get('active_recover', 0.55)) * power01[:, None, None] * effect_strength
             ).clamp_min(0.05)
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.8)) * glare_penalty
             adj['quality_add'] = adj['quality_add'] + float(fx.get('power_quality_bonus', 0.38)) * power_rescue
-            adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * strength
-            adj['debug_scene_mask'] = strength
+            adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * effect_strength
+            adj['debug_scene_mask'] = local_focus
             adj['debug_effect_map'] = glare_penalty.clamp(0.0, 1.0)
             adj['debug_scalars'] = {
-                'scene_mask_mean': self._spatial_mean(strength),
+                'scene_mask_mean': self._spatial_mean(local_focus),
                 'scene_effect_mean': self._spatial_mean(glare_penalty),
+                'sun_mask_mean': self._spatial_mean(strength),
+                'hazard_mask_mean': self._spatial_mean(hazard_mask),
             }
 
         elif scene_name == 'specular_trap':
@@ -821,17 +860,34 @@ class Env:
         if scene_name == 'base':
             voxels = self.base_voxels_template
         elif scene_name == 'sun_glare':
+            start = torch.tensor([-3.0, 0.0, 1.5], device=self.device)
+            goal = torch.tensor([2.0, 0.0, 1.5], device=self.device)
             voxels = self._build_sun_glare_voxel_layout()
             effects = {
-                'sun_anchor': [7.2, 0.0, 1.8],
-                'zone_enter_x': 1.8,
-                'zone_softness': 0.35,
-                'sun_sigma_u': 0.34,
-                'sun_sigma_v': 0.26,
-                'ambient_add': 2.4,
-                'active_drop': 0.50,
-                'quality_penalty': 1.9,
-                'valid_bias_scale': 0.08,
+                'sun_anchor': [2.8, 0.0, 1.65],
+                'zone_enter_x': 0.45,
+                'zone_softness': 0.18,
+                'sun_sigma_u': 0.30,
+                'sun_sigma_v': 0.23,
+                'ambient_add': 4.2,
+                'active_drop': 0.72,
+                'active_recover': 0.95,
+                'glare_bias': 0.30,
+                'glare_exposure_gain': 2.30,
+                'glare_power_bias': 0.16,
+                'glare_power_gain': 1.45,
+                'power_rescue_bias': 0.16,
+                'power_rescue_exposure_gain': 0.60,
+                'power_quality_bonus': 0.78,
+                'quality_penalty': 2.75,
+                'valid_bias_scale': 0.16,
+                'hazard_center': [1.45, 0.0, 1.5],
+                'hazard_half_y': 0.32,
+                'hazard_half_z': 1.35,
+                'hazard_softness': 0.055,
+                'hazard_focus_weight': 0.85,
+                'glare_focus_floor': 0.20,
+                'hazard_effect_boost': 0.35,
             }
         elif scene_name == 'specular_trap':
             voxels = self._build_specular_trap_layout()

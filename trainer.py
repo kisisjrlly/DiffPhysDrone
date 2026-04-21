@@ -273,7 +273,7 @@ def _teacher_inner_loop(env, env_snapshot, args,
                 physics_losses = compute_physics_losses(
                     v_ck, tv_ck, act_ck, vec_ck, p_ck,
                     env.margin, prev_act_tail_k,
-                    v_roll=v_roll_k, tv_roll=tv_roll_k, win=30,
+                    v_roll=v_roll_k, tv_roll=tv_roll_k, win=args.loss_v_window,
                 )
                 camera_losses = compute_camera_losses(
                     _stack_or_none(c_sensor_hist),
@@ -530,7 +530,7 @@ def student_rollout(env, model, args, B, device, use_amp,
                 physics_losses = compute_physics_losses(
                     v_ck, tv_ck, act_ck, vec_ck, p_ck,
                     env.margin, prev_act_tail,
-                    v_roll=v_roll, tv_roll=tv_roll, win=30,
+                    v_roll=v_roll, tv_roll=tv_roll, win=args.loss_v_window,
                 )
                 loss_v_pred_c = F.mse_loss(vpred_ck, v_ck.detach())
                 camera_losses = compute_camera_losses(
@@ -693,7 +693,7 @@ def full_bptt_losses(rollout, env, args, device, u_star, y_star, u_star_cam, dis
 
     physics_losses = compute_physics_losses(
         v_history, target_v_history, act_history, vec_to_pt_history, p_history,
-        env.margin, prev_act_tail, win=30,
+        env.margin, prev_act_tail, win=args.loss_v_window,
     )
 
     distance = torch.norm(vec_to_pt_history + 1e-6, 2, -1) - env.margin

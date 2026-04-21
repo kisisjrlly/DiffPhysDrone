@@ -34,6 +34,8 @@ def build_parser():
 
     # --- 物理与控制损失函数权重 ---
     parser.add_argument('--coef_v', type=float, default=1.0, help='速度跟踪损失权重')
+    parser.add_argument('--loss_v_window', type=int, default=30,
+                        help='速度跟踪损失的时间平均窗口长度（单位：step）；越大越平滑、越小越灵敏')
     parser.add_argument('--coef_v_pred', type=float, default=2.0, help='速度预测 MSE 损失权重')
     parser.add_argument('--coef_collide', type=float, default=2.0, help='碰撞惩罚权重')
     parser.add_argument('--coef_obj_avoidance', type=float, default=1.5, help='避障安全距离惩罚权重')
@@ -271,6 +273,8 @@ def validate_args(args):
         raise ValueError('--tbptt_chunk_steps 必须 >= 2')
     if args.tbptt_enable and args.tbptt_chunk_accum < 1:
         raise ValueError('--tbptt_chunk_accum 必须 >= 1')
+    if args.loss_v_window < 1:
+        raise ValueError('--loss_v_window 必须 >= 1')
     if args.depth_min_valid <= 0:
         raise ValueError('--depth_min_valid 必须 > 0')
     if args.depth_max_range <= args.depth_min_valid:

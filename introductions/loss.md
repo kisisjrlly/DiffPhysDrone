@@ -19,6 +19,12 @@
 - 物理/控制 loss
 - 相机/感知 loss
 
+其中有一个很容易被忽略、但对“接近终点时是否还愿意继续推进”影响很大的参数是：
+
+- `--loss_v_window`
+
+它控制 `loss_v` 在时间维度上看多长一段速度历史。窗口越大，速度监督越平滑，但也越“慢半拍”；窗口越小，速度监督越灵敏，更容易在小地图和终点附近继续推进。
+
 如果后面打开 teacher-student 训练，还会再加一块 distillation loss。
 
 ---
@@ -136,15 +142,48 @@ loss_diff_depth_fill = mean(fill_gap_t^2)
 
 在 [paper_final_full.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/paper_final_full.args) 里，你现在设的是：
 
-- `--coef_diff_depth_fill 30.0`
-- `--diff_depth_min_fill_rate 0.35`
+- `--coef_diff_depth_fill 5.0`
+- `--diff_depth_min_fill_rate 0.25`
 
 这意味着：
 
-- 训练时希望 soft fill 平均至少维持在 `0.35`
-- 一旦低于 `0.35`，`loss_diff_depth_fill` 会被 `30.0` 这个比较大的系数放大
+- 训练时希望 soft fill 平均至少维持在 `0.25`
+- 一旦低于 `0.25`，`loss_diff_depth_fill` 会被 `5.0` 这个系数放大
 
-所以这项 loss 现在在你的主配置里不是“点缀项”，而是一个很明确的硬约束倾向。
+所以这项 loss 现在在你的主配置里依然是明确约束，但强度比之前更偏“保底”，不是极强硬压制。
+
+---
+
+## 4.7 `loss_v_window` 到底在做什么
+
+对应代码在 [losses.py](/home/zhaoguodong/work/code/DiffPhysDrone/losses.py) 的 `velocity_tracking_loss(...)`：
+
+```python
+v_avg = (v_cum[win:] - v_cum[:-win]) / win
+tv_ref = tv_hist[win:]
+delta_v = torch.norm(v_avg[:m] - tv_ref[:m], 2, -1)
+```
+
+它不是直接比较“当前速度”和“当前目标速度”，而是：
+
+1. 先取最近 `win` 步真实速度的平均值
+2. 再和对应时刻的目标速度比较
+
+如果控制频率是 `15Hz`，那么：
+
+- `loss_v_window = 30` 约等于看过去 `2.0s`
+- `loss_v_window = 15` 约等于看过去 `1.0s`
+- `loss_v_window = 12` 约等于看过去 `0.8s`
+
+它的作用是让速度损失更平滑，减少策略追逐瞬时噪声。
+
+但窗口太大时也会带来副作用：
+
+- 接近终点时反应变慢
+- 刚进入 `sun_glare` 区时，loss 还在看前面正常飞行阶段的平均速度
+- 更容易出现“终点前减速后停住”的保守解
+
+所以当前主配置把它设为 `12`，是为了让小地图、固定场景下的目标推进更灵敏。
 
 ### 4.4 它和 `depth_min_valid` 的区别
 
