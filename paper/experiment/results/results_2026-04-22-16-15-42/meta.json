@@ -1,0 +1,12 @@
+{
+  "config": "/home/zhaoguodong/work/code/DiffPhysDrone/configs/paper_final_full.args",
+  "checkpoints": {
+    "ours": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-04-22-10-25-45/checkpoint0017.pth",
+    "fixed": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-04-22-11-52-18/checkpoint0017.pth",
+    "nondiff": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-04-22-13-00-37/checkpoint0049.pth"
+  },
+  "episodes_per_condition": 20,
+  "plot_level": "l3",
+  "device": "cuda",
+  "skip_base": false
+}

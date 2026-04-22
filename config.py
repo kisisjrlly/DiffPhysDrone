@@ -14,6 +14,7 @@ SUPPORTED_SCENARIOS = (
     'dark_morphing',
 )
 OPENING_SCENES = {'vantablack_gap', 'dark_morphing'}
+SUPPORTED_SUN_GLARE_LEVELS = ('l0', 'l1', 'l2', 'l3')
 
 
 def build_parser():
@@ -73,6 +74,10 @@ def build_parser():
                         help='固定小地图上的 diff_depth 场景列表；训练随机采样，评测顺序轮转')
     parser.add_argument('--scene_fit_profiles_path', type=str, default=None,
                         help='可选：加载 D455 标定反推得到的场景 profile JSON，自动覆盖 diff_depth 场景参数')
+    parser.add_argument('--sun_glare_levels', nargs='*', default=['l0', 'l1', 'l2', 'l3'],
+                        help='sun_glare 场景允许采样的强度档位；训练时随机采样，评测时若未指定固定档位则按该列表轮转/取首项')
+    parser.add_argument('--sun_glare_eval_level', type=str, default=None,
+                        help='可选：评估时固定使用某一档 sun_glare 强度，例如 l2；训练阶段忽略该参数')
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
@@ -81,6 +86,10 @@ def build_parser():
     # --- 可微相机与主动感知 ---
     parser.add_argument('--include_camera_state_in_obs', default=False, action=argparse.BooleanOptionalAction,
                         help='是否将相机状态拼接到观测向量')
+    parser.add_argument('--camera_control_mode', type=str, default='learned', choices=['learned', 'fixed'],
+                        help='相机控制模式：learned 为策略输出 power/exposure/gain，fixed 为固定相机基线')
+    parser.add_argument('--sensor_grad_mode', type=str, default='full', choices=['full', 'detached'],
+                        help='传感器梯度模式：full 为可微主动感知，detached 为不可微主动感知基线')
     parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
     parser.add_argument('--coef_power_reg', type=float, default=0.005,
                         help='首个相机控制通道偏离中心值的正则化权重（diff_depth 分支中对应 power）')
@@ -91,6 +100,12 @@ def build_parser():
                         help='diff_depth power 的中性/默认参考值；建议按真实 D455 默认 laser_power/max 对齐')
     parser.add_argument('--cam_power_penalty_threshold', type=float, default=0.5,
                         help='高功率惩罚的起始阈值；超过该值才触发 loss_diff_depth_power')
+    parser.add_argument('--fixed_camera_power', type=float, default=-1.0,
+                        help='fixed camera 基线的归一化 power；<0 时自动使用 cam_power_nominal')
+    parser.add_argument('--fixed_camera_exposure', type=float, default=0.5,
+                        help='fixed camera 基线的归一化 exposure')
+    parser.add_argument('--fixed_camera_gain', type=float, default=0.5,
+                        help='fixed camera 基线的归一化 gain')
     parser.add_argument('--wandb_disabled', default=False, action='store_true', help='禁用 wandb 日志记录')
     parser.add_argument('--wandb_log_raw_loss_terms', default=False, action=argparse.BooleanOptionalAction,
                         help='是否把未加权的各 loss 分量单独写入 wandb；默认关闭以避免与 loss_contrib 重复')
@@ -240,6 +255,63 @@ def parse_scenarios(items):
     return dedup
 
 
+def canonicalize_sun_glare_level(item):
+    if item is None:
+        return None
+    token = str(item).strip().lower()
+    aliases = {
+        '0': 'l0',
+        'l0': 'l0',
+        'weak': 'l0',
+        'low': 'l0',
+        '1': 'l1',
+        'l1': 'l1',
+        'mild': 'l1',
+        'midlow': 'l1',
+        '2': 'l2',
+        'l2': 'l2',
+        'mid': 'l2',
+        'medium': 'l2',
+        'default': 'l2',
+        '3': 'l3',
+        'l3': 'l3',
+        'strong': 'l3',
+        'high': 'l3',
+    }
+    return aliases.get(token, token)
+
+
+def parse_sun_glare_levels(items):
+    if items is None:
+        return ['l0', 'l1', 'l2', 'l3']
+
+    levels = []
+    for raw in items:
+        if raw is None:
+            continue
+        for token in str(raw).split(','):
+            name = canonicalize_sun_glare_level(token)
+            if not name:
+                continue
+            if name not in SUPPORTED_SUN_GLARE_LEVELS:
+                raise ValueError(
+                    f"--sun_glare_levels 不支持 '{name}'，仅支持: {list(SUPPORTED_SUN_GLARE_LEVELS)}"
+                )
+            levels.append(name)
+
+    if not levels:
+        return ['l0', 'l1', 'l2', 'l3']
+
+    dedup = []
+    seen = set()
+    for name in levels:
+        if name in seen:
+            continue
+        seen.add(name)
+        dedup.append(name)
+    return dedup
+
+
 def set_global_seed(seed: int, deterministic: bool = True):
     """设置全局随机数种子，提升训练可复现性。"""
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -293,6 +365,12 @@ def validate_args(args):
         raise ValueError('--cam_power_nominal 必须在 [0,1] 内')
     if not (0.0 <= args.cam_power_penalty_threshold <= 1.0):
         raise ValueError('--cam_power_penalty_threshold 必须在 [0,1] 内')
+    if args.fixed_camera_power >= 0.0 and not (0.0 <= args.fixed_camera_power <= 1.0):
+        raise ValueError('--fixed_camera_power 必须在 [0,1] 内，或设为 <0 使用 cam_power_nominal')
+    if not (0.0 <= args.fixed_camera_exposure <= 1.0):
+        raise ValueError('--fixed_camera_exposure 必须在 [0,1] 内')
+    if not (0.0 <= args.fixed_camera_gain <= 1.0):
+        raise ValueError('--fixed_camera_gain 必须在 [0,1] 内')
     if args.cam_power_reg_deadband < 0.0 or args.cam_power_reg_deadband > 1.0:
         raise ValueError('--cam_power_reg_deadband 必须在 [0,1] 内')
     if args.sun_glare_local_quality_target < 0.0 or args.sun_glare_local_quality_target > 1.0:
@@ -301,6 +379,15 @@ def validate_args(args):
         raise ValueError('--cam_model_randomize_scale 建议在 [0, 0.5] 内')
     if not getattr(args, 'scenarios', None):
         raise ValueError('--scenarios 至少需要一个场景')
+    if not getattr(args, 'sun_glare_levels', None):
+        raise ValueError('--sun_glare_levels 至少需要一个档位')
+    if args.sun_glare_eval_level is not None:
+        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
+        if args.sun_glare_eval_level not in SUPPORTED_SUN_GLARE_LEVELS:
+            raise ValueError(
+                f"--sun_glare_eval_level 不支持 '{args.sun_glare_eval_level}'，"
+                f"仅支持: {list(SUPPORTED_SUN_GLARE_LEVELS)}"
+            )
 
 
 def print_runtime_mode(args):
@@ -324,6 +411,10 @@ def print_runtime_mode(args):
     print(f"distill_coef              : {args.distill_coef} -> {args.distill_coef * args.distill_final_ratio}")
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
     print(f"scenarios                 : {args.scenarios}")
+    print(f"sun_glare_levels          : {args.sun_glare_levels}")
+    print(f"sun_glare_eval_level      : {args.sun_glare_eval_level}")
+    print(f"camera_control_mode       : {args.camera_control_mode}")
+    print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print("environment               : fixed_small_map_with_perception_scenarios")
     print("sensor_control_semantics  : power/exposure/gain")
     print("=" * 75)
@@ -335,6 +426,9 @@ def parse_args():
     args = parser.parse_args()
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
+    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
+    if args.sun_glare_eval_level is not None:
+        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
     return args

@@ -32,7 +32,12 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-20-21-04-10/checkpoint0009.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-20-22-03-47/checkpoint0007.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-20-22-43-01/checkpoint0024.pth}
-ckpt_path=${CKPT:-checkpoint/2026-04-21-10-08-06/checkpoint0024.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-21-10-08-06/checkpoint0024.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-10-25-45/checkpoint0017.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-10-25-45/checkpoint0017.pth} # ours
+ckpt_path=${CKPT:-checkpoint/2026-04-22-11-52-18/checkpoint0017.pth} # fixed
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-13-00-37/checkpoint0049.pth} # nodiff
+
 
 
 # 评估 episode 数（默认 1）
@@ -86,11 +91,6 @@ date=$(date +%Y-%m-%d-%H-%M-%S)
 log_file="logs/eval-${task}-${date}.log"
 echo "log file: $log_file"
 
-echo "using config files: ${cfg_files[*]}"
-echo "using checkpoint  : $ckpt_path"
-echo "eval episodes     : $eval_episodes"
-echo "eval batch_size   : $eval_batch_size"
-
 if ! command -v "$py_bin" >/dev/null 2>&1; then
 	echo "[error] python executable not found: $py_bin"
 	echo "        set PYTHON_BIN=/path/to/python if needed"
@@ -103,6 +103,11 @@ for f in "${cfg_files[@]}"; do
 	part=$(sed -E 's/[[:space:]]*#.*$//' "$f" | grep -Ev '^[[:space:]]*$' | xargs)
 	cfg_args="$cfg_args $part"
 done
+
+echo "using config files: ${cfg_files[*]}"
+echo "using checkpoint  : $ckpt_path"
+echo "eval episodes     : $eval_episodes"
+echo "eval batch_size   : $eval_batch_size"
 
 # 强制 eval 语义：
 # - 使用指定 checkpoint

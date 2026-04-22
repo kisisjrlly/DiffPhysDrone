@@ -146,6 +146,7 @@ def _teacher_inner_loop(env, env_snapshot, args,
                         B, device, yaw_drift_R, vis, should_vis_iter):
     """Run teacher inner optimization (TBPTT) and return u_star / y_star / u_star_cam."""
     optimize_intent = bool(args.policy_output_intent and args.use_dmpc)
+    sensor_differentiable = (getattr(args, 'sensor_grad_mode', 'full') == 'full')
 
     # Build optimizable parameters
     u_guess, y_guess = None, None
@@ -185,7 +186,8 @@ def _teacher_inner_loop(env, env_snapshot, args,
                 args.base_control_freq,
                 camera_semantics=env.cam_sem,
             )
-            depth_obs_k, quality_k = render_sensors(env, dt_k, power_k, exposure_k, gain_k, differentiable=True)
+            depth_obs_k, quality_k = render_sensors(
+                env, dt_k, power_k, exposure_k, gain_k, differentiable=sensor_differentiable)
             fill_rate_k = compute_depth_fill_rate(
                 quality_k if quality_k is not None else depth_obs_k,
                 min_valid_depth=args.depth_min_valid,
@@ -391,6 +393,7 @@ def student_rollout(env, model, args, B, device, use_amp,
     R_drift = make_yaw_drift_R(B, device) if args.yaw_drift else None
 
     power, exposure, gain = init_camera_params(env, B, device)
+    sensor_differentiable = (getattr(args, 'sensor_grad_mode', 'full') == 'full')
 
     # ── Main rollout loop ──
     for t in range(args.timesteps):
@@ -402,7 +405,8 @@ def student_rollout(env, model, args, B, device, use_amp,
         ctl_dt = base_dt + exposure_delay
         student_add_noise = (args.student_noise_mode == 'on') if args.enable_teacher_student_training else True
 
-        depth_obs, depth_quality = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=True)
+        depth_obs, depth_quality = render_sensors(
+            env, ctl_dt, power, exposure, gain, differentiable=sensor_differentiable)
         depth_vis = depth_obs
         # fill_rate 用 quality 张量计算（而非 noisy_depth）：
         # quality 是确定性的（无 randn），对 power/exposure/gain 可微，
@@ -839,10 +843,17 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
         smoother.add(proxy_stats)
 
     scene_name = getattr(env, 'current_scene_name', None)
+    scene_tag = getattr(env, 'current_scene_tag', scene_name)
     if scene_name is not None:
         smoother.add({'scene/current_id': float(getattr(env, 'current_scene_id', -1))})
         for name in getattr(env, 'scene_name_to_id', {}):
             smoother.add({f'scene/is_{name}': 1.0 if name == scene_name else 0.0})
+    if scene_tag is not None and scene_tag != scene_name:
+        smoother.add({f'scene/is_{scene_tag}': 1.0})
+    glare_level = getattr(env, 'current_sun_glare_level', None)
+    if glare_level is not None:
+        level_to_id = {'l0': 0.0, 'l1': 1.0, 'l2': 2.0, 'l3': 3.0}
+        smoother.add({'scene/glare_level_id': level_to_id.get(glare_level, -1.0)})
 
 
 def _build_loss_share_metrics(loss_scalars: dict, args, distill_coef_iter: float) -> dict:
@@ -985,7 +996,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 cyl_h=env.cyl_h[j].detach().cpu().numpy(),
                 start=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
-                scene_name=getattr(env, 'current_scene_name', None),
+                scene_name=getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', None)),
                 scene_effects=getattr(env, 'current_scene_effects', None))
 
         # Teacher phase

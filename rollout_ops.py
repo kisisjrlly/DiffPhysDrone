@@ -244,6 +244,13 @@ def update_camera_params(cam_params, power, exposure, gain, env):
     if cam_params is None:
         raise ValueError('diff_depth-only 路径要求 cam_params 不为空')
 
+    if getattr(env, 'camera_control_mode', 'learned') == 'fixed':
+        fixed_power = torch.full_like(power, float(getattr(env, 'fixed_camera_power', getattr(env, 'cam_power_nominal', 0.5))))
+        fixed_exposure = torch.full_like(exposure, float(getattr(env, 'fixed_camera_exposure', 0.5)))
+        fixed_gain = torch.full_like(gain, float(getattr(env, 'fixed_camera_gain', 0.5)))
+        hist = torch.stack([fixed_power, fixed_exposure, fixed_gain], dim=-1)
+        return fixed_power, fixed_exposure, fixed_gain, hist
+
     _ = env
     alpha = 0.7
     p_new, e_new, g_new = cam_params.unbind(-1)

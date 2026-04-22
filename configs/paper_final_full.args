@@ -9,7 +9,7 @@
 
 # ----------------- Training scale -----------------
 --batch_size 96
---num_iters 5000
+--num_iters 10000
 --timesteps 120
 
 # ----------------- TBPTT / schedule -----------------
@@ -36,6 +36,8 @@
 # --no_odom
 # --scenarios base sun_glare specular_trap vantablack_gap dark_morphing
 --scenarios sun_glare
+--sun_glare_levels l0 l1 l2 l3
+# --sun_glare_eval_level l2
 --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 # --ellipsoid_collision
@@ -65,6 +67,8 @@
 
 # ----------------- Active sensing -----------------
 --include_camera_state_in_obs
+--camera_control_mode learned # fixed / learned
+--sensor_grad_mode detached # detached / full
 --coef_cam_smooth 100
 --coef_power_reg 100
 --cam_power_reg_deadband 0.18

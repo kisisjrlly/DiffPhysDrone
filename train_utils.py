@@ -53,6 +53,8 @@ class MetricSmoother:
 
         if len(getattr(args, 'scenarios', ['random_base'])) <= 1:
             for k in list(out.keys()):
+                if k == 'scene/glare_level_id' or k.startswith('scene/is_sun_glare_l'):
+                    continue
                 if k.startswith('scene/'):
                     out.pop(k, None)
 
@@ -102,9 +104,10 @@ def active_loss_term_specs(args, distill_coef_iter=None):
     add('ground_affinity', 'loss_ground_affinity', args.coef_ground_affinity)
     add('tilt', 'loss_tilt', args.coef_tilt)
 
-    add('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth)
-    add('power_reg', 'loss_power_reg', args.coef_power_reg)
-    add('cam_range', 'loss_cam_range', args.coef_cam_range)
+    if getattr(args, 'camera_control_mode', 'learned') != 'fixed':
+        add('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth)
+        add('power_reg', 'loss_power_reg', args.coef_power_reg)
+        add('cam_range', 'loss_cam_range', args.coef_cam_range)
     add('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power)
     add('diff_depth_blur', 'loss_diff_depth_blur', args.coef_diff_depth_blur)
     add('diff_depth_noise', 'loss_diff_depth_noise', args.coef_diff_depth_noise)
@@ -208,6 +211,7 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
 
     return Env(
         batch_size, dw, dh, args.grad_decay, device,
+        eval_mode=eval_mode,
         fov_x_half_tan=args.fov_x_half_tan,
         cam_angle=args.cam_angle,
         ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
@@ -222,6 +226,11 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         cam_model_randomize=cam_model_randomize,
         cam_model_randomize_scale=args.cam_model_randomize_scale,
         cam_power_nominal=args.cam_power_nominal,
+        camera_control_mode=args.camera_control_mode,
+        sensor_grad_mode=args.sensor_grad_mode,
+        fixed_camera_power=args.fixed_camera_power,
+        fixed_camera_exposure=args.fixed_camera_exposure,
+        fixed_camera_gain=args.fixed_camera_gain,
         cam_exposure_t_min=args.cam_exposure_t_min,
         cam_exposure_t_span=args.cam_exposure_t_span,
         cam_exposure_eff_min=args.cam_exposure_eff_min,
@@ -233,6 +242,8 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         depth_min_valid=args.depth_min_valid,
         depth_max_range=args.depth_max_range,
         scenarios=args.scenarios,
+        sun_glare_levels=args.sun_glare_levels,
+        sun_glare_eval_level=args.sun_glare_eval_level if eval_mode else None,
         scene_fit_profiles_path=args.scene_fit_profiles_path,
         diff_sensor_impl=args.diff_sensor_impl,
     )

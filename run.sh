@@ -59,11 +59,6 @@ fi
 
 mkdir -p logs
 
-# 获取当前日期和时间，用于日志文件名 (Get current date and time for log file name)
-date=$(date +%Y-%m-%d-%H-%M-%S)
-log_file="logs/$task-$date.log"
-echo "log file: $log_file"
-
 # 运行主程序，读取对应的配置文件，并将输出重定向到日志文件
 # (Run the main program, read the corresponding config file, and redirect output to a log file)
 # 支持：
@@ -76,7 +71,26 @@ for f in "${cfg_files[@]}"; do
 	cfg_args="$cfg_args $part"
 done
 
+read -r -a cfg_tokens <<< "$cfg_args"
+camera_control_mode="learned"
+sensor_grad_mode="full"
+for ((i=0; i<${#cfg_tokens[@]}; i++)); do
+	if [ "${cfg_tokens[$i]}" = "--camera_control_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
+		camera_control_mode="${cfg_tokens[$((i+1))]}"
+	fi
+	if [ "${cfg_tokens[$i]}" = "--sensor_grad_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
+		sensor_grad_mode="${cfg_tokens[$((i+1))]}"
+	fi
+done
+
+# 获取当前日期和时间，用于日志文件名 (Get current date and time for log file name)
+date=$(date +%Y-%m-%d-%H-%M-%S)
+run_tag="cam-${camera_control_mode}_grad-${sensor_grad_mode}"
+log_file="logs/${task}-${run_tag}-${date}.log"
+echo "log file: $log_file"
+
 echo "using config files: ${cfg_files[*]}"
+echo "run tag          : $run_tag"
 
 if ! command -v "$py_bin" >/dev/null 2>&1; then
 	echo "[error] python executable not found: $py_bin"

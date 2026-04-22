@@ -591,7 +591,7 @@ class RerunVis:
 
         scene_name = None if scene_name is None else str(scene_name)
         fx = scene_effects or {}
-        if scene_name == 'sun_glare' and 'sun_anchor' in fx:
+        if scene_name is not None and scene_name.startswith('sun_glare') and 'sun_anchor' in fx:
             sun = np.asarray(fx['sun_anchor'], dtype=np.float32).reshape(3)
             rr.log(
                 f"{phase}/world/scene/sun_anchor",
@@ -608,7 +608,7 @@ class RerunVis:
                     show_labels=False,
                 ),
             )
-        elif scene_name == 'specular_trap' and 'panel_center' in fx:
+        elif scene_name is not None and scene_name.startswith('specular_trap') and 'panel_center' in fx:
             panel_center = np.asarray(fx['panel_center'], dtype=np.float32).reshape(3)
             half_y = float(fx.get('panel_half_y', 0.95))
             half_z = float(fx.get('panel_half_z', 1.15))
@@ -623,7 +623,7 @@ class RerunVis:
                     show_labels=True,
                 ),
             )
-        elif scene_name == 'vantablack_gap' and 'gap_center' in fx:
+        elif scene_name is not None and scene_name.startswith('vantablack_gap') and 'gap_center' in fx:
             gap_center = np.asarray(fx['gap_center'], dtype=np.float32).reshape(3)
             half_y = float(fx.get('gap_half_w', 0.58))
             half_z = float(fx.get('gap_half_h', 0.95))
@@ -638,7 +638,7 @@ class RerunVis:
                     show_labels=True,
                 ),
             )
-        elif scene_name == 'dark_morphing' and 'slit_center' in fx:
+        elif scene_name is not None and scene_name.startswith('dark_morphing') and 'slit_center' in fx:
             slit_center = np.asarray(fx['slit_center'], dtype=np.float32).reshape(3)
             half_y = float(fx.get('gap_half_w', 0.32))
             half_z = float(fx.get('gap_half_h', 0.88))

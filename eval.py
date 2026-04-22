@@ -19,6 +19,8 @@ from config import (
     build_parser,
     parse_diff_sensor_impl,
     parse_scenarios,
+    parse_sun_glare_levels,
+    canonicalize_sun_glare_level,
     set_global_seed,
     validate_args,
     print_runtime_mode,
@@ -52,6 +54,9 @@ def parse_eval_args():
 
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
+    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
+    if args.sun_glare_eval_level is not None:
+        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
 
@@ -61,11 +66,11 @@ def parse_eval_args():
     return args
 
 
-def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
+def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device, collect_trace=False):
     B = env.batch_size
     use_amp = bool(args.amp and device.type == 'cuda')
 
-    env.reset(scene_name=scene_name)
+    env.reset(scene_name=scene_name, scene_variant=scene_variant)
     model.reset()
 
     if vis.enabled:
@@ -79,7 +84,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
             cyl_h=env.cyl_h[j].detach().cpu().numpy(),
             start=env.p[j].detach().cpu().numpy(),
             target=env.p_target[j].detach().cpu().numpy(),
-            scene_name=getattr(env, 'current_scene_name', None),
+            scene_name=getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', None)),
             scene_effects=getattr(env, 'current_scene_effects', None),
             step_idx=0,
         )
@@ -102,11 +107,14 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
     fill_rate_hist = []
     fill_rate_soft_hist = []
     goal_dist_hist = []
+    x_hist = []
+    glare_quality_hist = []
+    glare_invalid_hist = []
     collided = False
     collided_step = None
+    trace_rows = [] if collect_trace else None
 
     for t in range(args.timesteps):
-        print("timestep:", t)
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
         exposure_delay = float(diff_depth_exposure_to_time(
             exposure.mean().detach(),
@@ -189,6 +197,12 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
         act_buffer.append(act_final)
         speed_hist.append(env.v.norm(2, -1))
         goal_dist_hist.append((env.p_target - env.p).norm(2, -1))
+        x_hist.append(env.p[:, 0].detach())
+        scene_debug_for_metrics = env.export_last_diff_depth_debug(0)
+        if 'glare_quality_mean' in scene_debug_for_metrics.get('scalars', {}):
+            glare_quality_hist.append(float(scene_debug_for_metrics['scalars']['glare_quality_mean']))
+        if 'glare_invalid_rate' in scene_debug_for_metrics.get('scalars', {}):
+            glare_invalid_hist.append(float(scene_debug_for_metrics['scalars']['glare_invalid_rate']))
 
         if vis.enabled:
             j = int(min(max(args.vis_env_idx, 0), B - 1))
@@ -251,6 +265,43 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
                 depth_hw=(int(env.height), int(env.width)),
             )
 
+        if collect_trace:
+            j = 0
+            scene_debug = env.export_last_diff_depth_debug(j)
+            fill_rate_last = fill_rate_hist[-1]
+            fill_rate_soft_last = fill_rate_soft_hist[-1]
+            if torch.is_tensor(fill_rate_last) and fill_rate_last.ndim == 0:
+                fill_rate_scalar = float(fill_rate_last.detach().cpu().item())
+            else:
+                fill_rate_scalar = float(fill_rate_last[j].detach().cpu().item())
+            if torch.is_tensor(fill_rate_soft_last) and fill_rate_soft_last.ndim == 0:
+                fill_rate_soft_scalar = float(fill_rate_soft_last.detach().cpu().item())
+            else:
+                fill_rate_soft_scalar = float(fill_rate_soft_last[j].detach().cpu().item())
+            trace_rows.append({
+                'episode_idx': int(ep_idx),
+                'step_idx': int(t),
+                'scene_name': str(getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', scene_name))),
+                'glare_level': getattr(env, 'current_sun_glare_level', None) or '',
+                'x': float(env.p[j, 0].detach().cpu().item()),
+                'y': float(env.p[j, 1].detach().cpu().item()),
+                'z': float(env.p[j, 2].detach().cpu().item()),
+                'speed_mps': float(env.v[j].norm(2).detach().cpu().item()),
+                'accel_norm_mps2': float(env.a[j].norm(2).detach().cpu().item()),
+                'power': float(power[j].detach().cpu().item()),
+                'exposure': float(exposure[j].detach().cpu().item()),
+                'gain': float(gain[j].detach().cpu().item()),
+                'fill_rate': fill_rate_scalar,
+                'fill_rate_soft': fill_rate_soft_scalar,
+                'scene_effect_mean': float(scene_debug.get('scalars', {}).get('scene_effect_mean', 0.0)),
+                'glare_quality_mean': float(scene_debug.get('scalars', {}).get('glare_quality_mean', 0.0)),
+                'glare_invalid_rate': float(scene_debug.get('scalars', {}).get('glare_invalid_rate', 0.0)),
+                'glare_level_id': float(scene_debug.get('scalars', {}).get('glare_level_id', -1.0)),
+                'zone_enter_x': float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0)),
+                'dist_to_goal_m': float((env.p_target[j] - env.p[j]).norm(2).detach().cpu().item()),
+                'collided': float(collided),
+            })
+
         if collided:
             print(f"[eval] collision detected at step={t}, early stop this episode.")
             break
@@ -296,8 +347,20 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
     else:
         time_to_goal = float(args.timesteps / max(args.base_control_freq, 1e-6))
 
+    stop_before_glare = 0.0
+    if getattr(env, 'current_scene_name', None) == 'sun_glare' and x_hist:
+        x_all = torch.stack(x_hist)
+        max_x = float(x_all.max().detach().cpu().item())
+        zone_enter_x = float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0))
+        tail_k = min(10, len(speed_hist))
+        tail_speed = 0.0
+        if tail_k > 0:
+            tail_speed = float(torch.stack(speed_hist[-tail_k:]).mean().detach().cpu().item())
+        stop_before_glare = 1.0 if (max_x < zone_enter_x + 0.05 and tail_speed < 0.15) else 0.0
+
     metrics = {
-        'scene_name': str(getattr(env, 'current_scene_name', scene_name)),
+        'scene_name': str(getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', scene_name))),
+        'glare_level': str(getattr(env, 'current_sun_glare_level', '') or ''),
         'success_rate': success_rate,
         'collision_rate': collision_rate,
         'avg_speed': avg_speed,
@@ -307,13 +370,17 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
         'hole_rate': hole_mean,
         'hole_rate_soft': hole_soft_mean,
         'time_to_goal': time_to_goal,
+        'stop_before_glare_rate': stop_before_glare,
+        'local_glare_quality': float(sum(glare_quality_hist) / len(glare_quality_hist)) if glare_quality_hist else 0.0,
+        'local_glare_invalid_rate': float(sum(glare_invalid_hist) / len(glare_invalid_hist)) if glare_invalid_hist else 0.0,
         'collided': float(collided),
     }
     metrics.update(cam_stats)
     metrics.update(proxy_stats)
 
+    total_eval_episodes = getattr(args, 'eval_episodes', '?')
     print(
-        f"[eval] episode={ep_idx + 1}/{args.eval_episodes} "
+        f"[eval] episode={ep_idx + 1}/{total_eval_episodes} "
         f"scene={metrics['scene_name']} "
         f"success_rate={success_rate:.3f} collision_rate={collision_rate:.3f} "
         f"fill_rate={fill_mean:.3f} fill_rate_soft={fill_soft_mean:.3f} "
@@ -322,6 +389,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device):
     )
 
     # 评估汇总指标保留在控制台输出；Rerun 侧重点为 step 级飞行状态。
+    if collect_trace:
+        return metrics, trace_rows
     return metrics
 
 
@@ -380,11 +449,20 @@ def main():
         eval_scenes = list(args.scenarios)
         for ep_idx in range(args.eval_episodes):
             scene_name = eval_scenes[ep_idx % len(eval_scenes)]
-            ep_metrics.append(run_one_episode(ep_idx, scene_name, args, model, env, vis, device))
+            scene_variant = None
+            if scene_name == 'sun_glare':
+                if args.sun_glare_eval_level is not None:
+                    scene_variant = args.sun_glare_eval_level
+                elif len(eval_scenes) == 1:
+                    scene_variant = args.sun_glare_levels[ep_idx % len(args.sun_glare_levels)]
+                else:
+                    scene_variant = args.sun_glare_levels[0]
+            ep_metrics.append(run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device))
 
     if ep_metrics:
         keys = [
-            'success_rate', 'collision_rate', 'time_to_goal',
+            'success_rate', 'collision_rate', 'stop_before_glare_rate', 'time_to_goal',
+            'local_glare_quality', 'local_glare_invalid_rate',
             'fill_rate', 'fill_rate_soft', 'hole_rate', 'hole_rate_soft',
             'energy_proxy', 'blur_proxy', 'noise_proxy',
             'avg_speed', 'max_speed',
@@ -395,9 +473,14 @@ def main():
             if vals:
                 print(f'  {key:<16}: {sum(vals) / len(vals):.4f}')
 
-        if len(eval_scenes) > 1:
+        unique_scene_names = []
+        for m in ep_metrics:
+            name = m.get('scene_name')
+            if name not in unique_scene_names:
+                unique_scene_names.append(name)
+        if len(unique_scene_names) > 1:
             print('[eval] per-scene summary:')
-            for scene_name in eval_scenes:
+            for scene_name in unique_scene_names:
                 scene_eps = [m for m in ep_metrics if m.get('scene_name') == scene_name]
                 if not scene_eps:
                     continue
