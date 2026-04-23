@@ -66,7 +66,7 @@ def main():
         torch.backends.cudnn.allow_tf32 = True
 
     # ── 3. WandB + checkpoint dir ────────────────────────────────────────
-    mode_tag = f"cam-{args.camera_control_mode}_grad-{args.sensor_grad_mode}"
+    mode_tag = f"cam-{args.camera_control_mode}_grad-{args.sensor_grad_mode}_depth-{args.policy_depth_mode}"
     run_name = f"{mode_tag}_{time.strftime('%Y%m%d_%H%M%S')}"
     ckpt_timestamp = time.strftime('%Y-%m-%d-%H-%M-%S')
     checkpoint_dir = os.path.join('checkpoint', ckpt_timestamp)

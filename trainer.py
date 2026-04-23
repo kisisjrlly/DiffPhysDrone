@@ -36,7 +36,7 @@ from rollout_ops import (
     compute_target_velocity, decode_action_direct, decode_action_lqr,
     update_camera_params, diff_depth_exposure_to_time,
     init_camera_params, compute_camera_param_stats, compute_diff_depth_proxies,
-    compute_depth_fill_rate, diff_depth_fill_softness,
+    compute_depth_fill_rate, diff_depth_fill_softness, select_policy_depth_obs,
 )
 from train_utils import (
     MetricSmoother, periodic_tail_ops, is_save_iter,
@@ -92,6 +92,7 @@ def _teacher_initial_guess(env, model, args, B, device, use_amp, yaw_drift_R):
             camera_semantics=env.cam_sem,
         )
         depth_obs, _ = render_sensors(env, dt, power, exposure, gain, differentiable=False)
+        policy_depth_obs = select_policy_depth_obs(depth_obs, getattr(args, 'policy_depth_mode', 'depth'))
         # torch.cuda.synchronize()
         if args.yaw_drift and yaw_drift_R is not None:
             tv_raw = torch.squeeze(tv_raw[:, None] @ yaw_drift_R, 1)
@@ -109,7 +110,7 @@ def _teacher_initial_guess(env, model, args, B, device, use_amp, yaw_drift_R):
         if args.policy_output_intent:
             with autocast(enabled=use_amp):
                 a_out, c_out, h_tmp, y_out = model(
-                    state, h_tmp, return_intent=True, depth_obs=depth_obs, add_noise=False)
+                    state, h_tmp, return_intent=True, depth_obs=policy_depth_obs, add_noise=False)
             a_out, y_out = a_out.float(), y_out.float()
             c_out = c_out.float()
             if optimize_intent:
@@ -117,7 +118,7 @@ def _teacher_initial_guess(env, model, args, B, device, use_amp, yaw_drift_R):
         else:
             with autocast(enabled=use_amp):
                 a_out, c_out, h_tmp = model(
-                    state, h_tmp, depth_obs=depth_obs, add_noise=False)
+                    state, h_tmp, depth_obs=policy_depth_obs, add_noise=False)
             a_out = a_out.float()
             c_out = c_out.float()
 
@@ -407,6 +408,7 @@ def student_rollout(env, model, args, B, device, use_amp,
 
         depth_obs, depth_quality = render_sensors(
             env, ctl_dt, power, exposure, gain, differentiable=sensor_differentiable)
+        policy_depth_obs = select_policy_depth_obs(depth_obs, getattr(args, 'policy_depth_mode', 'depth'))
         depth_vis = depth_obs
         # fill_rate 用 quality 张量计算（而非 noisy_depth）：
         # quality 是确定性的（无 randn），对 power/exposure/gain 可微，
@@ -455,14 +457,14 @@ def student_rollout(env, model, args, B, device, use_amp,
         if args.policy_output_intent:
             with autocast(enabled=use_amp):
                 act, cam_params, h, intent = model(
-                    state, h, return_intent=True, depth_obs=depth_obs, add_noise=student_add_noise)
+                    state, h, return_intent=True, depth_obs=policy_depth_obs, add_noise=student_add_noise)
             act, intent = act.float(), intent.float()
             if args.enable_teacher_student_training and args.use_dmpc:
                 raw_intent_history.append(intent)
         else:
             with autocast(enabled=use_amp):
                 act, cam_params, h = model(
-                    state, h, depth_obs=depth_obs, add_noise=student_add_noise)
+                    state, h, depth_obs=policy_depth_obs, add_noise=student_add_noise)
             act = act.float()
             intent = None
         cam_params = cam_params.float()

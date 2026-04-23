@@ -30,6 +30,7 @@ from model import Model
 from rerun_vis import RerunVis
 from rollout_ops import (
     render_sensors,
+    select_policy_depth_obs,
     build_local_frame,
     build_state_vector,
     compute_target_velocity,
@@ -113,6 +114,9 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
     collided = False
     collided_step = None
     trace_rows = [] if collect_trace else None
+    depth_input_mode = str(
+        getattr(args, 'eval_depth_mode', getattr(args, 'policy_depth_mode', 'depth'))
+    ).strip().lower()
 
     for t in range(args.timesteps):
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
@@ -132,6 +136,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
             min_valid_depth=args.depth_min_valid,
             softness=diff_depth_fill_softness(args.depth_min_valid),
         ).detach())
+        policy_depth_obs = select_policy_depth_obs(depth_obs, depth_input_mode)
 
         # 记录推进前的最小安全边距（<=0 视为碰撞）
         vec_now = env.find_vec_to_nearest_pt()
@@ -166,13 +171,13 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         if args.policy_output_intent:
             with autocast(enabled=use_amp):
                 act_raw, cam_params, h, intent = model(
-                    state, h, return_intent=True, depth_obs=depth_obs, add_noise=False)
+                    state, h, return_intent=True, depth_obs=policy_depth_obs, add_noise=False)
             act_raw = act_raw.float()
             intent = intent.float()
         else:
             with autocast(enabled=use_amp):
                 act_raw, cam_params, h = model(
-                    state, h, depth_obs=depth_obs, add_noise=False)
+                    state, h, depth_obs=policy_depth_obs, add_noise=False)
             act_raw = act_raw.float()
             intent = None
 
@@ -297,9 +302,11 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
                 'glare_quality_mean': float(scene_debug.get('scalars', {}).get('glare_quality_mean', 0.0)),
                 'glare_invalid_rate': float(scene_debug.get('scalars', {}).get('glare_invalid_rate', 0.0)),
                 'glare_level_id': float(scene_debug.get('scalars', {}).get('glare_level_id', -1.0)),
+                'decision_open_side_id': float(scene_debug.get('scalars', {}).get('decision_open_side_id', 0.0)),
                 'zone_enter_x': float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0)),
                 'dist_to_goal_m': float((env.p_target[j] - env.p[j]).norm(2).detach().cpu().item()),
                 'collided': float(collided),
+                'depth_input_mode': depth_input_mode,
             })
 
         if collided:
@@ -309,9 +316,6 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
             time.sleep(1.0/15)
 
     min_margin_all = torch.stack(min_margin_hist).amin(dim=0)
-    success_mask = min_margin_all > 0
-    success_rate = float(success_mask.float().mean().detach().cpu())
-    collision_rate = float((~success_mask).float().mean().detach().cpu())
 
     if len(speed_hist) > 0:
         speed_all = torch.stack(speed_hist)
@@ -339,13 +343,22 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         goal_dist_all = torch.stack(goal_dist_hist)
         reached = goal_dist_all < 0.5
         reached_any = reached.any(dim=0)
+        final_goal_dist = goal_dist_all[-1]
         first_hit = torch.full((B,), args.timesteps, device=device, dtype=torch.long)
         if reached_any.any():
             hit_idx = reached.float().argmax(dim=0)
             first_hit = torch.where(reached_any, hit_idx, first_hit)
         time_to_goal = float(first_hit.float().mean().item() / max(args.base_control_freq, 1e-6))
     else:
+        reached_any = torch.zeros((B,), device=device, dtype=torch.bool)
+        final_goal_dist = torch.full((B,), float('inf'), device=device)
         time_to_goal = float(args.timesteps / max(args.base_control_freq, 1e-6))
+
+    success_mask = (min_margin_all > 0) & reached_any
+    success_rate = float(success_mask.float().mean().detach().cpu())
+    collision_rate = float((min_margin_all <= 0).float().mean().detach().cpu())
+    goal_reach_rate = float(reached_any.float().mean().detach().cpu())
+    final_goal_dist_mean = float(final_goal_dist.mean().detach().cpu().item())
 
     stop_before_glare = 0.0
     if getattr(env, 'current_scene_name', None) == 'sun_glare' and x_hist:
@@ -363,6 +376,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         'glare_level': str(getattr(env, 'current_sun_glare_level', '') or ''),
         'success_rate': success_rate,
         'collision_rate': collision_rate,
+        'goal_reach_rate': goal_reach_rate,
         'avg_speed': avg_speed,
         'max_speed': max_speed,
         'fill_rate': fill_mean,
@@ -370,10 +384,12 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         'hole_rate': hole_mean,
         'hole_rate_soft': hole_soft_mean,
         'time_to_goal': time_to_goal,
+        'final_goal_dist': final_goal_dist_mean,
         'stop_before_glare_rate': stop_before_glare,
         'local_glare_quality': float(sum(glare_quality_hist) / len(glare_quality_hist)) if glare_quality_hist else 0.0,
         'local_glare_invalid_rate': float(sum(glare_invalid_hist) / len(glare_invalid_hist)) if glare_invalid_hist else 0.0,
         'collided': float(collided),
+        'depth_input_mode': depth_input_mode,
     }
     metrics.update(cam_stats)
     metrics.update(proxy_stats)
@@ -382,9 +398,10 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
     print(
         f"[eval] episode={ep_idx + 1}/{total_eval_episodes} "
         f"scene={metrics['scene_name']} "
-        f"success_rate={success_rate:.3f} collision_rate={collision_rate:.3f} "
+        f"success_rate={success_rate:.3f} collision_rate={collision_rate:.3f} goal_reach_rate={goal_reach_rate:.3f} "
         f"fill_rate={fill_mean:.3f} fill_rate_soft={fill_soft_mean:.3f} "
         f"avg_speed={avg_speed:.3f} max_speed={max_speed:.3f} "
+        f"final_goal_dist={final_goal_dist_mean:.3f} "
         f"collided={collided}" + (f" collided_step={collided_step}" if collided_step is not None else "")
     )
 
@@ -461,11 +478,11 @@ def main():
 
     if ep_metrics:
         keys = [
-            'success_rate', 'collision_rate', 'stop_before_glare_rate', 'time_to_goal',
+            'success_rate', 'collision_rate', 'goal_reach_rate', 'stop_before_glare_rate', 'time_to_goal',
             'local_glare_quality', 'local_glare_invalid_rate',
             'fill_rate', 'fill_rate_soft', 'hole_rate', 'hole_rate_soft',
             'energy_proxy', 'blur_proxy', 'noise_proxy',
-            'avg_speed', 'max_speed',
+            'avg_speed', 'max_speed', 'final_goal_dist',
         ]
         print('[eval] overall summary:')
         for key in keys:

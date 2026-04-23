@@ -74,6 +74,7 @@ done
 read -r -a cfg_tokens <<< "$cfg_args"
 camera_control_mode="learned"
 sensor_grad_mode="full"
+policy_depth_mode="depth"
 for ((i=0; i<${#cfg_tokens[@]}; i++)); do
 	if [ "${cfg_tokens[$i]}" = "--camera_control_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
 		camera_control_mode="${cfg_tokens[$((i+1))]}"
@@ -81,12 +82,15 @@ for ((i=0; i<${#cfg_tokens[@]}; i++)); do
 	if [ "${cfg_tokens[$i]}" = "--sensor_grad_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
 		sensor_grad_mode="${cfg_tokens[$((i+1))]}"
 	fi
+	if [ "${cfg_tokens[$i]}" = "--policy_depth_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
+		policy_depth_mode="${cfg_tokens[$((i+1))]}"
+	fi
 done
 
 # 获取当前日期和时间，用于日志文件名 (Get current date and time for log file name)
 date=$(date +%Y-%m-%d-%H-%M-%S)
-run_tag="cam-${camera_control_mode}_grad-${sensor_grad_mode}"
-log_file="logs/${task}-${run_tag}-${date}.log"
+run_tag="cam-${camera_control_mode}_grad-${sensor_grad_mode}_depth-${policy_depth_mode}"
+log_file="logs/${date}-${task}-${run_tag}.log"
 echo "log file: $log_file"
 
 echo "using config files: ${cfg_files[*]}"

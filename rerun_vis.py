@@ -113,6 +113,51 @@ class RerunVis:
         scene_max = np.array([5.8, 5.8, 4.0], dtype=np.float32)
         return scene_min, scene_max
 
+    def _build_box_mesh(self, boxes):
+        """Build a flat-shaded triangle mesh for axis-aligned boxes.
+
+        boxes: (N, 6) with [cx, cy, cz, hx, hy, hz]
+        returns: (vertex_positions, triangle_indices, vertex_normals)
+        """
+        b = np.asarray(boxes, dtype=np.float32)
+        if b.size == 0:
+            return (
+                np.empty((0, 3), dtype=np.float32),
+                np.empty((0, 3), dtype=np.uint32),
+                np.empty((0, 3), dtype=np.float32),
+            )
+
+        # 6 faces, 4 vertices per face, 2 triangles per face.
+        face_specs = [
+            ([1.0, 0.0, 0.0], [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]]),
+            ([-1.0, 0.0, 0.0], [[-1, 1, -1], [-1, -1, -1], [-1, -1, 1], [-1, 1, 1]]),
+            ([0.0, 1.0, 0.0], [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]]),
+            ([0.0, -1.0, 0.0], [[1, -1, -1], [-1, -1, -1], [-1, -1, 1], [1, -1, 1]]),
+            ([0.0, 0.0, 1.0], [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]),
+            ([0.0, 0.0, -1.0], [[-1, 1, -1], [1, 1, -1], [1, -1, -1], [-1, -1, -1]]),
+        ]
+
+        vertices = []
+        normals = []
+        triangles = []
+        for row in b:
+            cx, cy, cz, hx, hy, hz = row.tolist()
+            center = np.array([cx, cy, cz], dtype=np.float32)
+            half = np.array([hx, hy, hz], dtype=np.float32)
+            for normal, local_corners in face_specs:
+                base = len(vertices)
+                for corner in local_corners:
+                    vertices.append((center + half * np.asarray(corner, dtype=np.float32)).tolist())
+                    normals.append(list(normal))
+                triangles.append([base + 0, base + 1, base + 2])
+                triangles.append([base + 0, base + 2, base + 3])
+
+        return (
+            np.asarray(vertices, dtype=np.float32),
+            np.asarray(triangles, dtype=np.uint32),
+            np.asarray(normals, dtype=np.float32),
+        )
+
     def begin_episode(self, ep_idx: int):
         """Reset all per-episode data in rerun at the start of a new episode.
 
@@ -285,7 +330,7 @@ class RerunVis:
             scene_max = scene_max + margin
 
         span = scene_max - scene_min
-        axis_len = float(max(3.0, 0.25 * np.max(span)))
+        axis_len = float(np.clip(0.12 * np.max(span), 0.55, 1.25))
         scene_diag = float(np.linalg.norm(span))
         # 线宽按场景尺度自适应，但保持上限较小，避免“线框淹没实体面”。
         base_r = float(np.clip(0.00045 * scene_diag, 0.002, 0.008))
@@ -350,18 +395,8 @@ class RerunVis:
                 vectors=[[axis_len, 0.0, 0.0], [0.0, axis_len, 0.0], [0.0, 0.0, axis_len]],
                 origins=[[0.0, 0.0, 0.0]] * 3,
                 colors=[[255, 80, 80], [80, 255, 80], [80, 160, 255]],
-                radii=[0.02, 0.02, 0.02],
+                radii=[0.008, 0.008, 0.008],
                 labels=["+X", "+Y", "+Z"],
-                show_labels=True,
-            ),
-        )
-        rr.log(
-            f"{phase}/world/axis_tips",
-            rr.Points3D(
-                [[axis_len, 0.0, 0.0], [0.0, axis_len, 0.0], [0.0, 0.0, axis_len]],
-                radii=[0.05, 0.05, 0.05],
-                colors=[[255, 80, 80], [80, 255, 80], [80, 160, 255]],
-                labels=["X+", "Y+", "Z+"],
                 show_labels=True,
             ),
         )
@@ -377,8 +412,7 @@ class RerunVis:
                 # 降低填充透明度，主要依赖高对比线框强调边界。
                 colors=[[255, 240, 120, 24]],
                 radii=[box_r],
-                labels=["MAP_AABB"],
-                show_labels=True,
+                show_labels=False,
             ),
         )
 
@@ -418,16 +452,27 @@ class RerunVis:
         if voxels is not None:
             v = np.asarray(voxels, dtype=np.float32)
             if v.size > 0:
-                rr.log(
-                    f"{phase}/world/voxels",
-                    rr.Boxes3D(
-                        centers=v[:, :3],
-                        half_sizes=v[:, 3:6],
-                        # 以“实体面”为主：提高填充不透明度，减少空心观感。
-                        colors=[[60, 200, 255, 170]] * v.shape[0],
-                        radii=[box_r] * v.shape[0],
-                    ),
-                )
+                if hasattr(rr, "Mesh3D"):
+                    vertex_positions, triangle_indices, vertex_normals = self._build_box_mesh(v)
+                    rr.log(
+                        f"{phase}/world/voxels_mesh",
+                        rr.Mesh3D(
+                            vertex_positions=vertex_positions,
+                            triangle_indices=triangle_indices,
+                            vertex_normals=vertex_normals,
+                            albedo_factor=[80, 185, 245, 170],
+                        ),
+                    )
+                else:
+                    rr.log(
+                        f"{phase}/world/voxels",
+                        rr.Boxes3D(
+                            centers=v[:, :3],
+                            half_sizes=v[:, 3:6],
+                            colors=[[60, 200, 255, 170]] * v.shape[0],
+                            radii=[box_r] * v.shape[0],
+                        ),
+                    )
 
                 # Add wireframe edges to make box obstacles stand out.
                 edges = []
@@ -542,7 +587,7 @@ class RerunVis:
                 f"{phase}/world/start",
                 rr.Points3D(
                     [s],
-                    radii=[0.14],
+                    radii=[0.10],
                     colors=[[30, 255, 120]],
                     labels=["START"],
                     show_labels=True,
@@ -554,40 +599,12 @@ class RerunVis:
                 f"{phase}/world/goal",
                 rr.Points3D(
                     [t],
-                    radii=[0.16],
+                    radii=[0.11],
                     colors=[[255, 70, 70]],
                     labels=["GOAL"],
                     show_labels=True,
                 ),
             )
-
-        # Start-goal numeric distance overlay (3D label + scalar).
-        if (start is not None) and (target is not None):
-            s = np.asarray(start, dtype=np.float32).reshape(3)
-            t = np.asarray(target, dtype=np.float32).reshape(3)
-            dist = float(np.linalg.norm(t - s))
-            mid = ((s + t) * 0.5).astype(np.float32)
-            rr.log(
-                f"{phase}/world/start_goal_line",
-                rr.LineStrips3D(
-                    [[s.tolist(), t.tolist()]],
-                    colors=[[255, 255, 120, 255]],
-                    radii=[0.01],
-                    labels=[f"START↔GOAL {dist:.2f}m"],
-                    show_labels=True,
-                ),
-            )
-            rr.log(
-                f"{phase}/world/start_goal_distance_label",
-                rr.Points3D(
-                    [mid.tolist()],
-                    radii=[0.05],
-                    colors=[[255, 255, 120]],
-                    labels=[f"D={dist:.2f} m"],
-                    show_labels=True,
-                ),
-            )
-            rr.log(f"{phase}/world/start_goal_distance_m", self._scalar_msg(dist))
 
         scene_name = None if scene_name is None else str(scene_name)
         fx = scene_effects or {}
@@ -718,7 +735,7 @@ class RerunVis:
     def _log_drone_rig(self, phase: str, pos, drone_R=None, cam_R=None,
                        main_fov_half_tan: float = 0.53,
                        main_hw=(240, 320), depth_hw=(60, 80)):
-        """Log drone body size/orientation and dual-camera frustums in 3D."""
+        """Log drone body size/orientation and a single diff-depth camera frustum in 3D."""
         if not self.enabled:
             return
         rr = self._rr
@@ -734,7 +751,7 @@ class RerunVis:
         # Body pose (world)
         rr.log(
             f"{phase}/drone/body",
-            rr.Transform3D(translation=o.tolist(), mat3x3=Rw.tolist(), axis_length=0.22),
+            rr.Transform3D(translation=o.tolist(), mat3x3=Rw.tolist(), axis_length=0.08),
         )
 
         # Cinematic body model: chassis + cross arms (local/body coordinates)
@@ -760,18 +777,7 @@ class RerunVis:
                 radii=[0.014, 0.014],
             ),
         )
-        rr.log(
-            f"{phase}/drone/body/axes",
-            rr.Arrows3D(
-                origins=[[0.0, 0.0, 0.0]] * 3,
-                vectors=[[0.35, 0.0, 0.0], [0.0, 0.35, 0.0], [0.0, 0.0, 0.25]],
-                colors=[[255, 90, 90], [90, 255, 90], [90, 160, 255]],
-                radii=[0.01, 0.01, 0.01],
-                # labels=["body+x", "body+y", "body+z"],
-            ),
-        )
-
-        # Camera rig (both main + depth share simulator extrinsics in this project)
+        # Camera rig
         Rcw = Rw @ Rc
 
         def _frustum_lines_local(tan_half_x, h, w, near, far):
@@ -796,46 +802,23 @@ class RerunVis:
             strips.append([c_far[0].tolist(), c_far[1].tolist(), c_far[2].tolist(), c_far[3].tolist(), c_far[0].tolist()])
             return strips
 
-        # Main camera frustum
+        # Diff-depth-only branch: show one camera frustum to avoid duplicated rigs.
         rr.log(
-            f"{phase}/drone/cameras/main",
-            rr.Transform3D(translation=o.tolist(), mat3x3=Rcw.tolist(), axis_length=0.14),
-        )
-        main_strips = _frustum_lines_local(float(main_fov_half_tan), int(main_hw[0]), int(main_hw[1]), near=0.12, far=1.05)
-        rr.log(
-            f"{phase}/drone/cameras/main/frustum",
-            rr.LineStrips3D(main_strips, colors=[[255, 240, 70]] * len(main_strips), radii=[0.004] * len(main_strips)),
-        )
-        rr.log(
-            f"{phase}/drone/cameras/main/look",
-            rr.Arrows3D(
-                origins=[[0.0, 0.0, 0.0]],
-                vectors=[[0.9, 0.0, 0.0]],
-                colors=[[255, 235, 80]],
-                radii=[0.009],
-                labels=["MAIN_CAM"],
-                show_labels=False,
-            ),
-        )
-
-        # Depth frustum (same extrinsics in simulator; separate style for readability)
-        rr.log(
-            f"{phase}/drone/cameras/depth",
-            rr.Transform3D(translation=o.tolist(), mat3x3=Rcw.tolist(), axis_length=0.12),
+            f"{phase}/drone/camera",
+            rr.Transform3D(translation=o.tolist(), mat3x3=Rcw.tolist(), axis_length=0.05),
         )
         depth_strips = _frustum_lines_local(float(main_fov_half_tan), int(depth_hw[0]), int(depth_hw[1]), near=0.10, far=0.90)
         rr.log(
-            f"{phase}/drone/cameras/depth/frustum",
-            rr.LineStrips3D(depth_strips, colors=[[80, 200, 255]] * len(depth_strips), radii=[0.003] * len(depth_strips)),
+            f"{phase}/drone/camera/frustum",
+            rr.LineStrips3D(depth_strips, colors=[[80, 200, 255]] * len(depth_strips), radii=[0.0026] * len(depth_strips)),
         )
         rr.log(
-            f"{phase}/drone/cameras/depth/look",
+            f"{phase}/drone/camera/look",
             rr.Arrows3D(
                 origins=[[0.0, 0.0, 0.0]],
-                vectors=[[0.75, 0.0, 0.0]],
+                vectors=[[0.62, 0.0, 0.0]],
                 colors=[[80, 210, 255]],
-                radii=[0.008],
-                labels=["DEPTH_CAM"],
+                radii=[0.005],
                 show_labels=False,
             ),
         )

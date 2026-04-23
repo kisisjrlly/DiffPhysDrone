@@ -13,8 +13,10 @@ from typing import Dict, List
 
 
 ROOT = Path(__file__).resolve().parents[2]
-METHOD_ORDER = ["ours", "fixed", "nondiff"]
+METHOD_ORDER = ["ours", "blind", "fixed", "nondiff"]
 GLARE_LEVEL_ORDER = ["l0", "l1", "l2", "l3"]
+ENTRY_PRE_STEPS = 5
+ENTRY_POST_STEPS = 5
 
 
 def _read_csv(path: Path) -> List[dict]:
@@ -65,6 +67,120 @@ def _latest_results_dir(results_root: Path) -> Path:
     if not dirs:
         raise FileNotFoundError(f"no results directories under {results_root}")
     return sorted(dirs)[-1]
+
+
+def _compute_t_entry(trace_rows: List[dict]) -> int | None:
+    if not trace_rows:
+        return None
+    zone_enter_x = _to_float(trace_rows[0].get("zone_enter_x", 0.0))
+    for row in trace_rows:
+        if _to_float(row.get("x", -1e9)) > zone_enter_x:
+            return int(row["step_idx"])
+    return None
+
+
+def _window_mean(trace_rows: List[dict], key: str, step_lo: int, step_hi: int) -> float | None:
+    vals: list[float] = []
+    for row in trace_rows:
+        step_idx = int(row["step_idx"])
+        if step_idx < step_lo or step_idx > step_hi:
+            continue
+        raw = row.get(key, "")
+        if raw in ("", None):
+            continue
+        val = _to_float(raw, default=math.nan)
+        if math.isnan(val):
+            continue
+        vals.append(val)
+    if not vals:
+        return None
+    return float(sum(vals) / len(vals))
+
+
+def _compute_post_entry_metrics_from_trace(trace_rows: List[dict]) -> dict:
+    metrics = {
+        "post_entry_available": 0.0,
+        "t_entry_step": -1.0,
+        "post_entry_local_glare_quality": 0.0,
+        "post_entry_local_glare_invalid_rate": 0.0,
+        "post_entry_fill_rate": 0.0,
+        "post_entry_scene_effect_mean": 0.0,
+        "post_entry_power_mean": 0.0,
+        "post_entry_exposure_mean": 0.0,
+        "post_entry_gain_mean": 0.0,
+        "post_entry_power_delta": 0.0,
+        "post_entry_exposure_delta": 0.0,
+        "post_entry_gain_delta": 0.0,
+    }
+    if not trace_rows:
+        return metrics
+
+    rows = sorted(trace_rows, key=lambda x: int(x["step_idx"]))
+    t_entry = _compute_t_entry(rows)
+    if t_entry is None:
+        return metrics
+
+    pre_lo = max(int(rows[0]["step_idx"]), int(t_entry) - ENTRY_PRE_STEPS)
+    pre_hi = int(t_entry) - 1
+    post_lo = int(t_entry)
+    post_hi = int(t_entry) + ENTRY_POST_STEPS
+
+    pre_power = _window_mean(rows, "power", pre_lo, pre_hi)
+    pre_exposure = _window_mean(rows, "exposure", pre_lo, pre_hi)
+    pre_gain = _window_mean(rows, "gain", pre_lo, pre_hi)
+    post_power = _window_mean(rows, "power", post_lo, post_hi)
+    post_exposure = _window_mean(rows, "exposure", post_lo, post_hi)
+    post_gain = _window_mean(rows, "gain", post_lo, post_hi)
+
+    metrics["post_entry_available"] = 1.0
+    metrics["t_entry_step"] = float(t_entry)
+    metrics["post_entry_local_glare_quality"] = _window_mean(rows, "glare_quality_mean", post_lo, post_hi) or 0.0
+    metrics["post_entry_local_glare_invalid_rate"] = _window_mean(rows, "glare_invalid_rate", post_lo, post_hi) or 0.0
+    metrics["post_entry_fill_rate"] = _window_mean(rows, "fill_rate", post_lo, post_hi) or 0.0
+    metrics["post_entry_scene_effect_mean"] = _window_mean(rows, "scene_effect_mean", post_lo, post_hi) or 0.0
+    metrics["post_entry_power_mean"] = post_power or 0.0
+    metrics["post_entry_exposure_mean"] = post_exposure or 0.0
+    metrics["post_entry_gain_mean"] = post_gain or 0.0
+    if pre_power is not None and post_power is not None:
+        metrics["post_entry_power_delta"] = float(post_power - pre_power)
+    if pre_exposure is not None and post_exposure is not None:
+        metrics["post_entry_exposure_delta"] = float(post_exposure - pre_exposure)
+    if pre_gain is not None and post_gain is not None:
+        metrics["post_entry_gain_delta"] = float(post_gain - pre_gain)
+    return metrics
+
+
+def _augment_summary_with_post_entry(summary_rows: List[dict], trace_rows: List[dict]) -> List[dict]:
+    grouped: Dict[tuple[str, str, str], List[dict]] = {}
+    for row in trace_rows:
+        key = (
+            str(row.get("method_key", "")),
+            str(row.get("condition", "")),
+            str(row.get("episode_idx", "")),
+        )
+        grouped.setdefault(key, []).append(row)
+
+    aggregate: Dict[tuple[str, str], Dict[str, List[float]]] = {}
+    for (method_key, condition, _episode_idx), episode_rows in grouped.items():
+        episode_metrics = _compute_post_entry_metrics_from_trace(episode_rows)
+        agg_key = (method_key, condition)
+        bucket = aggregate.setdefault(agg_key, {k: [] for k in episode_metrics.keys()})
+        for key, value in episode_metrics.items():
+            bucket[key].append(float(value))
+
+    out: List[dict] = []
+    for row in summary_rows:
+        new_row = dict(row)
+        agg_key = (str(row.get("method_key", "")), str(row.get("condition", "")))
+        if agg_key in aggregate:
+            for key, values in aggregate[agg_key].items():
+                new_row[key] = float(sum(values) / len(values)) if values else 0.0
+        else:
+            defaults = _compute_post_entry_metrics_from_trace([])
+            for key, value in defaults.items():
+                new_row.setdefault(key, value)
+        out.append(new_row)
+    return out
 
 
 def _build_base_table(rows: List[dict]) -> str:
@@ -187,6 +303,51 @@ def _build_camera_table(rows: List[dict]) -> str:
     return "\n".join(lines)
 
 
+def _build_post_entry_table(rows: List[dict]) -> str:
+    if not rows:
+        return "\n".join([
+            "\\begin{tabular}{llccccc}",
+            "\\toprule",
+            "Method & Level & PostQ $\\uparrow$ & PostFill $\\uparrow$ & PostInv $\\downarrow$ & $\\Delta$Power $\\uparrow$ & $\\Delta$Exposure $\\downarrow$ \\\\",
+            "\\midrule",
+            "No data & - & - & - & - & - & - \\\\",
+            "\\bottomrule",
+            "\\end{tabular}",
+        ])
+
+    lines = []
+    lines.append("\\begin{tabular}{llccccc}")
+    lines.append("\\toprule")
+    lines.append("Method & Level & PostQ $\\uparrow$ & PostFill $\\uparrow$ & PostInv $\\downarrow$ & $\\Delta$Power $\\uparrow$ & $\\Delta$Exposure $\\downarrow$ \\\\")
+    lines.append("\\midrule")
+    for level in GLARE_LEVEL_ORDER:
+        level_rows = [r for r in rows if str(r.get("glare_level", "")) == level]
+        if not level_rows:
+            continue
+        level_rows = sorted(level_rows, key=lambda r: _method_rank(r.get("method_key", "")))
+        best_post_q = max(_to_float(r.get("post_entry_local_glare_quality", 0.0)) for r in level_rows)
+        best_post_fill = max(_to_float(r.get("post_entry_fill_rate", 0.0)) for r in level_rows)
+        best_post_inv = min(_to_float(r.get("post_entry_local_glare_invalid_rate", 0.0)) for r in level_rows)
+        best_dp = max(_to_float(r.get("post_entry_power_delta", 0.0)) for r in level_rows)
+        best_de = min(_to_float(r.get("post_entry_exposure_delta", 0.0)) for r in level_rows)
+        for idx, row in enumerate(level_rows):
+            level_cell = level.upper() if idx == 0 else ""
+            vals = [
+                _bold_if_best(_to_float(row.get("post_entry_local_glare_quality", 0.0)), best_post_q, lower_is_better=False),
+                _bold_if_best(_to_float(row.get("post_entry_fill_rate", 0.0)), best_post_fill, lower_is_better=False),
+                _bold_if_best(_to_float(row.get("post_entry_local_glare_invalid_rate", 0.0)), best_post_inv, lower_is_better=True),
+                _bold_if_best(_to_float(row.get("post_entry_power_delta", 0.0)), best_dp, lower_is_better=False),
+                _bold_if_best(_to_float(row.get("post_entry_exposure_delta", 0.0)), best_de, lower_is_better=True),
+            ]
+            lines.append(f"{row['method_label']} & {level_cell} & " + " & ".join(vals) + " \\\\")
+        lines.append("\\midrule")
+    if lines[-1] == "\\midrule":
+        lines.pop()
+    lines.append("\\bottomrule")
+    lines.append("\\end{tabular}")
+    return "\n".join(lines)
+
+
 def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     cond_map = _group_by_condition(summary_rows)
     base_rows = cond_map.get("base", [])
@@ -203,7 +364,7 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     lines.append("- `episode_metrics.csv`：每个 episode 一行，可看波动和失败模式。")
     lines.append("- `trace_metrics.csv`：每个 timestep 一行，可画事件对齐曲线。")
     lines.append("- `success_vs_glare.png`：随 glare 强度变化的成功率曲线。")
-    lines.append("- `quality_and_stop_vs_glare.png`：局部质量和保守停车曲线。")
+    lines.append("- `post_entry_vs_glare.png`：进入逆光区后的关键窗口指标曲线。")
     lines.append("- `event_aligned_l3.png`：L3 条件下的参数时序图。")
     lines.append("- `trajectory_l3.png`：L3 条件下的顶视轨迹图。")
     lines.append("")
@@ -228,7 +389,7 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
                 "主结果表上很难再用 `success rate` 拉开差距。"
             )
             lines.append(
-                "- 在这种情况下，更该关注 `local_glare_quality`、`local_glare_invalid_rate`、"
+                "- 在这种情况下，更该关注 `post_entry` 指标、`local_glare_quality`、"
                 "`power/exposure/gain` 以及事件对齐曲线，而不是只看成功率。"
             )
         best_q = max(glare_rows, key=lambda r: _to_float(r["local_glare_quality"]))
@@ -236,11 +397,16 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
             f"- 当前所有 glare 条件里，`local_glare_quality` 最高的单项结果来自 "
             f"`{best_q['method_label']}` @ `{best_q['condition']}`，数值约为 `{_format_num(_to_float(best_q['local_glare_quality']))}`。"
         )
+        best_post_q = max(glare_rows, key=lambda r: _to_float(r.get("post_entry_local_glare_quality", 0.0)))
+        lines.append(
+            f"- 进入逆光区后的关键窗口里，`post_entry_local_glare_quality` 最高的单项结果来自 "
+            f"`{best_post_q['method_label']}` @ `{best_post_q['condition']}`，数值约为 `{_format_num(_to_float(best_post_q.get('post_entry_local_glare_quality', 0.0)))}`。"
+        )
     lines.append("")
 
-    lines.append("## Base 场景汇总")
-    lines.append("")
     if base_rows:
+        lines.append("## Base 场景汇总")
+        lines.append("")
         lines.append("| Method | Success | Collision | Time | AvgSpeed | Fill |")
         lines.append("|---|---:|---:|---:|---:|---:|")
         for row in base_rows:
@@ -252,9 +418,7 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
                 f"{_format_num(_to_float(row['avg_speed']))} | "
                 f"{_format_num(_to_float(row['fill_rate']))} |"
             )
-    else:
-        lines.append("无 Base 数据。")
-    lines.append("")
+        lines.append("")
 
     lines.append("## Sun Glare 汇总")
     lines.append("")
@@ -275,12 +439,31 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
             )
     lines.append("")
 
+    lines.append("## Post-Entry 汇总")
+    lines.append("")
+    lines.append("| Method | Level | PostQ | PostFill | PostInv | dPower | dExposure |")
+    lines.append("|---|---|---:|---:|---:|---:|---:|")
+    for level in GLARE_LEVEL_ORDER:
+        level_rows = [r for r in glare_rows if str(r.get("glare_level", "")) == level]
+        for row in sorted(level_rows, key=lambda r: _method_rank(r.get("method_key", ""))):
+            lines.append(
+                f"| {row['method_label']} | {level.upper()} | "
+                f"{_format_num(_to_float(row.get('post_entry_local_glare_quality', 0.0)))} | "
+                f"{_format_num(_to_float(row.get('post_entry_fill_rate', 0.0)))} | "
+                f"{_format_num(_to_float(row.get('post_entry_local_glare_invalid_rate', 0.0)))} | "
+                f"{_format_num(_to_float(row.get('post_entry_power_delta', 0.0)))} | "
+                f"{_format_num(_to_float(row.get('post_entry_exposure_delta', 0.0)))} |"
+            )
+    lines.append("")
+
     lines.append("## 怎么分析这些指标")
     lines.append("")
     lines.append("- `success_rate / collision_rate`：决定任务是否完成，但一旦全部饱和就不再有区分度。")
-    lines.append("- `local_glare_quality`：最关键的感知恢复指标，越高越说明逆光区域还保留了可用几何。")
-    lines.append("- `local_glare_invalid_rate`：越低越好，说明炫光区域里无效深度更少。")
-    lines.append("- `power_mean / exposure_mean / gain_mean`：用于解释策略是如何恢复感知的。")
+    lines.append("- `post_entry_local_glare_quality`：最关键的主指标，专门看进入逆光区后那几步还能不能保住关键几何。")
+    lines.append("- `post_entry_fill_rate / post_entry_local_glare_invalid_rate`：判断逆光区是否已经从“还能飞”退化到“局部盲飞”。")
+    lines.append("- `post_entry_power_delta / post_entry_exposure_delta`：判断策略在事件发生后有没有做出你预期的相机反应。")
+    lines.append("- `local_glare_quality`：整段 episode 的平均局部质量，适合看总体趋势，不适合单独当 hardest-case 指标。")
+    lines.append("- `power_mean / exposure_mean / gain_mean`：用于解释策略整段任务期间的总体感知风格。")
     lines.append("- `time_to_goal`：如果成功率都一样，它能反映谁更保守、谁更果断。")
     lines.append("")
 
@@ -293,20 +476,34 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     if glare_rows:
         ours_l3 = next((r for r in glare_rows if r["method_key"] == "ours" and r["glare_level"] == "l3"), None)
         fixed_l3 = next((r for r in glare_rows if r["method_key"] == "fixed" and r["glare_level"] == "l3"), None)
+        blind_l3 = next((r for r in glare_rows if r["method_key"] == "blind" and r["glare_level"] == "l3"), None)
         if ours_l3 and fixed_l3:
-            q_gap = _to_float(ours_l3["local_glare_quality"]) - _to_float(fixed_l3["local_glare_quality"])
-            p_gap = _to_float(ours_l3["power_mean"]) - _to_float(fixed_l3["power_mean"])
+            q_gap = _to_float(ours_l3.get("post_entry_local_glare_quality", 0.0)) - _to_float(fixed_l3.get("post_entry_local_glare_quality", 0.0))
+            f_gap = _to_float(ours_l3.get("post_entry_fill_rate", 0.0)) - _to_float(fixed_l3.get("post_entry_fill_rate", 0.0))
+            dp = _to_float(ours_l3.get("post_entry_power_delta", 0.0))
             lines.append(
-                f"- 在 `L3` 下，`Ours` 相对 `Fixed Camera` 的 `LocalQ` 提升约 `{_format_num(q_gap)}`，"
-                f"`Power` 提升约 `{_format_num(p_gap)}`，这正是论文里最值得讲的机制证据。"
+                f"- 在 `L3` 下，`Ours` 相对 `Fixed Camera` 的 `PostQ` 提升约 `{_format_num(q_gap)}`，"
+                f"`PostFill` 提升约 `{_format_num(f_gap)}`。这比只看整段平均值更能体现 hardest-case 感知恢复。"
             )
+            if dp <= 0.0:
+                lines.append("- 但 `Ours` 在 `L3` 下的 `post_entry_power_delta` 仍未转正，说明当前仿真里 `power` 还不是必要动作，论文故事仍然主要靠 `exposure` 在支撑。")
+        if ours_l3 and blind_l3:
+            success_gap = _to_float(ours_l3.get("success_rate", 0.0)) - _to_float(blind_l3.get("success_rate", 0.0))
+            post_q_gap = _to_float(ours_l3.get("post_entry_local_glare_quality", 0.0)) - _to_float(blind_l3.get("post_entry_local_glare_quality", 0.0))
+            if success_gap <= 0.05:
+                lines.append("- `Blind / No Depth` 在 `L3` 下与 `Ours` 的成功率差距仍然很小，这通常意味着场景仍然可以被记忆轨迹或开环策略部分解决。")
+            else:
+                lines.append(
+                    f"- `Blind / No Depth` 在 `L3` 下相对 `Ours` 的成功率下降约 `{_format_num(success_gap)}`，"
+                    f"`PostQ` 下降约 `{_format_num(post_q_gap)}`，这更能说明场景已经真正变成感知关键任务。"
+                )
     lines.append("")
 
     lines.append("## 可直接引用的图片")
     lines.append("")
     for name in [
         "success_vs_glare.png",
-        "quality_and_stop_vs_glare.png",
+        "post_entry_vs_glare.png",
         "event_aligned_l3.png",
         "trajectory_l3.png",
     ]:
@@ -324,6 +521,9 @@ def format_results_dir(results_dir: Path):
         raise FileNotFoundError(f"missing summary csv: {summary_csv}")
 
     summary_rows = _read_csv(summary_csv)
+    trace_csv = results_dir / "trace_metrics.csv"
+    if trace_csv.is_file():
+        summary_rows = _augment_summary_with_post_entry(summary_rows, _read_csv(trace_csv))
     base_rows = [r for r in summary_rows if r["condition"] == "base"]
     glare_rows = [r for r in summary_rows if str(r.get("scene_name", "")).startswith("sun_glare_")]
 
@@ -339,11 +539,15 @@ def format_results_dir(results_dir: Path):
     latex_cam = _build_camera_table(glare_rows)
     (results_dir / "table_camera.tex").write_text(latex_cam, encoding="utf-8")
 
+    latex_post = _build_post_entry_table(glare_rows)
+    (results_dir / "table_post_entry.tex").write_text(latex_post, encoding="utf-8")
+
     return {
         "report_md": results_dir / "report.md",
         "table_base_tex": results_dir / "table_base.tex",
         "table_glare_tex": results_dir / "table_glare.tex",
         "table_camera_tex": results_dir / "table_camera.tex",
+        "table_post_entry_tex": results_dir / "table_post_entry.tex",
     }
 
 

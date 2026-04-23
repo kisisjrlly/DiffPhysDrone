@@ -64,6 +64,8 @@ def build_parser():
     parser.add_argument('--depth_nn_height', type=int, default=12, help='diff_depth: 输入策略网络前的深度特征高')
     parser.add_argument('--depth_use_pipeline', default=True, action=argparse.BooleanOptionalAction,
                         help='深度输入是否启用图像处理流水线（仅对 diff_depth 生效）')
+    parser.add_argument('--policy_depth_mode', type=str, default='depth', choices=['depth', 'zero'],
+                        help='策略看到的深度输入模式：depth 为正常深度观测，zero 为全零深度（正式 blind baseline 训练/评测）')
     parser.add_argument('--diff_sensor_impl', nargs='*', default=['diff_depth=python'],
                         help='diff_depth 可微传感实现后端列表')
 
@@ -410,6 +412,7 @@ def print_runtime_mode(args):
     print(f"student_noise_mode        : {args.student_noise_mode}")
     print(f"distill_coef              : {args.distill_coef} -> {args.distill_coef * args.distill_final_ratio}")
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
+    print(f"policy_depth_mode        : {args.policy_depth_mode}")
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_levels          : {args.sun_glare_levels}")
     print(f"sun_glare_eval_level      : {args.sun_glare_eval_level}")

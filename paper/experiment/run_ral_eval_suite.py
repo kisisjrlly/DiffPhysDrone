@@ -54,6 +54,15 @@ METHOD_SPECS = {
         },
         "color": "#d62728",
     },
+    "blind": {
+        "label": "Blind / No Depth",
+        "args": {
+            "camera_control_mode": "learned",
+            "sensor_grad_mode": "full",
+            "policy_depth_mode": "zero",
+        },
+        "color": "#9467bd",
+    },
     "fixed": {
         "label": "Fixed Camera",
         "args": {
@@ -73,6 +82,8 @@ METHOD_SPECS = {
 }
 
 GLARE_LEVEL_ORDER = ["l0", "l1", "l2", "l3"]
+ENTRY_PRE_STEPS = 5
+ENTRY_POST_STEPS = 5
 
 
 def _lazy_imports():
@@ -183,6 +194,79 @@ def _compute_t_entry(trace_rows: list[dict]) -> int | None:
     return None
 
 
+def _window_mean(trace_rows: list[dict], key: str, step_lo: int, step_hi: int) -> float | None:
+    vals: list[float] = []
+    for row in trace_rows:
+        step_idx = int(row["step_idx"])
+        if step_idx < step_lo or step_idx > step_hi:
+            continue
+        raw = row.get(key, "")
+        if raw in ("", None):
+            continue
+        val = float(raw)
+        if math.isnan(val):
+            continue
+        vals.append(val)
+    if not vals:
+        return None
+    return float(sum(vals) / len(vals))
+
+
+def _compute_post_entry_metrics(trace_rows: list[dict],
+                                pre_steps: int = ENTRY_PRE_STEPS,
+                                post_steps: int = ENTRY_POST_STEPS) -> dict[str, float]:
+    metrics = {
+        "post_entry_available": 0.0,
+        "t_entry_step": -1.0,
+        "post_entry_local_glare_quality": 0.0,
+        "post_entry_local_glare_invalid_rate": 0.0,
+        "post_entry_fill_rate": 0.0,
+        "post_entry_scene_effect_mean": 0.0,
+        "post_entry_power_mean": 0.0,
+        "post_entry_exposure_mean": 0.0,
+        "post_entry_gain_mean": 0.0,
+        "post_entry_power_delta": 0.0,
+        "post_entry_exposure_delta": 0.0,
+        "post_entry_gain_delta": 0.0,
+    }
+    if not trace_rows:
+        return metrics
+
+    rows = sorted(trace_rows, key=lambda x: int(x["step_idx"]))
+    t_entry = _compute_t_entry(rows)
+    if t_entry is None:
+        return metrics
+
+    pre_lo = max(int(rows[0]["step_idx"]), int(t_entry) - int(pre_steps))
+    pre_hi = int(t_entry) - 1
+    post_lo = int(t_entry)
+    post_hi = int(t_entry) + int(post_steps)
+
+    pre_power = _window_mean(rows, "power", pre_lo, pre_hi)
+    pre_exposure = _window_mean(rows, "exposure", pre_lo, pre_hi)
+    pre_gain = _window_mean(rows, "gain", pre_lo, pre_hi)
+    post_power = _window_mean(rows, "power", post_lo, post_hi)
+    post_exposure = _window_mean(rows, "exposure", post_lo, post_hi)
+    post_gain = _window_mean(rows, "gain", post_lo, post_hi)
+
+    metrics["post_entry_available"] = 1.0
+    metrics["t_entry_step"] = float(t_entry)
+    metrics["post_entry_local_glare_quality"] = _window_mean(rows, "glare_quality_mean", post_lo, post_hi) or 0.0
+    metrics["post_entry_local_glare_invalid_rate"] = _window_mean(rows, "glare_invalid_rate", post_lo, post_hi) or 0.0
+    metrics["post_entry_fill_rate"] = _window_mean(rows, "fill_rate", post_lo, post_hi) or 0.0
+    metrics["post_entry_scene_effect_mean"] = _window_mean(rows, "scene_effect_mean", post_lo, post_hi) or 0.0
+    metrics["post_entry_power_mean"] = post_power or 0.0
+    metrics["post_entry_exposure_mean"] = post_exposure or 0.0
+    metrics["post_entry_gain_mean"] = post_gain or 0.0
+    if pre_power is not None and post_power is not None:
+        metrics["post_entry_power_delta"] = float(post_power - pre_power)
+    if pre_exposure is not None and post_exposure is not None:
+        metrics["post_entry_exposure_delta"] = float(post_exposure - pre_exposure)
+    if pre_gain is not None and post_gain is not None:
+        metrics["post_entry_gain_delta"] = float(post_gain - pre_gain)
+    return metrics
+
+
 def _summarize_rows(rows: list[dict], metric_keys: list[str]) -> list[dict]:
     grouped: dict[tuple[str, str], list[dict]] = {}
     for row in rows:
@@ -240,22 +324,22 @@ def _plot_success_vs_glare(summary_rows: list[dict], output_path: Path):
     plt.close(fig)
 
 
-def _plot_quality_and_stop(summary_rows: list[dict], output_path: Path):
+def _plot_post_entry_metrics(summary_rows: list[dict], output_path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(10.0, 4.0), dpi=180, sharex=True)
     x = np.arange(len(GLARE_LEVEL_ORDER))
     for method_key, spec in METHOD_SPECS.items():
         q_vals = []
-        s_vals = []
+        f_vals = []
         for level in GLARE_LEVEL_ORDER:
             cond = f"sun_glare_{level}"
             row = next((r for r in summary_rows if r["method_key"] == method_key and r["condition"] == cond), None)
-            q_vals.append(float(row["local_glare_quality"]) if row is not None else np.nan)
-            s_vals.append(float(row["stop_before_glare_rate"]) if row is not None else np.nan)
+            q_vals.append(float(row["post_entry_local_glare_quality"]) if row is not None else np.nan)
+            f_vals.append(float(row["post_entry_fill_rate"]) if row is not None else np.nan)
         axes[0].plot(x, q_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
-        axes[1].plot(x, s_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
+        axes[1].plot(x, f_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
 
-    axes[0].set_ylabel("Local Glare Quality")
-    axes[1].set_ylabel("Stop-Before-Glare Rate")
+    axes[0].set_ylabel("Post-Entry LocalQ")
+    axes[1].set_ylabel("Post-Entry Fill")
     for ax in axes:
         ax.set_xticks(x, [lvl.upper() for lvl in GLARE_LEVEL_ORDER])
         ax.set_xlabel("Sun Glare Severity")
@@ -398,6 +482,7 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
             metrics, trace = run_one_episode(
                 ep_idx, scene_name, glare_level, cond_args, model, env, vis, device, collect_trace=True)
             row = dict(metrics)
+            row.update(_compute_post_entry_metrics(trace))
             row.update({
                 "method_key": method_key,
                 "method_label": spec["label"],
@@ -431,9 +516,12 @@ def parse_args():
     parser.add_argument("--ours_ckpt", type=str, required=True)
     parser.add_argument("--fixed_ckpt", type=str, required=True)
     parser.add_argument("--nondiff_ckpt", type=str, required=True)
+    parser.add_argument("--include_blind", action="store_true")
+    parser.add_argument("--blind_ckpt", type=str, default=None)
     parser.add_argument("--episodes_per_condition", type=int, default=12)
     parser.add_argument("--plot_level", type=str, default="l3")
-    parser.add_argument("--skip_base", action="store_true")
+    parser.add_argument("--include_base", action="store_true")
+    parser.add_argument("--skip_base", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--output_dir", type=str, default=None)
@@ -452,6 +540,10 @@ def main():
         "fixed": Path(args.fixed_ckpt).resolve(),
         "nondiff": Path(args.nondiff_ckpt).resolve(),
     }
+    if args.include_blind:
+        if not args.blind_ckpt:
+            raise ValueError("--include_blind 时必须显式提供 --blind_ckpt；正式 blind baseline 需要先单独训练再评测")
+        ckpts["blind"] = Path(args.blind_ckpt).resolve()
     for name, path in ckpts.items():
         if not path.is_file():
             raise FileNotFoundError(f"{name} checkpoint not found: {path}")
@@ -476,6 +568,7 @@ def main():
 
     all_episode_rows = []
     all_trace_rows = []
+    include_base = bool(args.include_base) and not bool(args.skip_base)
     for method_key, ckpt_path in ckpts.items():
         episode_rows, trace_rows = _evaluate_method(
             method_key=method_key,
@@ -483,7 +576,7 @@ def main():
             base_args=base_args,
             device=device,
             episodes_per_condition=int(args.episodes_per_condition),
-            include_base=not args.skip_base,
+            include_base=include_base,
             plot_level=plot_level,
         )
         all_episode_rows.extend(episode_rows)
@@ -492,8 +585,10 @@ def main():
     summary_metric_keys = [
         "success_rate",
         "collision_rate",
+        "goal_reach_rate",
         "stop_before_glare_rate",
         "time_to_goal",
+        "final_goal_dist",
         "avg_speed",
         "fill_rate",
         "local_glare_quality",
@@ -501,6 +596,18 @@ def main():
         "power_mean",
         "exposure_mean",
         "gain_mean",
+        "post_entry_available",
+        "t_entry_step",
+        "post_entry_local_glare_quality",
+        "post_entry_local_glare_invalid_rate",
+        "post_entry_fill_rate",
+        "post_entry_scene_effect_mean",
+        "post_entry_power_mean",
+        "post_entry_exposure_mean",
+        "post_entry_gain_mean",
+        "post_entry_power_delta",
+        "post_entry_exposure_delta",
+        "post_entry_gain_delta",
         "energy_proxy",
         "blur_proxy",
         "noise_proxy",
@@ -516,11 +623,11 @@ def main():
         "episodes_per_condition": int(args.episodes_per_condition),
         "plot_level": plot_level,
         "device": str(device),
-        "skip_base": bool(args.skip_base),
+        "include_base": bool(include_base),
     })
 
     _plot_success_vs_glare(summary_rows, output_dir / "success_vs_glare.png")
-    _plot_quality_and_stop(summary_rows, output_dir / "quality_and_stop_vs_glare.png")
+    _plot_post_entry_metrics(summary_rows, output_dir / "post_entry_vs_glare.png")
     _plot_event_aligned(all_trace_rows, plot_level=plot_level, output_path=output_dir / f"event_aligned_{plot_level}.png")
     _plot_trajectory(all_trace_rows, plot_level=plot_level, output_path=output_dir / f"trajectory_{plot_level}.png")
 

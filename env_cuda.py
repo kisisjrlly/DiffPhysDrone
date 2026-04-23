@@ -431,6 +431,10 @@ class Env:
             return self.sun_glare_eval_level
         return random.choice(self.sun_glare_levels)
 
+    def _choose_sun_glare_open_side(self):
+        """随机选择逆光墙后唯一可通行的开口方向。"""
+        return random.choice(('left', 'right'))
+
     def _apply_sun_glare_level(self, effects, level):
         cfg = {
             'l0': {
@@ -757,27 +761,39 @@ class Env:
             [wall_x, gap_y_center, gap_z_center - gap_half_h - big, wall_thickness, gap_half_w, big],
         ], device=device)
 
-    def _build_sun_glare_voxel_layout(self):
+    def _build_sun_glare_voxel_layout(self, open_side):
         """
-        最小 Sun Glare 论文场景：少量固定柱体 + 一个逆光区关键障碍。
+        Sun Glare 感知关键场景：中央遮挡板 + 后方单侧开口墙。
 
-        真机复现语义：
-        - 不使用走廊墙、门框或复杂开口，只需要几根 0.5m 宽的高柱体。
-        - 光源放在目标方向，使无人机进入 x>约 1.2m 后处于逆光观测。
-        - 关键柱体位于逆光区中心线附近；固定相机/不可微感知更容易在局部
-          深度失效时停下或撞上它，可微主动感知则有机会通过 power/exposure/gain
-          的联合调节恢复该区域的深度质量。
+        设计目标：
+        - 让无人机在进入强逆光区前，只能看到一个居中的遮挡板；
+        - 真正决定成败的开口位于遮挡板后方，且左右随机；
+        - 没有有效感知时，策略只能猜边；有感知时，才能在 post-entry 窗口中
+          选择正确侧向并通过。
         """
         voxel_half_w = 0.25
         voxel_half_h = 1.5
-        rows = [
-            [-1.25, -0.2, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [-0.25,  0.85, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [ 0.75, -1.15, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [ 1.25,  0.40, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [ 3.00,  0.00, 1.5, 0.10, 0.95, voxel_half_h],
-        ]
-        return self._build_voxels(rows)
+
+        guide = self._build_voxels([
+            [-1.45, -1.05, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-1.45,  1.05, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+        ])
+        occluder = self._build_voxels([
+            [0.90, 0.00, 1.5, 0.10, 0.62, voxel_half_h],
+        ])
+
+        gap_y_center = -0.72 if str(open_side).lower() == 'left' else 0.72
+        gate_wall = self._build_opening_wall(
+            wall_x=1.60,
+            gap_y_center=gap_y_center,
+            gap_z_center=1.50,
+            gap_half_w=0.34,
+            gap_half_h=1.05,
+        )
+        back_wall = self._build_voxels([
+            [3.00, 0.00, 1.5, 0.10, 0.95, voxel_half_h],
+        ])
+        return torch.cat([guide, occluder, gate_wall, back_wall], dim=0)
 
     def _build_specular_trap_layout(self):
         rows = [
@@ -805,6 +821,63 @@ class Env:
         v = (cam[:, 2] / (denom * fov_y_half)).clamp(-4.0, 4.0)
         visible = (cam_x > 0.05).to(dtype)
         return u, v, cam_x, visible
+
+    def _voxel_line_of_sight_mask(self, point, dtype, start_margin=1e-4, end_margin=0.02):
+        """
+        Return whether a free-space anchor point is visible from the camera origin
+        under the current voxel geometry.
+
+        Notes:
+        - This is only used for scene-effect anchors such as `sun_anchor`,
+          `hazard_center`, `gap_center`, `slit_center`.
+        - Current fixed scenarios are voxel-only, so checking `self.voxels` is
+          sufficient for the active benchmark scenes.
+        - `end_margin` is in normalized segment parameter t in [0,1]. It avoids
+          classifying points very near the target anchor as "occluded by the
+          target itself" due to finite wall thickness / numerical noise.
+        """
+        point_t = torch.as_tensor(point, device=self.device, dtype=dtype)
+        if point_t.ndim == 1:
+            point_t = point_t.unsqueeze(0).expand(self.batch_size, -1)
+        elif point_t.ndim == 2 and point_t.shape[0] == 1:
+            point_t = point_t.expand(self.batch_size, -1)
+
+        if self.voxels.numel() == 0:
+            return torch.ones((self.batch_size,), device=self.device, dtype=dtype)
+
+        origin = self.p.to(dtype)
+        direction = point_t - origin
+
+        # Segment parameterization: x(t) = origin + t * direction, t in [0, 1].
+        o = origin[:, None, :]
+        d = direction[:, None, :]
+        vox = self.voxels.to(dtype)
+        center = vox[:, :, :3]
+        half = vox[:, :, 3:6].clamp_min(1e-6)
+
+        eps = 1e-8
+        parallel = d.abs() <= eps
+        slab_min = center - half
+        slab_max = center + half
+        outside_parallel = parallel & ((o < slab_min) | (o > slab_max))
+        miss_parallel = outside_parallel.any(dim=-1)
+
+        safe_d = torch.where(parallel, torch.ones_like(d), d)
+        t1 = (slab_min - o) / safe_d
+        t2 = (slab_max - o) / safe_d
+
+        neg_inf = torch.full_like(t1, -1e9)
+        pos_inf = torch.full_like(t1, 1e9)
+        t_near_axis = torch.where(parallel, neg_inf, torch.minimum(t1, t2))
+        t_far_axis = torch.where(parallel, pos_inf, torch.maximum(t1, t2))
+
+        t_enter = t_near_axis.amax(dim=-1)
+        t_exit = t_far_axis.amin(dim=-1)
+
+        intersects = (~miss_parallel) & (t_exit >= t_enter) & (t_exit >= float(start_margin))
+        first_hit = torch.where(t_enter > float(start_margin), t_enter, t_exit)
+        blocked = intersects & (first_hit < (1.0 - float(end_margin)))
+        return (~blocked.any(dim=-1)).to(dtype)
 
     def _project_rect_half_extents(self, cam_x, half_y, half_z, dtype):
         fov_x_half = max(float(self._fov_x_half_tan), 1e-4)
@@ -859,6 +932,7 @@ class Env:
         if scene_name == 'sun_glare':
             center_u, center_v, _, visible = self._project_world_point(
                 fx['sun_anchor'], R_cam_world, dtype)
+            sun_los = self._voxel_line_of_sight_mask(fx['sun_anchor'], dtype)
             sun_mask = self._make_gaussian_mask(
                 center_u, center_v,
                 fx.get('sun_sigma_u', 0.30),
@@ -869,12 +943,13 @@ class Env:
                 (self.p[:, 0].to(dtype) - float(fx.get('zone_enter_x', 1.8))) /
                 float(fx.get('zone_softness', 0.35))
             )[:, None, None]
-            strength = sun_mask * zone_gate * visible[:, None, None]
+            strength = sun_mask * zone_gate * visible[:, None, None] * sun_los[:, None, None]
 
             hazard_mask = zeros
             if 'hazard_center' in fx:
                 hazard_u, hazard_v, hazard_x, hazard_visible = self._project_world_point(
                     fx['hazard_center'], R_cam_world, dtype)
+                hazard_los = self._voxel_line_of_sight_mask(fx['hazard_center'], dtype)
                 half_u, half_v = self._project_rect_half_extents(
                     hazard_x,
                     fx.get('hazard_half_y', 0.32),
@@ -888,15 +963,21 @@ class Env:
                     half_v,
                     fx.get('hazard_softness', 0.055),
                     dtype,
-                ) * hazard_visible[:, None, None]
+                ) * hazard_visible[:, None, None] * hazard_los[:, None, None]
+            else:
+                hazard_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
 
             # 全局强光负责制造逆光退化；局部 mask 负责把训练/评测指标聚焦到
             # 逆光区中必须看清的关键障碍，而不是整幅图平均值。
             focus_floor = float(fx.get('glare_focus_floor', 0.20))
             focus_weight = float(fx.get('hazard_focus_weight', 0.85))
-            local_focus = strength * (focus_floor + focus_weight * hazard_mask).clamp(0.0, 1.0)
+            focus_gate = torch.sigmoid(
+                (self.p[:, 0].to(dtype) - float(fx.get('focus_enter_x', fx.get('zone_enter_x', 1.8)))) /
+                float(fx.get('focus_softness', 0.10))
+            )[:, None, None]
+            local_focus = strength * focus_gate * (focus_floor + focus_weight * hazard_mask).clamp(0.0, 1.0)
             effect_strength = strength * (
-                1.0 + float(fx.get('hazard_effect_boost', 0.35)) * hazard_mask
+                1.0 + float(fx.get('hazard_effect_boost', 0.35)) * hazard_mask * focus_gate
             )
 
             glare_penalty = effect_strength * (
@@ -926,6 +1007,15 @@ class Env:
                 'scene_effect_mean': self._spatial_mean(glare_penalty),
                 'sun_mask_mean': self._spatial_mean(strength),
                 'hazard_mask_mean': self._spatial_mean(hazard_mask),
+                'sun_los_mean': sun_los.detach(),
+                'hazard_los_mean': hazard_los.detach(),
+                'focus_gate_mean': self._spatial_mean(focus_gate),
+                'decision_open_side_id': torch.full(
+                    (self.batch_size,),
+                    float(fx.get('decision_open_side_id', 0.0)),
+                    device=self.device,
+                    dtype=dtype,
+                ),
                 'glare_level_id': torch.full(
                     (self.batch_size,),
                     float(fx.get('glare_level_id', 0.0)),
@@ -984,6 +1074,7 @@ class Env:
         elif scene_name == 'vantablack_gap':
             center_u, center_v, cam_x, visible = self._project_world_point(
                 fx['gap_center'], R_cam_world, dtype)
+            gap_los = self._voxel_line_of_sight_mask(fx['gap_center'], dtype)
             gap_half_u, gap_half_v = self._project_rect_half_extents(
                 cam_x,
                 fx.get('gap_half_w', 0.55),
@@ -992,7 +1083,7 @@ class Env:
             )
             outer = self._make_box_mask(center_u, center_v, gap_half_u * 1.55, gap_half_v * 1.20, 0.07, dtype)
             inner = self._make_box_mask(center_u, center_v, gap_half_u * 0.72, gap_half_v * 0.72, 0.07, dtype)
-            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None]
+            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None] * gap_los[:, None, None]
             adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - float(fx.get('albedo_drop', 0.88)) * frame_mask)
             adj['ambient_mul'] = adj['ambient_mul'] * (1.0 - float(fx.get('ambient_drop', 0.45)) * frame_mask)
             adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.72)) * frame_mask)
@@ -1003,11 +1094,13 @@ class Env:
             adj['debug_scalars'] = {
                 'scene_mask_mean': self._spatial_mean(frame_mask),
                 'scene_effect_mean': self._spatial_mean(frame_mask),
+                'gap_los_mean': gap_los.detach(),
             }
 
         elif scene_name == 'dark_morphing':
             center_u, center_v, cam_x, visible = self._project_world_point(
                 fx['slit_center'], R_cam_world, dtype)
+            slit_los = self._voxel_line_of_sight_mask(fx['slit_center'], dtype)
             slit_half_u, slit_half_v = self._project_rect_half_extents(
                 cam_x,
                 fx.get('gap_half_w', 0.32),
@@ -1016,8 +1109,8 @@ class Env:
             )
             outer = self._make_box_mask(center_u, center_v, slit_half_u * 1.70, slit_half_v * 1.25, 0.06, dtype)
             inner = self._make_box_mask(center_u, center_v, slit_half_u * 0.78, slit_half_v * 0.76, 0.06, dtype)
-            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None]
-            slit_mask = inner * visible[:, None, None]
+            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None] * slit_los[:, None, None]
+            slit_mask = inner * visible[:, None, None] * slit_los[:, None, None]
             adj['ambient_mul'] = adj['ambient_mul'] * float(fx.get('ambient_global_mul', 0.40))
             adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - float(fx.get('albedo_drop', 0.78)) * frame_mask)
             adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.82)) * frame_mask)
@@ -1030,6 +1123,7 @@ class Env:
             adj['debug_scalars'] = {
                 'scene_mask_mean': self._spatial_mean(torch.maximum(frame_mask, slit_mask)),
                 'scene_effect_mean': self._spatial_mean(motion_mix),
+                'slit_los_mean': slit_los.detach(),
             }
 
         return adj
@@ -1046,12 +1140,14 @@ class Env:
             voxels = self.base_voxels_template
         elif scene_name == 'sun_glare':
             selected_variant = self._choose_sun_glare_level(scene_variant)
+            open_side = self._choose_sun_glare_open_side()
+            gap_y_center = -0.72 if open_side == 'left' else 0.72
             start = torch.tensor([-3.0, 0.0, 1.5], device=self.device)
             goal = torch.tensor([2.0, 0.0, 1.5], device=self.device)
-            voxels = self._build_sun_glare_voxel_layout()
+            voxels = self._build_sun_glare_voxel_layout(open_side)
             effects = {
-                'sun_anchor': [2.8, 0.0, 1.65],
-                'zone_enter_x': 0.45,
+                'sun_anchor': [2.8, gap_y_center, 1.65],
+                'zone_enter_x': 0.55,
                 'zone_softness': 0.18,
                 'sun_sigma_u': 0.30,
                 'sun_sigma_v': 0.23,
@@ -1067,13 +1163,17 @@ class Env:
                 'power_quality_bonus': 0.78,
                 'quality_penalty': 2.75,
                 'valid_bias_scale': 0.16,
-                'hazard_center': [1.45, 0.0, 1.5],
-                'hazard_half_y': 0.32,
-                'hazard_half_z': 1.35,
+                'hazard_center': [1.60, gap_y_center, 1.5],
+                'hazard_half_y': 0.40,
+                'hazard_half_z': 1.20,
                 'hazard_softness': 0.055,
                 'hazard_focus_weight': 0.85,
-                'glare_focus_floor': 0.20,
+                'glare_focus_floor': 0.00,
+                'focus_enter_x': 1.02,
+                'focus_softness': 0.08,
                 'hazard_effect_boost': 0.35,
+                'decision_open_side': open_side,
+                'decision_open_side_id': -1.0 if open_side == 'left' else 1.0,
             }
         elif scene_name == 'specular_trap':
             voxels = self._build_specular_trap_layout()

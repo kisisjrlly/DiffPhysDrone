@@ -9,3 +9,4 @@ __pycache__/
 wandb/
 *.log
 logs/
+paper/experiment/results/*

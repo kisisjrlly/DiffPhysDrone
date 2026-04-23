@@ -34,6 +34,16 @@ def compute_depth_fill_rate(depth_obs, min_valid_depth: float = 0.3, softness=No
     return torch.sigmoid((depth_obs - threshold) / softness).mean()
 
 
+def select_policy_depth_obs(depth_obs, mode: str = 'depth'):
+    """Choose what depth tensor is actually fed into the policy network."""
+    if depth_obs is None:
+        return None
+    mode = str(mode).strip().lower()
+    if mode in {'zero', 'blind', 'none'}:
+        return torch.zeros_like(depth_obs)
+    return depth_obs
+
+
 def _stack_history_or_tensor(values):
     if values is None:
         return None

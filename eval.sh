@@ -35,8 +35,14 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-21-10-08-06/checkpoint0024.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-10-25-45/checkpoint0017.pth}
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-10-25-45/checkpoint0017.pth} # ours
-ckpt_path=${CKPT:-checkpoint/2026-04-22-11-52-18/checkpoint0017.pth} # fixed
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-11-52-18/checkpoint0017.pth} # fixed
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-13-00-37/checkpoint0049.pth} # nodiff
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-18-00-42/checkpoint0015.pth} # nocamera
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-20-38-15/checkpoint0014.pth} # ours
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-22-57-27/checkpoint0014.pth} # nodiff
+# ckpt_path=${CKPT:-checkpoint/2026-04-22-21-41-35/checkpoint0014.pth} # fixed
+ckpt_path=${CKPT:-checkpoint/2026-04-23-12-12-57/checkpoint0014.pth}
+
 
 
 
