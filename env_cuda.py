@@ -599,6 +599,31 @@ class Env:
         merged.update(self.scene_effect_overrides.get(scene_name, {}))
         return merged
 
+    def _realign_sun_glare_effects(self, effects):
+        """
+        Keep geometry-dependent anchors consistent with the sampled opening side.
+
+        `scene_fit_profiles.json` can override scene-effect values at runtime, but
+        for `sun_glare` the y-coordinate of `sun_anchor` / `hazard_center`
+        should always follow the current opening side rather than a fixed
+        centerline value from the profile file.
+        """
+        aligned = dict(effects)
+        open_side = str(aligned.get('decision_open_side', 'right')).strip().lower()
+        gap_y_center = -0.72 if open_side == 'left' else 0.72
+
+        def _replace_y(key, default_xyz):
+            raw = aligned.get(key, default_xyz)
+            if isinstance(raw, torch.Tensor):
+                raw = raw.detach().cpu().tolist()
+            if not isinstance(raw, (list, tuple)) or len(raw) < 3:
+                raw = default_xyz
+            return [float(raw[0]), float(gap_y_center), float(raw[2])]
+
+        aligned['sun_anchor'] = _replace_y('sun_anchor', [2.8, gap_y_center, 1.65])
+        aligned['hazard_center'] = _replace_y('hazard_center', [1.60, gap_y_center, 1.50])
+        return aligned
+
     def _choose_scene_name(self, scene_name=None):
         if scene_name is not None:
             name = str(scene_name).strip().lower()
@@ -623,6 +648,22 @@ class Env:
 
     def _sample_scene_tensor(self, lo, hi):
         return torch.empty((self.batch_size,), device=self.device).uniform_(float(lo), float(hi))
+
+    def _require_finite_tensor(self, name, value, scene_name=None):
+        if not torch.is_tensor(value):
+            return value
+        if torch.isfinite(value).all():
+            return value
+
+        bad = ~torch.isfinite(value)
+        bad_count = int(bad.sum().detach().cpu().item())
+        flat_bad = bad.reshape(-1).nonzero(as_tuple=False)
+        first_bad = int(flat_bad[0, 0].detach().cpu().item()) if flat_bad.numel() > 0 else -1
+        scene = scene_name or self.current_scene_name or 'unknown'
+        raise RuntimeError(
+            f"[env_cuda:{scene}] non-finite tensor detected in {name}: "
+            f"shape={tuple(value.shape)} bad_count={bad_count} first_bad_flat_idx={first_bad}"
+        )
 
     def _spatial_mean(self, x):
         if x is None:
@@ -811,14 +852,25 @@ class Env:
             point_t = point_t.unsqueeze(0).expand(self.batch_size, -1)
         elif point_t.ndim == 2 and point_t.shape[0] == 1:
             point_t = point_t.expand(self.batch_size, -1)
-        rel = point_t - self.p.to(dtype)
-        cam = torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), rel)
+        point_t = self._require_finite_tensor('scene_anchor_point', point_t)
+        origin = self._require_finite_tensor('camera_position', self.p.to(dtype))
+        rel = self._require_finite_tensor('scene_anchor_rel', point_t - origin)
+        cam = self._require_finite_tensor(
+            'scene_anchor_cam_coords',
+            torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), rel),
+        )
         cam_x = cam[:, 0]
         fov_x_half = max(float(self._fov_x_half_tan), 1e-4)
         fov_y_half = max(fov_x_half * float(self.height) / max(float(self.width), 1.0), 1e-4)
         denom = cam_x.abs().clamp_min(1e-4)
-        u = (cam[:, 1] / (denom * fov_x_half)).clamp(-4.0, 4.0)
-        v = (cam[:, 2] / (denom * fov_y_half)).clamp(-4.0, 4.0)
+        u = self._require_finite_tensor(
+            'scene_anchor_proj_u',
+            (cam[:, 1] / (denom * fov_x_half)).clamp(-4.0, 4.0),
+        )
+        v = self._require_finite_tensor(
+            'scene_anchor_proj_v',
+            (cam[:, 2] / (denom * fov_y_half)).clamp(-4.0, 4.0),
+        )
         visible = (cam_x > 0.05).to(dtype)
         return u, v, cam_x, visible
 
@@ -841,12 +893,12 @@ class Env:
             point_t = point_t.unsqueeze(0).expand(self.batch_size, -1)
         elif point_t.ndim == 2 and point_t.shape[0] == 1:
             point_t = point_t.expand(self.batch_size, -1)
+        point_t = self._require_finite_tensor('los_anchor_point', point_t)
+        origin = self._require_finite_tensor('los_camera_origin', self.p.to(dtype))
+        direction = self._require_finite_tensor('los_direction', point_t - origin)
 
         if self.voxels.numel() == 0:
             return torch.ones((self.batch_size,), device=self.device, dtype=dtype)
-
-        origin = self.p.to(dtype)
-        direction = point_t - origin
 
         # Segment parameterization: x(t) = origin + t * direction, t in [0, 1].
         o = origin[:, None, :]
@@ -873,6 +925,8 @@ class Env:
 
         t_enter = t_near_axis.amax(dim=-1)
         t_exit = t_far_axis.amin(dim=-1)
+        t_enter = self._require_finite_tensor('los_t_enter', t_enter)
+        t_exit = self._require_finite_tensor('los_t_exit', t_exit)
 
         intersects = (~miss_parallel) & (t_exit >= t_enter) & (t_exit >= float(start_margin))
         first_hit = torch.where(t_enter > float(start_margin), t_enter, t_exit)
@@ -943,7 +997,11 @@ class Env:
                 (self.p[:, 0].to(dtype) - float(fx.get('zone_enter_x', 1.8))) /
                 float(fx.get('zone_softness', 0.35))
             )[:, None, None]
-            strength = sun_mask * zone_gate * visible[:, None, None] * sun_los[:, None, None]
+            strength = self._require_finite_tensor(
+                'sun_glare/strength',
+                sun_mask * zone_gate * visible[:, None, None] * sun_los[:, None, None],
+                scene_name,
+            )
 
             hazard_mask = zeros
             if 'hazard_center' in fx:
@@ -964,6 +1022,7 @@ class Env:
                     fx.get('hazard_softness', 0.055),
                     dtype,
                 ) * hazard_visible[:, None, None] * hazard_los[:, None, None]
+                hazard_mask = self._require_finite_tensor('sun_glare/hazard_mask', hazard_mask, scene_name)
             else:
                 hazard_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
 
@@ -976,16 +1035,24 @@ class Env:
                 float(fx.get('focus_softness', 0.10))
             )[:, None, None]
             local_focus = strength * focus_gate * (focus_floor + focus_weight * hazard_mask).clamp(0.0, 1.0)
-            effect_strength = strength * (
-                1.0 + float(fx.get('hazard_effect_boost', 0.35)) * hazard_mask * focus_gate
+            effect_strength = self._require_finite_tensor(
+                'sun_glare/effect_strength',
+                strength * (
+                    1.0 + float(fx.get('hazard_effect_boost', 0.35)) * hazard_mask * focus_gate
+                ),
+                scene_name,
             )
 
-            glare_penalty = effect_strength * (
-                float(fx.get('glare_bias', 0.24)) +
-                float(fx.get('glare_exposure_gain', 1.70)) * exposure_s[:, None, None]
-            ) / (
-                float(fx.get('glare_power_bias', 0.18)) +
-                float(fx.get('glare_power_gain', 1.55)) * power01[:, None, None]
+            glare_penalty = self._require_finite_tensor(
+                'sun_glare/glare_penalty',
+                effect_strength * (
+                    float(fx.get('glare_bias', 0.24)) +
+                    float(fx.get('glare_exposure_gain', 1.70)) * exposure_s[:, None, None]
+                ) / (
+                    float(fx.get('glare_power_bias', 0.18)) +
+                    float(fx.get('glare_power_gain', 1.55)) * power01[:, None, None]
+                ),
+                scene_name,
             )
             power_rescue = effect_strength * power01[:, None, None] / (
                 float(fx.get('power_rescue_bias', 0.22)) +
@@ -1083,7 +1150,11 @@ class Env:
             )
             outer = self._make_box_mask(center_u, center_v, gap_half_u * 1.55, gap_half_v * 1.20, 0.07, dtype)
             inner = self._make_box_mask(center_u, center_v, gap_half_u * 0.72, gap_half_v * 0.72, 0.07, dtype)
-            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None] * gap_los[:, None, None]
+            frame_mask = self._require_finite_tensor(
+                'vantablack_gap/frame_mask',
+                (outer - inner).clamp(0.0, 1.0) * visible[:, None, None] * gap_los[:, None, None],
+                scene_name,
+            )
             adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - float(fx.get('albedo_drop', 0.88)) * frame_mask)
             adj['ambient_mul'] = adj['ambient_mul'] * (1.0 - float(fx.get('ambient_drop', 0.45)) * frame_mask)
             adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.72)) * frame_mask)
@@ -1109,8 +1180,16 @@ class Env:
             )
             outer = self._make_box_mask(center_u, center_v, slit_half_u * 1.70, slit_half_v * 1.25, 0.06, dtype)
             inner = self._make_box_mask(center_u, center_v, slit_half_u * 0.78, slit_half_v * 0.76, 0.06, dtype)
-            frame_mask = (outer - inner).clamp(0.0, 1.0) * visible[:, None, None] * slit_los[:, None, None]
-            slit_mask = inner * visible[:, None, None] * slit_los[:, None, None]
+            frame_mask = self._require_finite_tensor(
+                'dark_morphing/frame_mask',
+                (outer - inner).clamp(0.0, 1.0) * visible[:, None, None] * slit_los[:, None, None],
+                scene_name,
+            )
+            slit_mask = self._require_finite_tensor(
+                'dark_morphing/slit_mask',
+                inner * visible[:, None, None] * slit_los[:, None, None],
+                scene_name,
+            )
             adj['ambient_mul'] = adj['ambient_mul'] * float(fx.get('ambient_global_mul', 0.40))
             adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - float(fx.get('albedo_drop', 0.78)) * frame_mask)
             adj['passive_mul'] = adj['passive_mul'] * (1.0 - float(fx.get('passive_drop', 0.82)) * frame_mask)
@@ -1237,6 +1316,7 @@ class Env:
         effects = self._merge_scene_effects(scene_name, effects)
         if scene_name == 'sun_glare':
             effects = self._apply_sun_glare_level(effects, selected_variant)
+            effects = self._realign_sun_glare_effects(effects)
         return voxels, start, goal, max_speed, margin, effects, selected_variant
 
     def reset(self, scene_name=None, scene_variant=None):

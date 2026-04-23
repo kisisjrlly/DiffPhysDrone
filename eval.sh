@@ -41,13 +41,13 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-20-38-15/checkpoint0014.pth} # ours
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-22-57-27/checkpoint0014.pth} # nodiff
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-21-41-35/checkpoint0014.pth} # fixed
-ckpt_path=${CKPT:-checkpoint/2026-04-23-12-12-57/checkpoint0014.pth}
+ckpt_path=${CKPT:-checkpoint/2026-04-23-20-10-25/checkpoint0007.pth}
 
 
 
 
 # 评估 episode 数（默认 1）
-eval_episodes=${EVAL_EPISODES:-1}
+eval_episodes=${EVAL_EPISODES:-10}
 
 # 评估 batch 大小（默认 1，只看单机/单轨迹结果）
 eval_batch_size=${EVAL_BATCH_SIZE:-1}

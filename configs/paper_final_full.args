@@ -55,10 +55,13 @@
 --depth_use_pipeline
 # --policy_depth_mode depth # zero
 --policy_depth_mode depth
+# --policy_depth_mode zero
+# --camera_control_mode fixed
+# --sensor_grad_mode detached
 --diff_sensor_impl diff_depth=python
 
 # ----------------- Core losses -----------------
---coef_v 5.5
+--coef_v 10.5
 --loss_v_window 12
 --coef_v_pred 0.0
 --coef_d_acc 0.1
@@ -102,7 +105,7 @@
 --coef_diff_depth_noise 5
 --coef_diff_depth_fill 5.0
 --diff_depth_min_fill_rate 0.25
---coef_sun_glare_local_quality 30.0
+--coef_sun_glare_local_quality 10.0
 --sun_glare_local_quality_target 0.20
 
 # ----------------- Teacher-student -----------------
