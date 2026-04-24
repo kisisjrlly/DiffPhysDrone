@@ -431,9 +431,33 @@ class Env:
             return self.sun_glare_eval_level
         return random.choice(self.sun_glare_levels)
 
+    def _sun_glare_opening_candidates(self):
+        """
+        Four candidate opening lanes, ordered from negative-y to positive-y.
+
+        This makes blind or fixed-template policies much harder to script: even
+        after choosing a coarse left/right side, they still need to identify the
+        correct lane among two candidates on that side.
+        """
+        return (
+            {'name': 'far_left', 'side': 'left', 'y': -1.12, 'id': -1.5},
+            {'name': 'left', 'side': 'left', 'y': -0.56, 'id': -0.5},
+            {'name': 'right', 'side': 'right', 'y': 0.56, 'id': 0.5},
+            {'name': 'far_right', 'side': 'right', 'y': 1.12, 'id': 1.5},
+        )
+
+    def _choose_sun_glare_open_slot(self):
+        """随机选择四选一的 opening lane。"""
+        return dict(random.choice(self._sun_glare_opening_candidates()))
+
     def _choose_sun_glare_open_side(self):
-        """随机选择逆光墙后唯一可通行的开口方向。"""
-        return random.choice(('left', 'right'))
+        """
+        Backward-compatible helper retained for old analysis scripts.
+
+        Returns only the coarse left/right side, while the actual scene logic
+        uses `_choose_sun_glare_open_slot()` for four-way opening randomization.
+        """
+        return self._choose_sun_glare_open_slot()['side']
 
     def _apply_sun_glare_level(self, effects, level):
         cfg = {
@@ -609,8 +633,12 @@ class Env:
         centerline value from the profile file.
         """
         aligned = dict(effects)
-        open_side = str(aligned.get('decision_open_side', 'right')).strip().lower()
-        gap_y_center = -0.72 if open_side == 'left' else 0.72
+        slot_y = aligned.get('decision_open_slot_y', None)
+        if slot_y is None:
+            open_side = str(aligned.get('decision_open_side', 'right')).strip().lower()
+            gap_y_center = -0.56 if open_side == 'left' else 0.56
+        else:
+            gap_y_center = float(slot_y)
 
         def _replace_y(key, default_xyz):
             raw = aligned.get(key, default_xyz)
@@ -620,8 +648,8 @@ class Env:
                 raw = default_xyz
             return [float(raw[0]), float(gap_y_center), float(raw[2])]
 
-        aligned['sun_anchor'] = _replace_y('sun_anchor', [2.8, gap_y_center, 1.65])
-        aligned['hazard_center'] = _replace_y('hazard_center', [1.60, gap_y_center, 1.50])
+        aligned['sun_anchor'] = _replace_y('sun_anchor', [3.00, gap_y_center, 1.65])
+        aligned['hazard_center'] = _replace_y('hazard_center', [1.82, gap_y_center, 1.50])
         return aligned
 
     def _choose_scene_name(self, scene_name=None):
@@ -802,39 +830,47 @@ class Env:
             [wall_x, gap_y_center, gap_z_center - gap_half_h - big, wall_thickness, gap_half_w, big],
         ], device=device)
 
-    def _build_sun_glare_voxel_layout(self, open_side):
+    def _build_sun_glare_voxel_layout(self, gap_y_center):
         """
-        Sun Glare 感知关键场景：中央遮挡板 + 后方单侧开口墙。
+        Sun Glare probe-then-commit 场景：
+        中央遮挡板 + 三条 lane divider fins + 四选一单开口墙。
 
         设计目标：
-        - 让无人机在进入强逆光区前，只能看到一个居中的遮挡板；
-        - 真正决定成败的开口位于遮挡板后方，且左右随机；
-        - 没有有效感知时，策略只能猜边；有感知时，才能在 post-entry 窗口中
-          选择正确侧向并通过。
+        - 在 occluder 前仍然只看到一个居中的遮挡体，避免“提前背答案”；
+        - 在 occluder 后留一小段 probe zone，使正确 lane 更早暴露 cue；
+        - 通过三条很薄的 divider fins 把通道切成 4 条候选 lane；
+        - 真正 opening 只在其中 1 条 lane 上开放，且每回合随机；
+        - 正确策略应当先 probe 再 commit，而不是先固定走某个模板 lane。
         """
         voxel_half_w = 0.25
         voxel_half_h = 1.5
 
         guide = self._build_voxels([
-            [-1.45, -1.05, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [-1.45,  1.05, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-1.65, -1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-1.65,  1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
         ])
         occluder = self._build_voxels([
-            [0.90, 0.00, 1.5, 0.10, 0.62, voxel_half_h],
+            [0.88, 0.00, 1.5, 0.10, 0.48, voxel_half_h],
         ])
-
-        gap_y_center = -0.72 if str(open_side).lower() == 'left' else 0.72
+        lane_dividers = self._build_voxels([
+            # Keep the lanes well-separated near the gate, but leave enough
+            # x-distance after the occluder so all four candidate lanes remain
+            # physically reachable under the current collision model.
+            [1.58, -0.84, 1.5, 0.22, 0.05, voxel_half_h],
+            [1.58,  0.00, 1.5, 0.22, 0.05, voxel_half_h],
+            [1.58,  0.84, 1.5, 0.22, 0.05, voxel_half_h],
+        ])
         gate_wall = self._build_opening_wall(
-            wall_x=1.60,
+            wall_x=1.82,
             gap_y_center=gap_y_center,
             gap_z_center=1.50,
-            gap_half_w=0.34,
+            gap_half_w=0.18,
             gap_half_h=1.05,
         )
         back_wall = self._build_voxels([
-            [3.00, 0.00, 1.5, 0.10, 0.95, voxel_half_h],
+            [3.65, 0.00, 1.5, 0.10, 1.30, voxel_half_h],
         ])
-        return torch.cat([guide, occluder, gate_wall, back_wall], dim=0)
+        return torch.cat([guide, occluder, lane_dividers, gate_wall, back_wall], dim=0)
 
     def _build_specular_trap_layout(self):
         rows = [
@@ -1083,6 +1119,18 @@ class Env:
                     device=self.device,
                     dtype=dtype,
                 ),
+                'decision_open_slot_id': torch.full(
+                    (self.batch_size,),
+                    float(fx.get('decision_open_side_id', 0.0)),
+                    device=self.device,
+                    dtype=dtype,
+                ),
+                'decision_open_slot_y': torch.full(
+                    (self.batch_size,),
+                    float(fx.get('decision_open_slot_y', 0.0)),
+                    device=self.device,
+                    dtype=dtype,
+                ),
                 'glare_level_id': torch.full(
                     (self.batch_size,),
                     float(fx.get('glare_level_id', 0.0)),
@@ -1219,17 +1267,18 @@ class Env:
             voxels = self.base_voxels_template
         elif scene_name == 'sun_glare':
             selected_variant = self._choose_sun_glare_level(scene_variant)
-            open_side = self._choose_sun_glare_open_side()
-            gap_y_center = -0.72 if open_side == 'left' else 0.72
-            start = torch.tensor([-3.0, 0.0, 1.5], device=self.device)
-            goal = torch.tensor([2.0, 0.0, 1.5], device=self.device)
-            voxels = self._build_sun_glare_voxel_layout(open_side)
+            open_slot = self._choose_sun_glare_open_slot()
+            gap_y_center = float(open_slot['y'])
+            start = torch.tensor([-2.8, 0.0, 1.5], device=self.device)
+            goal = torch.tensor([3.00, 0.0, 1.5], device=self.device)
+            max_speed = 1.15
+            voxels = self._build_sun_glare_voxel_layout(gap_y_center)
             effects = {
-                'sun_anchor': [2.8, gap_y_center, 1.65],
-                'zone_enter_x': 0.55,
-                'zone_softness': 0.18,
-                'sun_sigma_u': 0.30,
-                'sun_sigma_v': 0.23,
+                'sun_anchor': [3.00, gap_y_center, 1.65],
+                'zone_enter_x': 0.24,
+                'zone_softness': 0.15,
+                'sun_sigma_u': 0.24,
+                'sun_sigma_v': 0.22,
                 'ambient_add': 4.2,
                 'active_drop': 0.72,
                 'active_recover': 0.95,
@@ -1242,17 +1291,19 @@ class Env:
                 'power_quality_bonus': 0.78,
                 'quality_penalty': 2.75,
                 'valid_bias_scale': 0.16,
-                'hazard_center': [1.60, gap_y_center, 1.5],
-                'hazard_half_y': 0.40,
+                'hazard_center': [1.82, gap_y_center, 1.5],
+                'hazard_half_y': 0.18,
                 'hazard_half_z': 1.20,
-                'hazard_softness': 0.055,
+                'hazard_softness': 0.045,
                 'hazard_focus_weight': 0.85,
                 'glare_focus_floor': 0.00,
-                'focus_enter_x': 1.02,
-                'focus_softness': 0.08,
-                'hazard_effect_boost': 0.35,
-                'decision_open_side': open_side,
-                'decision_open_side_id': -1.0 if open_side == 'left' else 1.0,
+                'focus_enter_x': 0.70,
+                'focus_softness': 0.07,
+                'hazard_effect_boost': 0.42,
+                'decision_open_side': str(open_slot['side']),
+                'decision_open_side_id': float(open_slot['id']),
+                'decision_open_slot_name': str(open_slot['name']),
+                'decision_open_slot_y': float(gap_y_center),
             }
         elif scene_name == 'specular_trap':
             voxels = self._build_specular_trap_layout()

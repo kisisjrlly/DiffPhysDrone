@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from d455_calib_utils import (
+from tools.calibrate.d455_calib_utils import (
     SUPPORTED_CALIB_SCENES,
     fit_scene_profile,
     load_csv_rows,

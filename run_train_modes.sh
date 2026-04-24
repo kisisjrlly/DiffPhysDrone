@@ -31,8 +31,9 @@ make_override_block() {
 			cat <<'EOF'
 # auto-generated mode overrides: nocamera
 --policy_depth_mode zero
---camera_control_mode learned
---sensor_grad_mode full
+--camera_control_mode fixed
+--sensor_grad_mode detached
+--no-include_camera_state_in_obs
 EOF
 			;;
 		ours)

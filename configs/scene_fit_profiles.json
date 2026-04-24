@@ -134,14 +134,14 @@
   "scene_effects": {
     "sun_glare": {
       "sun_anchor": [
-        2.8,
+        3.0,
         0.0,
         1.65
       ],
-      "zone_enter_x": 0.45,
-      "zone_softness": 0.18,
-      "sun_sigma_u": 0.30,
-      "sun_sigma_v": 0.23,
+      "zone_enter_x": 0.24,
+      "zone_softness": 0.15,
+      "sun_sigma_u": 0.24,
+      "sun_sigma_v": 0.22,
       "ambient_add": 4.2,
       "active_drop": 0.72,
       "active_recover": 0.95,
@@ -155,16 +155,18 @@
       "quality_penalty": 2.75,
       "valid_bias_scale": 0.16,
       "hazard_center": [
-        1.45,
+        1.82,
         0.0,
         1.5
       ],
-      "hazard_half_y": 0.32,
-      "hazard_half_z": 1.35,
-      "hazard_softness": 0.055,
+      "hazard_half_y": 0.18,
+      "hazard_half_z": 1.20,
+      "hazard_softness": 0.045,
       "hazard_focus_weight": 0.85,
-      "glare_focus_floor": 0.20,
-      "hazard_effect_boost": 0.35
+      "glare_focus_floor": 0.00,
+      "focus_enter_x": 0.70,
+      "focus_softness": 0.07,
+      "hazard_effect_boost": 0.42
     },
     "specular_trap": {
       "panel_center": [
