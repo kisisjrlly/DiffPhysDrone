@@ -37,16 +37,36 @@ class RerunVis:
             import rerun.blueprint as rrb  # type: ignore
 
             if "eval" in str(self.app_id).lower():
-                metrics_row = rrb.Horizontal(
+                motion_row = rrb.Horizontal(
                     rrb.TimeSeriesView(origin="/student/metrics/speed_mps", contents=["/student/metrics/speed_mps"], name="speed_mps"),
                     rrb.TimeSeriesView(origin="/student/metrics/angular_speed_rps", contents=["/student/metrics/angular_speed_rps"], name="angular_speed_rps"),
                     rrb.TimeSeriesView(origin="/student/metrics/thrust_norm_mps2", contents=["/student/metrics/thrust_norm_mps2"], name="thrust_norm_mps2"),
                     rrb.TimeSeriesView(origin="/student/metrics/accel_norm_mps2", contents=["/student/metrics/accel_norm_mps2"], name="accel_norm_mps2"),
                     rrb.TimeSeriesView(origin="/student/metrics/dist_to_goal_m", contents=["/student/metrics/dist_to_goal_m"], name="dist_to_goal_m"),
+                    name="eval_motion_metrics",
+                )
+                position_row = rrb.Horizontal(
+                    rrb.TimeSeriesView(origin="/student/metrics/pos_x_m", contents=["/student/metrics/pos_x_m"], name="pos_x_m"),
+                    rrb.TimeSeriesView(origin="/student/metrics/pos_y_m", contents=["/student/metrics/pos_y_m"], name="pos_y_m"),
+                    rrb.TimeSeriesView(origin="/student/metrics/pos_z_m", contents=["/student/metrics/pos_z_m"], name="pos_z_m"),
+                    name="eval_position_metrics",
+                )
+                scene_row = rrb.Horizontal(
+                    rrb.TimeSeriesView(origin="/student/metrics/scene_effect_mean", contents=["/student/metrics/scene_effect_mean"], name="scene_effect_mean"),
+                    rrb.TimeSeriesView(origin="/student/metrics/glare_quality_mean", contents=["/student/metrics/glare_quality_mean"], name="glare_quality_mean"),
+                    rrb.TimeSeriesView(origin="/student/metrics/glare_invalid_rate", contents=["/student/metrics/glare_invalid_rate"], name="glare_invalid_rate"),
+                    rrb.TimeSeriesView(origin="/student/metrics/sun_los_mean", contents=["/student/metrics/sun_los_mean"], name="sun_los_mean"),
+                    rrb.TimeSeriesView(origin="/student/metrics/hazard_los_mean", contents=["/student/metrics/hazard_los_mean"], name="hazard_los_mean"),
+                    name="eval_scene_metrics",
+                )
+                metrics_block = rrb.Vertical(
+                    motion_row,
+                    position_row,
+                    scene_row,
                     name="eval_metrics",
                 )
             else:
-                metrics_row = rrb.Horizontal(
+                metrics_block = rrb.Horizontal(
                     rrb.TimeSeriesView(origin="/train/loss", contents=["/train/loss"], name="loss"),
                     rrb.TimeSeriesView(origin="/train/loss_distill", contents=["/train/loss_distill"], name="loss_distill"),
                     rrb.TimeSeriesView(origin="/train/sim_fps", contents=["/train/sim_fps"], name="sim_fps"),
@@ -97,7 +117,7 @@ class RerunVis:
                         ),
                         name="top_row",
                     ),
-                    metrics_row,
+                    metrics_block,
                 ),
                 auto_layout=False,
                 auto_views=False,
@@ -869,6 +889,9 @@ class RerunVis:
                 radii=[0.012] * len(self._paths[phase]),
             ),
         )
+        rr.log(f"{phase}/metrics/pos_x_m", self._scalar_msg(float(p[0])))
+        rr.log(f"{phase}/metrics/pos_y_m", self._scalar_msg(float(p[1])))
+        rr.log(f"{phase}/metrics/pos_z_m", self._scalar_msg(float(p[2])))
 
         # Render drone physical size/orientation + camera rig pose/frustums
         self._log_drone_rig(
