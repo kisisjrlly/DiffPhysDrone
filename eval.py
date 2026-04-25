@@ -316,7 +316,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
             print(f"[eval] collision detected at step={t}, early stop this episode.")
             break
         if vis.enabled:
-            time.sleep(1.0/15)
+            time.sleep(1.0/5)
 
     min_margin_all = torch.stack(min_margin_hist).amin(dim=0)
 

@@ -100,10 +100,17 @@ def compute_diff_depth_proxies(power_seq, exposure_seq, gain_seq, speed_seq, cam
 
 def init_camera_params(env, B, device):
     """Initial diff_depth sensor-control state: power / exposure / gain."""
-    power_nominal = float(getattr(env, 'cam_power_nominal', 0.5))
-    power = torch.full((B,), power_nominal, device=device)
-    exposure = torch.full((B,), 0.5, device=device)
-    gain = torch.full((B,), 0.5, device=device)
+    if getattr(env, 'camera_control_mode', 'learned') == 'fixed':
+        power0 = float(getattr(env, 'fixed_camera_power', getattr(env, 'cam_power_nominal', 0.5)))
+        exposure0 = float(getattr(env, 'fixed_camera_exposure', 0.5))
+        gain0 = float(getattr(env, 'fixed_camera_gain', 0.5))
+    else:
+        power0 = float(getattr(env, 'cam_power_nominal', 0.5))
+        exposure0 = 0.5
+        gain0 = 0.5
+    power = torch.full((B,), min(max(power0, 0.0), 1.0), device=device)
+    exposure = torch.full((B,), min(max(exposure0, 0.0), 1.0), device=device)
+    gain = torch.full((B,), min(max(gain0, 0.0), 1.0), device=device)
     return power, exposure, gain
 
 

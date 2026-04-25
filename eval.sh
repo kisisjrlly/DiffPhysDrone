@@ -41,7 +41,8 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-20-38-15/checkpoint0014.pth} # ours
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-22-57-27/checkpoint0014.pth} # nodiff
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-21-41-35/checkpoint0014.pth} # fixed
-ckpt_path=${CKPT:-checkpoint/2026-04-24-09-31-09/checkpoint0019.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-04-25-10-51-34/checkpoint0049.pth} # nocamera
+ckpt_path=${CKPT:-checkpoint/2026-04-25-10-46-03/checkpoint0049.pth} # ours
 
 
 
