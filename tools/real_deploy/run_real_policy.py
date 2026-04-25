@@ -328,6 +328,17 @@ def resize_depth_for_policy(depth_m: np.ndarray, width: int, height: int) -> np.
     return cv2.resize(depth_m.astype(np.float32), (width, height), interpolation=cv2.INTER_NEAREST)
 
 
+def normalized_iso_gain_curve(cam_sem, gain01: float) -> float:
+    gain01 = float(min(max(gain01, 0.0), 1.0))
+    gain_lo = float(cam_sem.iso_to_gain(0.0))
+    gain_hi = float(cam_sem.iso_to_gain(1.0))
+    denom = gain_hi - gain_lo
+    if abs(denom) <= 1e-12:
+        return gain01
+    gain_sem = float(cam_sem.iso_to_gain(gain01))
+    return float(min(max((gain_sem - gain_lo) / denom, 0.0), 1.0))
+
+
 @dataclass
 class D455SettingInfo:
     power01: float
@@ -467,7 +478,7 @@ class D455Runtime:
         )) * float(self.cli_args.d455_exposure_divisor_us)
         exposure_us = min(max(exposure_us, exp_lo), exp_hi)
 
-        gain_curve = gain01 ** float(max(self.project_args.cam_iso_gain_gamma, 1e-6))
+        gain_curve = normalized_iso_gain_curve(self.cam_sem, gain01)
         gain_value = gain_lo + (gain_hi - gain_lo) * gain_curve
 
         laser_power = self._quantize(laser_power, 'laser_power')

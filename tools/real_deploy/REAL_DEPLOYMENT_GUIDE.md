@@ -432,7 +432,7 @@ python3 tools/test_d455_depth.py
 
 - 曝光映射会用项目中的 `CameraSemantics`
 - 曝光时间再乘上 `d455_exposure_divisor_us`
-- gain 会按 `cam_iso_gain_gamma` 做一个幂次映射
+- gain 会复用项目中的 `CameraSemantics.iso_to_gain()` 语义曲线，再归一化映射到 D455 工作区间
 
 这意味着当前脚本不是简单线性复现训练参数，而是尽量保持当前项目的语义一致性。
 
@@ -750,7 +750,7 @@ python3 tools/fit_d455_scene_profiles.py
 
 #### Gain 映射
 
-会根据项目中的 `cam_iso_gain_gamma` 做幂次映射，再映射回 D455 工作区间。
+会根据项目中的 `CameraSemantics.iso_to_gain()` 语义曲线做映射，再映射回 D455 工作区间。
 
 ### 为什么这样设计
 
@@ -1490,4 +1490,3 @@ artifacts/real_policy_runs/<timestamp>/
   - https://docs.px4.io/main/en/ros/external_position_estimation.html
 - PX4 Motion Capture
   - https://docs.px4.io/main/en/computer_vision/motion_capture.html
-

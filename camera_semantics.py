@@ -52,11 +52,19 @@ class CameraSemantics:
         return self.exposure_to_effective(exposure01)
 
     def iso_to_gain(self, iso01: TensorOrFloat) -> TensorOrFloat:
+        # Smooth the fractional power near zero: gamma < 1 has infinite
+        # derivative at exactly 0, which can poison full-BPTT gradients.
+        eps = 1e-4
+        gamma = float(self.iso_gain_gamma)
+        eps_gamma = eps ** gamma
+        denom = max((1.0 + eps) ** gamma - eps_gamma, 1e-12)
         if isinstance(iso01, torch.Tensor):
             iv = iso01.clamp(0.0, 1.0)
-            return self.iso_gain_base + self.iso_gain_scale * (iv ** self.iso_gain_gamma)
+            shaped = ((iv + eps).pow(gamma) - eps_gamma) / denom
+            return self.iso_gain_base + self.iso_gain_scale * shaped
         iv = min(max(float(iso01), 0.0), 1.0)
-        return self.iso_gain_base + self.iso_gain_scale * (iv ** self.iso_gain_gamma)
+        shaped = (((iv + eps) ** gamma) - eps_gamma) / denom
+        return self.iso_gain_base + self.iso_gain_scale * shaped
 
 
 def from_args(args) -> CameraSemantics:
