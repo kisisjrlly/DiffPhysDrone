@@ -99,20 +99,15 @@ def active_loss_term_specs(args, distill_coef_iter=None):
     add('obj_avoidance', 'loss_obj_avoidance', args.coef_obj_avoidance)
     add('d_acc', 'loss_d_acc', args.coef_d_acc)
     add('d_jerk', 'loss_d_jerk', args.coef_d_jerk)
-    add('v_pred', 'loss_v_pred', args.coef_v_pred)
     add('collide', 'loss_collide', args.coef_collide)
-    add('ground_affinity', 'loss_ground_affinity', args.coef_ground_affinity)
-    add('tilt', 'loss_tilt', args.coef_tilt)
 
     if getattr(args, 'camera_control_mode', 'learned') != 'fixed':
         add('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth)
         add('power_reg', 'loss_power_reg', args.coef_power_reg)
-        add('cam_range', 'loss_cam_range', args.coef_cam_range)
     add('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power)
     add('diff_depth_blur', 'loss_diff_depth_blur', args.coef_diff_depth_blur)
     add('diff_depth_noise', 'loss_diff_depth_noise', args.coef_diff_depth_noise)
     add('diff_depth_fill', 'loss_diff_depth_fill', args.coef_diff_depth_fill)
-    add('sun_glare_local_quality', 'loss_sun_glare_local_quality', args.coef_sun_glare_local_quality)
 
     if getattr(args, 'enable_teacher_student_training', False) and distill_coef_iter is not None:
         add('distill', 'loss_distill', distill_coef_iter)

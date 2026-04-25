@@ -72,6 +72,9 @@ def _latest_results_dir(results_root: Path) -> Path:
 def _compute_t_entry(trace_rows: List[dict]) -> int | None:
     if not trace_rows:
         return None
+    for row in trace_rows:
+        if _to_float(row.get("scene_effect_mean", 0.0)) > 0.02:
+            return int(row["step_idx"])
     zone_enter_x = _to_float(trace_rows[0].get("zone_enter_x", 0.0))
     for row in trace_rows:
         if _to_float(row.get("x", -1e9)) > zone_enter_x:

@@ -109,6 +109,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
     fill_rate_soft_hist = []
     goal_dist_hist = []
     x_hist = []
+    scene_effect_hist = []
     glare_quality_hist = []
     glare_invalid_hist = []
     collided = False
@@ -204,6 +205,8 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         goal_dist_hist.append((env.p_target - env.p).norm(2, -1))
         x_hist.append(env.p[:, 0].detach())
         scene_debug_for_metrics = env.export_last_diff_depth_debug(0)
+        if 'scene_effect_mean' in scene_debug_for_metrics.get('scalars', {}):
+            scene_effect_hist.append(float(scene_debug_for_metrics['scalars']['scene_effect_mean']))
         if 'glare_quality_mean' in scene_debug_for_metrics.get('scalars', {}):
             glare_quality_hist.append(float(scene_debug_for_metrics['scalars']['glare_quality_mean']))
         if 'glare_invalid_rate' in scene_debug_for_metrics.get('scalars', {}):
@@ -362,14 +365,12 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
 
     stop_before_glare = 0.0
     if getattr(env, 'current_scene_name', None) == 'sun_glare' and x_hist:
-        x_all = torch.stack(x_hist)
-        max_x = float(x_all.max().detach().cpu().item())
-        zone_enter_x = float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0))
         tail_k = min(10, len(speed_hist))
         tail_speed = 0.0
         if tail_k > 0:
             tail_speed = float(torch.stack(speed_hist[-tail_k:]).mean().detach().cpu().item())
-        stop_before_glare = 1.0 if (max_x < zone_enter_x + 0.05 and tail_speed < 0.15) else 0.0
+        entered_glare = any(v > 0.02 for v in scene_effect_hist)
+        stop_before_glare = 1.0 if (not entered_glare and tail_speed < 0.15) else 0.0
 
     metrics = {
         'scene_name': str(getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', scene_name))),

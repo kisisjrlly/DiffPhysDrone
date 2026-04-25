@@ -96,9 +96,7 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
                           camera_semantics=None,
                           power_nominal: float = 0.5,
                           power_penalty_threshold: float = 0.5,
-                          power_reg_deadband: float = 0.0,
-                          sun_glare_local_quality_seq=None,
-                          sun_glare_local_quality_target: float = 0.55):
+                          power_reg_deadband: float = 0.0):
     """计算 diff_depth-only 分支的相机控制损失。"""
     device = _infer_loss_device(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq)
     power_nominal = float(power_nominal)
@@ -107,12 +105,10 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
     result = {
         'loss_cam_smooth': torch.zeros((), device=device),
         'loss_power_reg': torch.zeros((), device=device),
-        'loss_cam_range': torch.zeros((), device=device),
         'loss_diff_depth_power': torch.zeros((), device=device),
         'loss_diff_depth_blur': torch.zeros((), device=device),
         'loss_diff_depth_noise': torch.zeros((), device=device),
         'loss_diff_depth_fill': torch.zeros((), device=device),
-        'loss_sun_glare_local_quality': torch.zeros((), device=device),
     }
 
     # 相机平滑度与正则化
@@ -122,8 +118,6 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
         # 允许 power 在默认档位附近有一段自由调节区，否则策略很难学到“必要时升功率”
         power_delta = (cam_hist[:, :, 0] - power_nominal).abs()
         result['loss_power_reg'] = F.relu(power_delta - power_reg_deadband).pow(2).mean()
-        # loss_cam_range 只惩罚 exposure(1) 和 gain(2) 偏离中心，避免与 loss_power_reg 重复惩罚 power
-        result['loss_cam_range'] = (cam_hist[:, :, 1:] - 0.5).pow(2).mean()
 
     # diff_depth 光学损失
     if exposure_seq is not None:
@@ -138,9 +132,6 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
     if fill_rate_seq is not None:
         fill_gap = F.relu(float(min_fill_rate) - fill_rate_seq)
         result['loss_diff_depth_fill'] = fill_gap.pow(2).mean()
-    if sun_glare_local_quality_seq is not None:
-        glare_gap = F.relu(float(sun_glare_local_quality_target) - sun_glare_local_quality_seq)
-        result['loss_sun_glare_local_quality'] = glare_gap.pow(2).mean()
 
     return result
 
@@ -196,7 +187,6 @@ def compute_distill_loss(raw_act_history, raw_intent_history, raw_cam_history,
 
 def aggregate_loss(physics_losses, camera_losses, args,
                    loss_distill=None, distill_coef_iter=None,
-                   loss_v_pred=None, loss_tilt=None,
                    chunk_count=None):
     """按系数加权汇总所有损失项，返回总损失与各分量 dict。
 
@@ -206,16 +196,10 @@ def aggregate_loss(physics_losses, camera_losses, args,
         args: 命令行参数
         loss_distill: 蒸馏损失 (optional)
         distill_coef_iter: 当前迭代的蒸馏系数 (optional)
-        loss_v_pred: 速度预测辅助损失 (optional, Teacher 阶段无此项)
-        loss_tilt: 侧倾损失 (optional)
         chunk_count: 如果非 None，则按 chunk 数归一化 (Teacher TBPTT 需要)
     """
     device = physics_losses['loss_v'].device
     zero = torch.zeros((), device=device)
-    if loss_v_pred is None:
-        loss_v_pred = zero
-    if loss_tilt is None:
-        loss_tilt = zero
     if loss_distill is None:
         loss_distill = zero
 
@@ -225,17 +209,12 @@ def aggregate_loss(physics_losses, camera_losses, args,
         + args.coef_d_acc * physics_losses['loss_d_acc']
         + args.coef_d_jerk * physics_losses['loss_d_jerk']
         + args.coef_collide * physics_losses['loss_collide']
-        + args.coef_ground_affinity * physics_losses['loss_ground']
-        + args.coef_v_pred * loss_v_pred
         + args.coef_cam_smooth * camera_losses['loss_cam_smooth']
         + args.coef_power_reg * camera_losses['loss_power_reg']
-        + args.coef_cam_range * camera_losses['loss_cam_range']
-        + args.coef_tilt * loss_tilt
         + args.coef_diff_depth_power * camera_losses['loss_diff_depth_power']
         + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
         + args.coef_diff_depth_noise * camera_losses['loss_diff_depth_noise']
         + args.coef_diff_depth_fill * camera_losses['loss_diff_depth_fill']
-        + args.coef_sun_glare_local_quality * camera_losses['loss_sun_glare_local_quality']
     )
 
     if args.enable_teacher_student_training and distill_coef_iter is not None:
@@ -251,17 +230,12 @@ def aggregate_loss(physics_losses, camera_losses, args,
         'loss_d_jerk': physics_losses['loss_d_jerk'],
         'loss_obj_avoidance': physics_losses['loss_avoid'],
         'loss_collide': physics_losses['loss_collide'],
-        'loss_ground_affinity': physics_losses['loss_ground'],
-        'loss_v_pred': loss_v_pred,
         'loss_cam_smooth': camera_losses['loss_cam_smooth'],
         'loss_power_reg': camera_losses['loss_power_reg'],
-        'loss_cam_range': camera_losses['loss_cam_range'],
-        'loss_tilt': loss_tilt,
         'loss_diff_depth_power': camera_losses['loss_diff_depth_power'],
         'loss_diff_depth_blur': camera_losses['loss_diff_depth_blur'],
         'loss_diff_depth_noise': camera_losses['loss_diff_depth_noise'],
         'loss_diff_depth_fill': camera_losses['loss_diff_depth_fill'],
-        'loss_sun_glare_local_quality': camera_losses['loss_sun_glare_local_quality'],
         'loss_distill': loss_distill,
     }
 

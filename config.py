@@ -37,12 +37,12 @@ def build_parser():
     parser.add_argument('--coef_v', type=float, default=1.0, help='速度跟踪损失权重')
     parser.add_argument('--loss_v_window', type=int, default=30,
                         help='速度跟踪损失的时间平均窗口长度（单位：step）；越大越平滑、越小越灵敏')
-    parser.add_argument('--coef_v_pred', type=float, default=2.0, help='速度预测 MSE 损失权重')
+    parser.add_argument('--coef_v_pred', type=float, default=2.0, help='[deprecated/ignored] 旧版速度预测 MSE 损失权重')
     parser.add_argument('--coef_collide', type=float, default=2.0, help='碰撞惩罚权重')
     parser.add_argument('--coef_obj_avoidance', type=float, default=1.5, help='避障安全距离惩罚权重')
     parser.add_argument('--coef_d_acc', type=float, default=0.01, help='控制加速度正则化权重')
     parser.add_argument('--coef_d_jerk', type=float, default=0.001, help='控制 Jerk 正则化权重')
-    parser.add_argument('--coef_ground_affinity', type=float, default=0., help='贴地飞行偏好权重')
+    parser.add_argument('--coef_ground_affinity', type=float, default=0., help='[deprecated/ignored] 旧版贴地飞行偏好权重')
 
     # --- 训练超参数 ---
     parser.add_argument('--lr', type=float, default=1e-3, help='学习率')
@@ -83,7 +83,7 @@ def build_parser():
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
-    parser.add_argument('--coef_tilt', type=float, default=0.0, help='侧倾对齐损失权重')
+    parser.add_argument('--coef_tilt', type=float, default=0.0, help='[deprecated/ignored] 旧版侧倾对齐损失权重')
 
     # --- 可微相机与主动感知 ---
     parser.add_argument('--include_camera_state_in_obs', default=False, action=argparse.BooleanOptionalAction,
@@ -97,7 +97,7 @@ def build_parser():
                         help='首个相机控制通道偏离中心值的正则化权重（diff_depth 分支中对应 power）')
     parser.add_argument('--cam_power_reg_deadband', type=float, default=0.0,
                         help='power 相对中性值的免罚区间半宽；在该 deadband 内允许策略按环境调节 power')
-    parser.add_argument('--coef_cam_range', type=float, default=0.001, help='相机参数范围正则化权重')
+    parser.add_argument('--coef_cam_range', type=float, default=0.001, help='[deprecated/ignored] 旧版 exposure/gain 范围正则化权重')
     parser.add_argument('--cam_power_nominal', type=float, default=0.5,
                         help='diff_depth power 的中性/默认参考值；建议按真实 D455 默认 laser_power/max 对齐')
     parser.add_argument('--cam_power_penalty_threshold', type=float, default=0.5,
@@ -163,9 +163,9 @@ def build_parser():
     parser.add_argument('--diff_depth_min_fill_rate', type=float, default=0.18,
                         help='深度 fill rate 的最低目标阈值；低于它时会触发 blackout penalty')
     parser.add_argument('--coef_sun_glare_local_quality', type=float, default=0.0,
-                        help='sun_glare 场景局部炫光区域质量恢复损失权重；用于鼓励 power/exposure 联合调节')
+                        help='[deprecated/ignored] 旧版 sun_glare 局部质量恢复损失权重')
     parser.add_argument('--sun_glare_local_quality_target', type=float, default=0.55,
-                        help='sun_glare 局部炫光区域的目标 quality 均值')
+                        help='[deprecated/ignored] 旧版 sun_glare 局部质量目标值')
     parser.add_argument('--use_dmpc', default=False, action='store_true')
     parser.add_argument('--policy_output_intent', default=False, action='store_true')
     parser.add_argument('--inject_depth_into_lqr', default=False, action='store_true')
@@ -375,10 +375,24 @@ def validate_args(args):
         raise ValueError('--fixed_camera_gain 必须在 [0,1] 内')
     if args.cam_power_reg_deadband < 0.0 or args.cam_power_reg_deadband > 1.0:
         raise ValueError('--cam_power_reg_deadband 必须在 [0,1] 内')
-    if args.sun_glare_local_quality_target < 0.0 or args.sun_glare_local_quality_target > 1.0:
-        raise ValueError('--sun_glare_local_quality_target 必须在 [0,1] 内')
     if args.cam_model_randomize_scale < 0.0 or args.cam_model_randomize_scale > 0.5:
         raise ValueError('--cam_model_randomize_scale 建议在 [0, 0.5] 内')
+    deprecated_loss_args = []
+    if abs(float(getattr(args, 'coef_v_pred', 0.0))) > 1e-12:
+        deprecated_loss_args.append('--coef_v_pred')
+    if abs(float(getattr(args, 'coef_ground_affinity', 0.0))) > 1e-12:
+        deprecated_loss_args.append('--coef_ground_affinity')
+    if abs(float(getattr(args, 'coef_tilt', 0.0))) > 1e-12:
+        deprecated_loss_args.append('--coef_tilt')
+    if abs(float(getattr(args, 'coef_cam_range', 0.0))) > 1e-12:
+        deprecated_loss_args.append('--coef_cam_range')
+    if abs(float(getattr(args, 'coef_sun_glare_local_quality', 0.0))) > 1e-12:
+        deprecated_loss_args.append('--coef_sun_glare_local_quality')
+    if abs(float(getattr(args, 'sun_glare_local_quality_target', 0.55)) - 0.55) > 1e-12:
+        deprecated_loss_args.append('--sun_glare_local_quality_target')
+    if deprecated_loss_args:
+        joined = ', '.join(deprecated_loss_args)
+        print(f"[warn] 以下旧 loss 参数当前版本已不参与训练，将被忽略: {joined}")
     if not getattr(args, 'scenarios', None):
         raise ValueError('--scenarios 至少需要一个场景')
     if not getattr(args, 'sun_glare_levels', None):

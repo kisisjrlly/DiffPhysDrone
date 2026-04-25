@@ -289,12 +289,8 @@ L_total
 + coef_d_acc * loss_d_acc
 + coef_d_jerk * loss_d_jerk
 + coef_collide * loss_collide
-+ coef_ground_affinity * loss_ground_affinity
-+ coef_v_pred * loss_v_pred
 + coef_cam_smooth * loss_cam_smooth
 + coef_power_reg * loss_power_reg
-+ coef_cam_range * loss_cam_range
-+ coef_tilt * loss_tilt
 + coef_diff_depth_power * loss_diff_depth_power
 + coef_diff_depth_blur * loss_diff_depth_blur
 + coef_diff_depth_noise * loss_diff_depth_noise
@@ -308,6 +304,11 @@ L_total = distill_coef_iter * loss_distill + student_physics_coef * L_base
 ```
 
 当前你强调“不启用 teacher-student / tbptt / dmpc”，那么主要关心的就是上面这组基础 loss。
+
+说明：
+
+- 当前主线代码已经不再把 `loss_v_pred / loss_ground_affinity / loss_cam_range / loss_tilt / loss_sun_glare_local_quality` 计入训练总损失。
+- 其中 `sun_glare` 相关的局部质量量现在只保留为诊断统计，不再作为 reward/loss shaping。
 
 ---
 
@@ -698,7 +699,6 @@ fill_src = depth_quality if depth_quality is not None else depth_obs.detach()
 - `loss_d_jerk`
 - `loss_cam_smooth`
 - `loss_power_reg`
-- `loss_cam_range`
 - `loss_diff_depth_power`
 - `loss_diff_depth_blur`
 - `loss_diff_depth_noise`

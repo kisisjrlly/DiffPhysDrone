@@ -187,6 +187,9 @@ def _condition_label(scene_name: str, glare_level: str | None) -> str:
 def _compute_t_entry(trace_rows: list[dict]) -> int | None:
     if not trace_rows:
         return None
+    for row in trace_rows:
+        if float(row.get("scene_effect_mean", 0.0)) > 0.02:
+            return int(row["step_idx"])
     zone_enter_x = float(trace_rows[0].get("zone_enter_x", 0.0))
     for row in trace_rows:
         if float(row.get("x", -1e9)) > zone_enter_x:

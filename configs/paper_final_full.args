@@ -43,7 +43,6 @@
 # --ellipsoid_collision
 --drone_a 0.15
 --drone_c 0.075
---coef_tilt 0.0
 
 # ----------------- Depth input -----------------
 --depth_width 64
@@ -63,12 +62,10 @@
 # ----------------- Core losses -----------------
 --coef_v 10.5
 --loss_v_window 12
---coef_v_pred 0.0
 --coef_d_acc 0.1
 --coef_d_jerk 0.2
 --coef_obj_avoidance 0.5
 --coef_collide 10.0
---coef_ground_affinity 0.0
 
 # ----------------- Active sensing -----------------
 --include_camera_state_in_obs
@@ -77,7 +74,6 @@
 --coef_cam_smooth 100
 --coef_power_reg 100
 --cam_power_reg_deadband 0.18
---coef_cam_range 1
 
 --cam_realism_preset low
 --cam_enable_specular
@@ -105,8 +101,6 @@
 --coef_diff_depth_noise 5
 --coef_diff_depth_fill 5.0
 --diff_depth_min_fill_rate 0.25
---coef_sun_glare_local_quality 10.0
---sun_glare_local_quality_target 0.20
 
 # ----------------- Teacher-student -----------------
 # --enable_teacher_student_training

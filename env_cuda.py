@@ -475,7 +475,6 @@ class Env:
                 'power_quality_bonus_mul': 0.68,
                 'quality_penalty_mul': 0.58,
                 'valid_bias_scale_mul': 0.70,
-                'hazard_effect_boost_mul': 0.85,
                 'sun_sigma_u_mul': 0.92,
                 'sun_sigma_v_mul': 0.92,
             },
@@ -493,7 +492,6 @@ class Env:
                 'power_quality_bonus_mul': 0.84,
                 'quality_penalty_mul': 0.82,
                 'valid_bias_scale_mul': 0.86,
-                'hazard_effect_boost_mul': 0.94,
                 'sun_sigma_u_mul': 0.97,
                 'sun_sigma_v_mul': 0.97,
             },
@@ -511,7 +509,6 @@ class Env:
                 'power_quality_bonus_mul': 1.00,
                 'quality_penalty_mul': 1.00,
                 'valid_bias_scale_mul': 1.00,
-                'hazard_effect_boost_mul': 1.00,
                 'sun_sigma_u_mul': 1.00,
                 'sun_sigma_v_mul': 1.00,
             },
@@ -529,7 +526,6 @@ class Env:
                 'power_quality_bonus_mul': 1.18,
                 'quality_penalty_mul': 1.24,
                 'valid_bias_scale_mul': 1.16,
-                'hazard_effect_boost_mul': 1.08,
                 'sun_sigma_u_mul': 1.06,
                 'sun_sigma_v_mul': 1.06,
             },
@@ -549,7 +545,6 @@ class Env:
             'power_quality_bonus': 'power_quality_bonus_mul',
             'quality_penalty': 'quality_penalty_mul',
             'valid_bias_scale': 'valid_bias_scale_mul',
-            'hazard_effect_boost': 'hazard_effect_boost_mul',
             'sun_sigma_u': 'sun_sigma_u_mul',
             'sun_sigma_v': 'sun_sigma_v_mul',
         }
@@ -1029,13 +1024,9 @@ class Env:
                 fx.get('sun_sigma_v', 0.24),
                 dtype,
             )
-            zone_gate = torch.sigmoid(
-                (self.p[:, 0].to(dtype) - float(fx.get('zone_enter_x', 1.8))) /
-                float(fx.get('zone_softness', 0.35))
-            )[:, None, None]
             strength = self._require_finite_tensor(
                 'sun_glare/strength',
-                sun_mask * zone_gate * visible[:, None, None] * sun_los[:, None, None],
+                sun_mask * visible[:, None, None] * sun_los[:, None, None],
                 scene_name,
             )
 
@@ -1062,22 +1053,7 @@ class Env:
             else:
                 hazard_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
 
-            # 全局强光负责制造逆光退化；局部 mask 负责把训练/评测指标聚焦到
-            # 逆光区中必须看清的关键障碍，而不是整幅图平均值。
-            focus_floor = float(fx.get('glare_focus_floor', 0.20))
-            focus_weight = float(fx.get('hazard_focus_weight', 0.85))
-            focus_gate = torch.sigmoid(
-                (self.p[:, 0].to(dtype) - float(fx.get('focus_enter_x', fx.get('zone_enter_x', 1.8)))) /
-                float(fx.get('focus_softness', 0.10))
-            )[:, None, None]
-            local_focus = strength * focus_gate * (focus_floor + focus_weight * hazard_mask).clamp(0.0, 1.0)
-            effect_strength = self._require_finite_tensor(
-                'sun_glare/effect_strength',
-                strength * (
-                    1.0 + float(fx.get('hazard_effect_boost', 0.35)) * hazard_mask * focus_gate
-                ),
-                scene_name,
-            )
+            effect_strength = strength
 
             glare_penalty = self._require_finite_tensor(
                 'sun_glare/glare_penalty',
@@ -1103,16 +1079,15 @@ class Env:
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.8)) * glare_penalty
             adj['quality_add'] = adj['quality_add'] + float(fx.get('power_quality_bonus', 0.38)) * power_rescue
             adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * effect_strength
-            adj['debug_scene_mask'] = local_focus
+            adj['debug_scene_mask'] = hazard_mask
             adj['debug_effect_map'] = glare_penalty.clamp(0.0, 1.0)
             adj['debug_scalars'] = {
-                'scene_mask_mean': self._spatial_mean(local_focus),
+                'scene_mask_mean': self._spatial_mean(hazard_mask),
                 'scene_effect_mean': self._spatial_mean(glare_penalty),
                 'sun_mask_mean': self._spatial_mean(strength),
                 'hazard_mask_mean': self._spatial_mean(hazard_mask),
                 'sun_los_mean': sun_los.detach(),
                 'hazard_los_mean': hazard_los.detach(),
-                'focus_gate_mean': self._spatial_mean(focus_gate),
                 'decision_open_side_id': torch.full(
                     (self.batch_size,),
                     float(fx.get('decision_open_side_id', 0.0)),
@@ -1275,8 +1250,6 @@ class Env:
             voxels = self._build_sun_glare_voxel_layout(gap_y_center)
             effects = {
                 'sun_anchor': [3.00, gap_y_center, 1.65],
-                'zone_enter_x': 0.24,
-                'zone_softness': 0.15,
                 'sun_sigma_u': 0.24,
                 'sun_sigma_v': 0.22,
                 'ambient_add': 4.2,
@@ -1295,11 +1268,6 @@ class Env:
                 'hazard_half_y': 0.18,
                 'hazard_half_z': 1.20,
                 'hazard_softness': 0.045,
-                'hazard_focus_weight': 0.85,
-                'glare_focus_floor': 0.00,
-                'focus_enter_x': 0.70,
-                'focus_softness': 0.07,
-                'hazard_effect_boost': 0.42,
                 'decision_open_side': str(open_slot['side']),
                 'decision_open_side_id': float(open_slot['id']),
                 'decision_open_slot_name': str(open_slot['name']),
@@ -1695,8 +1663,6 @@ class Env:
             glare_mass = scene_mask.sum(dim=(-2, -1)).clamp_min(1e-6)
             glare_quality = (quality * scene_mask).sum(dim=(-2, -1)) / glare_mass
             glare_invalid = (invalid_mask * scene_mask).sum(dim=(-2, -1)) / glare_mass
-            train_aux['sun_glare_local_quality'] = glare_quality
-            train_aux['sun_glare_local_invalid_rate'] = glare_invalid
             debug_scalars['glare_quality_mean'] = glare_quality.detach()
             debug_scalars['glare_invalid_rate'] = glare_invalid.detach()
         debug_scalars.update({
