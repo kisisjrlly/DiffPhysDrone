@@ -15,6 +15,7 @@ SUPPORTED_SCENARIOS = (
 )
 OPENING_SCENES = {'vantablack_gap', 'dark_morphing'}
 SUPPORTED_SUN_GLARE_LEVELS = ('l0', 'l1', 'l2', 'l3')
+SUPPORTED_SUN_GLARE_SLOTS = ('far_left', 'left', 'right', 'far_right')
 
 
 def build_parser():
@@ -80,6 +81,8 @@ def build_parser():
                         help='sun_glare 场景允许采样的强度档位；训练时随机采样，评测时若未指定固定档位则按该列表轮转/取首项')
     parser.add_argument('--sun_glare_eval_level', type=str, default=None,
                         help='可选：评估时固定使用某一档 sun_glare 强度，例如 l2；训练阶段忽略该参数')
+    parser.add_argument('--sun_glare_eval_slot', type=str, default=None,
+                        help='可选：评估时固定使用某个 sun_glare 开口，例如 far_left/left/right/far_right；训练阶段忽略该参数')
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
@@ -88,8 +91,9 @@ def build_parser():
     # --- 可微相机与主动感知 ---
     parser.add_argument('--include_camera_state_in_obs', default=False, action=argparse.BooleanOptionalAction,
                         help='是否将相机状态拼接到观测向量')
-    parser.add_argument('--camera_control_mode', type=str, default='learned', choices=['learned', 'fixed'],
-                        help='相机控制模式：learned 为策略输出 power/exposure/gain，fixed 为固定相机基线')
+    parser.add_argument('--camera_control_mode', type=str, default='learned',
+                        choices=['learned', 'fixed', 'fixed_random_static'],
+                        help='相机控制模式：learned 为策略输出；fixed 为固定相机；fixed_random_static 为每个 episode 随机一组静态相机参数')
     parser.add_argument('--sensor_grad_mode', type=str, default='full', choices=['full', 'detached'],
                         help='传感器梯度模式：full 为可微主动感知，detached 为不可微主动感知基线')
     parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
@@ -108,6 +112,18 @@ def build_parser():
                         help='fixed camera 基线的归一化 exposure')
     parser.add_argument('--fixed_camera_gain', type=float, default=0.5,
                         help='fixed camera 基线的归一化 gain')
+    parser.add_argument('--fixed_random_power_min', type=float, default=0.55,
+                        help='fixed_random_static 每个 episode 采样 power 的下界')
+    parser.add_argument('--fixed_random_power_max', type=float, default=0.90,
+                        help='fixed_random_static 每个 episode 采样 power 的上界')
+    parser.add_argument('--fixed_random_exposure_min', type=float, default=0.16,
+                        help='fixed_random_static 每个 episode 采样 exposure 的下界')
+    parser.add_argument('--fixed_random_exposure_max', type=float, default=0.60,
+                        help='fixed_random_static 每个 episode 采样 exposure 的上界')
+    parser.add_argument('--fixed_random_gain_min', type=float, default=0.02,
+                        help='fixed_random_static 每个 episode 采样 gain 的下界')
+    parser.add_argument('--fixed_random_gain_max', type=float, default=0.42,
+                        help='fixed_random_static 每个 episode 采样 gain 的上界')
     parser.add_argument('--wandb_disabled', default=False, action='store_true', help='禁用 wandb 日志记录')
     parser.add_argument('--wandb_log_raw_loss_terms', default=False, action=argparse.BooleanOptionalAction,
                         help='是否把未加权的各 loss 分量单独写入 wandb；默认关闭以避免与 loss_contrib 重复')
@@ -143,6 +159,36 @@ def build_parser():
                         help='ISO 增益幂指数')
     parser.add_argument('--cam_shot_noise_base', type=float, default=0.03,
                         help='Shot noise 基础系数')
+
+    # --- Sun glare harder randomization ---
+    parser.add_argument('--sun_glare_randomize', default=False, action=argparse.BooleanOptionalAction,
+                        help='训练/评估 sun_glare 时启用光照、局部 glare 和几何的 harder 随机化')
+    parser.add_argument('--sun_glare_ambient_min', type=float, default=0.06)
+    parser.add_argument('--sun_glare_ambient_max', type=float, default=0.28)
+    parser.add_argument('--sun_glare_dir_min', type=float, default=0.25)
+    parser.add_argument('--sun_glare_dir_max', type=float, default=1.05)
+    parser.add_argument('--sun_glare_airlight_min', type=float, default=0.06)
+    parser.add_argument('--sun_glare_airlight_max', type=float, default=0.34)
+    parser.add_argument('--sun_glare_fog_beta_min', type=float, default=0.006)
+    parser.add_argument('--sun_glare_fog_beta_max', type=float, default=0.045)
+    parser.add_argument('--sun_glare_mat_obstacle_min', type=float, default=0.42)
+    parser.add_argument('--sun_glare_mat_obstacle_max', type=float, default=0.82)
+    parser.add_argument('--sun_glare_mat_spec_min', type=float, default=0.02)
+    parser.add_argument('--sun_glare_mat_spec_max', type=float, default=0.16)
+    parser.add_argument('--sun_glare_sun_sigma_u_min', type=float, default=0.18)
+    parser.add_argument('--sun_glare_sun_sigma_u_max', type=float, default=0.34)
+    parser.add_argument('--sun_glare_sun_sigma_v_min', type=float, default=0.16)
+    parser.add_argument('--sun_glare_sun_sigma_v_max', type=float, default=0.30)
+    parser.add_argument('--sun_glare_sun_y_jitter', type=float, default=0.18)
+    parser.add_argument('--sun_glare_sun_z_jitter', type=float, default=0.12)
+    parser.add_argument('--sun_glare_occluder_x_jitter', type=float, default=0.10)
+    parser.add_argument('--sun_glare_occluder_half_y_min', type=float, default=0.36)
+    parser.add_argument('--sun_glare_occluder_half_y_max', type=float, default=0.50)
+    parser.add_argument('--sun_glare_divider_x_jitter', type=float, default=0.08)
+    parser.add_argument('--sun_glare_gate_x_jitter', type=float, default=0.08)
+    parser.add_argument('--sun_glare_gap_half_w_min', type=float, default=0.16)
+    parser.add_argument('--sun_glare_gap_half_w_max', type=float, default=0.24)
+    parser.add_argument('--sun_glare_start_y_jitter', type=float, default=0.18)
 
     # ===== Camera loss + Teacher-Student training =====
     parser.add_argument('--enable_teacher_student_training', default=False, action='store_true')
@@ -283,6 +329,29 @@ def canonicalize_sun_glare_level(item):
     return aliases.get(token, token)
 
 
+def canonicalize_sun_glare_slot(item):
+    if item is None:
+        return None
+    token = str(item).strip().lower().replace('-', '_')
+    aliases = {
+        'fl': 'far_left',
+        'farleft': 'far_left',
+        'far_left': 'far_left',
+        '-1.5': 'far_left',
+        'l': 'left',
+        'left': 'left',
+        '-0.5': 'left',
+        'r': 'right',
+        'right': 'right',
+        '0.5': 'right',
+        'fr': 'far_right',
+        'farright': 'far_right',
+        'far_right': 'far_right',
+        '1.5': 'far_right',
+    }
+    return aliases.get(token, token)
+
+
 def parse_sun_glare_levels(items):
     if items is None:
         return ['l0', 'l1', 'l2', 'l3']
@@ -373,6 +442,41 @@ def validate_args(args):
         raise ValueError('--fixed_camera_exposure 必须在 [0,1] 内')
     if not (0.0 <= args.fixed_camera_gain <= 1.0):
         raise ValueError('--fixed_camera_gain 必须在 [0,1] 内')
+    for lo_name, hi_name in [
+        ('fixed_random_power_min', 'fixed_random_power_max'),
+        ('fixed_random_exposure_min', 'fixed_random_exposure_max'),
+        ('fixed_random_gain_min', 'fixed_random_gain_max'),
+    ]:
+        lo = float(getattr(args, lo_name))
+        hi = float(getattr(args, hi_name))
+        if not (0.0 <= lo <= hi <= 1.0):
+            raise ValueError(f'--{lo_name}/--{hi_name} 必须满足 0 <= min <= max <= 1')
+    for lo_name, hi_name in [
+        ('sun_glare_ambient_min', 'sun_glare_ambient_max'),
+        ('sun_glare_dir_min', 'sun_glare_dir_max'),
+        ('sun_glare_airlight_min', 'sun_glare_airlight_max'),
+        ('sun_glare_fog_beta_min', 'sun_glare_fog_beta_max'),
+        ('sun_glare_mat_obstacle_min', 'sun_glare_mat_obstacle_max'),
+        ('sun_glare_mat_spec_min', 'sun_glare_mat_spec_max'),
+        ('sun_glare_sun_sigma_u_min', 'sun_glare_sun_sigma_u_max'),
+        ('sun_glare_sun_sigma_v_min', 'sun_glare_sun_sigma_v_max'),
+        ('sun_glare_occluder_half_y_min', 'sun_glare_occluder_half_y_max'),
+        ('sun_glare_gap_half_w_min', 'sun_glare_gap_half_w_max'),
+    ]:
+        lo = float(getattr(args, lo_name))
+        hi = float(getattr(args, hi_name))
+        if lo < 0.0 or hi < lo:
+            raise ValueError(f'--{lo_name}/--{hi_name} 必须满足 0 <= min <= max')
+    for name in [
+        'sun_glare_sun_y_jitter',
+        'sun_glare_sun_z_jitter',
+        'sun_glare_occluder_x_jitter',
+        'sun_glare_divider_x_jitter',
+        'sun_glare_gate_x_jitter',
+        'sun_glare_start_y_jitter',
+    ]:
+        if float(getattr(args, name)) < 0.0:
+            raise ValueError(f'--{name} 必须 >= 0')
     if args.cam_power_reg_deadband < 0.0 or args.cam_power_reg_deadband > 1.0:
         raise ValueError('--cam_power_reg_deadband 必须在 [0,1] 内')
     if args.cam_model_randomize_scale < 0.0 or args.cam_model_randomize_scale > 0.5:
@@ -404,6 +508,13 @@ def validate_args(args):
                 f"--sun_glare_eval_level 不支持 '{args.sun_glare_eval_level}'，"
                 f"仅支持: {list(SUPPORTED_SUN_GLARE_LEVELS)}"
             )
+    if getattr(args, 'sun_glare_eval_slot', None) is not None:
+        args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
+        if args.sun_glare_eval_slot not in SUPPORTED_SUN_GLARE_SLOTS:
+            raise ValueError(
+                f"--sun_glare_eval_slot 不支持 '{args.sun_glare_eval_slot}'，"
+                f"仅支持: {list(SUPPORTED_SUN_GLARE_SLOTS)}"
+            )
 
 
 def print_runtime_mode(args):
@@ -430,6 +541,7 @@ def print_runtime_mode(args):
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_levels          : {args.sun_glare_levels}")
     print(f"sun_glare_eval_level      : {args.sun_glare_eval_level}")
+    print(f"sun_glare_eval_slot       : {getattr(args, 'sun_glare_eval_slot', None)}")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print("environment               : fixed_small_map_with_perception_scenarios")
@@ -446,6 +558,8 @@ def parse_args():
     args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
+    if getattr(args, 'sun_glare_eval_slot', None) is not None:
+        args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
     return args

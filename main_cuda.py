@@ -6,6 +6,7 @@ This file only wires together: arg parsing, object creation, and the training ca
 """
 import os
 import time
+import faulthandler
 
 import torch
 from torch.cuda.amp import GradScaler
@@ -20,6 +21,8 @@ from model import Model
 from rerun_vis import RerunVis
 from train_utils import build_env, estimate_optimizer_steps
 from trainer import train
+
+faulthandler.enable(all_threads=True)
 
 
 def _print_cuda_failure_summary(args, device, exc: Exception):

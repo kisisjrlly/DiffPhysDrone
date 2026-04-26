@@ -100,10 +100,19 @@ def compute_diff_depth_proxies(power_seq, exposure_seq, gain_seq, speed_seq, cam
 
 def init_camera_params(env, B, device):
     """Initial diff_depth sensor-control state: power / exposure / gain."""
-    if getattr(env, 'camera_control_mode', 'learned') == 'fixed':
+    mode = getattr(env, 'camera_control_mode', 'learned')
+    if mode == 'fixed':
         power0 = float(getattr(env, 'fixed_camera_power', getattr(env, 'cam_power_nominal', 0.5)))
         exposure0 = float(getattr(env, 'fixed_camera_exposure', 0.5))
         gain0 = float(getattr(env, 'fixed_camera_gain', 0.5))
+    elif mode == 'fixed_random_static':
+        p_lo, p_hi = getattr(env, 'fixed_random_power_range', (0.55, 0.90))
+        e_lo, e_hi = getattr(env, 'fixed_random_exposure_range', (0.16, 0.60))
+        g_lo, g_hi = getattr(env, 'fixed_random_gain_range', (0.02, 0.42))
+        power = torch.empty((B,), device=device).uniform_(float(p_lo), float(p_hi))
+        exposure = torch.empty((B,), device=device).uniform_(float(e_lo), float(e_hi))
+        gain = torch.empty((B,), device=device).uniform_(float(g_lo), float(g_hi))
+        return power, exposure, gain
     else:
         power0 = float(getattr(env, 'cam_power_nominal', 0.5))
         exposure0 = 0.5
@@ -261,12 +270,16 @@ def update_camera_params(cam_params, power, exposure, gain, env):
     if cam_params is None:
         raise ValueError('diff_depth-only 路径要求 cam_params 不为空')
 
-    if getattr(env, 'camera_control_mode', 'learned') == 'fixed':
+    mode = getattr(env, 'camera_control_mode', 'learned')
+    if mode == 'fixed':
         fixed_power = torch.full_like(power, float(getattr(env, 'fixed_camera_power', getattr(env, 'cam_power_nominal', 0.5))))
         fixed_exposure = torch.full_like(exposure, float(getattr(env, 'fixed_camera_exposure', 0.5)))
         fixed_gain = torch.full_like(gain, float(getattr(env, 'fixed_camera_gain', 0.5)))
         hist = torch.stack([fixed_power, fixed_exposure, fixed_gain], dim=-1)
         return fixed_power, fixed_exposure, fixed_gain, hist
+    if mode == 'fixed_random_static':
+        hist = torch.stack([power.detach(), exposure.detach(), gain.detach()], dim=-1)
+        return power.detach(), exposure.detach(), gain.detach(), hist
 
     _ = env
     alpha = 0.7

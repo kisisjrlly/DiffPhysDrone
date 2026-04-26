@@ -13,7 +13,7 @@ from typing import Dict, List
 
 
 ROOT = Path(__file__).resolve().parents[2]
-METHOD_ORDER = ["ours", "blind", "fixed", "nondiff"]
+METHOD_ORDER = ["ours", "ours_zero", "blind", "fixed", "fixed_random", "nondiff"]
 GLARE_LEVEL_ORDER = ["l0", "l1", "l2", "l3"]
 ENTRY_PRE_STEPS = 5
 ENTRY_POST_STEPS = 5
@@ -354,7 +354,12 @@ def _build_post_entry_table(rows: List[dict]) -> str:
 def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     cond_map = _group_by_condition(summary_rows)
     base_rows = cond_map.get("base", [])
-    glare_rows = [r for r in summary_rows if str(r.get("scene_name", "")).startswith("sun_glare_")]
+    glare_rows = [
+        r for r in summary_rows
+        if str(r.get("scene_name", "")) == "sun_glare"
+        or str(r.get("scene_name", "")).startswith("sun_glare_")
+        or str(r.get("condition", "")).startswith("sun_glare_")
+    ]
 
     lines: List[str] = []
     lines.append("# RAL 实验结果报告")
@@ -507,7 +512,7 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     for name in [
         "success_vs_glare.png",
         "post_entry_vs_glare.png",
-        "event_aligned_l3.png",
+        "success_by_slot.png",
         "trajectory_l3.png",
     ]:
         p = results_dir / name
@@ -528,7 +533,12 @@ def format_results_dir(results_dir: Path):
     if trace_csv.is_file():
         summary_rows = _augment_summary_with_post_entry(summary_rows, _read_csv(trace_csv))
     base_rows = [r for r in summary_rows if r["condition"] == "base"]
-    glare_rows = [r for r in summary_rows if str(r.get("scene_name", "")).startswith("sun_glare_")]
+    glare_rows = [
+        r for r in summary_rows
+        if str(r.get("scene_name", "")) == "sun_glare"
+        or str(r.get("scene_name", "")).startswith("sun_glare_")
+        or str(r.get("condition", "")).startswith("sun_glare_")
+    ]
 
     report_md = _build_markdown_summary(summary_rows, results_dir)
     (results_dir / "report.md").write_text(report_md, encoding="utf-8")

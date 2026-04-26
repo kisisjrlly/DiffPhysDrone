@@ -2,13 +2,14 @@
 
 set -euo pipefail
 
-# Auto-train four paper baselines by repeatedly invoking `bash run.sh`.
+# Auto-train selected paper baselines by repeatedly invoking `bash run.sh`.
 #
 # Default modes:
 #   1) nocamera : blind baseline, zero depth input
 #   2) ours     : learned camera + full sensor gradient
 #   3) nondiff  : learned camera + detached sensor gradient
 #   4) fix      : fixed camera baseline
+#   5) randfix  : random static camera baseline
 #
 # Examples:
 #   bash run_train_modes.sh
@@ -16,7 +17,7 @@ set -euo pipefail
 
 BASE_CONFIG=${BASE_CONFIG:-configs/paper_final_full.args}
 # MODES=${MODES:-"nocamera ours nondiff fix"}
-MODES=${MODES:-"ours"}
+MODES=${MODES:-"nocamera ours nondiff fix randfix"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 
 if [ ! -f "$BASE_CONFIG" ]; then
@@ -57,6 +58,14 @@ EOF
 # auto-generated mode overrides: fix
 --policy_depth_mode depth
 --camera_control_mode fixed
+--sensor_grad_mode full
+EOF
+			;;
+		randfix|fixed_random|fixed_random_static)
+			cat <<'EOF'
+# auto-generated mode overrides: randfix
+--policy_depth_mode depth
+--camera_control_mode fixed_random_static
 --sensor_grad_mode full
 EOF
 			;;

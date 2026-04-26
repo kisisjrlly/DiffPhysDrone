@@ -66,7 +66,7 @@
 --include_camera_state_in_obs
 # --policy_depth_mode depth # zero
 # --policy_depth_mode depth
---camera_control_mode learned # fixed / learned
+--camera_control_mode learned # fixed / fixed_random_static / learned
 --sensor_grad_mode full # detached / full
 --policy_depth_mode depth
 # --camera_control_mode fixed
@@ -74,8 +74,14 @@
 --fixed_camera_power 0.75
 --fixed_camera_exposure 0.45
 --fixed_camera_gain 0.45
---coef_cam_smooth 100
---coef_power_reg 100
+--fixed_random_power_min 0.55
+--fixed_random_power_max 0.90
+--fixed_random_exposure_min 0.16
+--fixed_random_exposure_max 0.60
+--fixed_random_gain_min 0.02
+--fixed_random_gain_max 0.42
+--coef_cam_smooth 35
+--coef_power_reg 50
 --cam_power_reg_deadband 0.18
 
 --cam_realism_preset low
@@ -86,9 +92,37 @@
 --cam_fog_scale 1.0
 --cam_lighting_scale 1.0
 --cam_model_randomize
---cam_model_randomize_scale 0.08
+--cam_model_randomize_scale 0.12
 --cam_power_nominal 0.7
 --cam_power_penalty_threshold 0.7
+
+--sun_glare_randomize
+--sun_glare_ambient_min 0.06
+--sun_glare_ambient_max 0.28
+--sun_glare_dir_min 0.25
+--sun_glare_dir_max 1.05
+--sun_glare_airlight_min 0.06
+--sun_glare_airlight_max 0.34
+--sun_glare_fog_beta_min 0.006
+--sun_glare_fog_beta_max 0.045
+--sun_glare_mat_obstacle_min 0.42
+--sun_glare_mat_obstacle_max 0.82
+--sun_glare_mat_spec_min 0.02
+--sun_glare_mat_spec_max 0.16
+--sun_glare_sun_sigma_u_min 0.18
+--sun_glare_sun_sigma_u_max 0.34
+--sun_glare_sun_sigma_v_min 0.16
+--sun_glare_sun_sigma_v_max 0.30
+--sun_glare_sun_y_jitter 0.18
+--sun_glare_sun_z_jitter 0.12
+--sun_glare_occluder_x_jitter 0.10
+--sun_glare_occluder_half_y_min 0.36
+--sun_glare_occluder_half_y_max 0.50
+--sun_glare_divider_x_jitter 0.08
+--sun_glare_gate_x_jitter 0.08
+--sun_glare_gap_half_w_min 0.16
+--sun_glare_gap_half_w_max 0.24
+--sun_glare_start_y_jitter 0.18
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
@@ -99,11 +133,11 @@
 --cam_iso_gain_gamma 0.6
 --cam_shot_noise_base 0.01
 
---coef_diff_depth_power 2
---coef_diff_depth_blur 0.05
---coef_diff_depth_noise 0.5
---coef_diff_depth_fill 5.0
---diff_depth_min_fill_rate 0.8
+--coef_diff_depth_power 1.5
+--coef_diff_depth_blur 0.08
+--coef_diff_depth_noise 0.35
+--coef_diff_depth_fill 4.5
+--diff_depth_min_fill_rate 0.72
 
 # ----------------- Teacher-student -----------------
 # --enable_teacher_student_training

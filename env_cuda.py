@@ -33,6 +33,14 @@ class Env:
       这些论文场景在仿真中对应到局部光照、材质与几何事件
     - 避免回退到旧的大地图随机世界
     """
+    @staticmethod
+    def _ordered_range(lo, hi):
+        lo_f = float(lo)
+        hi_f = float(hi)
+        if hi_f < lo_f:
+            lo_f, hi_f = hi_f, lo_f
+        return lo_f, hi_f
+
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.53,
                  eval_mode=False,
                  cam_angle=10, ellipsoid_a=0.0, ellipsoid_c=0.0,
@@ -51,6 +59,12 @@ class Env:
                  fixed_camera_power=-1.0,
                  fixed_camera_exposure=0.5,
                  fixed_camera_gain=0.5,
+                 fixed_random_power_min=0.55,
+                 fixed_random_power_max=0.90,
+                 fixed_random_exposure_min=0.16,
+                 fixed_random_exposure_max=0.60,
+                 fixed_random_gain_min=0.02,
+                 fixed_random_gain_max=0.42,
                  cam_exposure_t_min=0.25,
                  cam_exposure_t_span=2.75,
                  cam_exposure_eff_min=0.15,
@@ -64,6 +78,34 @@ class Env:
                  scenarios=None,
                  sun_glare_levels=None,
                  sun_glare_eval_level=None,
+                 sun_glare_eval_slot=None,
+                 sun_glare_randomize=False,
+                 sun_glare_ambient_min=0.06,
+                 sun_glare_ambient_max=0.28,
+                 sun_glare_dir_min=0.25,
+                 sun_glare_dir_max=1.05,
+                 sun_glare_airlight_min=0.06,
+                 sun_glare_airlight_max=0.34,
+                 sun_glare_fog_beta_min=0.006,
+                 sun_glare_fog_beta_max=0.045,
+                 sun_glare_mat_obstacle_min=0.42,
+                 sun_glare_mat_obstacle_max=0.82,
+                 sun_glare_mat_spec_min=0.02,
+                 sun_glare_mat_spec_max=0.16,
+                 sun_glare_sun_sigma_u_min=0.18,
+                 sun_glare_sun_sigma_u_max=0.34,
+                 sun_glare_sun_sigma_v_min=0.16,
+                 sun_glare_sun_sigma_v_max=0.30,
+                 sun_glare_sun_y_jitter=0.18,
+                 sun_glare_sun_z_jitter=0.12,
+                 sun_glare_occluder_x_jitter=0.10,
+                 sun_glare_occluder_half_y_min=0.36,
+                 sun_glare_occluder_half_y_max=0.50,
+                 sun_glare_divider_x_jitter=0.08,
+                 sun_glare_gate_x_jitter=0.08,
+                 sun_glare_gap_half_w_min=0.16,
+                 sun_glare_gap_half_w_max=0.24,
+                 sun_glare_start_y_jitter=0.18,
                  scene_fit_profiles_path=None,
                  diff_sensor_impl=None) -> None:
         self.device = device
@@ -117,6 +159,7 @@ class Env:
         self.sun_glare_supported_levels = ('l0', 'l1', 'l2', 'l3')
         self.sun_glare_levels = self._normalize_sun_glare_levels(sun_glare_levels)
         self.sun_glare_eval_level = self._canonical_sun_glare_level(sun_glare_eval_level)
+        self.sun_glare_eval_slot = self._canonical_sun_glare_slot(sun_glare_eval_slot)
         self.current_scene_variant = None
         self.current_scene_tag = self.current_scene_name
         self.current_sun_glare_level = None
@@ -148,6 +191,26 @@ class Env:
         self.fixed_camera_power = float(self.cam_power_nominal if float(fixed_camera_power) < 0.0 else fixed_camera_power)
         self.fixed_camera_exposure = float(fixed_camera_exposure)
         self.fixed_camera_gain = float(fixed_camera_gain)
+        self.fixed_random_power_range = self._ordered_range(fixed_random_power_min, fixed_random_power_max)
+        self.fixed_random_exposure_range = self._ordered_range(fixed_random_exposure_min, fixed_random_exposure_max)
+        self.fixed_random_gain_range = self._ordered_range(fixed_random_gain_min, fixed_random_gain_max)
+        self.sun_glare_randomize = bool(sun_glare_randomize)
+        self.sun_glare_ambient_range = self._ordered_range(sun_glare_ambient_min, sun_glare_ambient_max)
+        self.sun_glare_dir_range = self._ordered_range(sun_glare_dir_min, sun_glare_dir_max)
+        self.sun_glare_airlight_range = self._ordered_range(sun_glare_airlight_min, sun_glare_airlight_max)
+        self.sun_glare_fog_beta_range = self._ordered_range(sun_glare_fog_beta_min, sun_glare_fog_beta_max)
+        self.sun_glare_mat_obstacle_range = self._ordered_range(sun_glare_mat_obstacle_min, sun_glare_mat_obstacle_max)
+        self.sun_glare_mat_spec_range = self._ordered_range(sun_glare_mat_spec_min, sun_glare_mat_spec_max)
+        self.sun_glare_sun_sigma_u_range = self._ordered_range(sun_glare_sun_sigma_u_min, sun_glare_sun_sigma_u_max)
+        self.sun_glare_sun_sigma_v_range = self._ordered_range(sun_glare_sun_sigma_v_min, sun_glare_sun_sigma_v_max)
+        self.sun_glare_sun_y_jitter = max(float(sun_glare_sun_y_jitter), 0.0)
+        self.sun_glare_sun_z_jitter = max(float(sun_glare_sun_z_jitter), 0.0)
+        self.sun_glare_occluder_x_jitter = max(float(sun_glare_occluder_x_jitter), 0.0)
+        self.sun_glare_occluder_half_y_range = self._ordered_range(sun_glare_occluder_half_y_min, sun_glare_occluder_half_y_max)
+        self.sun_glare_divider_x_jitter = max(float(sun_glare_divider_x_jitter), 0.0)
+        self.sun_glare_gate_x_jitter = max(float(sun_glare_gate_x_jitter), 0.0)
+        self.sun_glare_gap_half_w_range = self._ordered_range(sun_glare_gap_half_w_min, sun_glare_gap_half_w_max)
+        self.sun_glare_start_y_jitter = max(float(sun_glare_start_y_jitter), 0.0)
 
         self.cam_ambient_min = 0.08
         self.cam_ambient_max = 0.35
@@ -424,6 +487,34 @@ class Env:
                     out.append(name)
         return out or ['l0', 'l1', 'l2', 'l3']
 
+    def _canonical_sun_glare_slot(self, slot):
+        if slot is None:
+            return None
+        token = str(slot).strip().lower().replace('-', '_')
+        aliases = {
+            'fl': 'far_left',
+            'farleft': 'far_left',
+            'far_left': 'far_left',
+            '-1.5': 'far_left',
+            'l': 'left',
+            'left': 'left',
+            '-0.5': 'left',
+            'r': 'right',
+            'right': 'right',
+            '0.5': 'right',
+            'fr': 'far_right',
+            'farright': 'far_right',
+            'far_right': 'far_right',
+            '1.5': 'far_right',
+        }
+        name = aliases.get(token, token)
+        valid = {item['name'] for item in self._sun_glare_opening_candidates()}
+        if name not in valid:
+            raise ValueError(
+                f"不支持的 sun_glare 开口 '{slot}'，仅支持 {sorted(valid)}"
+            )
+        return name
+
     def _choose_sun_glare_level(self, scene_variant=None):
         if scene_variant is not None:
             return self._canonical_sun_glare_level(scene_variant)
@@ -448,6 +539,11 @@ class Env:
 
     def _choose_sun_glare_open_slot(self):
         """随机选择四选一的 opening lane。"""
+        if self.eval_mode and self.sun_glare_eval_slot is not None:
+            for item in self._sun_glare_opening_candidates():
+                if item['name'] == self.sun_glare_eval_slot:
+                    return dict(item)
+            raise RuntimeError(f"invalid sun_glare_eval_slot={self.sun_glare_eval_slot}")
         return dict(random.choice(self._sun_glare_opening_candidates()))
 
     def _choose_sun_glare_open_side(self):
@@ -635,15 +731,16 @@ class Env:
         else:
             gap_y_center = float(slot_y)
 
-        def _replace_y(key, default_xyz):
+        def _replace_y(key, default_xyz, offset_key=None):
             raw = aligned.get(key, default_xyz)
             if isinstance(raw, torch.Tensor):
                 raw = raw.detach().cpu().tolist()
             if not isinstance(raw, (list, tuple)) or len(raw) < 3:
                 raw = default_xyz
-            return [float(raw[0]), float(gap_y_center), float(raw[2])]
+            y_offset = float(aligned.get(offset_key, 0.0)) if offset_key else 0.0
+            return [float(raw[0]), float(gap_y_center) + y_offset, float(raw[2])]
 
-        aligned['sun_anchor'] = _replace_y('sun_anchor', [3.00, gap_y_center, 1.65])
+        aligned['sun_anchor'] = _replace_y('sun_anchor', [3.00, gap_y_center, 1.65], 'sun_y_offset')
         aligned['hazard_center'] = _replace_y('hazard_center', [1.82, gap_y_center, 1.50])
         return aligned
 
@@ -751,12 +848,20 @@ class Env:
 
     def _apply_scene_sensor_profile(self, scene_name):
         if scene_name == 'sun_glare':
-            self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
-            self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.35, 0.75)
-            self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.010, 0.030)
-            self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.12, 0.25)
-            self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.52, 0.78)
-            self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.04, 0.10)
+            if self.sun_glare_randomize:
+                self._cam_ambient = self._sample_scene_tensor(*self.sun_glare_ambient_range)
+                self._cam_dir_intensity = self._sample_scene_tensor(*self.sun_glare_dir_range)
+                self._cam_fog_beta = self._sample_scene_tensor(*self.sun_glare_fog_beta_range)
+                self._cam_airlight = self._sample_scene_tensor(*self.sun_glare_airlight_range)
+                self._cam_mat_obstacle = self._sample_scene_tensor(*self.sun_glare_mat_obstacle_range)
+                self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
+            else:
+                self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
+                self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.35, 0.75)
+                self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.010, 0.030)
+                self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.12, 0.25)
+                self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.52, 0.78)
+                self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.04, 0.10)
         elif scene_name == 'specular_trap':
             self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.08, 0.16)
             self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.18, 0.42)
@@ -825,7 +930,9 @@ class Env:
             [wall_x, gap_y_center, gap_z_center - gap_half_h - big, wall_thickness, gap_half_w, big],
         ], device=device)
 
-    def _build_sun_glare_voxel_layout(self, gap_y_center):
+    def _build_sun_glare_voxel_layout(self, gap_y_center, *, occluder_x=0.88,
+                                      occluder_half_y=0.48, divider_x=1.58,
+                                      gate_x=1.82, gap_half_w=0.18):
         """
         Sun Glare probe-then-commit 场景：
         中央遮挡板 + 三条 lane divider fins + 四选一单开口墙。
@@ -845,25 +952,25 @@ class Env:
             [-1.65,  1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
         ])
         occluder = self._build_voxels([
-            [0.88, 0.00, 1.5, 0.10, 0.48, voxel_half_h],
+            [float(occluder_x), 0.00, 1.5, 0.10, float(occluder_half_y), voxel_half_h],
         ])
         lane_dividers = self._build_voxels([
             # Keep the lanes well-separated near the gate, but leave enough
             # x-distance after the occluder so all four candidate lanes remain
             # physically reachable under the current collision model.
-            [1.58, -0.84, 1.5, 0.22, 0.05, voxel_half_h],
-            [1.58,  0.00, 1.5, 0.22, 0.05, voxel_half_h],
-            [1.58,  0.84, 1.5, 0.22, 0.05, voxel_half_h],
+            [float(divider_x), -0.84, 1.5, 0.22, 0.05, voxel_half_h],
+            [float(divider_x),  0.00, 1.5, 0.22, 0.05, voxel_half_h],
+            [float(divider_x),  0.84, 1.5, 0.22, 0.05, voxel_half_h],
         ])
         gate_wall = self._build_opening_wall(
-            wall_x=1.82,
+            wall_x=float(gate_x),
             gap_y_center=gap_y_center,
             gap_z_center=1.50,
-            gap_half_w=0.18,
+            gap_half_w=float(gap_half_w),
             gap_half_h=1.05,
         )
         back_wall = self._build_voxels([
-            [3.65, 0.00, 1.5, 0.10, 1.30, voxel_half_h],
+            [float(gate_x) + 1.83, 0.00, 1.5, 0.10, 1.30, voxel_half_h],
         ])
         return torch.cat([guide, occluder, lane_dividers, gate_wall, back_wall], dim=0)
 
@@ -1244,14 +1351,45 @@ class Env:
             selected_variant = self._choose_sun_glare_level(scene_variant)
             open_slot = self._choose_sun_glare_open_slot()
             gap_y_center = float(open_slot['y'])
-            start = torch.tensor([-2.8, 0.0, 1.5], device=self.device)
+            start_y = 0.0
+            occluder_x = 0.88
+            occluder_half_y = 0.48
+            divider_x = 1.58
+            gate_x = 1.82
+            gap_half_w = 0.18
+            sun_sigma_u = 0.24
+            sun_sigma_v = 0.22
+            sun_y_offset = 0.0
+            sun_z_offset = 0.0
+            if self.sun_glare_randomize:
+                start_y = random.uniform(-self.sun_glare_start_y_jitter, self.sun_glare_start_y_jitter)
+                occluder_x = 0.88 + random.uniform(-self.sun_glare_occluder_x_jitter, self.sun_glare_occluder_x_jitter)
+                occluder_half_y = random.uniform(*self.sun_glare_occluder_half_y_range)
+                divider_x = 1.58 + random.uniform(-self.sun_glare_divider_x_jitter, self.sun_glare_divider_x_jitter)
+                gate_x = 1.82 + random.uniform(-self.sun_glare_gate_x_jitter, self.sun_glare_gate_x_jitter)
+                divider_x = max(divider_x, occluder_x + 0.45)
+                gate_x = max(gate_x, divider_x + 0.20)
+                gap_half_w = random.uniform(*self.sun_glare_gap_half_w_range)
+                sun_sigma_u = random.uniform(*self.sun_glare_sun_sigma_u_range)
+                sun_sigma_v = random.uniform(*self.sun_glare_sun_sigma_v_range)
+                sun_y_offset = random.uniform(-self.sun_glare_sun_y_jitter, self.sun_glare_sun_y_jitter)
+                sun_z_offset = random.uniform(-self.sun_glare_sun_z_jitter, self.sun_glare_sun_z_jitter)
+            start = torch.tensor([-2.8, start_y, 1.5], device=self.device)
             goal = torch.tensor([3.00, 0.0, 1.5], device=self.device)
             max_speed = 1.15
-            voxels = self._build_sun_glare_voxel_layout(gap_y_center)
+            voxels = self._build_sun_glare_voxel_layout(
+                gap_y_center,
+                occluder_x=occluder_x,
+                occluder_half_y=occluder_half_y,
+                divider_x=divider_x,
+                gate_x=gate_x,
+                gap_half_w=gap_half_w,
+            )
             effects = {
-                'sun_anchor': [3.00, gap_y_center, 1.65],
-                'sun_sigma_u': 0.24,
-                'sun_sigma_v': 0.22,
+                'sun_anchor': [3.00, gap_y_center + sun_y_offset, 1.65 + sun_z_offset],
+                'sun_y_offset': sun_y_offset,
+                'sun_sigma_u': sun_sigma_u,
+                'sun_sigma_v': sun_sigma_v,
                 'ambient_add': 4.2,
                 'active_drop': 0.72,
                 'active_recover': 0.95,
@@ -1264,14 +1402,20 @@ class Env:
                 'power_quality_bonus': 0.78,
                 'quality_penalty': 2.75,
                 'valid_bias_scale': 0.16,
-                'hazard_center': [1.82, gap_y_center, 1.5],
-                'hazard_half_y': 0.18,
+                'hazard_center': [gate_x, gap_y_center, 1.5],
+                'hazard_half_y': max(0.18, gap_half_w),
                 'hazard_half_z': 1.20,
                 'hazard_softness': 0.045,
                 'decision_open_side': str(open_slot['side']),
                 'decision_open_side_id': float(open_slot['id']),
                 'decision_open_slot_name': str(open_slot['name']),
                 'decision_open_slot_y': float(gap_y_center),
+                'geometry_occluder_x': float(occluder_x),
+                'geometry_occluder_half_y': float(occluder_half_y),
+                'geometry_divider_x': float(divider_x),
+                'geometry_gate_x': float(gate_x),
+                'geometry_gap_half_w': float(gap_half_w),
+                'geometry_start_y': float(start_y),
             }
         elif scene_name == 'specular_trap':
             voxels = self._build_specular_trap_layout()
@@ -1334,6 +1478,21 @@ class Env:
 
         effects = self._merge_scene_effects(scene_name, effects)
         if scene_name == 'sun_glare':
+            if self.sun_glare_randomize:
+                effects.update({
+                    'sun_anchor': [3.00, gap_y_center + sun_y_offset, 1.65 + sun_z_offset],
+                    'sun_y_offset': sun_y_offset,
+                    'sun_sigma_u': sun_sigma_u,
+                    'sun_sigma_v': sun_sigma_v,
+                    'hazard_center': [gate_x, gap_y_center, 1.5],
+                    'hazard_half_y': max(0.18, gap_half_w),
+                    'geometry_occluder_x': float(occluder_x),
+                    'geometry_occluder_half_y': float(occluder_half_y),
+                    'geometry_divider_x': float(divider_x),
+                    'geometry_gate_x': float(gate_x),
+                    'geometry_gap_half_w': float(gap_half_w),
+                    'geometry_start_y': float(start_y),
+                })
             effects = self._apply_sun_glare_level(effects, selected_variant)
             effects = self._realign_sun_glare_effects(effects)
         return voxels, start, goal, max_speed, margin, effects, selected_variant

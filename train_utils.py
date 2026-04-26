@@ -101,7 +101,7 @@ def active_loss_term_specs(args, distill_coef_iter=None):
     add('d_jerk', 'loss_d_jerk', args.coef_d_jerk)
     add('collide', 'loss_collide', args.coef_collide)
 
-    if getattr(args, 'camera_control_mode', 'learned') != 'fixed':
+    if getattr(args, 'camera_control_mode', 'learned') == 'learned':
         add('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth)
         add('power_reg', 'loss_power_reg', args.coef_power_reg)
     add('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power)
@@ -226,6 +226,12 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         fixed_camera_power=args.fixed_camera_power,
         fixed_camera_exposure=args.fixed_camera_exposure,
         fixed_camera_gain=args.fixed_camera_gain,
+        fixed_random_power_min=args.fixed_random_power_min,
+        fixed_random_power_max=args.fixed_random_power_max,
+        fixed_random_exposure_min=args.fixed_random_exposure_min,
+        fixed_random_exposure_max=args.fixed_random_exposure_max,
+        fixed_random_gain_min=args.fixed_random_gain_min,
+        fixed_random_gain_max=args.fixed_random_gain_max,
         cam_exposure_t_min=args.cam_exposure_t_min,
         cam_exposure_t_span=args.cam_exposure_t_span,
         cam_exposure_eff_min=args.cam_exposure_eff_min,
@@ -239,6 +245,34 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         scenarios=args.scenarios,
         sun_glare_levels=args.sun_glare_levels,
         sun_glare_eval_level=args.sun_glare_eval_level if eval_mode else None,
+        sun_glare_eval_slot=getattr(args, 'sun_glare_eval_slot', None) if eval_mode else None,
+        sun_glare_randomize=args.sun_glare_randomize,
+        sun_glare_ambient_min=args.sun_glare_ambient_min,
+        sun_glare_ambient_max=args.sun_glare_ambient_max,
+        sun_glare_dir_min=args.sun_glare_dir_min,
+        sun_glare_dir_max=args.sun_glare_dir_max,
+        sun_glare_airlight_min=args.sun_glare_airlight_min,
+        sun_glare_airlight_max=args.sun_glare_airlight_max,
+        sun_glare_fog_beta_min=args.sun_glare_fog_beta_min,
+        sun_glare_fog_beta_max=args.sun_glare_fog_beta_max,
+        sun_glare_mat_obstacle_min=args.sun_glare_mat_obstacle_min,
+        sun_glare_mat_obstacle_max=args.sun_glare_mat_obstacle_max,
+        sun_glare_mat_spec_min=args.sun_glare_mat_spec_min,
+        sun_glare_mat_spec_max=args.sun_glare_mat_spec_max,
+        sun_glare_sun_sigma_u_min=args.sun_glare_sun_sigma_u_min,
+        sun_glare_sun_sigma_u_max=args.sun_glare_sun_sigma_u_max,
+        sun_glare_sun_sigma_v_min=args.sun_glare_sun_sigma_v_min,
+        sun_glare_sun_sigma_v_max=args.sun_glare_sun_sigma_v_max,
+        sun_glare_sun_y_jitter=args.sun_glare_sun_y_jitter,
+        sun_glare_sun_z_jitter=args.sun_glare_sun_z_jitter,
+        sun_glare_occluder_x_jitter=args.sun_glare_occluder_x_jitter,
+        sun_glare_occluder_half_y_min=args.sun_glare_occluder_half_y_min,
+        sun_glare_occluder_half_y_max=args.sun_glare_occluder_half_y_max,
+        sun_glare_divider_x_jitter=args.sun_glare_divider_x_jitter,
+        sun_glare_gate_x_jitter=args.sun_glare_gate_x_jitter,
+        sun_glare_gap_half_w_min=args.sun_glare_gap_half_w_min,
+        sun_glare_gap_half_w_max=args.sun_glare_gap_half_w_max,
+        sun_glare_start_y_jitter=args.sun_glare_start_y_jitter,
         scene_fit_profiles_path=args.scene_fit_profiles_path,
         diff_sensor_impl=args.diff_sensor_impl,
     )

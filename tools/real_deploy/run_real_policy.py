@@ -1005,6 +1005,18 @@ def main():
         fixed_camera_power=fixed_camera_power,
         fixed_camera_exposure=float(project_args.fixed_camera_exposure),
         fixed_camera_gain=float(project_args.fixed_camera_gain),
+        fixed_random_power_range=(
+            float(project_args.fixed_random_power_min),
+            float(project_args.fixed_random_power_max),
+        ),
+        fixed_random_exposure_range=(
+            float(project_args.fixed_random_exposure_min),
+            float(project_args.fixed_random_exposure_max),
+        ),
+        fixed_random_gain_range=(
+            float(project_args.fixed_random_gain_min),
+            float(project_args.fixed_random_gain_max),
+        ),
     )
 
     try:

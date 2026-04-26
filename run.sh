@@ -106,6 +106,12 @@ fi
 # 注：某些 PyTorch/CUDA 组合下 expandable_segments 可能触发内部断言，默认不开启。
 # export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-"max_split_size_mb:128,garbage_collection_threshold:0.8"}
 
+# Native 崩溃诊断：不改变训练语义。若 Python/C++ 扩展 segfault，
+# faulthandler 会尽量把各 Python 线程栈写进日志；core dump 便于 gdb 追 C++ 栈。
+export PYTHONFAULTHANDLER=${PYTHONFAULTHANDLER:-1}
+export TORCH_SHOW_CPP_STACKTRACES=${TORCH_SHOW_CPP_STACKTRACES:-1}
+ulimit -c unlimited 2>/dev/null || true
+
 
 if [ "$log_to_file" = "1" ]; then
 	"$py_bin" -u main_cuda.py $cfg_args > "$log_file" 2>&1

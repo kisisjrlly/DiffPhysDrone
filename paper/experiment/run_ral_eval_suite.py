@@ -37,6 +37,7 @@ parse_diff_sensor_impl = None
 parse_scenarios = None
 parse_sun_glare_levels = None
 canonicalize_sun_glare_level = None
+canonicalize_sun_glare_slot = None
 set_global_seed = None
 validate_args = None
 run_one_episode = None
@@ -55,13 +56,23 @@ METHOD_SPECS = {
         "color": "#d62728",
     },
     "blind": {
-        "label": "Blind / No Depth",
+        "label": "Zero-Depth Trained",
+        "args": {
+            "camera_control_mode": "fixed",
+            "sensor_grad_mode": "detached",
+            "policy_depth_mode": "zero",
+            "include_camera_state_in_obs": False,
+        },
+        "color": "#9467bd",
+    },
+    "ours_zero": {
+        "label": "Ours w/ Zero Depth",
         "args": {
             "camera_control_mode": "learned",
             "sensor_grad_mode": "full",
             "policy_depth_mode": "zero",
         },
-        "color": "#9467bd",
+        "color": "#ff7f0e",
     },
     "fixed": {
         "label": "Fixed Camera",
@@ -70,6 +81,14 @@ METHOD_SPECS = {
             "sensor_grad_mode": "full",
         },
         "color": "#1f77b4",
+    },
+    "fixed_random": {
+        "label": "Random Static Camera",
+        "args": {
+            "camera_control_mode": "fixed_random_static",
+            "sensor_grad_mode": "full",
+        },
+        "color": "#17becf",
     },
     "nondiff": {
         "label": "Non-Diff Active",
@@ -82,14 +101,22 @@ METHOD_SPECS = {
 }
 
 GLARE_LEVEL_ORDER = ["l0", "l1", "l2", "l3"]
+SUN_GLARE_SLOT_ORDER = ["far_left", "left", "right", "far_right"]
+SUN_GLARE_SLOT_Y = {
+    "far_left": -1.12,
+    "left": -0.56,
+    "right": 0.56,
+    "far_right": 1.12,
+}
 ENTRY_PRE_STEPS = 5
 ENTRY_POST_STEPS = 5
+GATE_X = 1.82
 
 
 def _lazy_imports():
     global torch, plt
     global build_parser, parse_diff_sensor_impl, parse_scenarios
-    global parse_sun_glare_levels, canonicalize_sun_glare_level
+    global parse_sun_glare_levels, canonicalize_sun_glare_level, canonicalize_sun_glare_slot
     global set_global_seed, validate_args, run_one_episode, Model, build_env
     global format_results_dir
 
@@ -104,6 +131,7 @@ def _lazy_imports():
         parse_scenarios as _parse_scenarios,
         parse_sun_glare_levels as _parse_sun_glare_levels,
         canonicalize_sun_glare_level as _canonicalize_sun_glare_level,
+        canonicalize_sun_glare_slot as _canonicalize_sun_glare_slot,
         set_global_seed as _set_global_seed,
         validate_args as _validate_args,
     )
@@ -119,6 +147,7 @@ def _lazy_imports():
     parse_scenarios = _parse_scenarios
     parse_sun_glare_levels = _parse_sun_glare_levels
     canonicalize_sun_glare_level = _canonicalize_sun_glare_level
+    canonicalize_sun_glare_slot = _canonicalize_sun_glare_slot
     set_global_seed = _set_global_seed
     validate_args = _validate_args
     run_one_episode = _run_one_episode
@@ -146,6 +175,8 @@ def _load_args_from_config(config_path: Path):
     args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
+    if getattr(args, "sun_glare_eval_slot", None) is not None:
+        args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
     validate_args(args)
     return args
 
@@ -176,11 +207,44 @@ def _load_checkpoint(model: Model, ckpt_path: Path, device: torch.device):
     model.eval()
 
 
-def _condition_label(scene_name: str, glare_level: str | None) -> str:
+def _checkpoint_state_input_dim(ckpt_path: Path) -> int | None:
+    state_dict = torch.load(str(ckpt_path), map_location="cpu")
+    weight = state_dict.get("v_proj.weight")
+    if weight is None or not hasattr(weight, "shape") or len(weight.shape) != 2:
+        return None
+    return int(weight.shape[1])
+
+
+def _match_args_to_checkpoint(args, ckpt_path: Path):
+    input_dim = _checkpoint_state_input_dim(ckpt_path)
+    if input_dim is None:
+        return args
+    obs_dim = 7 if args.no_odom else 10
+    if input_dim == obs_dim:
+        expected_include_camera = False
+    elif input_dim == obs_dim + 3:
+        expected_include_camera = True
+    else:
+        raise ValueError(
+            f"{ckpt_path} 的 v_proj.weight 输入维度为 {input_dim}，"
+            f"与 obs_dim={obs_dim} 或 obs_dim+3={obs_dim + 3} 都不匹配"
+        )
+    if bool(args.include_camera_state_in_obs) != expected_include_camera:
+        print(
+            f"[suite][info] checkpoint={ckpt_path.name} requires "
+            f"include_camera_state_in_obs={expected_include_camera}; "
+            f"override config value {args.include_camera_state_in_obs}."
+        )
+        args.include_camera_state_in_obs = expected_include_camera
+    return args
+
+
+def _condition_label(scene_name: str, glare_level: str | None, slot_name: str | None = None) -> str:
     if scene_name == "base":
         return "base"
     if scene_name == "sun_glare":
-        return f"sun_glare_{glare_level}"
+        slot_suffix = f"_{slot_name}" if slot_name else ""
+        return f"sun_glare_{glare_level}{slot_suffix}"
     return scene_name
 
 
@@ -270,6 +334,77 @@ def _compute_post_entry_metrics(trace_rows: list[dict],
     return metrics
 
 
+def _safe_pearson(xs: list[float], ys: list[float]) -> float:
+    if len(xs) < 3 or len(ys) < 3 or len(xs) != len(ys):
+        return 0.0
+    x = np.asarray(xs, dtype=np.float64)
+    y = np.asarray(ys, dtype=np.float64)
+    valid = np.isfinite(x) & np.isfinite(y)
+    if int(valid.sum()) < 3:
+        return 0.0
+    x = x[valid]
+    y = y[valid]
+    x = x - float(x.mean())
+    y = y - float(y.mean())
+    denom = float(np.sqrt(np.sum(x * x) * np.sum(y * y)))
+    if denom <= 1e-12:
+        return 0.0
+    return float(np.sum(x * y) / denom)
+
+
+def _compute_trace_diagnostics(trace_rows: list[dict], min_fill_rate: float,
+                               opening_y_fallback: float | None = None) -> dict[str, float]:
+    metrics = {
+        "opening_y": 0.0,
+        "opening_slot_id": 0.0,
+        "y_at_gate": 0.0,
+        "gate_y_error": 0.0,
+        "abs_gate_y_error": 0.0,
+        "final_y": 0.0,
+        "corr_power_scene_effect": 0.0,
+        "corr_exposure_scene_effect": 0.0,
+        "corr_gain_scene_effect": 0.0,
+        "corr_power_fill_gap": 0.0,
+        "corr_exposure_fill_gap": 0.0,
+        "corr_gain_fill_gap": 0.0,
+    }
+    if not trace_rows:
+        return metrics
+
+    rows = sorted(trace_rows, key=lambda x: int(x["step_idx"]))
+    opening_y_raw = rows[0].get("decision_open_slot_y", None)
+    if opening_y_raw in ("", None):
+        opening_y = float(opening_y_fallback or 0.0)
+    else:
+        opening_y = float(opening_y_raw)
+    opening_slot_id = float(rows[0].get("decision_open_side_id", 0.0) or 0.0)
+    gate_row = min(rows, key=lambda r: abs(float(r.get("x", 0.0)) - GATE_X))
+    y_at_gate = float(gate_row.get("y", 0.0))
+    final_y = float(rows[-1].get("y", 0.0))
+
+    power = [float(r.get("power", 0.0)) for r in rows]
+    exposure = [float(r.get("exposure", 0.0)) for r in rows]
+    gain = [float(r.get("gain", 0.0)) for r in rows]
+    scene_effect = [float(r.get("scene_effect_mean", 0.0)) for r in rows]
+    fill_gap = [max(0.0, float(min_fill_rate) - float(r.get("fill_rate", 0.0))) for r in rows]
+
+    metrics.update({
+        "opening_y": opening_y,
+        "opening_slot_id": opening_slot_id,
+        "y_at_gate": y_at_gate,
+        "gate_y_error": y_at_gate - opening_y,
+        "abs_gate_y_error": abs(y_at_gate - opening_y),
+        "final_y": final_y,
+        "corr_power_scene_effect": _safe_pearson(power, scene_effect),
+        "corr_exposure_scene_effect": _safe_pearson(exposure, scene_effect),
+        "corr_gain_scene_effect": _safe_pearson(gain, scene_effect),
+        "corr_power_fill_gap": _safe_pearson(power, fill_gap),
+        "corr_exposure_fill_gap": _safe_pearson(exposure, fill_gap),
+        "corr_gain_fill_gap": _safe_pearson(gain, fill_gap),
+    })
+    return metrics
+
+
 def _summarize_rows(rows: list[dict], metric_keys: list[str]) -> list[dict]:
     grouped: dict[tuple[str, str], list[dict]] = {}
     for row in rows:
@@ -284,6 +419,8 @@ def _summarize_rows(rows: list[dict], metric_keys: list[str]) -> list[dict]:
             "condition": condition,
             "scene_name": items[0]["scene_name"],
             "glare_level": items[0]["glare_level"],
+            "opening_slot": items[0].get("opening_slot", ""),
+            "opening_y": items[0].get("opening_y", ""),
             "episodes": len(items),
         }
         for key in metric_keys:
@@ -306,15 +443,36 @@ def _write_csv(path: Path, rows: list[dict]):
         writer.writerows(rows)
 
 
+def _summary_metric(summary_rows: list[dict], method_key: str, level: str,
+                    metric: str, slot_name: str | None = None) -> float:
+    vals = []
+    for row in summary_rows:
+        if row.get("method_key") != method_key:
+            continue
+        if row.get("glare_level") != level:
+            continue
+        if slot_name is not None and row.get("opening_slot") != slot_name:
+            continue
+        if metric not in row:
+            continue
+        try:
+            vals.append(float(row[metric]))
+        except (TypeError, ValueError):
+            pass
+    if not vals:
+        return math.nan
+    return float(sum(vals) / len(vals))
+
+
 def _plot_success_vs_glare(summary_rows: list[dict], output_path: Path):
     fig, ax = plt.subplots(figsize=(6.6, 4.2), dpi=180)
     x = np.arange(len(GLARE_LEVEL_ORDER))
-    for method_key, spec in METHOD_SPECS.items():
+    active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in summary_rows)]
+    for method_key in active_methods:
+        spec = METHOD_SPECS[method_key]
         ys = []
         for level in GLARE_LEVEL_ORDER:
-            cond = f"sun_glare_{level}"
-            row = next((r for r in summary_rows if r["method_key"] == method_key and r["condition"] == cond), None)
-            ys.append(float(row["success_rate"]) if row is not None else np.nan)
+            ys.append(_summary_metric(summary_rows, method_key, level, "success_rate"))
         ax.plot(x, ys, marker="o", linewidth=2.2, label=spec["label"], color=spec["color"])
     ax.set_xticks(x, [lvl.upper() for lvl in GLARE_LEVEL_ORDER])
     ax.set_ylim(-0.02, 1.02)
@@ -327,17 +485,48 @@ def _plot_success_vs_glare(summary_rows: list[dict], output_path: Path):
     plt.close(fig)
 
 
+def _plot_success_by_slot(summary_rows: list[dict], output_path: Path):
+    methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in summary_rows)]
+    fig, axes = plt.subplots(
+        len(methods), 1,
+        figsize=(7.2, max(2.0, 2.1 * len(methods))),
+        dpi=180,
+        squeeze=False,
+    )
+    for row_idx, method_key in enumerate(methods):
+        spec = METHOD_SPECS[method_key]
+        mat = np.full((len(GLARE_LEVEL_ORDER), len(SUN_GLARE_SLOT_ORDER)), np.nan, dtype=np.float32)
+        for i, level in enumerate(GLARE_LEVEL_ORDER):
+            for j, slot in enumerate(SUN_GLARE_SLOT_ORDER):
+                mat[i, j] = _summary_metric(summary_rows, method_key, level, "success_rate", slot)
+        ax = axes[row_idx, 0]
+        im = ax.imshow(mat, vmin=0.0, vmax=1.0, cmap="viridis", aspect="auto")
+        ax.set_title(spec["label"])
+        ax.set_xticks(np.arange(len(SUN_GLARE_SLOT_ORDER)), SUN_GLARE_SLOT_ORDER, rotation=20, ha="right")
+        ax.set_yticks(np.arange(len(GLARE_LEVEL_ORDER)), [x.upper() for x in GLARE_LEVEL_ORDER])
+        ax.set_ylabel("Glare")
+        for i in range(mat.shape[0]):
+            for j in range(mat.shape[1]):
+                if np.isfinite(mat[i, j]):
+                    ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center", color="white", fontsize=7)
+    axes[-1, 0].set_xlabel("Opening Slot")
+    fig.colorbar(im, ax=axes[:, 0].tolist(), fraction=0.025, pad=0.02, label="Success Rate")
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
 def _plot_post_entry_metrics(summary_rows: list[dict], output_path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(10.0, 4.0), dpi=180, sharex=True)
     x = np.arange(len(GLARE_LEVEL_ORDER))
-    for method_key, spec in METHOD_SPECS.items():
+    active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in summary_rows)]
+    for method_key in active_methods:
+        spec = METHOD_SPECS[method_key]
         q_vals = []
         f_vals = []
         for level in GLARE_LEVEL_ORDER:
-            cond = f"sun_glare_{level}"
-            row = next((r for r in summary_rows if r["method_key"] == method_key and r["condition"] == cond), None)
-            q_vals.append(float(row["post_entry_local_glare_quality"]) if row is not None else np.nan)
-            f_vals.append(float(row["post_entry_fill_rate"]) if row is not None else np.nan)
+            q_vals.append(_summary_metric(summary_rows, method_key, level, "post_entry_local_glare_quality"))
+            f_vals.append(_summary_metric(summary_rows, method_key, level, "post_entry_fill_rate"))
         axes[0].plot(x, q_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
         axes[1].plot(x, f_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
 
@@ -393,8 +582,9 @@ def _aggregate_aligned_trace(trace_rows: list[dict], method_key: str, condition:
     return out
 
 
-def _plot_event_aligned(trace_rows: list[dict], plot_level: str, output_path: Path, rel_min: int = -12, rel_max: int = 24):
-    condition = f"sun_glare_{plot_level}"
+def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
+                        output_path: Path, rel_min: int = -12, rel_max: int = 24):
+    condition = _condition_label("sun_glare", plot_level, plot_slot)
     fig, axes = plt.subplots(4, 1, figsize=(8.0, 8.5), dpi=180, sharex=True)
     keys = [
         ("power", "Power"),
@@ -402,7 +592,9 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, output_path: Pa
         ("gain", "Gain"),
         ("glare_quality_mean", "Local Glare Quality"),
     ]
-    for method_key, spec in METHOD_SPECS.items():
+    active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in trace_rows)]
+    for method_key in active_methods:
+        spec = METHOD_SPECS[method_key]
         agg = _aggregate_aligned_trace(trace_rows, method_key, condition, rel_min, rel_max)
         x = np.asarray(agg["x"], dtype=np.float32)
         for ax, (key, ylabel) in zip(axes, keys):
@@ -411,6 +603,7 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, output_path: Pa
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.25)
     axes[0].legend(frameon=False)
+    axes[0].set_title(f"{plot_level.upper()} / {plot_slot}")
     axes[-1].axvline(0.0, color="k", linestyle="--", linewidth=1.2, alpha=0.65)
     axes[-1].set_xlabel("t - t_entry (steps)")
     fig.tight_layout()
@@ -419,25 +612,40 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, output_path: Pa
 
 
 def _plot_trajectory(trace_rows: list[dict], plot_level: str, output_path: Path):
-    condition = f"sun_glare_{plot_level}"
-    fig, ax = plt.subplots(figsize=(6.6, 3.8), dpi=180)
-    for method_key, spec in METHOD_SPECS.items():
-        rows = [r for r in trace_rows if r["method_key"] == method_key and r["condition"] == condition and int(r["episode_idx"]) == 0]
-        rows = sorted(rows, key=lambda x: int(x["step_idx"]))
-        if not rows:
-            continue
-        xs = [float(r["x"]) for r in rows]
-        ys = [float(r["y"]) for r in rows]
-        ax.plot(xs, ys, linewidth=2.2, label=spec["label"], color=spec["color"])
-        ax.scatter([xs[0]], [ys[0]], color=spec["color"], s=18)
-        ax.scatter([xs[-1]], [ys[-1]], color=spec["color"], s=24, marker="x")
-    ax.scatter([-3.0], [0.0], color="black", s=40, marker="o", label="Start")
-    ax.scatter([2.0], [0.0], color="black", s=48, marker="*", label="Goal")
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
-    ax.set_title(f"Top-Down Trajectories ({plot_level.upper()})")
-    ax.grid(True, alpha=0.25)
-    ax.legend(frameon=False, ncol=2)
+    fig, axes = plt.subplots(2, 2, figsize=(9.0, 6.6), dpi=180, sharex=True, sharey=True)
+    axes = axes.flatten()
+    for ax, slot in zip(axes, SUN_GLARE_SLOT_ORDER):
+        condition = _condition_label("sun_glare", plot_level, slot)
+        opening_y = SUN_GLARE_SLOT_Y[slot]
+        active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in trace_rows)]
+        for method_key in active_methods:
+            spec = METHOD_SPECS[method_key]
+            rows = [
+                r for r in trace_rows
+                if r["method_key"] == method_key
+                and r["condition"] == condition
+                and int(r["episode_idx"]) == 0
+            ]
+            rows = sorted(rows, key=lambda x: int(x["step_idx"]))
+            if not rows:
+                continue
+            xs = [float(r["x"]) for r in rows]
+            ys = [float(r["y"]) for r in rows]
+            ax.plot(xs, ys, linewidth=1.8, label=spec["label"], color=spec["color"])
+            ax.scatter([xs[0]], [ys[0]], color=spec["color"], s=12)
+            ax.scatter([xs[-1]], [ys[-1]], color=spec["color"], s=18, marker="x")
+        ax.axhline(opening_y, color="black", linestyle="--", linewidth=1.0, alpha=0.6)
+        ax.axvline(GATE_X, color="black", linestyle=":", linewidth=1.0, alpha=0.5)
+        ax.set_title(f"{slot} (opening y={opening_y:+.2f})")
+        ax.grid(True, alpha=0.25)
+    for ax in axes[2:]:
+        ax.set_xlabel("x (m)")
+    for ax in axes[::2]:
+        ax.set_ylabel("y (m)")
+    handles, labels = axes[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(handles, labels, frameon=False, loc="upper center", ncol=min(4, len(handles)))
+    fig.suptitle(f"Top-Down Trajectories ({plot_level.upper()})", y=0.995)
     fig.tight_layout()
     fig.savefig(output_path)
     plt.close(fig)
@@ -448,12 +656,62 @@ def _dump_metadata(path: Path, payload: dict):
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+def _compute_trajectory_diffs(trace_rows: list[dict], method_a: str, method_b: str) -> list[dict]:
+    grouped: dict[tuple[str, int, str], list[dict]] = {}
+    for row in trace_rows:
+        key = (str(row["condition"]), int(row["episode_idx"]), str(row["method_key"]))
+        grouped.setdefault(key, []).append(row)
+
+    out = []
+    condition_eps = sorted({(cond, ep) for (cond, ep, _method) in grouped})
+    for condition, ep_idx in condition_eps:
+        rows_a = grouped.get((condition, ep_idx, method_a), [])
+        rows_b = grouped.get((condition, ep_idx, method_b), [])
+        if not rows_a or not rows_b:
+            continue
+        by_step_a = {int(r["step_idx"]): r for r in rows_a}
+        by_step_b = {int(r["step_idx"]): r for r in rows_b}
+        common_steps = sorted(set(by_step_a) & set(by_step_b))
+        if not common_steps:
+            continue
+        y_diff = [
+            abs(float(by_step_a[t].get("y", 0.0)) - float(by_step_b[t].get("y", 0.0)))
+            for t in common_steps
+        ]
+        xy_diff = [
+            math.hypot(
+                float(by_step_a[t].get("x", 0.0)) - float(by_step_b[t].get("x", 0.0)),
+                float(by_step_a[t].get("y", 0.0)) - float(by_step_b[t].get("y", 0.0)),
+            )
+            for t in common_steps
+        ]
+        last_t = common_steps[-1]
+        first = by_step_a[common_steps[0]]
+        out.append({
+            "method_a": method_a,
+            "method_b": method_b,
+            "condition": condition,
+            "glare_level": first.get("glare_level", ""),
+            "opening_slot": first.get("opening_slot", ""),
+            "episode_idx": ep_idx,
+            "steps": len(common_steps),
+            "mean_abs_y_diff": float(sum(y_diff) / len(y_diff)),
+            "max_abs_y_diff": float(max(y_diff)),
+            "mean_xy_diff": float(sum(xy_diff) / len(xy_diff)),
+            "final_abs_y_diff": abs(
+                float(by_step_a[last_t].get("y", 0.0)) - float(by_step_b[last_t].get("y", 0.0))
+            ),
+        })
+    return out
+
+
 def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.device,
-                     episodes_per_condition: int, include_base: bool, plot_level: str):
+                     episodes_per_condition: int, include_base: bool, slots: list[str]):
     spec = METHOD_SPECS[method_key]
     method_args = copy.deepcopy(base_args)
     for key, value in spec["args"].items():
         setattr(method_args, key, value)
+    method_args = _match_args_to_checkpoint(method_args, ckpt_path)
     method_args.batch_size = 1
     method_args.vis_enable = False
     method_args.wandb_disabled = True
@@ -467,29 +725,46 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
     trace_rows = []
     conditions = []
     if include_base:
-        conditions.append(("base", None))
+        conditions.append(("base", None, None))
     for level in GLARE_LEVEL_ORDER:
-        conditions.append(("sun_glare", level))
+        for slot in slots:
+            conditions.append(("sun_glare", level, slot))
 
-    for cond_idx, (scene_name, glare_level) in enumerate(conditions):
+    for cond_idx, (scene_name, glare_level, slot_name) in enumerate(conditions):
         cond_args = copy.deepcopy(method_args)
         cond_args.scenarios = [scene_name]
         cond_args.sun_glare_eval_level = glare_level if scene_name == "sun_glare" else None
+        cond_args.sun_glare_eval_slot = slot_name if scene_name == "sun_glare" else None
         cond_args.eval_episodes = int(episodes_per_condition)
         validate_args(cond_args)
         set_global_seed(int(cond_args.seed) + cond_idx, cond_args.deterministic)
         env = build_env(cond_args.batch_size, cond_args, device, eval_mode=True)
-        cond_label = _condition_label(scene_name, glare_level)
+        cond_label = _condition_label(scene_name, glare_level, slot_name)
         print(f"[suite] method={method_key} condition={cond_label} episodes={episodes_per_condition}")
         for ep_idx in range(episodes_per_condition):
             metrics, trace = run_one_episode(
                 ep_idx, scene_name, glare_level, cond_args, model, env, vis, device, collect_trace=True)
             row = dict(metrics)
+            # run_one_episode reports collision_rate over the internal continuous-collision
+            # subdivision tensor. For this sweep we need episode-level binary outcomes.
+            collided_ep = float(row.get("collided", 0.0)) > 0.5
+            reached_ep = float(row.get("goal_reach_rate", 0.0)) > 0.5
+            row["collision_rate"] = 1.0 if collided_ep else 0.0
+            row["success_rate"] = 1.0 if (reached_ep and not collided_ep) else 0.0
             row.update(_compute_post_entry_metrics(trace))
+            opening_y_fallback = SUN_GLARE_SLOT_Y.get(slot_name, 0.0) if slot_name else 0.0
+            row.update(_compute_trace_diagnostics(
+                trace,
+                min_fill_rate=cond_args.diff_depth_min_fill_rate,
+                opening_y_fallback=opening_y_fallback,
+            ))
             row.update({
                 "method_key": method_key,
                 "method_label": spec["label"],
                 "condition": cond_label,
+                "scene_name": scene_name,
+                "glare_level": glare_level or "",
+                "opening_slot": slot_name or "",
                 "episode_idx": int(ep_idx),
                 "checkpoint": str(ckpt_path),
             })
@@ -501,6 +776,8 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
                     "method_key": method_key,
                     "method_label": spec["label"],
                     "condition": cond_label,
+                    "opening_slot": slot_name or "",
+                    "opening_y": opening_y_fallback,
                     "checkpoint": str(ckpt_path),
                     "t_entry": -1 if t_entry is None else int(t_entry),
                     "t_minus_entry": math.nan if t_entry is None else int(item["step_idx"]) - int(t_entry),
@@ -518,9 +795,15 @@ def parse_args():
     parser.add_argument("--config", type=str, default="configs/paper_final_full.args")
     parser.add_argument("--ours_ckpt", type=str, required=True)
     parser.add_argument("--fixed_ckpt", type=str, required=True)
+    parser.add_argument("--include_fixed_random", action="store_true")
+    parser.add_argument("--fixed_random_ckpt", type=str, default=None)
     parser.add_argument("--nondiff_ckpt", type=str, required=True)
     parser.add_argument("--include_blind", action="store_true")
     parser.add_argument("--blind_ckpt", type=str, default=None)
+    parser.add_argument("--include_ours_zero_ablation", action="store_true",
+                        help="Use ours checkpoint with policy_depth_mode=zero to isolate depth-cue usage.")
+    parser.add_argument("--slots", nargs="*", default=list(SUN_GLARE_SLOT_ORDER),
+                        help="Sun-glare opening slots to sweep: far_left left right far_right")
     parser.add_argument("--episodes_per_condition", type=int, default=12)
     parser.add_argument("--plot_level", type=str, default="l3")
     parser.add_argument("--include_base", action="store_true")
@@ -543,6 +826,12 @@ def main():
         "fixed": Path(args.fixed_ckpt).resolve(),
         "nondiff": Path(args.nondiff_ckpt).resolve(),
     }
+    if args.include_fixed_random:
+        if not args.fixed_random_ckpt:
+            raise ValueError("--include_fixed_random 时必须提供 --fixed_random_ckpt")
+        ckpts["fixed_random"] = Path(args.fixed_random_ckpt).resolve()
+    if args.include_ours_zero_ablation:
+        ckpts["ours_zero"] = Path(args.ours_ckpt).resolve()
     if args.include_blind:
         if not args.blind_ckpt:
             raise ValueError("--include_blind 时必须显式提供 --blind_ckpt；正式 blind baseline 需要先单独训练再评测")
@@ -554,6 +843,15 @@ def main():
     plot_level = canonicalize_sun_glare_level(args.plot_level)
     if plot_level not in GLARE_LEVEL_ORDER:
         raise ValueError(f"unsupported plot level: {plot_level}")
+    slots = []
+    for raw_slot in args.slots:
+        slot = canonicalize_sun_glare_slot(raw_slot)
+        if slot not in SUN_GLARE_SLOT_ORDER:
+            raise ValueError(f"unsupported slot: {raw_slot}")
+        if slot not in slots:
+            slots.append(slot)
+    if not slots:
+        raise ValueError("--slots 至少需要一个 opening slot")
 
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -580,7 +878,7 @@ def main():
             device=device,
             episodes_per_condition=int(args.episodes_per_condition),
             include_base=include_base,
-            plot_level=plot_level,
+            slots=slots,
         )
         all_episode_rows.extend(episode_rows)
         all_trace_rows.extend(trace_rows)
@@ -599,6 +897,12 @@ def main():
         "power_mean",
         "exposure_mean",
         "gain_mean",
+        "opening_y",
+        "opening_slot_id",
+        "y_at_gate",
+        "gate_y_error",
+        "abs_gate_y_error",
+        "final_y",
         "post_entry_available",
         "t_entry_step",
         "post_entry_local_glare_quality",
@@ -614,24 +918,47 @@ def main():
         "energy_proxy",
         "blur_proxy",
         "noise_proxy",
+        "corr_power_scene_effect",
+        "corr_exposure_scene_effect",
+        "corr_gain_scene_effect",
+        "corr_power_fill_gap",
+        "corr_exposure_fill_gap",
+        "corr_gain_fill_gap",
     ]
     summary_rows = _summarize_rows(all_episode_rows, summary_metric_keys)
+    trajectory_diff_rows = []
+    if "ours_zero" in ckpts:
+        trajectory_diff_rows.extend(_compute_trajectory_diffs(all_trace_rows, "ours", "ours_zero"))
+    if "blind" in ckpts:
+        trajectory_diff_rows.extend(_compute_trajectory_diffs(all_trace_rows, "ours", "blind"))
+    for baseline in ("fixed", "fixed_random", "nondiff"):
+        if baseline in ckpts:
+            trajectory_diff_rows.extend(_compute_trajectory_diffs(all_trace_rows, "ours", baseline))
 
     _write_csv(output_dir / "episode_metrics.csv", all_episode_rows)
     _write_csv(output_dir / "trace_metrics.csv", all_trace_rows)
     _write_csv(output_dir / "summary_metrics.csv", summary_rows)
+    _write_csv(output_dir / "trajectory_diffs.csv", trajectory_diff_rows)
     _dump_metadata(output_dir / "meta.json", {
         "config": str(config_path),
         "checkpoints": {k: str(v) for k, v in ckpts.items()},
         "episodes_per_condition": int(args.episodes_per_condition),
         "plot_level": plot_level,
+        "slots": slots,
         "device": str(device),
         "include_base": bool(include_base),
     })
 
     _plot_success_vs_glare(summary_rows, output_dir / "success_vs_glare.png")
+    _plot_success_by_slot(summary_rows, output_dir / "success_by_slot.png")
     _plot_post_entry_metrics(summary_rows, output_dir / "post_entry_vs_glare.png")
-    _plot_event_aligned(all_trace_rows, plot_level=plot_level, output_path=output_dir / f"event_aligned_{plot_level}.png")
+    for slot in slots:
+        _plot_event_aligned(
+            all_trace_rows,
+            plot_level=plot_level,
+            plot_slot=slot,
+            output_path=output_dir / f"event_aligned_{plot_level}_{slot}.png",
+        )
     _plot_trajectory(all_trace_rows, plot_level=plot_level, output_path=output_dir / f"trajectory_{plot_level}.png")
 
     formatted_outputs = format_results_dir(output_dir)
@@ -641,6 +968,7 @@ def main():
     print(f"[suite] summary csv: {output_dir / 'summary_metrics.csv'}")
     print(f"[suite] episode csv: {output_dir / 'episode_metrics.csv'}")
     print(f"[suite] trace csv  : {output_dir / 'trace_metrics.csv'}")
+    print(f"[suite] traj diff  : {output_dir / 'trajectory_diffs.csv'}")
     for name, path in formatted_outputs.items():
         print(f"[suite] {name}: {path}")
 
