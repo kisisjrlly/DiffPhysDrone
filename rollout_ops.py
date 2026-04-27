@@ -3,6 +3,8 @@ Rollout building blocks shared by Teacher and Student phases.
 
 All functions are stateless / pure, taking explicit arguments.
 """
+import math
+
 import torch
 import torch.nn.functional as F
 
@@ -32,6 +34,47 @@ def compute_depth_fill_rate(depth_obs, min_valid_depth: float = 0.3, softness=No
     if softness <= 0.0:
         return (depth_obs >= threshold).float().mean()
     return torch.sigmoid((depth_obs - threshold) / softness).mean()
+
+
+def compute_depth_sensor_health(depth_obs, min_valid_depth: float = 0.3,
+                                softness=None, patch_rows: int = 6,
+                                patch_cols: int = 8,
+                                cvar_frac: float = 0.25):
+    """Return per-env worst-patch/CVaR fill health for camera optimization.
+
+    This is intentionally scene-agnostic: split each depth/quality image into a
+    coarse grid, compute valid-rate per patch, then average the worst
+    ``cvar_frac`` patches. It prevents a large valid background region from
+    hiding local sensor failures around edges, glare, or dark patches.
+    """
+    threshold = float(min_valid_depth)
+    if softness is None or float(softness) <= 0.0:
+        valid = (depth_obs >= threshold).float()
+    else:
+        valid = torch.sigmoid((depth_obs - threshold) / float(softness))
+
+    if valid.ndim == 2:
+        valid = valid.unsqueeze(0)
+    elif valid.ndim == 4:
+        if valid.shape[1] == 1:
+            valid = valid[:, 0]
+        else:
+            valid = valid.mean(dim=1)
+    if valid.ndim != 3:
+        raise ValueError(
+            f"compute_depth_sensor_health expects [H,W], [B,H,W], or [B,C,H,W], got {tuple(valid.shape)}"
+        )
+
+    rows = max(1, int(patch_rows))
+    cols = max(1, int(patch_cols))
+    patch_fill = F.adaptive_avg_pool2d(valid[:, None], (rows, cols)).flatten(1)
+    frac = min(max(float(cvar_frac), 0.0), 1.0)
+    if frac <= 0.0:
+        k = 1
+    else:
+        k = max(1, int(math.ceil(patch_fill.shape[1] * frac)))
+    worst = torch.topk(patch_fill, k=k, dim=1, largest=False).values
+    return worst.mean(dim=1)
 
 
 def select_policy_depth_obs(depth_obs, mode: str = 'depth'):

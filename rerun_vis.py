@@ -28,6 +28,118 @@ class RerunVis:
             self.enabled = False
             self._rr = None
 
+    def _build_eval_dashboard(self, rrb, root="/student", name="student"):
+        """Build one eval dashboard bound to one exact student entity root."""
+        root = str(root).rstrip("/")
+
+        def p(rel_path):
+            return f"{root}/{rel_path}"
+
+        motion_row = rrb.Horizontal(
+            rrb.TimeSeriesView(origin=p("metrics/speed_mps"), contents=[p("metrics/speed_mps")], name="speed_mps"),
+            rrb.TimeSeriesView(origin=p("metrics/angular_speed_rps"), contents=[p("metrics/angular_speed_rps")], name="angular_speed_rps"),
+            rrb.TimeSeriesView(origin=p("metrics/thrust_norm_mps2"), contents=[p("metrics/thrust_norm_mps2")], name="thrust_norm_mps2"),
+            rrb.TimeSeriesView(origin=p("metrics/accel_norm_mps2"), contents=[p("metrics/accel_norm_mps2")], name="accel_norm_mps2"),
+            rrb.TimeSeriesView(origin=p("metrics/dist_to_goal_m"), contents=[p("metrics/dist_to_goal_m")], name="dist_to_goal_m"),
+            name=f"{name}_motion_metrics",
+        )
+        position_row = rrb.Horizontal(
+            rrb.TimeSeriesView(origin=p("metrics/pos_x_m"), contents=[p("metrics/pos_x_m")], name="pos_x_m"),
+            rrb.TimeSeriesView(origin=p("metrics/pos_y_m"), contents=[p("metrics/pos_y_m")], name="pos_y_m"),
+            rrb.TimeSeriesView(origin=p("metrics/pos_z_m"), contents=[p("metrics/pos_z_m")], name="pos_z_m"),
+            name=f"{name}_position_metrics",
+        )
+        scene_row = rrb.Horizontal(
+            rrb.TimeSeriesView(origin=p("metrics/scene_effect_mean"), contents=[p("metrics/scene_effect_mean")], name="scene_effect_mean"),
+            rrb.TimeSeriesView(origin=p("metrics/glare_quality_mean"), contents=[p("metrics/glare_quality_mean")], name="glare_quality_mean"),
+            rrb.TimeSeriesView(origin=p("metrics/glare_invalid_rate"), contents=[p("metrics/glare_invalid_rate")], name="glare_invalid_rate"),
+            rrb.TimeSeriesView(origin=p("metrics/sun_los_mean"), contents=[p("metrics/sun_los_mean")], name="sun_los_mean"),
+            rrb.TimeSeriesView(origin=p("metrics/hazard_los_mean"), contents=[p("metrics/hazard_los_mean")], name="hazard_los_mean"),
+            name=f"{name}_scene_metrics",
+        )
+        metrics_block = rrb.Vertical(
+            motion_row,
+            position_row,
+            scene_row,
+            name=f"{name}_metrics",
+        )
+
+        return rrb.Vertical(
+            rrb.Horizontal(
+                rrb.Spatial3DView(
+                    origin=root,
+                    contents=[
+                        p("drone/**"),
+                        p("target/**"),
+                        p("world/**"),
+                    ],
+                    name="student_3d",
+                ),
+                rrb.Spatial2DView(
+                    origin=p("camera/depth_aux"),
+                    contents=[p("camera/depth_aux")],
+                    name="depth",
+                ),
+                rrb.Vertical(
+                    rrb.Spatial2DView(
+                        origin=p("camera/quality"),
+                        contents=[p("camera/quality")],
+                        name="quality",
+                    ),
+                    rrb.Spatial2DView(
+                        origin=p("camera/invalid"),
+                        contents=[p("camera/invalid")],
+                        name="invalid",
+                    ),
+                    rrb.Spatial2DView(
+                        origin=p("camera/scene_effect"),
+                        contents=[p("camera/scene_effect")],
+                        name="scene_effect",
+                    ),
+                    name="scene_maps",
+                ),
+                rrb.Vertical(
+                    rrb.TimeSeriesView(origin=p("camera/power"), contents=[p("camera/power")], name="power"),
+                    rrb.TimeSeriesView(origin=p("camera/exposure"), contents=[p("camera/exposure")], name="exposure"),
+                    rrb.TimeSeriesView(origin=p("camera/gain"), contents=[p("camera/gain")], name="gain"),
+                    name="camera_params",
+                ),
+                name="top_row",
+            ),
+            metrics_block,
+            name=name,
+        )
+
+    def send_eval_episode_blueprint(self, num_episodes: int, vis_episode_idx: int = -1):
+        """Send an eval blueprint with one selectable tab per logged episode."""
+        if not self.enabled or self._rr is None:
+            return
+        try:
+            import rerun.blueprint as rrb  # type: ignore
+
+            if int(vis_episode_idx) >= 0:
+                root = "/student"
+                dashboard = self._build_eval_dashboard(rrb, root=root, name=f"ep_{int(vis_episode_idx):03d}")
+                bp = rrb.Blueprint(dashboard, auto_layout=False, auto_views=False)
+            else:
+                n = max(1, int(num_episodes))
+                tabs = [
+                    self._build_eval_dashboard(
+                        rrb,
+                        root=f"/episodes/ep_{ep_idx:03d}/student",
+                        name=f"ep_{ep_idx:03d}",
+                    )
+                    for ep_idx in range(n)
+                ]
+                bp = rrb.Blueprint(
+                    rrb.Tabs(*tabs, active_tab=0, name="episodes"),
+                    auto_layout=False,
+                    auto_views=False,
+                )
+            self._rr.send_blueprint(bp)
+        except Exception as e:
+            print(f"[warn] failed to send eval episode blueprint: {e}")
+
     def _send_default_blueprint(self):
         """Send a deterministic dashboard layout so key metrics are always visible."""
         if not self.enabled or self._rr is None:
@@ -37,34 +149,10 @@ class RerunVis:
             import rerun.blueprint as rrb  # type: ignore
 
             if "eval" in str(self.app_id).lower():
-                motion_row = rrb.Horizontal(
-                    rrb.TimeSeriesView(origin="/student/metrics/speed_mps", contents=["/student/metrics/speed_mps"], name="speed_mps"),
-                    rrb.TimeSeriesView(origin="/student/metrics/angular_speed_rps", contents=["/student/metrics/angular_speed_rps"], name="angular_speed_rps"),
-                    rrb.TimeSeriesView(origin="/student/metrics/thrust_norm_mps2", contents=["/student/metrics/thrust_norm_mps2"], name="thrust_norm_mps2"),
-                    rrb.TimeSeriesView(origin="/student/metrics/accel_norm_mps2", contents=["/student/metrics/accel_norm_mps2"], name="accel_norm_mps2"),
-                    rrb.TimeSeriesView(origin="/student/metrics/dist_to_goal_m", contents=["/student/metrics/dist_to_goal_m"], name="dist_to_goal_m"),
-                    name="eval_motion_metrics",
-                )
-                position_row = rrb.Horizontal(
-                    rrb.TimeSeriesView(origin="/student/metrics/pos_x_m", contents=["/student/metrics/pos_x_m"], name="pos_x_m"),
-                    rrb.TimeSeriesView(origin="/student/metrics/pos_y_m", contents=["/student/metrics/pos_y_m"], name="pos_y_m"),
-                    rrb.TimeSeriesView(origin="/student/metrics/pos_z_m", contents=["/student/metrics/pos_z_m"], name="pos_z_m"),
-                    name="eval_position_metrics",
-                )
-                scene_row = rrb.Horizontal(
-                    rrb.TimeSeriesView(origin="/student/metrics/scene_effect_mean", contents=["/student/metrics/scene_effect_mean"], name="scene_effect_mean"),
-                    rrb.TimeSeriesView(origin="/student/metrics/glare_quality_mean", contents=["/student/metrics/glare_quality_mean"], name="glare_quality_mean"),
-                    rrb.TimeSeriesView(origin="/student/metrics/glare_invalid_rate", contents=["/student/metrics/glare_invalid_rate"], name="glare_invalid_rate"),
-                    rrb.TimeSeriesView(origin="/student/metrics/sun_los_mean", contents=["/student/metrics/sun_los_mean"], name="sun_los_mean"),
-                    rrb.TimeSeriesView(origin="/student/metrics/hazard_los_mean", contents=["/student/metrics/hazard_los_mean"], name="hazard_los_mean"),
-                    name="eval_scene_metrics",
-                )
-                metrics_block = rrb.Vertical(
-                    motion_row,
-                    position_row,
-                    scene_row,
-                    name="eval_metrics",
-                )
+                dashboard = self._build_eval_dashboard(rrb, root="/student", name="student")
+                bp = rrb.Blueprint(dashboard, auto_layout=False, auto_views=False)
+                rr.send_blueprint(bp)
+                return
             else:
                 metrics_block = rrb.Horizontal(
                     rrb.TimeSeriesView(origin="/train/loss", contents=["/train/loss"], name="loss"),
@@ -74,54 +162,7 @@ class RerunVis:
                     name="train_metrics",
                 )
 
-            bp = rrb.Blueprint(
-                rrb.Vertical(
-                    rrb.Horizontal(
-                        rrb.Spatial3DView(
-                            origin="/student",
-                            contents=[
-                                "/student/drone/**",
-                                "/student/target/**",
-                                "/student/world/**",
-                            ],
-                            name="student_3d",
-                        ),
-                        rrb.Spatial2DView(
-                            origin="/student/camera/depth_aux",
-                            contents=["/student/camera/depth_aux"],
-                            name="depth",
-                        ),
-                        rrb.Vertical(
-                            rrb.Spatial2DView(
-                                origin="/student/camera/quality",
-                                contents=["/student/camera/quality"],
-                                name="quality",
-                            ),
-                            rrb.Spatial2DView(
-                                origin="/student/camera/invalid",
-                                contents=["/student/camera/invalid"],
-                                name="invalid",
-                            ),
-                            rrb.Spatial2DView(
-                                origin="/student/camera/scene_effect",
-                                contents=["/student/camera/scene_effect"],
-                                name="scene_effect",
-                            ),
-                            name="scene_maps",
-                        ),
-                        rrb.Vertical(
-                            rrb.TimeSeriesView(origin="/student/camera/power", contents=["/student/camera/power"], name="power"),
-                            rrb.TimeSeriesView(origin="/student/camera/exposure", contents=["/student/camera/exposure"], name="exposure"),
-                            rrb.TimeSeriesView(origin="/student/camera/gain", contents=["/student/camera/gain"], name="gain"),
-                            name="camera_params",
-                        ),
-                        name="top_row",
-                    ),
-                    metrics_block,
-                ),
-                auto_layout=False,
-                auto_views=False,
-            )
+            bp = rrb.Blueprint(metrics_block, auto_layout=False, auto_views=False)
             rr.send_blueprint(bp)
         except Exception as e:
             print(f"[warn] failed to send rerun blueprint, fallback to auto layout: {e}")
@@ -178,7 +219,7 @@ class RerunVis:
             np.asarray(normals, dtype=np.float32),
         )
 
-    def begin_episode(self, ep_idx: int):
+    def begin_episode(self, ep_idx: int, step_base: int = 0):
         """Reset all per-episode data in rerun at the start of a new episode.
 
         Clears 3D scene entities, flight path, camera params, and metrics so
@@ -190,6 +231,14 @@ class RerunVis:
         self._paths["teacher"].clear()
         self._paths["student"].clear()
 
+        # Use a monotonically increasing step timeline across eval episodes.
+        # If every episode reuses step=0..T on the same scalar paths, Rerun
+        # overlays/joins multiple episode traces and plots look thick/zigzag.
+        try:
+            rr.set_time_sequence("step", int(step_base))
+        except Exception:
+            pass
+
         # Clear all student entities (3D scene, path, metrics, camera params)
         for ns in ("student", "teacher"):
             try:
@@ -197,11 +246,6 @@ class RerunVis:
             except Exception:
                 pass
 
-        # Reset step timeline to 0 for this episode
-        try:
-            rr.set_time_sequence("step", 0)
-        except Exception:
-            pass
         try:
             rr.set_time_sequence("iter", int(ep_idx))
         except Exception:
@@ -867,7 +911,8 @@ class RerunVis:
         p = np.asarray(pos, dtype=np.float32).reshape(3)
         t = np.asarray(target, dtype=np.float32).reshape(3)
 
-        self._paths[phase].append(p.tolist())
+        phase_path = self._paths.setdefault(phase, [])
+        phase_path.append(p.tolist())
 
         rr.log(
             f"{phase}/drone/pos",
@@ -879,14 +924,14 @@ class RerunVis:
         )
         rr.log(
             f"{phase}/drone/path",
-            rr.LineStrips3D([self._paths[phase]], colors=[[0, 240, 255]], radii=[0.014]),
+            rr.LineStrips3D([phase_path], colors=[[0, 240, 255]], radii=[0.014]),
         )
         rr.log(
             f"{phase}/drone/path_points",
             rr.Points3D(
-                self._paths[phase],
-                colors=[[180, 255, 255]] * len(self._paths[phase]),
-                radii=[0.012] * len(self._paths[phase]),
+                phase_path,
+                colors=[[180, 255, 255]] * len(phase_path),
+                radii=[0.012] * len(phase_path),
             ),
         )
         rr.log(f"{phase}/metrics/pos_x_m", self._scalar_msg(float(p[0])))

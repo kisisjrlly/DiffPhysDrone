@@ -8,6 +8,7 @@ DiffPhysDrone evaluation entry point.
 """
 
 import argparse
+import csv
 import os
 from random import normalvariate
 import time
@@ -51,6 +52,12 @@ def parse_eval_args():
     parser = build_parser()
     parser.add_argument('--eval_episodes', type=int, default=1,
                         help='评估 episode 数（每个 episode 重置一次环境并做 timesteps 步推理）')
+    parser.add_argument('--vis_episode_idx', type=int, default=-1,
+                        help='Rerun 只记录指定 episode，0-based；-1 表示记录全部 episode')
+    parser.add_argument('--eval_trace_csv', type=str, default=None,
+                        help='可选：保存 step 级 eval trace CSV')
+    parser.add_argument('--eval_episode_csv', type=str, default=None,
+                        help='可选：保存 episode 级 eval metrics CSV')
     args = parser.parse_args()
 
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
@@ -63,8 +70,29 @@ def parse_eval_args():
 
     if args.eval_episodes < 1:
         raise ValueError('--eval_episodes 必须 >= 1')
+    if args.vis_episode_idx < -1:
+        raise ValueError('--vis_episode_idx 必须为 -1 或 >= 0')
+    if args.vis_episode_idx >= args.eval_episodes:
+        raise ValueError('--vis_episode_idx 必须小于 --eval_episodes')
 
     return args
+
+
+def _write_csv_rows(path, rows):
+    if not path or not rows:
+        return
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    keys = []
+    seen = set()
+    for row in rows:
+        for key in row.keys():
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
+    with open(path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device, collect_trace=False):
@@ -73,12 +101,21 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
 
     env.reset(scene_name=scene_name, scene_variant=scene_variant)
     model.reset()
+    vis_episode_idx = int(getattr(args, 'vis_episode_idx', -1))
+    log_vis = bool(vis.enabled and (vis_episode_idx < 0 or int(ep_idx) == vis_episode_idx))
+    vis_all_episode_paths = bool(log_vis and vis_episode_idx < 0 and int(args.eval_episodes) > 1)
+    # For multi-episode Rerun eval, log each episode to an independent entity
+    # namespace. This lets the viewer hide/show one episode after the run.
+    vis_phase = f"episodes/ep_{int(ep_idx):03d}/student" if vis_all_episode_paths else "student"
+    # Episode-specific paths can reuse local step 0..T-1. If all episodes are
+    # deliberately logged to one path, keep a monotonic global step.
+    episode_step_base = 0 if vis_all_episode_paths or vis_episode_idx >= 0 else int(ep_idx) * int(args.timesteps)
 
-    if vis.enabled:
-        vis.begin_episode(ep_idx)
+    if log_vis:
+        vis.begin_episode(ep_idx, step_base=episode_step_base)
         j = int(min(max(args.vis_env_idx, 0), B - 1))
         vis.log_environment(
-            phase='student',
+            phase=vis_phase,
             balls=env.balls[j].detach().cpu().numpy(),
             voxels=env.voxels[j].detach().cpu().numpy(),
             cyl=env.cyl[j].detach().cpu().numpy(),
@@ -87,7 +124,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
             target=env.p_target[j].detach().cpu().numpy(),
             scene_name=getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', None)),
             scene_effects=getattr(env, 'current_scene_effects', None),
-            step_idx=0,
+            step_idx=episode_step_base,
         )
 
     h = None
@@ -212,7 +249,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         if 'glare_invalid_rate' in scene_debug_for_metrics.get('scalars', {}):
             glare_invalid_hist.append(float(scene_debug_for_metrics['scalars']['glare_invalid_rate']))
 
-        if vis.enabled:
+        if log_vis:
             j = int(min(max(args.vis_env_idx, 0), B - 1))
             cam_vals = (
                 float(power[j].detach().cpu()),
@@ -253,8 +290,8 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
             step_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
 
             vis.log_step(
-                phase='student',
-                step_idx=t,
+                phase=vis_phase,
+                step_idx=episode_step_base + t,
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=None,
@@ -316,7 +353,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
         if collided:
             print(f"[eval] collision detected at step={t}, early stop this episode.")
             break
-        if vis.enabled:
+        if log_vis:
             time.sleep(1.0/5)
 
     min_margin_all = torch.stack(min_margin_hist).amin(dim=0)
@@ -462,9 +499,16 @@ def main():
         app_id='DiffPhysDrone-Eval',
         spawn=args.vis_spawn,
     )
+    if vis.enabled:
+        vis.send_eval_episode_blueprint(args.eval_episodes, args.vis_episode_idx)
+    if vis.enabled and int(args.vis_episode_idx) >= 0:
+        print(f"[eval] rerun visualizes only episode index {int(args.vis_episode_idx)}")
+    elif vis.enabled and int(args.eval_episodes) > 1:
+        print("[eval] rerun logs episodes under /episodes/ep_XXX/student for post-run selection")
 
     with torch.no_grad():
         ep_metrics = []
+        trace_rows_all = []
         eval_scenes = list(args.scenarios)
         for ep_idx in range(args.eval_episodes):
             scene_name = eval_scenes[ep_idx % len(eval_scenes)]
@@ -476,7 +520,17 @@ def main():
                     scene_variant = args.sun_glare_levels[ep_idx % len(args.sun_glare_levels)]
                 else:
                     scene_variant = args.sun_glare_levels[0]
-            ep_metrics.append(run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device))
+            if args.eval_trace_csv:
+                metrics, trace_rows = run_one_episode(
+                    ep_idx, scene_name, scene_variant, args, model, env, vis, device,
+                    collect_trace=True,
+                )
+                trace_rows_all.extend(trace_rows)
+            else:
+                metrics = run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device)
+            metrics = dict(metrics)
+            metrics['episode_idx'] = int(ep_idx)
+            ep_metrics.append(metrics)
 
     if ep_metrics:
         keys = [
@@ -509,6 +563,13 @@ def main():
                     if vals:
                         parts.append(f'{key}={sum(vals) / len(vals):.4f}')
                 print(f'  {scene_name}: ' + ' '.join(parts))
+
+    if args.eval_episode_csv and ep_metrics:
+        _write_csv_rows(args.eval_episode_csv, ep_metrics)
+        print(f"[eval] wrote episode metrics: {args.eval_episode_csv}")
+    if args.eval_trace_csv and trace_rows_all:
+        _write_csv_rows(args.eval_trace_csv, trace_rows_all)
+        print(f"[eval] wrote trace rows: {args.eval_trace_csv}")
 
     print('[eval] done.')
 

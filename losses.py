@@ -94,9 +94,11 @@ def _infer_loss_device(*items):
 def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq,
                           fill_rate_seq=None, min_fill_rate=0.18,
                           camera_semantics=None,
-                          power_baseline: float = 0.55):
+                          power_baseline: float = 0.55,
+                          cam_initial=None):
     """计算 diff_depth-only 分支的相机控制损失。"""
-    device = _infer_loss_device(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq)
+    device = _infer_loss_device(
+        cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq, cam_initial)
     power_baseline = float(power_baseline)
     result = {
         'loss_cam_smooth': torch.zeros((), device=device),
@@ -106,10 +108,22 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
         'loss_diff_depth_fill': torch.zeros((), device=device),
     }
 
-    # 相机平滑度与正则化
-    if cam_hist is not None and cam_hist.shape[0] > 1:
-        cam_diff = cam_hist.diff(1, 0)
-        result['loss_cam_smooth'] = cam_diff.pow(2).mean()
+    # 相机平滑度与正则化。把 rollout/chunk 起始相机状态拼进去，
+    # 约束“初始状态 -> 第一个网络输出”的跳变。
+    if cam_hist is not None:
+        cam_for_smooth = cam_hist
+        if cam_initial is not None:
+            init = cam_initial.to(device=cam_hist.device, dtype=cam_hist.dtype)
+            if init.ndim == cam_hist.ndim - 1:
+                init = init.unsqueeze(0)
+            if init.shape[1:] != cam_hist.shape[1:]:
+                raise ValueError(
+                    f"cam_initial shape {tuple(init.shape)} incompatible with cam_hist {tuple(cam_hist.shape)}"
+                )
+            cam_for_smooth = torch.cat([init.detach(), cam_hist], dim=0)
+        if cam_for_smooth.shape[0] > 1:
+            cam_diff = cam_for_smooth.diff(1, 0)
+            result['loss_cam_smooth'] = cam_diff.pow(2).mean()
 
     # diff_depth 光学损失
     if exposure_seq is not None:

@@ -10,3 +10,4 @@ wandb/
 *.log
 logs/
 paper/experiment/results/*
+configs/paper_final_full_auto*

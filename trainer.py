@@ -36,7 +36,8 @@ from rollout_ops import (
     compute_target_velocity, decode_action_direct, decode_action_lqr,
     update_camera_params, diff_depth_exposure_to_time,
     init_camera_params, compute_camera_param_stats, compute_diff_depth_proxies,
-    compute_depth_fill_rate, diff_depth_fill_softness, select_policy_depth_obs,
+    compute_depth_fill_rate, compute_depth_sensor_health,
+    diff_depth_fill_softness, select_policy_depth_obs,
 )
 from train_utils import (
     MetricSmoother, periodic_tail_ops, is_save_iter,
@@ -180,6 +181,11 @@ def _teacher_inner_loop(env, env_snapshot, args,
         c_exposure, c_gain, c_power, c_speed, c_fill = [], [], [], [], []
 
         power_k, exposure_k, gain_k = init_camera_params(env, B, device)
+        chunk_cam_initial_k = torch.stack([
+            power_k.detach(),
+            exposure_k.detach(),
+            gain_k.detach(),
+        ], dim=-1)
 
         for t in range(args.timesteps):
             dt_k = teacher_dt_like_student(
@@ -189,10 +195,14 @@ def _teacher_inner_loop(env, env_snapshot, args,
             )
             depth_obs_k, quality_k = render_sensors(
                 env, dt_k, power_k, exposure_k, gain_k, differentiable=sensor_differentiable)
-            fill_rate_k = compute_depth_fill_rate(
-                quality_k if quality_k is not None else depth_obs_k,
+            fill_src_k = quality_k if quality_k is not None else depth_obs_k
+            fill_health_k = compute_depth_sensor_health(
+                fill_src_k,
                 min_valid_depth=args.depth_min_valid,
                 softness=diff_depth_fill_softness(args.depth_min_valid),
+                patch_rows=args.diff_depth_health_patch_rows,
+                patch_cols=args.diff_depth_health_patch_cols,
+                cvar_frac=args.diff_depth_health_cvar_frac,
             )
             c_p.append(env.p)
             vec_now_k = env.find_vec_to_nearest_pt()
@@ -234,7 +244,7 @@ def _teacher_inner_loop(env, env_snapshot, args,
             c_gain.append(gain_k)
 
             c_speed.append(env.v.norm(2, -1))
-            c_fill.append(fill_rate_k)
+            c_fill.append(fill_health_k)
             c_v.append(env.v)
             c_tv.append(tv_k)
             c_act.append(a_final_k)
@@ -288,6 +298,7 @@ def _teacher_inner_loop(env, env_snapshot, args,
                     min_fill_rate=args.diff_depth_min_fill_rate,
                     camera_semantics=env.cam_sem,
                     power_baseline=args.cam_power_baseline,
+                    cam_initial=chunk_cam_initial_k,
                 )
                 chunk_loss, _ = aggregate_loss(
                     physics_losses,
@@ -311,6 +322,11 @@ def _teacher_inner_loop(env, env_snapshot, args,
                 c_p.clear(); c_v.clear(); c_tv.clear(); c_vtp.clear(); c_act.clear()
                 c_sensor_hist.clear()
                 c_exposure.clear(); c_gain.clear(); c_power.clear(); c_speed.clear(); c_fill.clear()
+                chunk_cam_initial_k = torch.stack([
+                    power_k.detach(),
+                    exposure_k.detach(),
+                    gain_k.detach(),
+                ], dim=-1)
 
         inner_optim.step()
 
@@ -370,6 +386,7 @@ def student_rollout(env, model, args, B, device, use_amp,
     speed_for_depth_history, R_up_history = [], []
     depth_fill_history = []
     depth_fill_soft_history = []
+    depth_fill_health_history = []
     h = None
 
     # TBPTT state
@@ -392,6 +409,13 @@ def student_rollout(env, model, args, B, device, use_amp,
     R_drift = make_yaw_drift_R(B, device) if args.yaw_drift else None
 
     power, exposure, gain = init_camera_params(env, B, device)
+    rollout_cam_initial = torch.stack([
+        power.detach(),
+        exposure.detach(),
+        gain.detach(),
+    ], dim=-1)
+    if tbptt_this_iter:
+        chunk_cam_initial = rollout_cam_initial
     sensor_differentiable = (getattr(args, 'sensor_grad_mode', 'full') == 'full')
 
     # ── Main rollout loop ──
@@ -421,8 +445,17 @@ def student_rollout(env, model, args, B, device, use_amp,
             min_valid_depth=args.depth_min_valid,
             softness=diff_depth_fill_softness(args.depth_min_valid),
         )
+        fill_health_t = compute_depth_sensor_health(
+            fill_src,
+            min_valid_depth=args.depth_min_valid,
+            softness=diff_depth_fill_softness(args.depth_min_valid),
+            patch_rows=args.diff_depth_health_patch_rows,
+            patch_cols=args.diff_depth_health_patch_cols,
+            cvar_frac=args.diff_depth_health_cvar_frac,
+        )
         depth_fill_history.append(fill_rate_t.detach() if tbptt_this_iter else fill_rate_t)
         depth_fill_soft_history.append(fill_rate_soft_t.detach() if tbptt_this_iter else fill_rate_soft_t)
+        depth_fill_health_history.append(fill_health_t.detach() if tbptt_this_iter else fill_health_t)
 
         vec_now = env.find_vec_to_nearest_pt()
         if tbptt_this_iter:
@@ -513,7 +546,7 @@ def student_rollout(env, model, args, B, device, use_amp,
             c_vec_hist.append(vec_now)
             c_act_hist.append(act); c_p_hist.append(env.p)
             c_speed.append(env.v.norm(2, -1))
-            c_fill.append(fill_rate_soft_t)
+            c_fill.append(fill_health_t)
             c_sensor_hist.append(cam_hist_entry)
             c_exposure.append(exposure); c_gain.append(gain)
             c_power.append(power)
@@ -539,6 +572,7 @@ def student_rollout(env, model, args, B, device, use_amp,
                     min_fill_rate=args.diff_depth_min_fill_rate,
                     camera_semantics=env.cam_sem,
                     power_baseline=args.cam_power_baseline,
+                    cam_initial=chunk_cam_initial,
                 )
 
                 loss_distill_c = None
@@ -608,6 +642,11 @@ def student_rollout(env, model, args, B, device, use_amp,
                 c_vec_hist.clear(); c_act_hist.clear(); c_p_hist.clear()
                 c_sensor_hist.clear(); c_exposure.clear(); c_gain.clear()
                 c_power.clear(); c_speed.clear(); c_fill.clear()
+                chunk_cam_initial = torch.stack([
+                    power.detach(),
+                    exposure.detach(),
+                    gain.detach(),
+                ], dim=-1)
 
         # Visualization
         if should_vis_iter and args.vis_student and (t % max(args.vis_every_steps, 1) == 0):
@@ -653,12 +692,14 @@ def student_rollout(env, model, args, B, device, use_amp,
         'raw_intent_history': raw_intent_history,
         'raw_cam_history': raw_cam_history,
         'cam_params_history': cam_params_history,
+        'camera_initial': rollout_cam_initial,
         'power_history': power_history,
         'exposure_history': exposure_history,
         'gain_history': gain_history,
         'speed_for_depth_history': speed_for_depth_history,
         'depth_fill_history': depth_fill_history,
         'depth_fill_soft_history': depth_fill_soft_history,
+        'depth_fill_health_history': depth_fill_health_history,
         'R_up_history': R_up_history,
     }
 
@@ -690,10 +731,11 @@ def full_bptt_losses(rollout, env, args, device, u_star, y_star, u_star_cam, dis
         _stack_or_none(rollout['exposure_history']),
         _stack_or_none(rollout['gain_history']),
         _stack_or_none(rollout['speed_for_depth_history']),
-        _stack_or_none(rollout['depth_fill_soft_history']),
+        _stack_or_none(rollout['depth_fill_health_history']),
         min_fill_rate=args.diff_depth_min_fill_rate,
         camera_semantics=env.cam_sem,
         power_baseline=args.cam_power_baseline,
+        cam_initial=rollout.get('camera_initial'),
     )
 
     loss_distill = None
@@ -790,6 +832,16 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
         smoother.add({
             'diff_depth_fill_rate_soft': float(fill_soft_mean.item()),
             'diff_depth_hole_rate_soft': float((1.0 - fill_soft_mean).item()),
+        })
+    if rollout.get('depth_fill_health_history'):
+        health_hist = torch.stack([
+            x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x
+            for x in rollout['depth_fill_health_history']
+        ])
+        health_mean = health_hist.mean()
+        smoother.add({
+            'diff_depth_sensor_health_cvar': float(health_mean.item()),
+            'diff_depth_sensor_health_gap': float((1.0 - health_mean).item()),
         })
     cam_stats = compute_camera_param_stats(
         rollout.get('power_history'),

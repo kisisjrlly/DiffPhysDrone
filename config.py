@@ -207,6 +207,12 @@ def build_parser():
                         help='惩罚 fill rate 低于阈值的 blackout 现象，防止策略把深度相机关到近乎失效')
     parser.add_argument('--diff_depth_min_fill_rate', type=float, default=0.18,
                         help='深度 fill rate 的最低目标阈值；低于它时会触发 blackout penalty')
+    parser.add_argument('--diff_depth_health_patch_rows', type=int, default=6,
+                        help='sensor health loss 使用的纵向 patch 网格数')
+    parser.add_argument('--diff_depth_health_patch_cols', type=int, default=8,
+                        help='sensor health loss 使用的横向 patch 网格数')
+    parser.add_argument('--diff_depth_health_cvar_frac', type=float, default=0.25,
+                        help='sensor health loss 取最差多少比例 patch 的均值；1.0 退化为全图均值')
     parser.add_argument('--coef_sun_glare_local_quality', type=float, default=0.0,
                         help='[deprecated/ignored] 旧版 sun_glare 局部质量恢复损失权重')
     parser.add_argument('--sun_glare_local_quality_target', type=float, default=0.55,
@@ -528,6 +534,12 @@ def validate_args(args):
             raise ValueError(f'--{name} 必须 >= 0')
     if args.cam_model_randomize_scale < 0.0 or args.cam_model_randomize_scale > 0.5:
         raise ValueError('--cam_model_randomize_scale 建议在 [0, 0.5] 内')
+    if int(getattr(args, 'diff_depth_health_patch_rows', 1)) < 1:
+        raise ValueError('--diff_depth_health_patch_rows 必须 >= 1')
+    if int(getattr(args, 'diff_depth_health_patch_cols', 1)) < 1:
+        raise ValueError('--diff_depth_health_patch_cols 必须 >= 1')
+    if not (0.0 <= float(getattr(args, 'diff_depth_health_cvar_frac', 0.25)) <= 1.0):
+        raise ValueError('--diff_depth_health_cvar_frac 必须在 [0, 1] 内')
     deprecated_loss_args = []
     if abs(float(getattr(args, 'coef_v_pred', 0.0))) > 1e-12:
         deprecated_loss_args.append('--coef_v_pred')
@@ -605,6 +617,11 @@ def print_runtime_mode(args):
     print(f"sun_glare_eval_regime     : {getattr(args, 'sun_glare_eval_regime', None)}")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
+    print(
+        "sensor_health_loss       : "
+        f"patch={args.diff_depth_health_patch_rows}x{args.diff_depth_health_patch_cols}, "
+        f"cvar={args.diff_depth_health_cvar_frac}, target={args.diff_depth_min_fill_rate}"
+    )
     print("environment               : fixed_small_map_with_perception_scenarios")
     print("sensor_control_semantics  : power/exposure/gain")
     print("=" * 75)

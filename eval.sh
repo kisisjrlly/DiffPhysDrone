@@ -42,17 +42,33 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-22-57-27/checkpoint0014.pth} # nodiff
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-21-41-35/checkpoint0014.pth} # fixed
 # ckpt_path=${CKPT:-checkpoint/2026-04-25-10-51-34/checkpoint0049.pth} # nocamera
-# ckpt_path=${CKPT:-checkpoint/2026-04-26-17-30-07/checkpoint0049.pth} # ours
-ckpt_path=${CKPT:-checkpoint/2026-04-26-17-31-21/checkpoint0049.pth} # fixed
+ckpt_path=${CKPT:-checkpoint/2026-04-27-11-57-54/checkpoint0039.pth} # ours
+# ckpt_path=${CKPT:-checkpoint/2026-04-26-17-31-21/checkpoint0049.pth} # fixed
 
 
 
 
 # 评估 episode 数（默认 1）
-eval_episodes=${EVAL_EPISODES:-1}
+eval_episodes=${EVAL_EPISODES:-10}
+
+# Rerun 只显示哪一轮 episode：
+# -1 表示全部写入 /episodes/ep_XXX，跑完后在 Rerun 手动选择；
+# 0 表示只写第 1 轮；1 表示只写第 2 轮；以此类推。
+vis_episode_idx=${VIS_EPISODE_IDX:--1}
 
 # 评估 batch 大小（默认 1，只看单机/单轨迹结果）
 eval_batch_size=${EVAL_BATCH_SIZE:-1}
+
+# 是否启用 Rerun 可视化。批量数值分析可设 VIS_ENABLE=0 加速。
+vis_enable=${VIS_ENABLE:-1}
+
+# 额外 eval 参数，例如：
+#   EVAL_EXTRA_ARGS="--sun_glare_eval_regime glare --sun_glare_eval_level l2"
+eval_extra_args=${EVAL_EXTRA_ARGS:-}
+
+# 可选 CSV 输出路径。
+eval_trace_csv=${EVAL_TRACE_CSV:-}
+eval_episode_csv=${EVAL_EPISODE_CSV:-}
 
 # 日志输出模式:
 # - LOG_TO_FILE=1 (默认): 输出到 logs/eval-<task>-<time>.log
@@ -115,14 +131,35 @@ done
 echo "using config files: ${cfg_files[*]}"
 echo "using checkpoint  : $ckpt_path"
 echo "eval episodes     : $eval_episodes"
+echo "vis episode idx   : $vis_episode_idx"
 echo "eval batch_size   : $eval_batch_size"
+echo "vis enable        : $vis_enable"
+echo "eval extra args   : ${eval_extra_args:-<none>}"
+echo "eval trace csv    : ${eval_trace_csv:-<none>}"
+echo "eval episode csv  : ${eval_episode_csv:-<none>}"
 
 # 强制 eval 语义：
 # - 使用指定 checkpoint
 # - 禁用 wandb
 # - 仅运行 eval.py 前向推理
 # common_cmd="python -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes --batch_size $eval_batch_size --timesteps 300"
-common_cmd="$py_bin -u eval.py $cfg_args --resume $ckpt_path --vis_enable --wandb_disabled --eval_episodes $eval_episodes --batch_size $eval_batch_size"
+vis_args=""
+if [ "$vis_enable" = "1" ]; then
+	vis_args="--vis_enable"
+elif [ "$vis_enable" != "0" ]; then
+	echo "[error] invalid VIS_ENABLE=$vis_enable (expected 0 or 1)"
+	exit 1
+fi
+
+csv_args=""
+if [ -n "$eval_trace_csv" ]; then
+	csv_args="$csv_args --eval_trace_csv $eval_trace_csv"
+fi
+if [ -n "$eval_episode_csv" ]; then
+	csv_args="$csv_args --eval_episode_csv $eval_episode_csv"
+fi
+
+common_cmd="$py_bin -u eval.py $cfg_args $eval_extra_args --resume $ckpt_path $vis_args --wandb_disabled --eval_episodes $eval_episodes --vis_episode_idx $vis_episode_idx --batch_size $eval_batch_size $csv_args"
 
 if [ "$log_to_file" = "1" ]; then
 	eval "$common_cmd" > "$log_file" 2>&1
