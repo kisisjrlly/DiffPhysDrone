@@ -1,143 +1,32 @@
 {
   "sensor_profiles": {
-    "base": {
-      "cam_ambient": [
-        0.10,
-        0.22
-      ],
-      "cam_dir_intensity": [
-        0.35,
-        0.95
-      ],
-      "cam_fog_beta": [
-        0.006,
-        0.028
-      ],
-      "cam_airlight": [
-        0.08,
-        0.22
-      ],
-      "cam_mat_obstacle": [
-        0.48,
-        0.78
-      ],
-      "cam_mat_spec": [
-        0.03,
-        0.10
-      ]
+    "glare": {
+      "cam_ambient": [0.10, 0.18],
+      "cam_dir_intensity": [0.40, 0.85],
+      "cam_fog_beta": [0.010, 0.028],
+      "cam_airlight": [0.12, 0.28],
+      "cam_mat_obstacle": [0.50, 0.76],
+      "cam_mat_spec": [0.04, 0.10]
     },
-    "sun_glare": {
-      "cam_ambient": [
-        0.10,
-        0.18
-      ],
-      "cam_dir_intensity": [
-        0.40,
-        0.85
-      ],
-      "cam_fog_beta": [
-        0.010,
-        0.028
-      ],
-      "cam_airlight": [
-        0.12,
-        0.28
-      ],
-      "cam_mat_obstacle": [
-        0.50,
-        0.76
-      ],
-      "cam_mat_spec": [
-        0.04,
-        0.10
-      ]
+    "specular": {
+      "cam_ambient": [0.16, 0.28],
+      "cam_dir_intensity": [0.55, 1.00],
+      "cam_fog_beta": [0.012, 0.040],
+      "cam_airlight": [0.12, 0.30],
+      "cam_mat_obstacle": [0.58, 0.82],
+      "cam_mat_spec": [0.34, 0.58]
     },
-    "specular_trap": {
-      "cam_ambient": [
-        0.08,
-        0.16
-      ],
-      "cam_dir_intensity": [
-        0.20,
-        0.44
-      ],
-      "cam_fog_beta": [
-        0.006,
-        0.018
-      ],
-      "cam_airlight": [
-        0.05,
-        0.12
-      ],
-      "cam_mat_obstacle": [
-        0.45,
-        0.72
-      ],
-      "cam_mat_spec": [
-        0.20,
-        0.42
-      ]
-    },
-    "vantablack_gap": {
-      "cam_ambient": [
-        0.015,
-        0.050
-      ],
-      "cam_dir_intensity": [
-        0.04,
-        0.14
-      ],
-      "cam_fog_beta": [
-        0.003,
-        0.012
-      ],
-      "cam_airlight": [
-        0.015,
-        0.06
-      ],
-      "cam_mat_obstacle": [
-        0.26,
-        0.40
-      ],
-      "cam_mat_spec": [
-        0.0,
-        0.015
-      ]
-    },
-    "dark_morphing": {
-      "cam_ambient": [
-        0.005,
-        0.016
-      ],
-      "cam_dir_intensity": [
-        0.010,
-        0.060
-      ],
-      "cam_fog_beta": [
-        0.004,
-        0.018
-      ],
-      "cam_airlight": [
-        0.004,
-        0.018
-      ],
-      "cam_mat_obstacle": [
-        0.20,
-        0.34
-      ],
-      "cam_mat_spec": [
-        0.0,
-        0.008
-      ]
+    "dark": {
+      "cam_ambient": [0.018, 0.055],
+      "cam_dir_intensity": [0.040, 0.14],
+      "cam_fog_beta": [0.002, 0.014],
+      "cam_airlight": [0.010, 0.050],
+      "cam_mat_obstacle": [0.24, 0.42],
+      "cam_mat_spec": [0.00, 0.030]
     }
   },
   "scene_effects": {
-    "sun_glare": {
-      "sun_anchor": [
-        3.0,
-        0.0,
-        1.65
-      ],
+    "glare": {
       "sun_sigma_u": 0.24,
       "sun_sigma_v": 0.22,
       "ambient_add": 4.2,
@@ -152,110 +41,38 @@
       "power_quality_bonus": 0.78,
       "quality_penalty": 2.75,
       "valid_bias_scale": 0.16,
-      "hazard_center": [
-        1.82,
-        0.0,
-        1.5
-      ],
       "hazard_half_y": 0.18,
       "hazard_half_z": 1.20,
       "hazard_softness": 0.045
     },
-    "specular_trap": {
-      "panel_center": [
-        0.0,
-        0.0,
-        1.45
-      ],
-      "panel_half_y": 0.95,
-      "panel_half_z": 1.15,
-      "interaction_radius_x": 1.6,
-      "spec_boost_base": 0.45,
-      "spec_boost_scale": 0.95,
-      "passive_rescue_scale": 0.35,
-      "quality_penalty": 1.85,
-      "far_override_scale": 0.92,
-      "far_override_rescue_discount": 0.45,
-      "valid_bias_scale": 0.25
+    "specular": {
+      "spec_add": 0.82,
+      "spec_mask_sun_mix": 0.0,
+      "spec_mask_hazard_mix": 1.0,
+      "power_washout_gamma": 1.65,
+      "power_washout_penalty": 1.25,
+      "power_washout_valid_bias": 0.22,
+      "hazard_mask_mix": 1.0,
+      "hazard_half_y": 0.18,
+      "hazard_half_z": 1.20,
+      "hazard_softness": 0.045
     },
-    "vantablack_gap": {
-      "gap_center": [
-        0.0,
-        0.85,
-        1.5
-      ],
-      "gap_half_w": 0.58,
-      "gap_half_h": 0.95,
-      "albedo_drop": 0.88,
-      "ambient_drop": 0.45,
-      "passive_drop": 0.72,
-      "motion_boost": 1.10,
-      "quality_penalty": 0.30
-    },
-    "dark_morphing": {
-      "slit_center": [
-        0.0,
-        -0.80,
-        1.5
-      ],
-      "gap_half_w": 0.32,
-      "gap_half_h": 0.88,
-      "ambient_global_mul": 0.40,
-      "albedo_drop": 0.78,
-      "passive_drop": 0.82,
-      "motion_boost": 1.45,
-      "quality_penalty": 0.42,
-      "slit_motion_mix": 0.30,
-      "slit_power_bonus": 0.18
-    }
-  },
-  "scene_profiles": {
-    "sun_glare": {
-      "ambient_add": 4.2,
-      "active_drop": 0.72,
-      "active_recover": 0.95,
-      "glare_bias": 0.30,
-      "glare_exposure_gain": 2.30,
-      "glare_power_bias": 0.16,
-      "glare_power_gain": 1.45,
-      "power_rescue_bias": 0.16,
-      "power_rescue_exposure_gain": 0.60,
-      "power_quality_bonus": 0.78,
-      "quality_penalty": 2.75,
-      "valid_bias_scale": 0.16,
-      "hazard_center": [
-        1.45,
-        0.0,
-        1.5
-      ],
-      "hazard_half_y": 0.32,
-      "hazard_half_z": 1.35,
-      "hazard_softness": 0.055
-    },
-    "specular_trap": {
-      "spec_boost_base": 0.45,
-      "spec_boost_scale": 0.95,
-      "passive_rescue_scale": 0.35,
-      "quality_penalty": 1.85,
-      "far_override_scale": 0.92,
-      "far_override_rescue_discount": 0.45,
-      "valid_bias_scale": 0.25
-    },
-    "vantablack_gap": {
-      "albedo_drop": 0.88,
-      "ambient_drop": 0.45,
-      "passive_drop": 0.72,
-      "motion_boost": 1.10,
-      "quality_penalty": 0.30
-    },
-    "dark_morphing": {
-      "ambient_global_mul": 0.40,
-      "albedo_drop": 0.78,
-      "passive_drop": 0.82,
-      "motion_boost": 1.45,
-      "quality_penalty": 0.42,
-      "slit_motion_mix": 0.30,
-      "slit_power_bonus": 0.18
+    "dark": {
+      "dark_albedo_drop": 0.72,
+      "dark_mask_hazard_mix": 1.0,
+      "dark_mask_sun_mix": 0.0,
+      "dark_exposure_target": 0.62,
+      "dark_gain_target": 0.25,
+      "dark_gain_weight": 0.32,
+      "dark_underexposure_penalty": 1.18,
+      "dark_exposure_bonus": 0.34,
+      "dark_gain_bonus": 0.10,
+      "dark_active_drop": 0.86,
+      "dark_passive_rescue": 0.95,
+      "hazard_mask_mix": 1.0,
+      "hazard_half_y": 0.18,
+      "hazard_half_z": 1.20,
+      "hazard_softness": 0.045
     }
   }
 }

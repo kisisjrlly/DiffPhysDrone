@@ -21,7 +21,7 @@
 --fov_x_half_tan 0.82
 --base_control_freq 15.0
 --cam_angle 20
---scenarios base sun_glare specular_trap vantablack_gap dark_morphing
+--scenarios glare specular dark
 --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 --drone_a 0.15

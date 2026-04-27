@@ -402,7 +402,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
     final_goal_dist_mean = float(final_goal_dist.mean().detach().cpu().item())
 
     stop_before_glare = 0.0
-    if getattr(env, 'current_scene_name', None) == 'sun_glare' and x_hist:
+    if getattr(env, 'current_scene_name', None) in {'glare', 'specular', 'dark'} and x_hist:
         tail_k = min(10, len(speed_hist))
         tail_speed = 0.0
         if tail_k > 0:
@@ -513,13 +513,12 @@ def main():
         for ep_idx in range(args.eval_episodes):
             scene_name = eval_scenes[ep_idx % len(eval_scenes)]
             scene_variant = None
-            if scene_name == 'sun_glare':
-                if args.sun_glare_eval_level is not None:
-                    scene_variant = args.sun_glare_eval_level
-                elif len(eval_scenes) == 1:
-                    scene_variant = args.sun_glare_levels[ep_idx % len(args.sun_glare_levels)]
-                else:
-                    scene_variant = args.sun_glare_levels[0]
+            if args.sun_glare_eval_level is not None:
+                scene_variant = args.sun_glare_eval_level
+            elif len(eval_scenes) == 1:
+                scene_variant = args.sun_glare_levels[ep_idx % len(args.sun_glare_levels)]
+            else:
+                scene_variant = args.sun_glare_levels[0]
             if args.eval_trace_csv:
                 metrics, trace_rows = run_one_episode(
                     ep_idx, scene_name, scene_variant, args, model, env, vis, device,

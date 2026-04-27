@@ -13,7 +13,6 @@ from random import normalvariate
 import torch
 import wandb
 
-from config import OPENING_SCENES
 from env_cuda import Env
 from rollout_ops import diff_depth_exposure_to_time
 
@@ -45,15 +44,12 @@ class MetricSmoother:
         out = dict(log)
         args = self._args
 
-        wall_keys = {'slit_pass_rate'}
-        has_opening_scene = any(name in OPENING_SCENES for name in getattr(args, 'scenarios', []))
-        if not has_opening_scene:
-            for k in wall_keys:
-                out.pop(k, None)
-
-        if len(getattr(args, 'scenarios', ['random_base'])) <= 1:
+        if len(getattr(args, 'scenarios', ['glare', 'specular', 'dark'])) <= 1:
             for k in list(out.keys()):
-                if k == 'scene/glare_level_id' or k.startswith('scene/is_sun_glare_l'):
+                if (
+                    k == 'scene/glare_level_id'
+                    or k.startswith('scene/is_')
+                ):
                     continue
                 if k.startswith('scene/'):
                     out.pop(k, None)
@@ -245,8 +241,6 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         sun_glare_levels=args.sun_glare_levels,
         sun_glare_eval_level=args.sun_glare_eval_level if eval_mode else None,
         sun_glare_eval_slot=getattr(args, 'sun_glare_eval_slot', None) if eval_mode else None,
-        sun_glare_sensor_regimes=getattr(args, 'sun_glare_sensor_regimes', None),
-        sun_glare_eval_regime=getattr(args, 'sun_glare_eval_regime', None) if eval_mode else None,
         sun_glare_randomize=args.sun_glare_randomize,
         sun_glare_ambient_min=args.sun_glare_ambient_min,
         sun_glare_ambient_max=args.sun_glare_ambient_max,

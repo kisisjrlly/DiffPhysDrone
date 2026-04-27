@@ -37,7 +37,7 @@
 
 当前配置画像：
 
-- 单场景训练：`sun_glare`
+- 场景训练：`glare/specular/dark` 共享同一张门洞地图
 - 传感后端：`diff_depth=python`
 - 相机控制约束较强（`coef_cam_smooth=10`、`coef_diff_depth_power=5`）
 - 安全项很强（`coef_collide=10`、`coef_obj_avoidance=4`）
@@ -108,22 +108,14 @@
 | --- | ---: | ---: | --- | --- |
 | `--yaw_drift` | `False` | `False` | 模拟偏航漂移 | 做鲁棒性实验时开启 |
 | `--no_odom` | `False` | `False` | 关闭里程计输入 | 任务更难，适合做消融 |
-| `--scenarios` | `['base']` | `['sun_glare']` | 场景列表 | 训练可多场景混训，评估可轮转 |
+| `--scenarios` | `['glare', 'specular', 'dark']` | `['glare', 'specular', 'dark']` | 场景列表 | 三者共享同一张门洞地图 |
 | `--scene_fit_profiles_path` | `None` | `configs/scene_fit_profiles.json` | 场景 profile 覆盖文件 | 建议用于实测拟合后的配置 |
 | `--ellipsoid_collision` | `False` | `False` | 椭球碰撞模型 | 需要更真实机体几何时开 |
 | `--drone_a` | `0.15` | `0.15` | 椭球 XY 半轴 | 仅椭球碰撞开启时有效 |
 | `--drone_c` | `0.075` | `0.075` | 椭球 Z 半轴 | 同上 |
 | `--coef_tilt` | `0.0` | `0.0` | 侧倾损失权重 | 默认 0；专项需求再启用 |
 
-`scenarios` 支持：
-
-- `base`
-- `sun_glare`
-- `specular_trap`
-- `vantablack_gap`
-- `dark_morphing`
-
-别名会自动映射（例如 `random` -> `base`）。
+`glare/specular/dark` 是公开场景名，共享同一张门洞地图；区别只在开口附近的局部成像机理。
 
 ---
 
@@ -358,7 +350,7 @@ $$
 
 如果你的目标是“先稳后强”，推荐这样做：
 
-1. 先固定场景（如当前 `sun_glare`），确认训练曲线稳定。
+1. 先固定一个场景（如 `glare`），确认训练曲线稳定。
 2. 优先稳定飞行：先调 `coef_collide/coef_obj_avoidance/coef_d_jerk`。
 3. 再保证可见性：调 `coef_diff_depth_fill` 与 `diff_depth_min_fill_rate`。
 4. 再压拖影和噪声：调 `coef_diff_depth_blur`、`coef_diff_depth_noise`。

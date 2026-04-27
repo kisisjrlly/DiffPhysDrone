@@ -17,12 +17,11 @@ BLIND_CKPT=${BLIND_CKPT:-/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/20
 
 EPISODES=${EPISODES:-20}
 PLOT_LEVEL=${PLOT_LEVEL:-l3}
-PLOT_REGIME=${PLOT_REGIME:-glare}
+PLOT_SCENE=${PLOT_SCENE:-glare}
 SLOTS=${SLOTS:-"far_left left right far_right"}
-REGIMES=${REGIMES:-"glare specular dark"}
+SCENARIOS=${SCENARIOS:-"glare specular dark"}
 INCLUDE_OURS_ZERO=${INCLUDE_OURS_ZERO:-1}
 OUTPUT_DIR=${OUTPUT_DIR:-}
-INCLUDE_BASE=${INCLUDE_BASE:-0}
 
 if [ ! -f "$CONFIG" ]; then
 	echo "[error] config not found: $CONFIG"
@@ -44,9 +43,9 @@ cmd=(
 	--nondiff_ckpt "$NONDIFF_CKPT"
 		--episodes_per_condition "$EPISODES"
 		--plot_level "$PLOT_LEVEL"
-		--plot_regime "$PLOT_REGIME"
+		--plot_scene "$PLOT_SCENE"
 		--slots $SLOTS
-		--regimes $REGIMES
+		--scenarios $SCENARIOS
 	)
 
 if [ -n "$FIXED_RANDOM_CKPT" ]; then
@@ -59,10 +58,6 @@ fi
 
 if [ "$INCLUDE_OURS_ZERO" = "1" ]; then
 	cmd+=(--include_ours_zero_ablation)
-fi
-
-if [ "$INCLUDE_BASE" = "1" ]; then
-	cmd+=(--include_base)
 fi
 
 if [ -n "$OUTPUT_DIR" ]; then
@@ -94,9 +89,9 @@ else
 fi
 echo "[eval-suite] episodes/cond : $EPISODES"
 echo "[eval-suite] plot_level    : $PLOT_LEVEL"
-echo "[eval-suite] plot_regime   : $PLOT_REGIME"
+echo "[eval-suite] plot_scene    : $PLOT_SCENE"
 echo "[eval-suite] slots         : $SLOTS"
-echo "[eval-suite] regimes       : $REGIMES"
+echo "[eval-suite] scenarios     : $SCENARIOS"
 echo "[eval-suite] ours_zero     : $INCLUDE_OURS_ZERO"
 
 "${cmd[@]}"

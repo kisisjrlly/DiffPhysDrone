@@ -7,16 +7,12 @@ import torch
 
 
 SUPPORTED_SCENARIOS = (
-    'base',
-    'sun_glare',
-    'specular_trap',
-    'vantablack_gap',
-    'dark_morphing',
+    'glare',
+    'specular',
+    'dark',
 )
-OPENING_SCENES = {'vantablack_gap', 'dark_morphing'}
 SUPPORTED_SUN_GLARE_LEVELS = ('l0', 'l1', 'l2', 'l3')
 SUPPORTED_SUN_GLARE_SLOTS = ('far_left', 'left', 'right', 'far_right')
-SUPPORTED_SUN_GLARE_REGIMES = ('glare', 'specular', 'dark')
 
 
 def build_parser():
@@ -74,20 +70,16 @@ def build_parser():
     # --- 环境与状态感知 ---
     parser.add_argument('--yaw_drift', default=False, action='store_true', help='模拟偏航角漂移')
     parser.add_argument('--no_odom', default=False, action='store_true', help='无里程计模式')
-    parser.add_argument('--scenarios', nargs='*', default=['base'],
-                        help='固定小地图上的 diff_depth 场景列表；训练随机采样，评测顺序轮转')
+    parser.add_argument('--scenarios', nargs='*', default=['glare', 'specular', 'dark'],
+                        help='同一门洞地图上的局部成像场景列表：glare/specular/dark')
     parser.add_argument('--scene_fit_profiles_path', type=str, default=None,
                         help='可选：加载 D455 标定反推得到的场景 profile JSON，自动覆盖 diff_depth 场景参数')
     parser.add_argument('--sun_glare_levels', nargs='*', default=['l0', 'l1', 'l2', 'l3'],
-                        help='sun_glare 场景允许采样的强度档位；训练时随机采样，评测时若未指定固定档位则按该列表轮转/取首项')
+                        help='共享门洞地图的局部退化强度档位；训练时随机采样，评测时若未指定固定档位则按该列表轮转/取首项')
     parser.add_argument('--sun_glare_eval_level', type=str, default=None,
-                        help='可选：评估时固定使用某一档 sun_glare 强度，例如 l2；训练阶段忽略该参数')
+                        help='可选：评估时固定使用某一档强度，例如 l2；训练阶段忽略该参数')
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None,
-                        help='可选：评估时固定使用某个 sun_glare 开口，例如 far_left/left/right/far_right；训练阶段忽略该参数')
-    parser.add_argument('--sun_glare_sensor_regimes', nargs='*', default=['glare', 'specular', 'dark'],
-                        help='sun_glare 内部的传感器退化子模式；训练时随机采样，用来制造静态相机无法通吃的多模态成像需求')
-    parser.add_argument('--sun_glare_eval_regime', type=str, default=None,
-                        help='可选：评估时固定 sun_glare 传感器子模式，例如 glare/specular/dark；训练阶段忽略该参数')
+                        help='可选：评估时固定使用某个开口，例如 far_left/left/right/far_right；训练阶段忽略该参数')
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
@@ -161,7 +153,7 @@ def build_parser():
 
     # --- Sun glare harder randomization ---
     parser.add_argument('--sun_glare_randomize', default=False, action=argparse.BooleanOptionalAction,
-                        help='训练/评估 sun_glare 时启用光照、局部 glare 和几何的 harder 随机化')
+                        help='训练/评估共享门洞地图时启用光照、局部退化和几何的 harder 随机化')
     parser.add_argument('--sun_glare_ambient_min', type=float, default=0.06)
     parser.add_argument('--sun_glare_ambient_max', type=float, default=0.28)
     parser.add_argument('--sun_glare_dir_min', type=float, default=0.25)
@@ -214,9 +206,9 @@ def build_parser():
     parser.add_argument('--diff_depth_health_cvar_frac', type=float, default=0.25,
                         help='sensor health loss 取最差多少比例 patch 的均值；1.0 退化为全图均值')
     parser.add_argument('--coef_sun_glare_local_quality', type=float, default=0.0,
-                        help='[deprecated/ignored] 旧版 sun_glare 局部质量恢复损失权重')
+                        help='[deprecated/ignored] 旧版局部质量恢复损失权重')
     parser.add_argument('--sun_glare_local_quality_target', type=float, default=0.55,
-                        help='[deprecated/ignored] 旧版 sun_glare 局部质量目标值')
+                        help='[deprecated/ignored] 旧版局部质量目标值')
     parser.add_argument('--use_dmpc', default=False, action='store_true')
     parser.add_argument('--policy_output_intent', default=False, action='store_true')
     parser.add_argument('--inject_depth_into_lqr', default=False, action='store_true')
@@ -272,21 +264,14 @@ def parse_diff_sensor_impl(items):
 def parse_scenarios(items):
     """解析固定小地图场景列表。支持空格或逗号分隔。"""
     if items is None:
-        return ['base']
+        return ['glare', 'specular', 'dark']
 
-    aliases = {
-        'random_base': 'base',
-        'random': 'base',
-        'random_scene': 'base',
-        'black_gap': 'vantablack_gap',
-        'dark_slit_lite': 'dark_morphing',
-    }
     scenarios = []
     for raw in items:
         if raw is None:
             continue
         for token in str(raw).split(','):
-            name = aliases.get(token.strip().lower(), token.strip().lower())
+            name = token.strip().lower().replace('-', '_')
             if not name:
                 continue
             if name not in SUPPORTED_SCENARIOS:
@@ -296,7 +281,7 @@ def parse_scenarios(items):
             scenarios.append(name)
 
     if not scenarios:
-        return ['base']
+        return ['glare', 'specular', 'dark']
 
     dedup = []
     seen = set()
@@ -357,27 +342,6 @@ def canonicalize_sun_glare_slot(item):
     return aliases.get(token, token)
 
 
-def canonicalize_sun_glare_regime(item):
-    if item is None:
-        return None
-    token = str(item).strip().lower().replace('-', '_')
-    aliases = {
-        'glare': 'glare',
-        'sun': 'glare',
-        'sun_glare': 'glare',
-        'rescue': 'glare',
-        'spec': 'specular',
-        'specular': 'specular',
-        'specular_overdrive': 'specular',
-        'overdrive': 'specular',
-        'dark': 'dark',
-        'dark_edge': 'dark',
-        'lowlight': 'dark',
-        'low_light': 'dark',
-    }
-    return aliases.get(token, token)
-
-
 def parse_sun_glare_levels(items):
     if items is None:
         return ['l0', 'l1', 'l2', 'l3']
@@ -402,37 +366,6 @@ def parse_sun_glare_levels(items):
     dedup = []
     seen = set()
     for name in levels:
-        if name in seen:
-            continue
-        seen.add(name)
-        dedup.append(name)
-    return dedup
-
-
-def parse_sun_glare_regimes(items):
-    if items is None:
-        return ['glare', 'specular', 'dark']
-
-    regimes = []
-    for raw in items:
-        if raw is None:
-            continue
-        for token in str(raw).split(','):
-            name = canonicalize_sun_glare_regime(token)
-            if not name:
-                continue
-            if name not in SUPPORTED_SUN_GLARE_REGIMES:
-                raise ValueError(
-                    f"--sun_glare_sensor_regimes 不支持 '{name}'，仅支持: {list(SUPPORTED_SUN_GLARE_REGIMES)}"
-                )
-            regimes.append(name)
-
-    if not regimes:
-        return ['glare', 'specular', 'dark']
-
-    dedup = []
-    seen = set()
-    for name in regimes:
         if name in seen:
             continue
         seen.add(name)
@@ -560,11 +493,6 @@ def validate_args(args):
         raise ValueError('--scenarios 至少需要一个场景')
     if not getattr(args, 'sun_glare_levels', None):
         raise ValueError('--sun_glare_levels 至少需要一个档位')
-    args.sun_glare_sensor_regimes = parse_sun_glare_regimes(
-        getattr(args, 'sun_glare_sensor_regimes', None)
-    )
-    if not getattr(args, 'sun_glare_sensor_regimes', None):
-        raise ValueError('--sun_glare_sensor_regimes 至少需要一个子模式')
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
         if args.sun_glare_eval_level not in SUPPORTED_SUN_GLARE_LEVELS:
@@ -578,13 +506,6 @@ def validate_args(args):
             raise ValueError(
                 f"--sun_glare_eval_slot 不支持 '{args.sun_glare_eval_slot}'，"
                 f"仅支持: {list(SUPPORTED_SUN_GLARE_SLOTS)}"
-            )
-    if getattr(args, 'sun_glare_eval_regime', None) is not None:
-        args.sun_glare_eval_regime = canonicalize_sun_glare_regime(args.sun_glare_eval_regime)
-        if args.sun_glare_eval_regime not in SUPPORTED_SUN_GLARE_REGIMES:
-            raise ValueError(
-                f"--sun_glare_eval_regime 不支持 '{args.sun_glare_eval_regime}'，"
-                f"仅支持: {list(SUPPORTED_SUN_GLARE_REGIMES)}"
             )
 
 
@@ -613,8 +534,6 @@ def print_runtime_mode(args):
     print(f"sun_glare_levels          : {args.sun_glare_levels}")
     print(f"sun_glare_eval_level      : {args.sun_glare_eval_level}")
     print(f"sun_glare_eval_slot       : {getattr(args, 'sun_glare_eval_slot', None)}")
-    print(f"sun_glare_sensor_regimes  : {getattr(args, 'sun_glare_sensor_regimes', None)}")
-    print(f"sun_glare_eval_regime     : {getattr(args, 'sun_glare_eval_regime', None)}")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print(
@@ -622,7 +541,7 @@ def print_runtime_mode(args):
         f"patch={args.diff_depth_health_patch_rows}x{args.diff_depth_health_patch_cols}, "
         f"cvar={args.diff_depth_health_cvar_frac}, target={args.diff_depth_min_fill_rate}"
     )
-    print("environment               : fixed_small_map_with_perception_scenarios")
+    print("environment               : shared_gate_sensor_scenes")
     print("sensor_control_semantics  : power/exposure/gain")
     print("=" * 75)
 
@@ -634,13 +553,10 @@ def parse_args():
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
     args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    args.sun_glare_sensor_regimes = parse_sun_glare_regimes(args.sun_glare_sensor_regimes)
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     if getattr(args, 'sun_glare_eval_slot', None) is not None:
         args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
-    if getattr(args, 'sun_glare_eval_regime', None) is not None:
-        args.sun_glare_eval_regime = canonicalize_sun_glare_regime(args.sun_glare_eval_regime)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
     return args

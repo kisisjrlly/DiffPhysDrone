@@ -1433,7 +1433,7 @@ $$
 | Depth range | $0.3\,\mathrm{m}$ 到 $6.0\,\mathrm{m}$ |
 | Camera angle | $20^\circ$ |
 | Sensor backend | `diff_depth=python` |
-| 训练中启用场景 | `sun_glare` |
+| 训练中启用场景 | `glare/specular/dark` |
 | Direct control | enabled |
 | dMPC | disabled |
 | Policy intent output | disabled |
@@ -2338,7 +2338,7 @@ $$
 
 | 参数 | 取值 |
 |---|---|
-| `--scenarios` | `sun_glare` |
+| `--scenarios` | `glare specular dark` |
 | `--batch_size` | `150` |
 | `--num_iters` | `5000` |
 | `--timesteps` | `80` |

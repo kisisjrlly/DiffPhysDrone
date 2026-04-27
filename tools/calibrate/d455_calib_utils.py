@@ -12,10 +12,9 @@ import numpy as np
 
 
 SUPPORTED_CALIB_SCENES = (
-    'sun_glare',
-    'specular_trap',
-    'vantablack_gap',
-    'dark_morphing',
+    'glare',
+    'specular',
+    'dark',
 )
 
 
@@ -224,42 +223,13 @@ def fit_scene_profile(scene: str, rows: list[dict[str, float | str]]) -> SceneFi
 
     sim_profile: dict[str, float] = {}
 
-    if scene == 'sun_glare':
-        sun_loss = max(0.0, best_fill.get('fill_rate_mean', 0.0) - worst_fill.get('fill_rate_mean', 0.0))
-        sim_profile = {
-            'ambient_add': float(np.clip(1.2 + 4.0 * sun_loss, 0.8, 4.5)),
-            'active_drop': float(np.clip(0.15 + 1.1 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.1, 0.9)),
-            'quality_penalty': float(np.clip(0.8 + 3.0 * sun_loss, 0.5, 3.5)),
-            'valid_bias_scale': float(np.clip(0.02 + 0.20 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.0, 0.30)),
-        }
-    elif scene == 'specular_trap':
-        sim_profile = {
-            'spec_boost_base': float(np.clip(0.15 + 1.5 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.10, 0.8)),
-            'spec_boost_scale': float(np.clip(0.30 + 2.0 * highest_var.get('depth_variance_m2_mean', 0.0), 0.2, 1.8)),
-            'quality_penalty': float(np.clip(0.5 + 4.0 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.5, 3.0)),
-            'far_override_scale': float(np.clip(0.10 + 1.2 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.05, 0.98)),
-            'far_override_rescue_discount': float(np.clip(0.15 + 1.5 * best_fill.get('fill_rate_mean', 0.0), 0.1, 0.85)),
-            'passive_rescue_scale': float(np.clip(0.10 + 1.2 * best_fill.get('fill_rate_mean', 0.0), 0.05, 0.8)),
-            'valid_bias_scale': float(np.clip(0.05 + 0.6 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.0, 0.35)),
-        }
-    elif scene == 'vantablack_gap':
-        sim_profile = {
-            'albedo_drop': float(np.clip(0.2 + 1.5 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.2, 0.95)),
-            'ambient_drop': float(np.clip(0.1 + 1.2 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.05, 0.8)),
-            'passive_drop': float(np.clip(0.15 + 1.5 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.1, 0.9)),
-            'motion_boost': float(np.clip(0.2 + 8.0 * highest_var.get('depth_variance_m2_mean', 0.0), 0.1, 2.0)),
-            'quality_penalty': float(np.clip(0.05 + 2.0 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.05, 0.8)),
-        }
-    elif scene == 'dark_morphing':
-        sim_profile = {
-            'ambient_global_mul': float(np.clip(1.0 - 1.2 * best_fill.get('brightness_proxy_mean', 0.0), 0.05, 0.6)),
-            'albedo_drop': float(np.clip(0.1 + 1.2 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.1, 0.9)),
-            'passive_drop': float(np.clip(0.15 + 1.5 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.1, 0.95)),
-            'motion_boost': float(np.clip(0.2 + 12.0 * highest_var.get('depth_variance_m2_mean', 0.0), 0.1, 2.5)),
-            'quality_penalty': float(np.clip(0.05 + 2.0 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.05, 0.8)),
-            'slit_motion_mix': float(np.clip(0.05 + 1.2 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.05, 0.6)),
-            'slit_power_bonus': float(np.clip(0.02 + 0.8 * best_fill.get('fill_rate_mean', 0.0), 0.02, 0.5)),
-        }
+    sun_loss = max(0.0, best_fill.get('fill_rate_mean', 0.0) - worst_fill.get('fill_rate_mean', 0.0))
+    sim_profile = {
+        'ambient_add': float(np.clip(1.2 + 4.0 * sun_loss, 0.8, 4.5)),
+        'active_drop': float(np.clip(0.15 + 1.1 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.1, 0.9)),
+        'quality_penalty': float(np.clip(0.8 + 3.0 * sun_loss, 0.5, 3.5)),
+        'valid_bias_scale': float(np.clip(0.02 + 0.20 * highest_invalid.get('invalid_ratio_mean', 0.0), 0.0, 0.30)),
+    }
 
     return SceneFitResult(
         scene=scene,

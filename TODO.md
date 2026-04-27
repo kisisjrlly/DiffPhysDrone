@@ -28,7 +28,7 @@
 
 | 文件 | 状态 | 说明 |
 | --- | --- | --- |
-| `env_cuda.py` | `[x]` | 当前主环境已改为固定 10m x 10m 小地图，并支持 `base / sun_glare / specular_trap / vantablack_gap / dark_morphing` 论文语义场景。 |
+| `env_cuda.py` | `[x]` | 当前主环境已简化为单一 `sun_glare` 地图，并在其中支持 `glare / specular / dark` 三种局部传感器模式。 |
 | `config.py` | `[x]` | 当前已恢复 `scenarios` 参数；旧的大地图随机环境参数仍保持移除。 |
 | `train_utils.py` | `[x]` | 已改为固定小地图环境构造，并重新接回 `scenarios` 主链。 |
 | `trainer.py` | `[x]` | 已恢复必要的 scene 统计与 opening pass 指标，但不再回退到旧随机世界统计。 |
@@ -95,8 +95,8 @@
 
 ### 多场景论文实验
 
-- [~] 当前已经恢复 `sun_glare`、`specular_trap`、`vantablack_gap`、`dark_morphing` 的局部场景版；后续还要继续校准几何与传感器退化强度。
-- [ ] 为每个场景定义更严格的几何目标和传感器退化目标。
+- [~] 当前已收敛为 `sun_glare` 单地图 benchmark；后续继续校准三种 sensor regime 的强度。
+- [ ] 为 `glare / specular / dark` 定义更严格的传感器退化目标。
 - [ ] 继续完善 per-scene 评测与导出。
 
 ### 大地图实验

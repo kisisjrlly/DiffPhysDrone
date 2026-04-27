@@ -354,11 +354,11 @@ def _build_post_entry_table(rows: List[dict]) -> str:
 def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     cond_map = _group_by_condition(summary_rows)
     base_rows = cond_map.get("base", [])
+    sensor_scene_names = {"glare", "specular", "dark"}
     glare_rows = [
         r for r in summary_rows
-        if str(r.get("scene_name", "")) == "sun_glare"
-        or str(r.get("scene_name", "")).startswith("sun_glare_")
-        or str(r.get("condition", "")).startswith("sun_glare_")
+        if str(r.get("scene_name", "")) in sensor_scene_names
+        or str(r.get("condition", "")).split("_", 1)[0] in sensor_scene_names
     ]
 
     lines: List[str] = []
@@ -373,8 +373,8 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
     lines.append("- `trace_metrics.csv`：每个 timestep 一行，可画事件对齐曲线。")
     lines.append("- `success_vs_glare.png`：随 glare 强度变化的成功率曲线。")
     lines.append("- `post_entry_vs_glare.png`：进入逆光区后的关键窗口指标曲线。")
-    lines.append("- `event_aligned_l3.png`：L3 条件下的参数时序图。")
-    lines.append("- `trajectory_l3.png`：L3 条件下的顶视轨迹图。")
+    lines.append("- `event_aligned_<scene>_<level>_<slot>.png`：指定场景/强度/开口下的参数时序图。")
+    lines.append("- `trajectory_<scene>_<level>.png`：指定场景/强度下的顶视轨迹图。")
     lines.append("")
 
     lines.append("## 当前结果一眼结论")
@@ -387,7 +387,7 @@ def _build_markdown_summary(summary_rows: List[dict], results_dir: Path) -> str:
         )
         lines.append(
             "- 但 `Base` 场景三种方法的成功率都偏低，说明当前基础导航本身还不够稳定，"
-            "这会削弱论文里关于 `sun_glare` 的结论可信度。"
+            "这会削弱论文里关于主动感知场景的结论可信度。"
         )
     if glare_rows:
         all_success = [_to_float(r["success_rate"]) for r in glare_rows]
@@ -533,11 +533,11 @@ def format_results_dir(results_dir: Path):
     if trace_csv.is_file():
         summary_rows = _augment_summary_with_post_entry(summary_rows, _read_csv(trace_csv))
     base_rows = [r for r in summary_rows if r["condition"] == "base"]
+    sensor_scene_names = {"glare", "specular", "dark"}
     glare_rows = [
         r for r in summary_rows
-        if str(r.get("scene_name", "")) == "sun_glare"
-        or str(r.get("scene_name", "")).startswith("sun_glare_")
-        or str(r.get("condition", "")).startswith("sun_glare_")
+        if str(r.get("scene_name", "")) in sensor_scene_names
+        or str(r.get("condition", "")).split("_", 1)[0] in sensor_scene_names
     ]
 
     report_md = _build_markdown_summary(summary_rows, results_dir)

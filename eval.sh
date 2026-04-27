@@ -63,7 +63,7 @@ eval_batch_size=${EVAL_BATCH_SIZE:-1}
 vis_enable=${VIS_ENABLE:-1}
 
 # 额外 eval 参数，例如：
-#   EVAL_EXTRA_ARGS="--sun_glare_eval_regime glare --sun_glare_eval_level l2"
+#   EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_level l2"
 eval_extra_args=${EVAL_EXTRA_ARGS:-}
 
 # 可选 CSV 输出路径。

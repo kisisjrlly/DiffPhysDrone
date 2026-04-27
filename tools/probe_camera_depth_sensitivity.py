@@ -599,7 +599,7 @@ def _make_arg_parser():
     parser.add_argument("--out_dir", default="paper/experiment/results/camera_param_probe",
                         help="Directory for CSV/PNG outputs.")
     parser.add_argument("--episodes", type=int, default=1)
-    parser.add_argument("--scene_name", default="sun_glare")
+    parser.add_argument("--scene_name", default="glare")
     parser.add_argument("--scene_variant", default=None,
                         help="Optional fixed scene variant, e.g. l2.")
     parser.add_argument("--probe_steps", default=None,

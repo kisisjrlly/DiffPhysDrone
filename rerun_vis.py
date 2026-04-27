@@ -672,68 +672,47 @@ class RerunVis:
 
         scene_name = None if scene_name is None else str(scene_name)
         fx = scene_effects or {}
-        if scene_name is not None and scene_name.startswith('sun_glare') and 'sun_anchor' in fx:
-            sun = np.asarray(fx['sun_anchor'], dtype=np.float32).reshape(3)
-            rr.log(
-                f"{phase}/world/scene/sun_anchor",
-                rr.Points3D([sun], radii=[0.16], colors=[[255, 220, 80]], labels=["SUN"], show_labels=True),
-            )
-            rr.log(
-                f"{phase}/world/scene/sun_rays",
-                rr.Arrows3D(
-                    origins=[sun.tolist()],
-                    vectors=[[-1.5, 0.0, -0.2]],
-                    colors=[[255, 220, 80]],
-                    radii=[0.025],
-                    labels=["SUN_RAY"],
-                    show_labels=False,
-                ),
-            )
-        elif scene_name is not None and scene_name.startswith('specular_trap') and 'panel_center' in fx:
-            panel_center = np.asarray(fx['panel_center'], dtype=np.float32).reshape(3)
-            half_y = float(fx.get('panel_half_y', 0.95))
-            half_z = float(fx.get('panel_half_z', 1.15))
-            rr.log(
-                f"{phase}/world/scene/specular_panel",
-                rr.Boxes3D(
-                    centers=[panel_center.tolist()],
-                    half_sizes=[[0.03, half_y, half_z]],
-                    colors=[[255, 180, 120, 120]],
-                    radii=[0.004],
-                    labels=["SPECULAR_PANEL"],
-                    show_labels=True,
-                ),
-            )
-        elif scene_name is not None and scene_name.startswith('vantablack_gap') and 'gap_center' in fx:
-            gap_center = np.asarray(fx['gap_center'], dtype=np.float32).reshape(3)
-            half_y = float(fx.get('gap_half_w', 0.58))
-            half_z = float(fx.get('gap_half_h', 0.95))
-            rr.log(
-                f"{phase}/world/scene/vantablack_gap",
-                rr.Boxes3D(
-                    centers=[gap_center.tolist()],
-                    half_sizes=[[0.03, half_y, half_z]],
-                    colors=[[30, 30, 30, 210]],
-                    radii=[0.004],
-                    labels=["VANTABLACK_GAP"],
-                    show_labels=True,
-                ),
-            )
-        elif scene_name is not None and scene_name.startswith('dark_morphing') and 'slit_center' in fx:
-            slit_center = np.asarray(fx['slit_center'], dtype=np.float32).reshape(3)
-            half_y = float(fx.get('gap_half_w', 0.32))
-            half_z = float(fx.get('gap_half_h', 0.88))
-            rr.log(
-                f"{phase}/world/scene/dark_slit",
-                rr.Boxes3D(
-                    centers=[slit_center.tolist()],
-                    half_sizes=[[0.03, half_y, half_z]],
-                    colors=[[90, 90, 130, 190]],
-                    radii=[0.004],
-                    labels=["DARK_SLIT"],
-                    show_labels=True,
-                ),
-            )
+        regime = str(fx.get('sensor_regime_name', scene_name or '')).split('_', 1)[0]
+        if regime in {'glare', 'specular', 'dark'}:
+            if regime == 'specular':
+                label = "REFLECTIVE_GATE"
+                color = [255, 180, 120, 150]
+            elif regime == 'dark':
+                label = "LOW_ALBEDO_GATE"
+                color = [30, 30, 30, 210]
+            else:
+                label = "IR_GLARE"
+                color = [255, 220, 80, 170]
+            if regime == 'glare' and 'sun_anchor' in fx:
+                sun = np.asarray(fx['sun_anchor'], dtype=np.float32).reshape(3)
+                rr.log(
+                    f"{phase}/world/scene/sun_anchor",
+                    rr.Points3D([sun], radii=[0.16], colors=[color[:3]], labels=[label], show_labels=True),
+                )
+                rr.log(
+                    f"{phase}/world/scene/sun_rays",
+                    rr.Arrows3D(
+                        origins=[sun.tolist()],
+                        vectors=[[-1.5, 0.0, -0.2]],
+                        colors=[[255, 220, 80]],
+                        radii=[0.025],
+                        labels=["IR_RAY"],
+                        show_labels=False,
+                    ),
+                )
+            if 'hazard_center' in fx:
+                hazard = np.asarray(fx['hazard_center'], dtype=np.float32).reshape(3)
+                rr.log(
+                    f"{phase}/world/scene/local_sensor_region",
+                    rr.Boxes3D(
+                        centers=[hazard.tolist()],
+                        half_sizes=[[0.035, float(fx.get('hazard_half_y', 0.25)), float(fx.get('hazard_half_z', 1.20))]],
+                        colors=[color],
+                        radii=[0.004],
+                        labels=[label],
+                        show_labels=True,
+                    ),
+                )
 
     def _scalar_msg(self, v: float):
         """API compatibility: rerun-sdk uses Scalars, older variants may expose Scalar."""

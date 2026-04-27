@@ -227,17 +227,8 @@ def load_project_args(args_file: str, checkpoint: str, override_tokens: list[str
 
 
 def infer_policy_speed_and_margin(project_args):
-    scene = None
-    scenarios = list(getattr(project_args, 'scenarios', []) or [])
-    if len(scenarios) == 1:
-        scene = str(scenarios[0]).strip().lower()
     max_speed = 1.0
     margin = 0.05
-    if scene == 'vantablack_gap':
-        max_speed = 1.35
-    elif scene == 'dark_morphing':
-        max_speed = 0.95
-        margin = 0.03
     return max_speed, margin
 
 

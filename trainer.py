@@ -805,14 +805,6 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
         dn_s = (_dn - dn_m).pow(2).mean(0).sqrt().clamp(min=1e-6)
         smoother.add({'power_obstacle_corr': (cov_pd / (pw_s * dn_s)).mean().item()})
 
-    if env.current_scene_has_opening and p_history is not None and distance is not None:
-        final_x = p_history[-1, :, 0]
-        success = torch.all(distance.flatten(0, 1) > 0, 0)
-        crossed = (final_x > 0.0).float()
-        smoother.add({
-            'slit_pass_rate': (crossed * success.float()).mean().item(),
-        })
-
     if rollout.get('depth_fill_history'):
         fill_hist = torch.stack([
             x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x

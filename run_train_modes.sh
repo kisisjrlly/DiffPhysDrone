@@ -3,6 +3,7 @@
 set -euo pipefail
 
 export all_proxy=http://127.0.0.1:7890
+# export CUDA_VISIBLE_DEVICES=0
 
 # Auto-train selected paper baselines by repeatedly invoking `bash run.sh`.
 #
@@ -19,7 +20,7 @@ export all_proxy=http://127.0.0.1:7890
 
 BASE_CONFIG=${BASE_CONFIG:-configs/paper_final_full.args}
 # MODES=${MODES:-"nocamera ours nondiff fix"}
-MODES=${MODES:-"ours"}
+MODES=${MODES:-"ours nondiff"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 
 if [ ! -f "$BASE_CONFIG" ]; then

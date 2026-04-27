@@ -2,7 +2,7 @@
 """Quick interactive D455 depth sanity check.
 
 正式标定采集请使用:
-  python3 tools/collect_d455_calibration.py --scene sun_glare --condition-id glare_front
+  python3 tools/collect_d455_calibration.py --scene glare --condition-id glare_front
 """
 from __future__ import annotations
 

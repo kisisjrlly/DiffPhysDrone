@@ -36,10 +36,8 @@ build_parser = None
 parse_diff_sensor_impl = None
 parse_scenarios = None
 parse_sun_glare_levels = None
-parse_sun_glare_regimes = None
 canonicalize_sun_glare_level = None
 canonicalize_sun_glare_slot = None
-canonicalize_sun_glare_regime = None
 set_global_seed = None
 validate_args = None
 run_one_episode = None
@@ -118,8 +116,8 @@ GATE_X = 1.82
 def _lazy_imports():
     global torch, plt
     global build_parser, parse_diff_sensor_impl, parse_scenarios
-    global parse_sun_glare_levels, parse_sun_glare_regimes
-    global canonicalize_sun_glare_level, canonicalize_sun_glare_slot, canonicalize_sun_glare_regime
+    global parse_sun_glare_levels
+    global canonicalize_sun_glare_level, canonicalize_sun_glare_slot
     global set_global_seed, validate_args, run_one_episode, Model, build_env
     global format_results_dir
 
@@ -133,10 +131,8 @@ def _lazy_imports():
         parse_diff_sensor_impl as _parse_diff_sensor_impl,
         parse_scenarios as _parse_scenarios,
         parse_sun_glare_levels as _parse_sun_glare_levels,
-        parse_sun_glare_regimes as _parse_sun_glare_regimes,
         canonicalize_sun_glare_level as _canonicalize_sun_glare_level,
         canonicalize_sun_glare_slot as _canonicalize_sun_glare_slot,
-        canonicalize_sun_glare_regime as _canonicalize_sun_glare_regime,
         set_global_seed as _set_global_seed,
         validate_args as _validate_args,
     )
@@ -151,10 +147,8 @@ def _lazy_imports():
     parse_diff_sensor_impl = _parse_diff_sensor_impl
     parse_scenarios = _parse_scenarios
     parse_sun_glare_levels = _parse_sun_glare_levels
-    parse_sun_glare_regimes = _parse_sun_glare_regimes
     canonicalize_sun_glare_level = _canonicalize_sun_glare_level
     canonicalize_sun_glare_slot = _canonicalize_sun_glare_slot
-    canonicalize_sun_glare_regime = _canonicalize_sun_glare_regime
     set_global_seed = _set_global_seed
     validate_args = _validate_args
     run_one_episode = _run_one_episode
@@ -180,13 +174,10 @@ def _load_args_from_config(config_path: Path):
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
     args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    args.sun_glare_sensor_regimes = parse_sun_glare_regimes(args.sun_glare_sensor_regimes)
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     if getattr(args, "sun_glare_eval_slot", None) is not None:
         args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
-    if getattr(args, "sun_glare_eval_regime", None) is not None:
-        args.sun_glare_eval_regime = canonicalize_sun_glare_regime(args.sun_glare_eval_regime)
     validate_args(args)
     return args
 
@@ -252,13 +243,8 @@ def _match_args_to_checkpoint(args, ckpt_path: Path):
 def _condition_label(scene_name: str, glare_level: str | None,
                      slot_name: str | None = None,
                      regime_name: str | None = None) -> str:
-    if scene_name == "base":
-        return "base"
-    if scene_name == "sun_glare":
-        slot_suffix = f"_{slot_name}" if slot_name else ""
-        regime_suffix = f"_{regime_name}" if regime_name else ""
-        return f"sun_glare_{glare_level}{slot_suffix}{regime_suffix}"
-    return scene_name
+    slot_suffix = f"_{slot_name}" if slot_name else ""
+    return f"{scene_name}_{glare_level}{slot_suffix}" if glare_level else f"{scene_name}{slot_suffix}"
 
 
 def _compute_t_entry(trace_rows: list[dict]) -> int | None:
@@ -459,10 +445,13 @@ def _write_csv(path: Path, rows: list[dict]):
 
 def _summary_metric(summary_rows: list[dict], method_key: str, level: str,
                     metric: str, slot_name: str | None = None,
-                    regime_name: str | None = None) -> float:
+                    regime_name: str | None = None,
+                    scene_name: str | None = None) -> float:
     vals = []
     for row in summary_rows:
         if row.get("method_key") != method_key:
+            continue
+        if scene_name is not None and row.get("scene_name") != scene_name:
             continue
         if row.get("glare_level") != level:
             continue
@@ -600,9 +589,9 @@ def _aggregate_aligned_trace(trace_rows: list[dict], method_key: str, condition:
 
 
 def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
-                        plot_regime: str,
+                        plot_scene: str,
                         output_path: Path, rel_min: int = -12, rel_max: int = 24):
-    condition = _condition_label("sun_glare", plot_level, plot_slot, plot_regime)
+    condition = _condition_label(plot_scene, plot_level, plot_slot)
     fig, axes = plt.subplots(4, 1, figsize=(8.0, 8.5), dpi=180, sharex=True)
     keys = [
         ("power", "Power"),
@@ -621,7 +610,7 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.25)
     axes[0].legend(frameon=False)
-    axes[0].set_title(f"{plot_level.upper()} / {plot_slot} / {plot_regime}")
+    axes[0].set_title(f"{plot_scene} / {plot_level.upper()} / {plot_slot}")
     axes[-1].axvline(0.0, color="k", linestyle="--", linewidth=1.2, alpha=0.65)
     axes[-1].set_xlabel("t - t_entry (steps)")
     fig.tight_layout()
@@ -629,11 +618,11 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
     plt.close(fig)
 
 
-def _plot_trajectory(trace_rows: list[dict], plot_level: str, plot_regime: str, output_path: Path):
+def _plot_trajectory(trace_rows: list[dict], plot_level: str, plot_scene: str, output_path: Path):
     fig, axes = plt.subplots(2, 2, figsize=(9.0, 6.6), dpi=180, sharex=True, sharey=True)
     axes = axes.flatten()
     for ax, slot in zip(axes, SUN_GLARE_SLOT_ORDER):
-        condition = _condition_label("sun_glare", plot_level, slot, plot_regime)
+        condition = _condition_label(plot_scene, plot_level, slot)
         opening_y = SUN_GLARE_SLOT_Y[slot]
         active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in trace_rows)]
         for method_key in active_methods:
@@ -663,7 +652,7 @@ def _plot_trajectory(trace_rows: list[dict], plot_level: str, plot_regime: str, 
     handles, labels = axes[0].get_legend_handles_labels()
     if handles:
         fig.legend(handles, labels, frameon=False, loc="upper center", ncol=min(4, len(handles)))
-    fig.suptitle(f"Top-Down Trajectories ({plot_level.upper()} / {plot_regime})", y=0.995)
+    fig.suptitle(f"Top-Down Trajectories ({plot_scene} / {plot_level.upper()})", y=0.995)
     fig.tight_layout()
     fig.savefig(output_path)
     plt.close(fig)
@@ -725,8 +714,7 @@ def _compute_trajectory_diffs(trace_rows: list[dict], method_a: str, method_b: s
 
 
 def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.device,
-                     episodes_per_condition: int, include_base: bool,
-                     slots: list[str], regimes: list[str]):
+                     episodes_per_condition: int, slots: list[str], scenarios: list[str]):
     spec = METHOD_SPECS[method_key]
     method_args = copy.deepcopy(base_args)
     for key, value in spec["args"].items():
@@ -744,24 +732,21 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
     episode_rows = []
     trace_rows = []
     conditions = []
-    if include_base:
-        conditions.append(("base", None, None, None))
-    for level in GLARE_LEVEL_ORDER:
-        for slot in slots:
-            for regime in regimes:
-                conditions.append(("sun_glare", level, slot, regime))
+    for scene_name in scenarios:
+        for level in GLARE_LEVEL_ORDER:
+            for slot in slots:
+                conditions.append((scene_name, level, slot))
 
-    for cond_idx, (scene_name, glare_level, slot_name, regime_name) in enumerate(conditions):
+    for cond_idx, (scene_name, glare_level, slot_name) in enumerate(conditions):
         cond_args = copy.deepcopy(method_args)
         cond_args.scenarios = [scene_name]
-        cond_args.sun_glare_eval_level = glare_level if scene_name == "sun_glare" else None
-        cond_args.sun_glare_eval_slot = slot_name if scene_name == "sun_glare" else None
-        cond_args.sun_glare_eval_regime = regime_name if scene_name == "sun_glare" else None
+        cond_args.sun_glare_eval_level = glare_level
+        cond_args.sun_glare_eval_slot = slot_name
         cond_args.eval_episodes = int(episodes_per_condition)
         validate_args(cond_args)
         set_global_seed(int(cond_args.seed) + cond_idx, cond_args.deterministic)
         env = build_env(cond_args.batch_size, cond_args, device, eval_mode=True)
-        cond_label = _condition_label(scene_name, glare_level, slot_name, regime_name)
+        cond_label = _condition_label(scene_name, glare_level, slot_name)
         print(f"[suite] method={method_key} condition={cond_label} episodes={episodes_per_condition}")
         for ep_idx in range(episodes_per_condition):
             metrics, trace = run_one_episode(
@@ -787,7 +772,7 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
                 "scene_name": scene_name,
                 "glare_level": glare_level or "",
                 "opening_slot": slot_name or "",
-                "sensor_regime": regime_name or "",
+                "sensor_regime": scene_name,
                 "episode_idx": int(ep_idx),
                 "checkpoint": str(ckpt_path),
             })
@@ -800,7 +785,7 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
                     "method_label": spec["label"],
                     "condition": cond_label,
                     "opening_slot": slot_name or "",
-                    "sensor_regime": regime_name or "",
+                    "sensor_regime": scene_name,
                     "opening_y": opening_y_fallback,
                     "checkpoint": str(ckpt_path),
                     "t_entry": -1 if t_entry is None else int(t_entry),
@@ -828,13 +813,11 @@ def parse_args():
                         help="Use ours checkpoint with policy_depth_mode=zero to isolate depth-cue usage.")
     parser.add_argument("--slots", nargs="*", default=list(SUN_GLARE_SLOT_ORDER),
                         help="Sun-glare opening slots to sweep: far_left left right far_right")
-    parser.add_argument("--regimes", nargs="*", default=["glare", "specular", "dark"],
-                        help="Sun-glare sensor regimes to sweep: glare specular dark")
+    parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"],
+                        help="Sensor scenes to sweep on the shared gate map: glare specular dark")
     parser.add_argument("--episodes_per_condition", type=int, default=12)
     parser.add_argument("--plot_level", type=str, default="l3")
-    parser.add_argument("--plot_regime", type=str, default=None)
-    parser.add_argument("--include_base", action="store_true")
-    parser.add_argument("--skip_base", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--plot_scene", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--output_dir", type=str, default=None)
@@ -879,18 +862,12 @@ def main():
             slots.append(slot)
     if not slots:
         raise ValueError("--slots 至少需要一个 opening slot")
-    regimes = []
-    for raw_regime in args.regimes:
-        regime = canonicalize_sun_glare_regime(raw_regime)
-        if regime not in ("glare", "specular", "dark"):
-            raise ValueError(f"unsupported regime: {raw_regime}")
-        if regime not in regimes:
-            regimes.append(regime)
-    if not regimes:
-        raise ValueError("--regimes 至少需要一个 sensor regime")
-    plot_regime = canonicalize_sun_glare_regime(args.plot_regime) if args.plot_regime else regimes[0]
-    if plot_regime not in regimes:
-        raise ValueError(f"--plot_regime={plot_regime} 不在 --regimes 中")
+    scenarios = parse_scenarios(args.scenarios)
+    if not scenarios:
+        raise ValueError("--scenarios 至少需要一个场景")
+    plot_scene = parse_scenarios([args.plot_scene])[0] if args.plot_scene else scenarios[0]
+    if plot_scene not in scenarios:
+        raise ValueError(f"--plot_scene={plot_scene} 不在 --scenarios 中")
 
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -908,7 +885,6 @@ def main():
 
     all_episode_rows = []
     all_trace_rows = []
-    include_base = bool(args.include_base) and not bool(args.skip_base)
     for method_key, ckpt_path in ckpts.items():
         episode_rows, trace_rows = _evaluate_method(
             method_key=method_key,
@@ -916,9 +892,8 @@ def main():
             base_args=base_args,
             device=device,
             episodes_per_condition=int(args.episodes_per_condition),
-            include_base=include_base,
             slots=slots,
-            regimes=regimes,
+            scenarios=scenarios,
         )
         all_episode_rows.extend(episode_rows)
         all_trace_rows.extend(trace_rows)
@@ -984,11 +959,10 @@ def main():
         "checkpoints": {k: str(v) for k, v in ckpts.items()},
         "episodes_per_condition": int(args.episodes_per_condition),
         "plot_level": plot_level,
-        "plot_regime": plot_regime,
+        "plot_scene": plot_scene,
         "slots": slots,
-        "regimes": regimes,
+        "scenarios": scenarios,
         "device": str(device),
-        "include_base": bool(include_base),
     })
 
     _plot_success_vs_glare(summary_rows, output_dir / "success_vs_glare.png")
@@ -999,14 +973,14 @@ def main():
             all_trace_rows,
             plot_level=plot_level,
             plot_slot=slot,
-            plot_regime=plot_regime,
-            output_path=output_dir / f"event_aligned_{plot_level}_{slot}_{plot_regime}.png",
+            plot_scene=plot_scene,
+            output_path=output_dir / f"event_aligned_{plot_scene}_{plot_level}_{slot}.png",
         )
     _plot_trajectory(
         all_trace_rows,
         plot_level=plot_level,
-        plot_regime=plot_regime,
-        output_path=output_dir / f"trajectory_{plot_level}_{plot_regime}.png",
+        plot_scene=plot_scene,
+        output_path=output_dir / f"trajectory_{plot_scene}_{plot_level}.png",
     )
 
     formatted_outputs = format_results_dir(output_dir)

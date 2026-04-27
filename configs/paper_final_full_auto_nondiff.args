@@ -34,12 +34,9 @@
 --cam_angle 5
 # --yaw_drift
 # --no_odom
-# --scenarios base sun_glare specular_trap vantablack_gap dark_morphing
---scenarios sun_glare
+--scenarios glare specular dark
 --sun_glare_levels l0 l1 l2 l3
---sun_glare_sensor_regimes glare specular dark
 # --sun_glare_eval_level l2
-# --sun_glare_eval_regime glare
 --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 # --ellipsoid_collision
