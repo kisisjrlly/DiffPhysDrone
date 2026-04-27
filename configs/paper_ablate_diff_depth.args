@@ -42,8 +42,6 @@
 
 --include_camera_state_in_obs
 --coef_cam_smooth 0.01
---coef_power_reg 0.005
---coef_cam_range 0.001
 
 --coef_diff_depth_power 0.02
 --coef_diff_depth_blur 0.02
@@ -60,8 +58,7 @@
 --cam_lighting_scale 0.9
 --cam_model_randomize
 --cam_model_randomize_scale 0.08
---cam_power_nominal 0.416667
---cam_power_penalty_threshold 0.416667
+--cam_power_baseline 0.416667
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
@@ -72,6 +69,5 @@
 --cam_iso_gain_gamma 1.2
 --cam_shot_noise_base 0.03
 
---no-vis_enable
 --wandb_disabled
 --amp

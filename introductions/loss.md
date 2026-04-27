@@ -290,7 +290,6 @@ L_total
 + coef_d_jerk * loss_d_jerk
 + coef_collide * loss_collide
 + coef_cam_smooth * loss_cam_smooth
-+ coef_power_reg * loss_power_reg
 + coef_diff_depth_power * loss_diff_depth_power
 + coef_diff_depth_blur * loss_diff_depth_blur
 + coef_diff_depth_noise * loss_diff_depth_noise
@@ -481,90 +480,23 @@ loss_cam_smooth = mean((cam_t - cam_{t-1})^2)
 
 ---
 
-### 7.3.2 `loss_power_reg`
+### 7.3.2 `loss_diff_depth_power`
 
 公式：
 
 ```text
-loss_power_reg = mean((power - cam_power_nominal)^2)
+loss_diff_depth_power = mean(relu(power - cam_power_baseline)^2)
 ```
 
-作用：
-
-- 惩罚 `power` 偏离可配置的中性值 `cam_power_nominal`
-- 无论往高还是往低偏，都会罚
-
-它的风格是“居中正则化”。
-
-这项不是物理正确性约束，而是策略先验：
-
-- 不希望网络一上来就把功率打满
-- 也不希望一直贴着 0
-
----
-
-### 7.3.3 `loss_cam_range`
-
-公式：
-
-```text
-loss_cam_range = mean((exposure - 0.5)^2 + (gain - 0.5)^2)
-```
-
-注意：
-
-- 这里只约束 `exposure` 和 `gain`
-- 不含 `power`
-
-当前代码里就是故意这样写的，避免和 `loss_power_reg` 重复处罚 `power`。
-
-作用：
-
-- 避免 exposure/gain 长时间贴边
-- 提高策略可控性和泛化性
-
----
-
-### 7.3.4 `loss_diff_depth_power`
-
-公式：
-
-```text
-loss_diff_depth_power = mean(relu(power - cam_power_penalty_threshold)^2)
-```
-
-这项和 `loss_power_reg` 非常像，但不是一回事。
-
-区别在于：
-
-- `loss_power_reg`：高于或低于 `cam_power_nominal` 都罚
-- `loss_diff_depth_power`：只罚高于 `cam_power_penalty_threshold` 的部分
-
-所以它更像“能耗约束”：
+这项是现在唯一保留的 power 成本项，语义就是“低功率是默认状态，高功率需要付出代价”：
 
 - 鼓励不要长期高功率
-- 但不反对把功率降到 0.5 以下
-
-### 7.3.5 为什么 `loss_power_reg` 和 `loss_diff_depth_power` 不算完全重复
-
-虽然都作用在 `power` 上，但角色不同：
-
-- `loss_power_reg` 是居中正则，防止 power 贴边
-- `loss_diff_depth_power` 是高功率能耗惩罚，强调“别总打满激光”
-
-如果只有 `loss_diff_depth_power`：
-
-- 网络可能把 power 长期压得很低
-
-如果只有 `loss_power_reg`：
-
-- 网络对“高功率更耗能”这件事没有明确偏置
-
-所以这两项有重叠，但不是完全重复。
+- 不惩罚低于 `cam_power_baseline` 的 power
+- 只有当传感器质量、fill rate 或任务收益足够大时，策略才值得把 power 推高
 
 ---
 
-### 7.3.6 `loss_diff_depth_blur`
+### 7.3.3 `loss_diff_depth_blur`
 
 先把归一化曝光映射成“物理语义上的有效曝光时间”：
 
@@ -591,7 +523,7 @@ loss_diff_depth_blur = mean((speed * exp_phys)^2)
 
 ---
 
-### 7.3.7 `loss_diff_depth_noise`
+### 7.3.4 `loss_diff_depth_noise`
 
 公式：
 
@@ -608,7 +540,7 @@ loss_diff_depth_noise = mean(gain^2)
 
 ---
 
-### 7.3.8 `loss_diff_depth_fill`
+### 7.3.5 `loss_diff_depth_fill`
 
 这是当前 diff-depth 里最重要的“感知可用性保护项”之一。
 
@@ -698,7 +630,6 @@ fill_src = depth_quality if depth_quality is not None else depth_obs.detach()
 - `loss_d_acc`
 - `loss_d_jerk`
 - `loss_cam_smooth`
-- `loss_power_reg`
 - `loss_diff_depth_power`
 - `loss_diff_depth_blur`
 - `loss_diff_depth_noise`
@@ -724,8 +655,6 @@ fill_src = depth_quality if depth_quality is not None else depth_obs.detach()
 | `loss_d_jerk` | 动作头 `fc` 和共享主干 |
 | `loss_v_pred` | 速度预测相关分支和共享主干 |
 | `loss_cam_smooth` | 相机头 `fc_cam` 和共享主干 |
-| `loss_power_reg` | 相机头 `fc_cam` 和共享主干 |
-| `loss_cam_range` | 相机头 `fc_cam` 和共享主干 |
 | `loss_diff_depth_power` | 相机头 `fc_cam` 和共享主干 |
 | `loss_diff_depth_blur` | 相机头 `fc_cam` 和共享主干 |
 | `loss_diff_depth_noise` | 相机头 `fc_cam` 和共享主干 |
@@ -822,20 +751,10 @@ loss_share/x = loss_contrib/x / total_contrib
 - 策略经常把 gain 拉得太高
 - 说明它更依赖增益，而不是其他成像手段
 
-如果 `loss_share/power_reg` 很高，通常说明：
-
-- `power` 偏离 `cam_power_nominal` 很明显
-- 但不一定表示它打满功率，也可能是长期偏低
-
 如果 `loss_share/diff_depth_power` 很高，通常说明：
 
-- 策略经常把 power 推到 `cam_power_penalty_threshold` 以上很多
+- 策略经常把 power 推到 `cam_power_baseline` 以上很多
 - 高功率能耗已经成了主要矛盾
-
-如果 `loss_share/cam_range` 很高，通常说明：
-
-- exposure 或 gain 经常贴近边界
-- 说明相机策略在“靠边打满某个寄存器”来求解问题
 
 如果 `loss_share/collide` 很高，通常说明：
 
@@ -898,9 +817,10 @@ loss_share/x = loss_contrib/x / total_contrib
    - `loss_share/diff_depth_blur`
    - `loss_share/diff_depth_noise`
 4. 最后再看是否出现不自然的寄存器行为：
-   - `loss_share/power_reg`
-   - `loss_share/cam_range`
    - `loss_share/cam_smooth`
+   - `cam/power_mean`
+   - `cam/exposure_mean`
+   - `cam/gain_mean`
 
 这样你就不会只盯着某一项 loss，结果把整体闭环判断错了。
 
@@ -919,8 +839,6 @@ loss_share/x = loss_contrib/x / total_contrib
 | `loss_d_jerk` | 动作是否过抖 |
 | `loss_v_pred` | 网络是否学会速度辅助表征 |
 | `loss_cam_smooth` | 相机参数是否帧间跳变太大 |
-| `loss_power_reg` | power 是否偏离中心值太远 |
-| `loss_cam_range` | exposure/gain 是否长期贴边 |
 | `loss_diff_depth_power` | 是否长期使用高功率激光 |
 | `loss_diff_depth_blur` | 是否在高速下还长曝光 |
 | `loss_diff_depth_noise` | 是否过度依赖高增益 |

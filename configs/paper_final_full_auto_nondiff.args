@@ -9,7 +9,7 @@
 
 # ----------------- Training scale -----------------
 --batch_size 92
---num_iters 5
+--num_iters 10000
 --timesteps 120
 
 # ----------------- TBPTT / schedule -----------------
@@ -37,7 +37,9 @@
 # --scenarios base sun_glare specular_trap vantablack_gap dark_morphing
 --scenarios sun_glare
 --sun_glare_levels l0 l1 l2 l3
+--sun_glare_sensor_regimes glare specular dark
 # --sun_glare_eval_level l2
+# --sun_glare_eval_regime glare
 --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 # --ellipsoid_collision
@@ -74,15 +76,13 @@
 --fixed_camera_power 0.75
 --fixed_camera_exposure 0.45
 --fixed_camera_gain 0.45
---fixed_random_power_min 0.55
---fixed_random_power_max 0.90
+--fixed_random_power_min 0.45
+--fixed_random_power_max 0.95
 --fixed_random_exposure_min 0.16
---fixed_random_exposure_max 0.60
+--fixed_random_exposure_max 0.82
 --fixed_random_gain_min 0.02
---fixed_random_gain_max 0.42
---coef_cam_smooth 35
---coef_power_reg 50
---cam_power_reg_deadband 0.18
+--fixed_random_gain_max 0.70
+--coef_cam_smooth 6
 
 --cam_realism_preset low
 --cam_enable_specular
@@ -93,36 +93,35 @@
 --cam_lighting_scale 1.0
 --cam_model_randomize
 --cam_model_randomize_scale 0.12
---cam_power_nominal 0.7
---cam_power_penalty_threshold 0.7
+--cam_power_baseline 0.55
 
 --sun_glare_randomize
---sun_glare_ambient_min 0.06
---sun_glare_ambient_max 0.28
---sun_glare_dir_min 0.25
---sun_glare_dir_max 1.05
---sun_glare_airlight_min 0.06
---sun_glare_airlight_max 0.34
---sun_glare_fog_beta_min 0.006
---sun_glare_fog_beta_max 0.045
---sun_glare_mat_obstacle_min 0.42
---sun_glare_mat_obstacle_max 0.82
---sun_glare_mat_spec_min 0.02
---sun_glare_mat_spec_max 0.16
---sun_glare_sun_sigma_u_min 0.18
---sun_glare_sun_sigma_u_max 0.34
---sun_glare_sun_sigma_v_min 0.16
---sun_glare_sun_sigma_v_max 0.30
---sun_glare_sun_y_jitter 0.18
---sun_glare_sun_z_jitter 0.12
---sun_glare_occluder_x_jitter 0.10
---sun_glare_occluder_half_y_min 0.36
+--sun_glare_ambient_min 0.04
+--sun_glare_ambient_max 0.34
+--sun_glare_dir_min 0.18
+--sun_glare_dir_max 1.25
+--sun_glare_airlight_min 0.03
+--sun_glare_airlight_max 0.42
+--sun_glare_fog_beta_min 0.004
+--sun_glare_fog_beta_max 0.060
+--sun_glare_mat_obstacle_min 0.30
+--sun_glare_mat_obstacle_max 0.88
+--sun_glare_mat_spec_min 0.00
+--sun_glare_mat_spec_max 0.42
+--sun_glare_sun_sigma_u_min 0.16
+--sun_glare_sun_sigma_u_max 0.42
+--sun_glare_sun_sigma_v_min 0.14
+--sun_glare_sun_sigma_v_max 0.36
+--sun_glare_sun_y_jitter 0.26
+--sun_glare_sun_z_jitter 0.18
+--sun_glare_occluder_x_jitter 0.12
+--sun_glare_occluder_half_y_min 0.34
 --sun_glare_occluder_half_y_max 0.50
---sun_glare_divider_x_jitter 0.08
---sun_glare_gate_x_jitter 0.08
---sun_glare_gap_half_w_min 0.16
---sun_glare_gap_half_w_max 0.24
---sun_glare_start_y_jitter 0.18
+--sun_glare_divider_x_jitter 0.10
+--sun_glare_gate_x_jitter 0.10
+--sun_glare_gap_half_w_min 0.14
+--sun_glare_gap_half_w_max 0.22
+--sun_glare_start_y_jitter 0.22
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
@@ -133,11 +132,11 @@
 --cam_iso_gain_gamma 0.6
 --cam_shot_noise_base 0.01
 
---coef_diff_depth_power 1.5
+--coef_diff_depth_power 5.0
 --coef_diff_depth_blur 0.08
---coef_diff_depth_noise 0.35
---coef_diff_depth_fill 4.5
---diff_depth_min_fill_rate 0.72
+--coef_diff_depth_noise 0.25
+--coef_diff_depth_fill 6.0
+--diff_depth_min_fill_rate 0.76
 
 # ----------------- Teacher-student -----------------
 # --enable_teacher_student_training
@@ -168,7 +167,7 @@
 --vis_student
 # --vis_spawn
 
---wandb_disabled
+# --wandb_disabled
 # --wandb_log_raw_loss_terms
 # --no-amp
 

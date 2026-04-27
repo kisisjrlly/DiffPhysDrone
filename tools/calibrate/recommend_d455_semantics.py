@@ -169,11 +169,10 @@ def _recommend_semantics(
     t_min = exp_min_us / exposure_divisor_us
     t_max = exp_max_us / exposure_divisor_us
     t_span = max(0.0, t_max - t_min)
-    power_nominal = _clamp(float(laser_default) / max(float(laser_max), 1e-6), 0.0, 1.0)
+    power_baseline = _clamp(float(laser_default) / max(float(laser_max), 1e-6), 0.0, 1.0)
 
     return {
-        'cam_power_nominal': float(power_nominal),
-        'cam_power_penalty_threshold': float(power_nominal),
+        'cam_power_baseline': float(power_baseline),
         'cam_exposure_t_min': float(t_min),
         'cam_exposure_t_span': float(t_span),
         'cam_exposure_eff_min': float(t_min),
@@ -188,8 +187,7 @@ def _recommend_semantics(
 def _format_args_block(values: dict[str, float]) -> str:
     lines = []
     for key in (
-        'cam_power_nominal',
-        'cam_power_penalty_threshold',
+        'cam_power_baseline',
         'cam_exposure_t_min',
         'cam_exposure_t_span',
         'cam_exposure_eff_min',
@@ -319,7 +317,7 @@ def main():
         },
         'recommended': recommended,
         'notes': [
-            'cam_power_nominal / cam_power_penalty_threshold 已按 D455 默认 laser_power/max 归一化。',
+            'cam_power_baseline 已按 D455 默认 laser_power/max 归一化。',
             'cam_exposure_* 是与 D455 最容易直接对齐的一组参数。',
             'cam_iso_gain_* 是语义增益，不是 D455 原始 gain 寄存器本身；这里给的是可运行初值。',
             'cam_shot_noise_base 仅给初值，最好再用静态平面墙面数据按 depth_std 细调。',
@@ -365,7 +363,7 @@ def main():
     print()
     print('Interpretation')
     print(
-        f"  power nominal -> {recommended['cam_power_nominal']:.4f} "
+        f"  power baseline -> {recommended['cam_power_baseline']:.4f} "
         f"(about {laser_full['default']:.0f}/{laser_full['max']:.0f})"
     )
     print(

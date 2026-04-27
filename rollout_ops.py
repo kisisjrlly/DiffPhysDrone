@@ -101,8 +101,9 @@ def compute_diff_depth_proxies(power_seq, exposure_seq, gain_seq, speed_seq, cam
 def init_camera_params(env, B, device):
     """Initial diff_depth sensor-control state: power / exposure / gain."""
     mode = getattr(env, 'camera_control_mode', 'learned')
+    power_baseline = float(getattr(env, 'cam_power_baseline', 0.55))
     if mode == 'fixed':
-        power0 = float(getattr(env, 'fixed_camera_power', getattr(env, 'cam_power_nominal', 0.5)))
+        power0 = float(getattr(env, 'fixed_camera_power', power_baseline))
         exposure0 = float(getattr(env, 'fixed_camera_exposure', 0.5))
         gain0 = float(getattr(env, 'fixed_camera_gain', 0.5))
     elif mode == 'fixed_random_static':
@@ -114,7 +115,7 @@ def init_camera_params(env, B, device):
         gain = torch.empty((B,), device=device).uniform_(float(g_lo), float(g_hi))
         return power, exposure, gain
     else:
-        power0 = float(getattr(env, 'cam_power_nominal', 0.5))
+        power0 = power_baseline
         exposure0 = 0.5
         gain0 = 0.5
     power = torch.full((B,), min(max(power0, 0.0), 1.0), device=device)
@@ -272,7 +273,8 @@ def update_camera_params(cam_params, power, exposure, gain, env):
 
     mode = getattr(env, 'camera_control_mode', 'learned')
     if mode == 'fixed':
-        fixed_power = torch.full_like(power, float(getattr(env, 'fixed_camera_power', getattr(env, 'cam_power_nominal', 0.5))))
+        power_baseline = float(getattr(env, 'cam_power_baseline', 0.55))
+        fixed_power = torch.full_like(power, float(getattr(env, 'fixed_camera_power', power_baseline)))
         fixed_exposure = torch.full_like(exposure, float(getattr(env, 'fixed_camera_exposure', 0.5)))
         fixed_gain = torch.full_like(gain, float(getattr(env, 'fixed_camera_gain', 0.5)))
         hist = torch.stack([fixed_power, fixed_exposure, fixed_gain], dim=-1)

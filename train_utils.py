@@ -103,7 +103,6 @@ def active_loss_term_specs(args, distill_coef_iter=None):
 
     if getattr(args, 'camera_control_mode', 'learned') == 'learned':
         add('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth)
-        add('power_reg', 'loss_power_reg', args.coef_power_reg)
     add('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power)
     add('diff_depth_blur', 'loss_diff_depth_blur', args.coef_diff_depth_blur)
     add('diff_depth_noise', 'loss_diff_depth_noise', args.coef_diff_depth_noise)
@@ -220,7 +219,7 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         cam_lighting_scale=args.cam_lighting_scale,
         cam_model_randomize=cam_model_randomize,
         cam_model_randomize_scale=args.cam_model_randomize_scale,
-        cam_power_nominal=args.cam_power_nominal,
+        cam_power_baseline=args.cam_power_baseline,
         camera_control_mode=args.camera_control_mode,
         sensor_grad_mode=args.sensor_grad_mode,
         fixed_camera_power=args.fixed_camera_power,
@@ -246,6 +245,8 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         sun_glare_levels=args.sun_glare_levels,
         sun_glare_eval_level=args.sun_glare_eval_level if eval_mode else None,
         sun_glare_eval_slot=getattr(args, 'sun_glare_eval_slot', None) if eval_mode else None,
+        sun_glare_sensor_regimes=getattr(args, 'sun_glare_sensor_regimes', None),
+        sun_glare_eval_regime=getattr(args, 'sun_glare_eval_regime', None) if eval_mode else None,
         sun_glare_randomize=args.sun_glare_randomize,
         sun_glare_ambient_min=args.sun_glare_ambient_min,
         sun_glare_ambient_max=args.sun_glare_ambient_max,

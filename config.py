@@ -16,6 +16,7 @@ SUPPORTED_SCENARIOS = (
 OPENING_SCENES = {'vantablack_gap', 'dark_morphing'}
 SUPPORTED_SUN_GLARE_LEVELS = ('l0', 'l1', 'l2', 'l3')
 SUPPORTED_SUN_GLARE_SLOTS = ('far_left', 'left', 'right', 'far_right')
+SUPPORTED_SUN_GLARE_REGIMES = ('glare', 'specular', 'dark')
 
 
 def build_parser():
@@ -38,7 +39,7 @@ def build_parser():
     parser.add_argument('--coef_v', type=float, default=1.0, help='速度跟踪损失权重')
     parser.add_argument('--loss_v_window', type=int, default=30,
                         help='速度跟踪损失的时间平均窗口长度（单位：step）；越大越平滑、越小越灵敏')
-    parser.add_argument('--coef_v_pred', type=float, default=2.0, help='[deprecated/ignored] 旧版速度预测 MSE 损失权重')
+    parser.add_argument('--coef_v_pred', type=float, default=0.0, help='[deprecated/ignored] 旧版速度预测 MSE 损失权重')
     parser.add_argument('--coef_collide', type=float, default=2.0, help='碰撞惩罚权重')
     parser.add_argument('--coef_obj_avoidance', type=float, default=1.5, help='避障安全距离惩罚权重')
     parser.add_argument('--coef_d_acc', type=float, default=0.01, help='控制加速度正则化权重')
@@ -83,6 +84,10 @@ def build_parser():
                         help='可选：评估时固定使用某一档 sun_glare 强度，例如 l2；训练阶段忽略该参数')
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None,
                         help='可选：评估时固定使用某个 sun_glare 开口，例如 far_left/left/right/far_right；训练阶段忽略该参数')
+    parser.add_argument('--sun_glare_sensor_regimes', nargs='*', default=['glare', 'specular', 'dark'],
+                        help='sun_glare 内部的传感器退化子模式；训练时随机采样，用来制造静态相机无法通吃的多模态成像需求')
+    parser.add_argument('--sun_glare_eval_regime', type=str, default=None,
+                        help='可选：评估时固定 sun_glare 传感器子模式，例如 glare/specular/dark；训练阶段忽略该参数')
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true', help='使用椭球体碰撞检测')
     parser.add_argument('--drone_a', type=float, default=0.15, help='椭球体 XY 半轴')
     parser.add_argument('--drone_c', type=float, default=0.075, help='椭球体 Z 半轴')
@@ -97,17 +102,11 @@ def build_parser():
     parser.add_argument('--sensor_grad_mode', type=str, default='full', choices=['full', 'detached'],
                         help='传感器梯度模式：full 为可微主动感知，detached 为不可微主动感知基线')
     parser.add_argument('--coef_cam_smooth', type=float, default=0.01, help='相机参数平滑度正则化权重')
-    parser.add_argument('--coef_power_reg', type=float, default=0.005,
-                        help='首个相机控制通道偏离中心值的正则化权重（diff_depth 分支中对应 power）')
-    parser.add_argument('--cam_power_reg_deadband', type=float, default=0.0,
-                        help='power 相对中性值的免罚区间半宽；在该 deadband 内允许策略按环境调节 power')
-    parser.add_argument('--coef_cam_range', type=float, default=0.001, help='[deprecated/ignored] 旧版 exposure/gain 范围正则化权重')
-    parser.add_argument('--cam_power_nominal', type=float, default=0.5,
-                        help='diff_depth power 的中性/默认参考值；建议按真实 D455 默认 laser_power/max 对齐')
-    parser.add_argument('--cam_power_penalty_threshold', type=float, default=0.5,
-                        help='高功率惩罚的起始阈值；超过该值才触发 loss_diff_depth_power')
+    parser.add_argument('--cam_power_baseline', type=float, default=0.55,
+                        help='diff_depth power 的低功率常态基准；超过该值的部分由 coef_diff_depth_power 惩罚')
+    parser.add_argument('--coef_cam_range', type=float, default=0.0, help='[deprecated/ignored] 旧版 exposure/gain 范围正则化权重')
     parser.add_argument('--fixed_camera_power', type=float, default=-1.0,
-                        help='fixed camera 基线的归一化 power；<0 时自动使用 cam_power_nominal')
+                        help='fixed camera 基线的归一化 power；<0 时自动使用 cam_power_baseline')
     parser.add_argument('--fixed_camera_exposure', type=float, default=0.5,
                         help='fixed camera 基线的归一化 exposure')
     parser.add_argument('--fixed_camera_gain', type=float, default=0.5,
@@ -352,6 +351,27 @@ def canonicalize_sun_glare_slot(item):
     return aliases.get(token, token)
 
 
+def canonicalize_sun_glare_regime(item):
+    if item is None:
+        return None
+    token = str(item).strip().lower().replace('-', '_')
+    aliases = {
+        'glare': 'glare',
+        'sun': 'glare',
+        'sun_glare': 'glare',
+        'rescue': 'glare',
+        'spec': 'specular',
+        'specular': 'specular',
+        'specular_overdrive': 'specular',
+        'overdrive': 'specular',
+        'dark': 'dark',
+        'dark_edge': 'dark',
+        'lowlight': 'dark',
+        'low_light': 'dark',
+    }
+    return aliases.get(token, token)
+
+
 def parse_sun_glare_levels(items):
     if items is None:
         return ['l0', 'l1', 'l2', 'l3']
@@ -376,6 +396,37 @@ def parse_sun_glare_levels(items):
     dedup = []
     seen = set()
     for name in levels:
+        if name in seen:
+            continue
+        seen.add(name)
+        dedup.append(name)
+    return dedup
+
+
+def parse_sun_glare_regimes(items):
+    if items is None:
+        return ['glare', 'specular', 'dark']
+
+    regimes = []
+    for raw in items:
+        if raw is None:
+            continue
+        for token in str(raw).split(','):
+            name = canonicalize_sun_glare_regime(token)
+            if not name:
+                continue
+            if name not in SUPPORTED_SUN_GLARE_REGIMES:
+                raise ValueError(
+                    f"--sun_glare_sensor_regimes 不支持 '{name}'，仅支持: {list(SUPPORTED_SUN_GLARE_REGIMES)}"
+                )
+            regimes.append(name)
+
+    if not regimes:
+        return ['glare', 'specular', 'dark']
+
+    dedup = []
+    seen = set()
+    for name in regimes:
         if name in seen:
             continue
         seen.add(name)
@@ -432,12 +483,10 @@ def validate_args(args):
         raise ValueError('--depth_width/--depth_height 必须 >= 1')
     if args.depth_nn_width < 1 or args.depth_nn_height < 1:
         raise ValueError('--depth_nn_width/--depth_nn_height 必须 >= 1')
-    if not (0.0 <= args.cam_power_nominal <= 1.0):
-        raise ValueError('--cam_power_nominal 必须在 [0,1] 内')
-    if not (0.0 <= args.cam_power_penalty_threshold <= 1.0):
-        raise ValueError('--cam_power_penalty_threshold 必须在 [0,1] 内')
+    if not (0.0 <= args.cam_power_baseline <= 1.0):
+        raise ValueError('--cam_power_baseline 必须在 [0,1] 内')
     if args.fixed_camera_power >= 0.0 and not (0.0 <= args.fixed_camera_power <= 1.0):
-        raise ValueError('--fixed_camera_power 必须在 [0,1] 内，或设为 <0 使用 cam_power_nominal')
+        raise ValueError('--fixed_camera_power 必须在 [0,1] 内，或设为 <0 使用 cam_power_baseline')
     if not (0.0 <= args.fixed_camera_exposure <= 1.0):
         raise ValueError('--fixed_camera_exposure 必须在 [0,1] 内')
     if not (0.0 <= args.fixed_camera_gain <= 1.0):
@@ -477,8 +526,6 @@ def validate_args(args):
     ]:
         if float(getattr(args, name)) < 0.0:
             raise ValueError(f'--{name} 必须 >= 0')
-    if args.cam_power_reg_deadband < 0.0 or args.cam_power_reg_deadband > 1.0:
-        raise ValueError('--cam_power_reg_deadband 必须在 [0,1] 内')
     if args.cam_model_randomize_scale < 0.0 or args.cam_model_randomize_scale > 0.5:
         raise ValueError('--cam_model_randomize_scale 建议在 [0, 0.5] 内')
     deprecated_loss_args = []
@@ -501,6 +548,11 @@ def validate_args(args):
         raise ValueError('--scenarios 至少需要一个场景')
     if not getattr(args, 'sun_glare_levels', None):
         raise ValueError('--sun_glare_levels 至少需要一个档位')
+    args.sun_glare_sensor_regimes = parse_sun_glare_regimes(
+        getattr(args, 'sun_glare_sensor_regimes', None)
+    )
+    if not getattr(args, 'sun_glare_sensor_regimes', None):
+        raise ValueError('--sun_glare_sensor_regimes 至少需要一个子模式')
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
         if args.sun_glare_eval_level not in SUPPORTED_SUN_GLARE_LEVELS:
@@ -514,6 +566,13 @@ def validate_args(args):
             raise ValueError(
                 f"--sun_glare_eval_slot 不支持 '{args.sun_glare_eval_slot}'，"
                 f"仅支持: {list(SUPPORTED_SUN_GLARE_SLOTS)}"
+            )
+    if getattr(args, 'sun_glare_eval_regime', None) is not None:
+        args.sun_glare_eval_regime = canonicalize_sun_glare_regime(args.sun_glare_eval_regime)
+        if args.sun_glare_eval_regime not in SUPPORTED_SUN_GLARE_REGIMES:
+            raise ValueError(
+                f"--sun_glare_eval_regime 不支持 '{args.sun_glare_eval_regime}'，"
+                f"仅支持: {list(SUPPORTED_SUN_GLARE_REGIMES)}"
             )
 
 
@@ -542,6 +601,8 @@ def print_runtime_mode(args):
     print(f"sun_glare_levels          : {args.sun_glare_levels}")
     print(f"sun_glare_eval_level      : {args.sun_glare_eval_level}")
     print(f"sun_glare_eval_slot       : {getattr(args, 'sun_glare_eval_slot', None)}")
+    print(f"sun_glare_sensor_regimes  : {getattr(args, 'sun_glare_sensor_regimes', None)}")
+    print(f"sun_glare_eval_regime     : {getattr(args, 'sun_glare_eval_regime', None)}")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print("environment               : fixed_small_map_with_perception_scenarios")
@@ -556,10 +617,13 @@ def parse_args():
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
     args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
+    args.sun_glare_sensor_regimes = parse_sun_glare_regimes(args.sun_glare_sensor_regimes)
     if args.sun_glare_eval_level is not None:
         args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     if getattr(args, 'sun_glare_eval_slot', None) is not None:
         args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
+    if getattr(args, 'sun_glare_eval_regime', None) is not None:
+        args.sun_glare_eval_regime = canonicalize_sun_glare_regime(args.sun_glare_eval_regime)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
     return args

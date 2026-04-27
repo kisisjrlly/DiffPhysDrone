@@ -47,8 +47,6 @@
   `loss_d_jerk`
 - 传感器控制：
   `loss_cam_smooth`
-  `loss_power_reg`
-  `loss_cam_range`
   `loss_diff_depth_power`
   `loss_diff_depth_blur`
   `loss_diff_depth_noise`

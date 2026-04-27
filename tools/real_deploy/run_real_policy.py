@@ -412,7 +412,7 @@ class D455Runtime:
             'laser_power': depth_sensor.get_option_range(rs.option.laser_power),
         }
 
-        init_power01 = float(getattr(self.project_args, 'cam_power_nominal', 0.5))
+        init_power01 = float(getattr(self.project_args, 'cam_power_baseline', 0.55))
         init_exposure01 = 0.5
         init_gain01 = 0.5
         self.apply_normalized(init_power01, init_exposure01, init_gain01, force=True)
@@ -995,12 +995,12 @@ def main():
             'policy_margin_m': policy_margin_m,
         }, f, ensure_ascii=False, indent=2)
 
-    cam_power_nominal = float(project_args.cam_power_nominal)
+    cam_power_baseline = float(project_args.cam_power_baseline)
     fixed_camera_power = float(project_args.fixed_camera_power)
     if fixed_camera_power < 0.0:
-        fixed_camera_power = cam_power_nominal
+        fixed_camera_power = cam_power_baseline
     cam_env = SimpleNamespace(
-        cam_power_nominal=cam_power_nominal,
+        cam_power_baseline=cam_power_baseline,
         camera_control_mode=str(project_args.camera_control_mode).lower(),
         fixed_camera_power=fixed_camera_power,
         fixed_camera_exposure=float(project_args.fixed_camera_exposure),

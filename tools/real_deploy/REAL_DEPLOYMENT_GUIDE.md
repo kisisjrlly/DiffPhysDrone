@@ -463,7 +463,7 @@ python3 tools/recommend_d455_semantics.py
 - 给出 `cam_exposure_*`
 - 给出 `cam_iso_gain_*`
 - 给出 `cam_shot_noise_base`
-- 给出 `cam_power_nominal`
+- 给出 `cam_power_baseline`
 
 ### 3. 静态墙面噪声标定
 

@@ -288,5 +288,5 @@ ls /dev/ttyUSB
 # 示例 2：如果你只做地面联调，想临时切成 blind 看动作输出，可以这样写：
 # --policy_depth_mode zero
 #
-# 示例 3：如果你非常确定需要覆盖相机名义功率，可这样写：
-# --cam_power_nominal 0.416667
+# 示例 3：如果你非常确定需要覆盖相机低功率基准，可这样写：
+# --cam_power_baseline 0.416667

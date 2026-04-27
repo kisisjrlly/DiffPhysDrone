@@ -17,7 +17,9 @@ BLIND_CKPT=${BLIND_CKPT:-/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/20
 
 EPISODES=${EPISODES:-20}
 PLOT_LEVEL=${PLOT_LEVEL:-l3}
+PLOT_REGIME=${PLOT_REGIME:-glare}
 SLOTS=${SLOTS:-"far_left left right far_right"}
+REGIMES=${REGIMES:-"glare specular dark"}
 INCLUDE_OURS_ZERO=${INCLUDE_OURS_ZERO:-1}
 OUTPUT_DIR=${OUTPUT_DIR:-}
 INCLUDE_BASE=${INCLUDE_BASE:-0}
@@ -40,10 +42,12 @@ cmd=(
 	--ours_ckpt "$OURS_CKPT"
 	--fixed_ckpt "$FIXED_CKPT"
 	--nondiff_ckpt "$NONDIFF_CKPT"
-	--episodes_per_condition "$EPISODES"
-	--plot_level "$PLOT_LEVEL"
-	--slots $SLOTS
-)
+		--episodes_per_condition "$EPISODES"
+		--plot_level "$PLOT_LEVEL"
+		--plot_regime "$PLOT_REGIME"
+		--slots $SLOTS
+		--regimes $REGIMES
+	)
 
 if [ -n "$FIXED_RANDOM_CKPT" ]; then
 	if [ ! -f "$FIXED_RANDOM_CKPT" ]; then
@@ -90,7 +94,9 @@ else
 fi
 echo "[eval-suite] episodes/cond : $EPISODES"
 echo "[eval-suite] plot_level    : $PLOT_LEVEL"
+echo "[eval-suite] plot_regime   : $PLOT_REGIME"
 echo "[eval-suite] slots         : $SLOTS"
+echo "[eval-suite] regimes       : $REGIMES"
 echo "[eval-suite] ours_zero     : $INCLUDE_OURS_ZERO"
 
 "${cmd[@]}"

@@ -292,7 +292,7 @@ $$
 
 - 让传感器控制有时间连续性（不瞬变）；
 - 历史状态不反传，控制图不无限增长；
-- 同时保留原始 `cam_params` 供 `loss_cam_smooth/loss_cam_range` 完整回传。
+- 同时保留原始 `cam_params` 供 `loss_cam_smooth` 完整回传。
 
 ---
 
@@ -338,9 +338,8 @@ $$
 - 输入：`cam_hist, power/exposure/gain 序列, speed_seq, fill_rate_seq`
 - 输出：
 	- `loss_cam_smooth`（相机输出平滑）
-	- `loss_power_reg`（power 偏离 `cam_power_nominal`）
-	- `loss_cam_range`（exposure/gain 偏离 0.5）
-	- `loss_diff_depth_power/blur/noise/fill`
+	- `loss_diff_depth_power`（power 高于 `cam_power_baseline` 的能耗成本）
+	- `loss_diff_depth_blur/noise/fill`
 
 特别注意：
 
@@ -374,7 +373,7 @@ $$
 
 | 函数 | 主要输入 | 主要输出 | 数值语义（归一化/物理） |
 |---|---|---|---|
-| `init_camera_params` | `B, device` | `power/exposure/gain` | 输出 `[0,1]` 初值（power 用 `cam_power_nominal`，exposure/gain 用 0.5） |
+| `init_camera_params` | `B, device` | `power/exposure/gain` | 输出 `[0,1]` 初值（power 用 `cam_power_baseline`，exposure/gain 用 0.5） |
 | `diff_depth_exposure_to_time` | `exposure01` | `exp_phys` | `[0,1]` → 有效曝光时间尺度 |
 | `render_sensors` | `env, power, exposure, gain` | `depth_obs, quality` | 输入归一化控制，输出深度(m语义)+质量(0~1) |
 | `Env.render_diff_depth` | `power, exposure, gain` | `(noisy_depth, quality)` 或 `(noisy_depth,None)` | 后端分派（python/cuda） |

@@ -94,17 +94,12 @@ def _infer_loss_device(*items):
 def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq,
                           fill_rate_seq=None, min_fill_rate=0.18,
                           camera_semantics=None,
-                          power_nominal: float = 0.5,
-                          power_penalty_threshold: float = 0.5,
-                          power_reg_deadband: float = 0.0):
+                          power_baseline: float = 0.55):
     """计算 diff_depth-only 分支的相机控制损失。"""
     device = _infer_loss_device(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq)
-    power_nominal = float(power_nominal)
-    power_penalty_threshold = float(power_penalty_threshold)
-    power_reg_deadband = max(float(power_reg_deadband), 0.0)
+    power_baseline = float(power_baseline)
     result = {
         'loss_cam_smooth': torch.zeros((), device=device),
-        'loss_power_reg': torch.zeros((), device=device),
         'loss_diff_depth_power': torch.zeros((), device=device),
         'loss_diff_depth_blur': torch.zeros((), device=device),
         'loss_diff_depth_noise': torch.zeros((), device=device),
@@ -115,9 +110,6 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
     if cam_hist is not None and cam_hist.shape[0] > 1:
         cam_diff = cam_hist.diff(1, 0)
         result['loss_cam_smooth'] = cam_diff.pow(2).mean()
-        # 允许 power 在默认档位附近有一段自由调节区，否则策略很难学到“必要时升功率”
-        power_delta = (cam_hist[:, :, 0] - power_nominal).abs()
-        result['loss_power_reg'] = F.relu(power_delta - power_reg_deadband).pow(2).mean()
 
     # diff_depth 光学损失
     if exposure_seq is not None:
@@ -125,8 +117,8 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
             exposure_seq,
             camera_semantics=camera_semantics,
         )
-        # 惩罚功率偏高（超过可配置阈值的部分），鼓励节能但不强迫关激光
-        result['loss_diff_depth_power'] = F.relu(power_seq - power_penalty_threshold).pow(2).mean()
+        # 单一 power 语义：baseline 是低功率常态，只有超过 baseline 的部分付能耗成本。
+        result['loss_diff_depth_power'] = F.relu(power_seq - power_baseline).pow(2).mean()
         result['loss_diff_depth_blur'] = (speed_seq * exp_phys).pow(2).mean()
         result['loss_diff_depth_noise'] = gain_seq.pow(2).mean()
     if fill_rate_seq is not None:
@@ -210,7 +202,6 @@ def aggregate_loss(physics_losses, camera_losses, args,
         + args.coef_d_jerk * physics_losses['loss_d_jerk']
         + args.coef_collide * physics_losses['loss_collide']
         + args.coef_cam_smooth * camera_losses['loss_cam_smooth']
-        + args.coef_power_reg * camera_losses['loss_power_reg']
         + args.coef_diff_depth_power * camera_losses['loss_diff_depth_power']
         + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
         + args.coef_diff_depth_noise * camera_losses['loss_diff_depth_noise']
@@ -231,7 +222,6 @@ def aggregate_loss(physics_losses, camera_losses, args,
         'loss_obj_avoidance': physics_losses['loss_avoid'],
         'loss_collide': physics_losses['loss_collide'],
         'loss_cam_smooth': camera_losses['loss_cam_smooth'],
-        'loss_power_reg': camera_losses['loss_power_reg'],
         'loss_diff_depth_power': camera_losses['loss_diff_depth_power'],
         'loss_diff_depth_blur': camera_losses['loss_diff_depth_blur'],
         'loss_diff_depth_noise': camera_losses['loss_diff_depth_noise'],

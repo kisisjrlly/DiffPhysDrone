@@ -39,7 +39,7 @@
 
 - 单场景训练：`sun_glare`
 - 传感后端：`diff_depth=python`
-- 相机控制约束很强（`coef_cam_smooth=100`、`coef_power_reg=100`）
+- 相机控制约束较强（`coef_cam_smooth=10`、`coef_diff_depth_power=5`）
 - 安全项很强（`coef_collide=10`、`coef_obj_avoidance=4`）
 - 未启用 teacher-student 蒸馏
 - 未启用 dMPC/intent 路径
@@ -132,7 +132,7 @@
 | 参数 | 默认值 | 当前值 | 含义 | 调参建议 |
 | --- | ---: | ---: | --- | --- |
 | `--coef_v` | `1.0` | `2.5` | 速度跟踪主损失 | 太保守可增；太激进可降 |
-| `--coef_v_pred` | `2.0` | `0.0` | 辅助速度预测损失 | 想加强表征可开启 |
+| `--coef_v_pred` | `0.0` | `0.0` | 已废弃/忽略 | 当前主线不使用 |
 | `--coef_collide` | `2.0` | `10.0` | 碰撞惩罚 | 撞得多就增；过保守可降 |
 | `--coef_obj_avoidance` | `1.5` | `4.0` | 安全边距惩罚 | 过近擦边可增 |
 | `--coef_d_acc` | `0.01` | `0.1` | 动作幅值正则 | 太猛可增；动作偏软可降 |
@@ -152,10 +152,10 @@
 | 参数 | 默认值 | 当前值 | 含义 | 调参建议 |
 | --- | ---: | ---: | --- | --- |
 | `--include_camera_state_in_obs` | `False` | `True` | 将相机状态拼入观测 | 通常建议开启 |
-| `--coef_cam_smooth` | `0.01` | `100` | 相机参数时序平滑 | 太大相机会“僵硬”，太小会抖 |
-| `--coef_power_reg` | `0.005` | `100` | power 偏离 `cam_power_nominal` 的正则 | 控制功耗/反射风险 |
-| `--coef_cam_range` | `0.001` | `1` | exposure/gain 偏离 0.5 正则 | 防止长期贴边策略 |
-| `--coef_diff_depth_power` | `0.01` | `20` | 高功率惩罚 | 抑制“暴力打光” |
+| `--coef_cam_smooth` | `0.01` | `10` | 相机参数时序平滑 | 太大相机会“僵硬”，太小会抖 |
+| `--cam_power_baseline` | `0.55` | `0.55` | 低功率常态基准 | 固定相机默认 power 也使用这个值 |
+| `--coef_cam_range` | `0.0` | `0.0` | 已废弃/忽略 | 当前主线不使用 |
+| `--coef_diff_depth_power` | `0.01` | `5` | 高于 `cam_power_baseline` 的 power 成本 | 抑制“暴力打光” |
 | `--coef_diff_depth_blur` | `0.01` | `0.1` | 模糊代理惩罚 | 压制高速+长曝光拖影 |
 | `--coef_diff_depth_noise` | `0.01` | `5` | 增益噪声惩罚 | 控制高 gain 噪声放大 |
 | `--coef_diff_depth_fill` | `0.0` | `30.0` | 填充率不足惩罚 | 防黑屏/空洞的关键项 |
@@ -163,8 +163,8 @@
 
 说明：
 
-- `coef_power_reg` 围绕的是 `cam_power_nominal`，不是固定 0.5。
-- `coef_diff_depth_power` 的起罚点是 `cam_power_penalty_threshold`，不是固定 0.5。
+- `coef_diff_depth_power` 只惩罚 `power > cam_power_baseline` 的部分。
+- 不再保留单独的 power 居中正则；低功率是默认状态，高功率必须由传感器收益来“付费”。
 
 ---
 
@@ -365,5 +365,3 @@ $$
 5. 最后才改语义映射常数（`cam_exposure_*`、`cam_iso_gain_*`）。
 
 一句话：先把“飞得稳 + 看得见”做扎实，再做 realism 强化。
-| `--cam_power_nominal` | `0.5` | `0.416667` | power 中性/默认参考值 | 建议按真实 D455 默认 `laser_power/max` 设置 |
-| `--cam_power_penalty_threshold` | `0.5` | `0.416667` | 高功率惩罚起始阈值 | 建议先与 `cam_power_nominal` 保持一致 |

@@ -53,7 +53,7 @@ class Env:
                  cam_lighting_scale=1.0,
                  cam_model_randomize=True,
                  cam_model_randomize_scale=0.08,
-                 cam_power_nominal=0.5,
+                 cam_power_baseline=0.55,
                  camera_control_mode='learned',
                  sensor_grad_mode='full',
                  fixed_camera_power=-1.0,
@@ -79,6 +79,8 @@ class Env:
                  sun_glare_levels=None,
                  sun_glare_eval_level=None,
                  sun_glare_eval_slot=None,
+                 sun_glare_sensor_regimes=None,
+                 sun_glare_eval_regime=None,
                  sun_glare_randomize=False,
                  sun_glare_ambient_min=0.06,
                  sun_glare_ambient_max=0.28,
@@ -157,9 +159,12 @@ class Env:
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
         self.current_scene_has_opening = False
         self.sun_glare_supported_levels = ('l0', 'l1', 'l2', 'l3')
+        self.sun_glare_supported_regimes = ('glare', 'specular', 'dark')
         self.sun_glare_levels = self._normalize_sun_glare_levels(sun_glare_levels)
         self.sun_glare_eval_level = self._canonical_sun_glare_level(sun_glare_eval_level)
         self.sun_glare_eval_slot = self._canonical_sun_glare_slot(sun_glare_eval_slot)
+        self.sun_glare_sensor_regimes = self._normalize_sun_glare_regimes(sun_glare_sensor_regimes)
+        self.sun_glare_eval_regime = self._canonical_sun_glare_regime(sun_glare_eval_regime)
         self.current_scene_variant = None
         self.current_scene_tag = self.current_scene_name
         self.current_sun_glare_level = None
@@ -185,10 +190,10 @@ class Env:
         self.cam_lighting_scale = float(cam_lighting_scale)
         self.cam_model_randomize = bool(cam_model_randomize)
         self.cam_model_randomize_scale = float(cam_model_randomize_scale)
-        self.cam_power_nominal = float(cam_power_nominal)
+        self.cam_power_baseline = float(cam_power_baseline)
         self.camera_control_mode = str(camera_control_mode).lower()
         self.sensor_grad_mode = str(sensor_grad_mode).lower()
-        self.fixed_camera_power = float(self.cam_power_nominal if float(fixed_camera_power) < 0.0 else fixed_camera_power)
+        self.fixed_camera_power = float(self.cam_power_baseline if float(fixed_camera_power) < 0.0 else fixed_camera_power)
         self.fixed_camera_exposure = float(fixed_camera_exposure)
         self.fixed_camera_gain = float(fixed_camera_gain)
         self.fixed_random_power_range = self._ordered_range(fixed_random_power_min, fixed_random_power_max)
@@ -515,6 +520,59 @@ class Env:
             )
         return name
 
+    def _canonical_sun_glare_regime(self, regime):
+        if regime is None:
+            return None
+        token = str(regime).strip().lower().replace('-', '_')
+        aliases = {
+            'glare': 'glare',
+            'sun': 'glare',
+            'sun_glare': 'glare',
+            'rescue': 'glare',
+            'spec': 'specular',
+            'specular': 'specular',
+            'specular_overdrive': 'specular',
+            'overdrive': 'specular',
+            'dark': 'dark',
+            'dark_edge': 'dark',
+            'lowlight': 'dark',
+            'low_light': 'dark',
+        }
+        name = aliases.get(token, token)
+        if name not in self.sun_glare_supported_regimes:
+            raise ValueError(
+                f"不支持的 sun_glare sensor regime '{regime}'，"
+                f"仅支持 {list(self.sun_glare_supported_regimes)}"
+            )
+        return name
+
+    def _normalize_sun_glare_regimes(self, regimes):
+        if regimes is None:
+            return list(self.sun_glare_supported_regimes)
+        if isinstance(regimes, str):
+            regimes = regimes.replace(',', ' ').split()
+        out = []
+        for item in regimes:
+            if item is None:
+                continue
+            for token in str(item).replace(',', ' ').split():
+                out.append(self._canonical_sun_glare_regime(token))
+        if not out:
+            return list(self.sun_glare_supported_regimes)
+        dedup = []
+        seen = set()
+        for name in out:
+            if name in seen:
+                continue
+            seen.add(name)
+            dedup.append(name)
+        return dedup
+
+    def _choose_sun_glare_sensor_regime(self):
+        if self.eval_mode and self.sun_glare_eval_regime is not None:
+            return self.sun_glare_eval_regime
+        return random.choice(self.sun_glare_sensor_regimes)
+
     def _choose_sun_glare_level(self, scene_variant=None):
         if scene_variant is not None:
             return self._canonical_sun_glare_level(scene_variant)
@@ -650,6 +708,79 @@ class Env:
         out['glare_level'] = level
         out['glare_level_id'] = float(cfg['severity_id'])
         return out
+
+    def _sun_glare_regime_effects(self, regime):
+        regime = self._canonical_sun_glare_regime(regime)
+        if regime == 'specular':
+            return {
+                'sensor_regime_name': 'specular',
+                'sensor_regime_id': 1.0,
+                'ambient_add': 3.2,
+                'active_drop': 0.62,
+                'active_recover': 0.22,
+                'glare_bias': 0.22,
+                'glare_exposure_gain': 1.55,
+                'glare_power_bias': 0.22,
+                'glare_power_gain': 0.62,
+                'power_rescue_bias': 0.42,
+                'power_rescue_exposure_gain': 0.95,
+                'power_quality_bonus': 0.08,
+                'quality_penalty': 2.30,
+                'valid_bias_scale': 0.12,
+                'spec_add': 0.82,
+                'spec_mask_sun_mix': 0.85,
+                'spec_mask_hazard_mix': 0.90,
+                'power_washout_gamma': 1.65,
+                'power_washout_penalty': 1.25,
+                'power_washout_valid_bias': 0.22,
+                'hazard_mask_mix': 0.55,
+            }
+        if regime == 'dark':
+            return {
+                'sensor_regime_name': 'dark',
+                'sensor_regime_id': 2.0,
+                'ambient_add': 0.75,
+                'active_drop': 0.52,
+                'active_recover': 0.42,
+                'glare_bias': 0.14,
+                'glare_exposure_gain': 0.82,
+                'glare_power_bias': 0.28,
+                'glare_power_gain': 0.90,
+                'power_rescue_bias': 0.30,
+                'power_rescue_exposure_gain': 0.75,
+                'power_quality_bonus': 0.25,
+                'quality_penalty': 1.20,
+                'valid_bias_scale': 0.10,
+                'dark_albedo_drop': 0.72,
+                'dark_mask_hazard_mix': 0.95,
+                'dark_mask_sun_mix': 0.18,
+                'dark_exposure_target': 0.62,
+                'dark_gain_target': 0.25,
+                'dark_gain_weight': 0.32,
+                'dark_underexposure_penalty': 1.18,
+                'dark_exposure_bonus': 0.34,
+                'dark_gain_bonus': 0.10,
+                'dark_active_drop': 0.86,
+                'dark_passive_rescue': 0.95,
+                'hazard_mask_mix': 0.80,
+            }
+        return {
+            'sensor_regime_name': 'glare',
+            'sensor_regime_id': 0.0,
+            'ambient_add': 4.4,
+            'active_drop': 0.76,
+            'active_recover': 1.02,
+            'glare_bias': 0.32,
+            'glare_exposure_gain': 2.55,
+            'glare_power_bias': 0.14,
+            'glare_power_gain': 1.55,
+            'power_rescue_bias': 0.14,
+            'power_rescue_exposure_gain': 0.58,
+            'power_quality_bonus': 0.88,
+            'quality_penalty': 2.95,
+            'valid_bias_scale': 0.18,
+            'hazard_mask_mix': 0.35,
+        }
 
     def _normalize_profile_dict(self, data):
         out = {}
@@ -849,12 +980,28 @@ class Env:
     def _apply_scene_sensor_profile(self, scene_name):
         if scene_name == 'sun_glare':
             if self.sun_glare_randomize:
-                self._cam_ambient = self._sample_scene_tensor(*self.sun_glare_ambient_range)
-                self._cam_dir_intensity = self._sample_scene_tensor(*self.sun_glare_dir_range)
-                self._cam_fog_beta = self._sample_scene_tensor(*self.sun_glare_fog_beta_range)
-                self._cam_airlight = self._sample_scene_tensor(*self.sun_glare_airlight_range)
-                self._cam_mat_obstacle = self._sample_scene_tensor(*self.sun_glare_mat_obstacle_range)
-                self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
+                regime = str((self.current_scene_effects or {}).get('sensor_regime_name', 'glare'))
+                if regime == 'specular':
+                    self._cam_ambient = self._sample_scene_tensor(0.16, 0.36)
+                    self._cam_dir_intensity = self._sample_scene_tensor(0.55, 1.35)
+                    self._cam_fog_beta = self._sample_scene_tensor(0.012, 0.060)
+                    self._cam_airlight = self._sample_scene_tensor(0.12, 0.42)
+                    self._cam_mat_obstacle = self._sample_scene_tensor(0.58, 0.90)
+                    self._cam_mat_spec = self._sample_scene_tensor(0.32, 0.72)
+                elif regime == 'dark':
+                    self._cam_ambient = self._sample_scene_tensor(0.012, 0.070)
+                    self._cam_dir_intensity = self._sample_scene_tensor(0.035, 0.18)
+                    self._cam_fog_beta = self._sample_scene_tensor(0.002, 0.020)
+                    self._cam_airlight = self._sample_scene_tensor(0.010, 0.070)
+                    self._cam_mat_obstacle = self._sample_scene_tensor(0.22, 0.48)
+                    self._cam_mat_spec = self._sample_scene_tensor(0.00, 0.035)
+                else:
+                    self._cam_ambient = self._sample_scene_tensor(*self.sun_glare_ambient_range)
+                    self._cam_dir_intensity = self._sample_scene_tensor(*self.sun_glare_dir_range)
+                    self._cam_fog_beta = self._sample_scene_tensor(*self.sun_glare_fog_beta_range)
+                    self._cam_airlight = self._sample_scene_tensor(*self.sun_glare_airlight_range)
+                    self._cam_mat_obstacle = self._sample_scene_tensor(*self.sun_glare_mat_obstacle_range)
+                    self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
             else:
                 self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
                 self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.35, 0.75)
@@ -1161,6 +1308,7 @@ class Env:
                 hazard_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
 
             effect_strength = strength
+            local_mask = (strength + hazard_mask * float(fx.get('hazard_mask_mix', 0.35))).clamp(0.0, 1.0)
 
             glare_penalty = self._require_finite_tensor(
                 'sun_glare/glare_penalty',
@@ -1177,6 +1325,7 @@ class Env:
                 float(fx.get('power_rescue_bias', 0.22)) +
                 float(fx.get('power_rescue_exposure_gain', 0.85)) * exposure_s[:, None, None]
             )
+            extra_effect = torch.zeros_like(glare_penalty)
             adj['ambient_add'] = adj['ambient_add'] + strength * float(fx.get('ambient_add', 2.2))
             adj['active_mul'] = adj['active_mul'] * (
                 1.0
@@ -1186,11 +1335,80 @@ class Env:
             adj['quality_add'] = adj['quality_add'] - float(fx.get('quality_penalty', 1.8)) * glare_penalty
             adj['quality_add'] = adj['quality_add'] + float(fx.get('power_quality_bonus', 0.38)) * power_rescue
             adj['valid_bias'] = adj['valid_bias'] + float(fx.get('valid_bias_scale', 0.08)) * effect_strength
+
+            spec_add = float(fx.get('spec_add', 0.0))
+            if spec_add > 0.0:
+                spec_mask = (
+                    strength * float(fx.get('spec_mask_sun_mix', 1.0)) +
+                    hazard_mask * float(fx.get('spec_mask_hazard_mix', 0.75))
+                ).clamp(0.0, 1.0)
+                power_overdrive = spec_mask * power01[:, None, None].pow(
+                    float(fx.get('power_washout_gamma', 1.6))
+                )
+                extra_effect = torch.maximum(extra_effect, power_overdrive.clamp(0.0, 1.0))
+                adj['spec_add'] = adj['spec_add'] + spec_mask * spec_add
+                adj['quality_add'] = adj['quality_add'] - (
+                    float(fx.get('power_washout_penalty', 0.0)) * power_overdrive
+                )
+                adj['valid_bias'] = adj['valid_bias'] + (
+                    float(fx.get('power_washout_valid_bias', 0.0)) * power_overdrive
+                )
+
+            dark_drop = float(fx.get('dark_albedo_drop', 0.0))
+            if dark_drop > 0.0:
+                dark_mask = (
+                    hazard_mask * float(fx.get('dark_mask_hazard_mix', 0.85)) +
+                    strength * float(fx.get('dark_mask_sun_mix', 0.25))
+                ).clamp(0.0, 1.0)
+                exposure01_est = (
+                    (exposure_s - float(self.cam_sem.exposure_t_min)) /
+                    max(float(self.cam_sem.exposure_t_span), 1e-6)
+                ).clamp(0.0, 1.0)
+                gain01_est = (
+                    (gain_scale - float(self.cam_sem.iso_gain_base)) /
+                    max(float(self.cam_sem.iso_gain_scale), 1e-6)
+                ).clamp(0.0, 1.0)
+                underexposed = (
+                    torch.relu(float(fx.get('dark_exposure_target', 0.62)) - exposure01_est) +
+                    float(fx.get('dark_gain_weight', 0.35)) *
+                    torch.relu(float(fx.get('dark_gain_target', 0.28)) - gain01_est)
+                )
+                dark_bonus = (
+                    float(fx.get('dark_exposure_bonus', 0.20)) * exposure01_est +
+                    float(fx.get('dark_gain_bonus', 0.10)) * gain01_est
+                )
+                adj['albedo_mul'] = adj['albedo_mul'] * (1.0 - dark_drop * dark_mask).clamp_min(0.04)
+                adj['active_mul'] = adj['active_mul'] * (
+                    1.0 - float(fx.get('dark_active_drop', 0.0)) * dark_mask
+                ).clamp_min(0.04)
+                adj['passive_mul'] = adj['passive_mul'] * (
+                    1.0 +
+                    float(fx.get('dark_passive_rescue', 0.0)) *
+                    dark_mask *
+                    (exposure01_est + 0.45 * gain01_est)[:, None, None]
+                )
+                extra_effect = torch.maximum(
+                    extra_effect,
+                    (dark_mask * underexposed[:, None, None]).clamp(0.0, 1.0),
+                )
+                adj['quality_add'] = adj['quality_add'] - (
+                    float(fx.get('dark_underexposure_penalty', 1.0)) *
+                    dark_mask * underexposed[:, None, None]
+                )
+                adj['quality_add'] = adj['quality_add'] + dark_mask * dark_bonus[:, None, None]
+
             adj['debug_scene_mask'] = hazard_mask
-            adj['debug_effect_map'] = glare_penalty.clamp(0.0, 1.0)
+            debug_effect = (glare_penalty + extra_effect + local_mask * 0.10).clamp(0.0, 1.0)
+            adj['debug_effect_map'] = debug_effect
             adj['debug_scalars'] = {
                 'scene_mask_mean': self._spatial_mean(hazard_mask),
-                'scene_effect_mean': self._spatial_mean(glare_penalty),
+                'scene_effect_mean': self._spatial_mean(debug_effect),
+                'sensor_regime_id': torch.full(
+                    (self.batch_size,),
+                    float(fx.get('sensor_regime_id', 0.0)),
+                    device=self.device,
+                    dtype=dtype,
+                ),
                 'sun_mask_mean': self._spatial_mean(strength),
                 'hazard_mask_mean': self._spatial_mean(hazard_mask),
                 'sun_los_mean': sun_los.detach(),
@@ -1350,6 +1568,7 @@ class Env:
         elif scene_name == 'sun_glare':
             selected_variant = self._choose_sun_glare_level(scene_variant)
             open_slot = self._choose_sun_glare_open_slot()
+            sensor_regime = self._choose_sun_glare_sensor_regime()
             gap_y_center = float(open_slot['y'])
             start_y = 0.0
             occluder_x = 0.88
@@ -1417,6 +1636,7 @@ class Env:
                 'geometry_gap_half_w': float(gap_half_w),
                 'geometry_start_y': float(start_y),
             }
+            effects.update(self._sun_glare_regime_effects(sensor_regime))
         elif scene_name == 'specular_trap':
             voxels = self._build_specular_trap_layout()
             effects = {

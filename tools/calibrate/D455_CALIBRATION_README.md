@@ -38,8 +38,7 @@ python3 tools/recommend_d455_semantics.py \
 
 它会输出一段可以直接粘进 `.args` 的推荐参数，例如：
 
-- `--cam_power_nominal`
-- `--cam_power_penalty_threshold`
+- `--cam_power_baseline`
 - `--cam_exposure_t_min`
 - `--cam_exposure_t_span`
 - `--cam_exposure_eff_min`

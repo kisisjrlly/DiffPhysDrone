@@ -287,8 +287,7 @@ def _teacher_inner_loop(env, env_snapshot, args,
                     _stack_or_none(c_fill),
                     min_fill_rate=args.diff_depth_min_fill_rate,
                     camera_semantics=env.cam_sem,
-                    power_nominal=args.cam_power_nominal,
-                    power_penalty_threshold=args.cam_power_penalty_threshold,
+                    power_baseline=args.cam_power_baseline,
                 )
                 chunk_loss, _ = aggregate_loss(
                     physics_losses,
@@ -539,9 +538,7 @@ def student_rollout(env, model, args, B, device, use_amp,
                     _stack_or_none(c_fill),
                     min_fill_rate=args.diff_depth_min_fill_rate,
                     camera_semantics=env.cam_sem,
-                    power_nominal=args.cam_power_nominal,
-                    power_penalty_threshold=args.cam_power_penalty_threshold,
-                    power_reg_deadband=args.cam_power_reg_deadband,
+                    power_baseline=args.cam_power_baseline,
                 )
 
                 loss_distill_c = None
@@ -696,9 +693,7 @@ def full_bptt_losses(rollout, env, args, device, u_star, y_star, u_star_cam, dis
         _stack_or_none(rollout['depth_fill_soft_history']),
         min_fill_rate=args.diff_depth_min_fill_rate,
         camera_semantics=env.cam_sem,
-        power_nominal=args.cam_power_nominal,
-        power_penalty_threshold=args.cam_power_penalty_threshold,
-        power_reg_deadband=args.cam_power_reg_deadband,
+        power_baseline=args.cam_power_baseline,
     )
 
     loss_distill = None

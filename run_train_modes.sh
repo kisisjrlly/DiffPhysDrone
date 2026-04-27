@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export all_proxy=http://127.0.0.1:7890
+
 # Auto-train selected paper baselines by repeatedly invoking `bash run.sh`.
 #
 # Default modes:
@@ -17,7 +19,7 @@ set -euo pipefail
 
 BASE_CONFIG=${BASE_CONFIG:-configs/paper_final_full.args}
 # MODES=${MODES:-"nocamera ours nondiff fix"}
-MODES=${MODES:-"nocamera ours nondiff fix randfix"}
+MODES=${MODES:-"ours"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 
 if [ ! -f "$BASE_CONFIG" ]; then

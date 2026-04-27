@@ -305,6 +305,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
                 'glare_quality_mean': float(scene_debug.get('scalars', {}).get('glare_quality_mean', 0.0)),
                 'glare_invalid_rate': float(scene_debug.get('scalars', {}).get('glare_invalid_rate', 0.0)),
                 'glare_level_id': float(scene_debug.get('scalars', {}).get('glare_level_id', -1.0)),
+                'sensor_regime_id': float(scene_debug.get('scalars', {}).get('sensor_regime_id', -1.0)),
                 'decision_open_side_id': float(scene_debug.get('scalars', {}).get('decision_open_side_id', 0.0)),
                 'zone_enter_x': float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0)),
                 'dist_to_goal_m': float((env.p_target[j] - env.p[j]).norm(2).detach().cpu().item()),

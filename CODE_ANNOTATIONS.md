@@ -42,4 +42,4 @@
 ## Key Semantics
 
 - 运行时控制通道统一为 `power / exposure / gain`
-- 正则项统一命名为 `loss_power_reg`
+- power 成本统一由 `loss_diff_depth_power` 表达：只惩罚高于 `cam_power_baseline` 的部分
