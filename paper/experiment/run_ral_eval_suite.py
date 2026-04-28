@@ -35,8 +35,6 @@ plt = None
 build_parser = None
 parse_diff_sensor_impl = None
 parse_scenarios = None
-parse_sun_glare_levels = None
-canonicalize_sun_glare_level = None
 canonicalize_sun_glare_slot = None
 set_global_seed = None
 validate_args = None
@@ -100,7 +98,6 @@ METHOD_SPECS = {
     },
 }
 
-GLARE_LEVEL_ORDER = ["l0", "l1", "l2", "l3"]
 SUN_GLARE_SLOT_ORDER = ["far_left", "left", "right", "far_right"]
 SUN_GLARE_SLOT_Y = {
     "far_left": -1.12,
@@ -116,8 +113,7 @@ GATE_X = 1.82
 def _lazy_imports():
     global torch, plt
     global build_parser, parse_diff_sensor_impl, parse_scenarios
-    global parse_sun_glare_levels
-    global canonicalize_sun_glare_level, canonicalize_sun_glare_slot
+    global canonicalize_sun_glare_slot
     global set_global_seed, validate_args, run_one_episode, Model, build_env
     global format_results_dir
 
@@ -130,8 +126,6 @@ def _lazy_imports():
         build_parser as _build_parser,
         parse_diff_sensor_impl as _parse_diff_sensor_impl,
         parse_scenarios as _parse_scenarios,
-        parse_sun_glare_levels as _parse_sun_glare_levels,
-        canonicalize_sun_glare_level as _canonicalize_sun_glare_level,
         canonicalize_sun_glare_slot as _canonicalize_sun_glare_slot,
         set_global_seed as _set_global_seed,
         validate_args as _validate_args,
@@ -146,8 +140,6 @@ def _lazy_imports():
     build_parser = _build_parser
     parse_diff_sensor_impl = _parse_diff_sensor_impl
     parse_scenarios = _parse_scenarios
-    parse_sun_glare_levels = _parse_sun_glare_levels
-    canonicalize_sun_glare_level = _canonicalize_sun_glare_level
     canonicalize_sun_glare_slot = _canonicalize_sun_glare_slot
     set_global_seed = _set_global_seed
     validate_args = _validate_args
@@ -173,9 +165,6 @@ def _load_args_from_config(config_path: Path):
     args = parser.parse_args(_read_args_tokens(config_path))
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
-    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    if args.sun_glare_eval_level is not None:
-        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     if getattr(args, "sun_glare_eval_slot", None) is not None:
         args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
     validate_args(args)
@@ -240,11 +229,11 @@ def _match_args_to_checkpoint(args, ckpt_path: Path):
     return args
 
 
-def _condition_label(scene_name: str, glare_level: str | None,
-                     slot_name: str | None = None,
+def _condition_label(scene_name: str, slot_name: str | None = None,
                      regime_name: str | None = None) -> str:
+    _ = regime_name
     slot_suffix = f"_{slot_name}" if slot_name else ""
-    return f"{scene_name}_{glare_level}{slot_suffix}" if glare_level else f"{scene_name}{slot_suffix}"
+    return f"{scene_name}{slot_suffix}"
 
 
 def _compute_t_entry(trace_rows: list[dict]) -> int | None:
@@ -417,7 +406,6 @@ def _summarize_rows(rows: list[dict], metric_keys: list[str]) -> list[dict]:
             "method_label": items[0]["method_label"],
             "condition": condition,
             "scene_name": items[0]["scene_name"],
-            "glare_level": items[0]["glare_level"],
             "opening_slot": items[0].get("opening_slot", ""),
             "sensor_regime": items[0].get("sensor_regime", ""),
             "opening_y": items[0].get("opening_y", ""),
@@ -443,7 +431,7 @@ def _write_csv(path: Path, rows: list[dict]):
         writer.writerows(rows)
 
 
-def _summary_metric(summary_rows: list[dict], method_key: str, level: str,
+def _summary_metric(summary_rows: list[dict], method_key: str,
                     metric: str, slot_name: str | None = None,
                     regime_name: str | None = None,
                     scene_name: str | None = None) -> float:
@@ -452,8 +440,6 @@ def _summary_metric(summary_rows: list[dict], method_key: str, level: str,
         if row.get("method_key") != method_key:
             continue
         if scene_name is not None and row.get("scene_name") != scene_name:
-            continue
-        if row.get("glare_level") != level:
             continue
         if slot_name is not None and row.get("opening_slot") != slot_name:
             continue
@@ -470,19 +456,20 @@ def _summary_metric(summary_rows: list[dict], method_key: str, level: str,
     return float(sum(vals) / len(vals))
 
 
-def _plot_success_vs_glare(summary_rows: list[dict], output_path: Path):
+def _plot_success_by_scene(summary_rows: list[dict], output_path: Path):
     fig, ax = plt.subplots(figsize=(6.6, 4.2), dpi=180)
-    x = np.arange(len(GLARE_LEVEL_ORDER))
+    scenes = sorted({str(r.get("scene_name", "")) for r in summary_rows if r.get("scene_name", "")})
+    x = np.arange(len(scenes))
     active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in summary_rows)]
     for method_key in active_methods:
         spec = METHOD_SPECS[method_key]
         ys = []
-        for level in GLARE_LEVEL_ORDER:
-            ys.append(_summary_metric(summary_rows, method_key, level, "success_rate"))
+        for scene in scenes:
+            ys.append(_summary_metric(summary_rows, method_key, "success_rate", scene_name=scene))
         ax.plot(x, ys, marker="o", linewidth=2.2, label=spec["label"], color=spec["color"])
-    ax.set_xticks(x, [lvl.upper() for lvl in GLARE_LEVEL_ORDER])
+    ax.set_xticks(x, scenes)
     ax.set_ylim(-0.02, 1.02)
-    ax.set_xlabel("Sun Glare Severity")
+    ax.set_xlabel("Sensor Scene")
     ax.set_ylabel("Success Rate")
     ax.grid(True, alpha=0.25)
     ax.legend(frameon=False)
@@ -493,6 +480,8 @@ def _plot_success_vs_glare(summary_rows: list[dict], output_path: Path):
 
 def _plot_success_by_slot(summary_rows: list[dict], output_path: Path):
     methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in summary_rows)]
+    scenes = sorted({str(r.get("scene_name", "")) for r in summary_rows if r.get("scene_name", "")})
+    row_labels = [(scene, slot) for scene in scenes for slot in SUN_GLARE_SLOT_ORDER]
     fig, axes = plt.subplots(
         len(methods), 1,
         figsize=(7.2, max(2.0, 2.1 * len(methods))),
@@ -501,16 +490,17 @@ def _plot_success_by_slot(summary_rows: list[dict], output_path: Path):
     )
     for row_idx, method_key in enumerate(methods):
         spec = METHOD_SPECS[method_key]
-        mat = np.full((len(GLARE_LEVEL_ORDER), len(SUN_GLARE_SLOT_ORDER)), np.nan, dtype=np.float32)
-        for i, level in enumerate(GLARE_LEVEL_ORDER):
+        mat = np.full((len(scenes), len(SUN_GLARE_SLOT_ORDER)), np.nan, dtype=np.float32)
+        for i, scene in enumerate(scenes):
             for j, slot in enumerate(SUN_GLARE_SLOT_ORDER):
-                mat[i, j] = _summary_metric(summary_rows, method_key, level, "success_rate", slot)
+                mat[i, j] = _summary_metric(
+                    summary_rows, method_key, "success_rate", slot_name=slot, scene_name=scene)
         ax = axes[row_idx, 0]
         im = ax.imshow(mat, vmin=0.0, vmax=1.0, cmap="viridis", aspect="auto")
         ax.set_title(spec["label"])
         ax.set_xticks(np.arange(len(SUN_GLARE_SLOT_ORDER)), SUN_GLARE_SLOT_ORDER, rotation=20, ha="right")
-        ax.set_yticks(np.arange(len(GLARE_LEVEL_ORDER)), [x.upper() for x in GLARE_LEVEL_ORDER])
-        ax.set_ylabel("Glare")
+        ax.set_yticks(np.arange(len(scenes)), scenes)
+        ax.set_ylabel("Scene")
         for i in range(mat.shape[0]):
             for j in range(mat.shape[1]):
                 if np.isfinite(mat[i, j]):
@@ -524,23 +514,26 @@ def _plot_success_by_slot(summary_rows: list[dict], output_path: Path):
 
 def _plot_post_entry_metrics(summary_rows: list[dict], output_path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(10.0, 4.0), dpi=180, sharex=True)
-    x = np.arange(len(GLARE_LEVEL_ORDER))
+    scenes = sorted({str(r.get("scene_name", "")) for r in summary_rows if r.get("scene_name", "")})
+    x = np.arange(len(scenes))
     active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in summary_rows)]
     for method_key in active_methods:
         spec = METHOD_SPECS[method_key]
         q_vals = []
         f_vals = []
-        for level in GLARE_LEVEL_ORDER:
-            q_vals.append(_summary_metric(summary_rows, method_key, level, "post_entry_local_glare_quality"))
-            f_vals.append(_summary_metric(summary_rows, method_key, level, "post_entry_fill_rate"))
+        for scene in scenes:
+            q_vals.append(_summary_metric(
+                summary_rows, method_key, "post_entry_local_glare_quality", scene_name=scene))
+            f_vals.append(_summary_metric(
+                summary_rows, method_key, "post_entry_fill_rate", scene_name=scene))
         axes[0].plot(x, q_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
         axes[1].plot(x, f_vals, marker="o", linewidth=2.0, label=spec["label"], color=spec["color"])
 
     axes[0].set_ylabel("Post-Entry LocalQ")
     axes[1].set_ylabel("Post-Entry Fill")
     for ax in axes:
-        ax.set_xticks(x, [lvl.upper() for lvl in GLARE_LEVEL_ORDER])
-        ax.set_xlabel("Sun Glare Severity")
+        ax.set_xticks(x, scenes)
+        ax.set_xlabel("Sensor Scene")
         ax.grid(True, alpha=0.25)
     axes[0].legend(frameon=False)
     fig.tight_layout()
@@ -588,10 +581,9 @@ def _aggregate_aligned_trace(trace_rows: list[dict], method_key: str, condition:
     return out
 
 
-def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
-                        plot_scene: str,
+def _plot_event_aligned(trace_rows: list[dict], plot_slot: str, plot_scene: str,
                         output_path: Path, rel_min: int = -12, rel_max: int = 24):
-    condition = _condition_label(plot_scene, plot_level, plot_slot)
+    condition = _condition_label(plot_scene, plot_slot)
     fig, axes = plt.subplots(4, 1, figsize=(8.0, 8.5), dpi=180, sharex=True)
     keys = [
         ("power", "Power"),
@@ -610,7 +602,7 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.25)
     axes[0].legend(frameon=False)
-    axes[0].set_title(f"{plot_scene} / {plot_level.upper()} / {plot_slot}")
+    axes[0].set_title(f"{plot_scene} / {plot_slot}")
     axes[-1].axvline(0.0, color="k", linestyle="--", linewidth=1.2, alpha=0.65)
     axes[-1].set_xlabel("t - t_entry (steps)")
     fig.tight_layout()
@@ -618,11 +610,11 @@ def _plot_event_aligned(trace_rows: list[dict], plot_level: str, plot_slot: str,
     plt.close(fig)
 
 
-def _plot_trajectory(trace_rows: list[dict], plot_level: str, plot_scene: str, output_path: Path):
+def _plot_trajectory(trace_rows: list[dict], plot_scene: str, output_path: Path):
     fig, axes = plt.subplots(2, 2, figsize=(9.0, 6.6), dpi=180, sharex=True, sharey=True)
     axes = axes.flatten()
     for ax, slot in zip(axes, SUN_GLARE_SLOT_ORDER):
-        condition = _condition_label(plot_scene, plot_level, slot)
+        condition = _condition_label(plot_scene, slot)
         opening_y = SUN_GLARE_SLOT_Y[slot]
         active_methods = [m for m in METHOD_SPECS if any(r.get("method_key") == m for r in trace_rows)]
         for method_key in active_methods:
@@ -652,7 +644,7 @@ def _plot_trajectory(trace_rows: list[dict], plot_level: str, plot_scene: str, o
     handles, labels = axes[0].get_legend_handles_labels()
     if handles:
         fig.legend(handles, labels, frameon=False, loc="upper center", ncol=min(4, len(handles)))
-    fig.suptitle(f"Top-Down Trajectories ({plot_scene} / {plot_level.upper()})", y=0.995)
+    fig.suptitle(f"Top-Down Trajectories ({plot_scene})", y=0.995)
     fig.tight_layout()
     fig.savefig(output_path)
     plt.close(fig)
@@ -698,7 +690,6 @@ def _compute_trajectory_diffs(trace_rows: list[dict], method_a: str, method_b: s
             "method_a": method_a,
             "method_b": method_b,
             "condition": condition,
-            "glare_level": first.get("glare_level", ""),
             "opening_slot": first.get("opening_slot", ""),
             "sensor_regime": first.get("sensor_regime", ""),
             "episode_idx": ep_idx,
@@ -733,24 +724,22 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
     trace_rows = []
     conditions = []
     for scene_name in scenarios:
-        for level in GLARE_LEVEL_ORDER:
-            for slot in slots:
-                conditions.append((scene_name, level, slot))
+        for slot in slots:
+            conditions.append((scene_name, slot))
 
-    for cond_idx, (scene_name, glare_level, slot_name) in enumerate(conditions):
+    for cond_idx, (scene_name, slot_name) in enumerate(conditions):
         cond_args = copy.deepcopy(method_args)
         cond_args.scenarios = [scene_name]
-        cond_args.sun_glare_eval_level = glare_level
         cond_args.sun_glare_eval_slot = slot_name
         cond_args.eval_episodes = int(episodes_per_condition)
         validate_args(cond_args)
         set_global_seed(int(cond_args.seed) + cond_idx, cond_args.deterministic)
         env = build_env(cond_args.batch_size, cond_args, device, eval_mode=True)
-        cond_label = _condition_label(scene_name, glare_level, slot_name)
+        cond_label = _condition_label(scene_name, slot_name)
         print(f"[suite] method={method_key} condition={cond_label} episodes={episodes_per_condition}")
         for ep_idx in range(episodes_per_condition):
             metrics, trace = run_one_episode(
-                ep_idx, scene_name, glare_level, cond_args, model, env, vis, device, collect_trace=True)
+                ep_idx, scene_name, cond_args, model, env, vis, device, collect_trace=True)
             row = dict(metrics)
             # run_one_episode reports collision_rate over the internal continuous-collision
             # subdivision tensor. For this sweep we need episode-level binary outcomes.
@@ -770,7 +759,6 @@ def _evaluate_method(method_key: str, ckpt_path: Path, base_args, device: torch.
                 "method_label": spec["label"],
                 "condition": cond_label,
                 "scene_name": scene_name,
-                "glare_level": glare_level or "",
                 "opening_slot": slot_name or "",
                 "sensor_regime": scene_name,
                 "episode_idx": int(ep_idx),
@@ -816,7 +804,6 @@ def parse_args():
     parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"],
                         help="Sensor scenes to sweep on the shared gate map: glare specular dark")
     parser.add_argument("--episodes_per_condition", type=int, default=12)
-    parser.add_argument("--plot_level", type=str, default="l3")
     parser.add_argument("--plot_scene", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
@@ -850,9 +837,6 @@ def main():
         if not path.is_file():
             raise FileNotFoundError(f"{name} checkpoint not found: {path}")
 
-    plot_level = canonicalize_sun_glare_level(args.plot_level)
-    if plot_level not in GLARE_LEVEL_ORDER:
-        raise ValueError(f"unsupported plot level: {plot_level}")
     slots = []
     for raw_slot in args.slots:
         slot = canonicalize_sun_glare_slot(raw_slot)
@@ -958,29 +942,26 @@ def main():
         "config": str(config_path),
         "checkpoints": {k: str(v) for k, v in ckpts.items()},
         "episodes_per_condition": int(args.episodes_per_condition),
-        "plot_level": plot_level,
         "plot_scene": plot_scene,
         "slots": slots,
         "scenarios": scenarios,
         "device": str(device),
     })
 
-    _plot_success_vs_glare(summary_rows, output_dir / "success_vs_glare.png")
+    _plot_success_by_scene(summary_rows, output_dir / "success_by_scene.png")
     _plot_success_by_slot(summary_rows, output_dir / "success_by_slot.png")
-    _plot_post_entry_metrics(summary_rows, output_dir / "post_entry_vs_glare.png")
+    _plot_post_entry_metrics(summary_rows, output_dir / "post_entry_by_scene.png")
     for slot in slots:
         _plot_event_aligned(
             all_trace_rows,
-            plot_level=plot_level,
             plot_slot=slot,
             plot_scene=plot_scene,
-            output_path=output_dir / f"event_aligned_{plot_scene}_{plot_level}_{slot}.png",
+            output_path=output_dir / f"event_aligned_{plot_scene}_{slot}.png",
         )
     _plot_trajectory(
         all_trace_rows,
-        plot_level=plot_level,
         plot_scene=plot_scene,
-        output_path=output_dir / f"trajectory_{plot_scene}_{plot_level}.png",
+        output_path=output_dir / f"trajectory_{plot_scene}.png",
     )
 
     formatted_outputs = format_results_dir(output_dir)

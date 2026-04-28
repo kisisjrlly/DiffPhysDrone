@@ -35,8 +35,6 @@
 # --yaw_drift
 # --no_odom
 --scenarios glare specular dark
---sun_glare_levels l0 l1 l2 l3
-# --sun_glare_eval_level l2
 --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 # --ellipsoid_collision
@@ -90,7 +88,7 @@
 --cam_lighting_scale 1.0
 --cam_model_randomize
 --cam_model_randomize_scale 0.12
---cam_power_baseline 0.35
+--cam_power_baseline 0.50
 
 --sun_glare_randomize
 --sun_glare_ambient_min 0.04

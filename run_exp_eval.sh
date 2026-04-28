@@ -16,7 +16,6 @@ NONDIFF_CKPT=${NONDIFF_CKPT:-/home/zhaoguodong/work/code/DiffPhysDrone/checkpoin
 BLIND_CKPT=${BLIND_CKPT:-/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-04-25-16-19-31/checkpoint0049.pth}
 
 EPISODES=${EPISODES:-20}
-PLOT_LEVEL=${PLOT_LEVEL:-l3}
 PLOT_SCENE=${PLOT_SCENE:-glare}
 SLOTS=${SLOTS:-"far_left left right far_right"}
 SCENARIOS=${SCENARIOS:-"glare specular dark"}
@@ -40,9 +39,8 @@ cmd=(
 	--config "$CONFIG"
 	--ours_ckpt "$OURS_CKPT"
 	--fixed_ckpt "$FIXED_CKPT"
-	--nondiff_ckpt "$NONDIFF_CKPT"
+		--nondiff_ckpt "$NONDIFF_CKPT"
 		--episodes_per_condition "$EPISODES"
-		--plot_level "$PLOT_LEVEL"
 		--plot_scene "$PLOT_SCENE"
 		--slots $SLOTS
 		--scenarios $SCENARIOS
@@ -88,7 +86,6 @@ else
 	echo "[eval-suite] blind_ckpt    : <disabled>"
 fi
 echo "[eval-suite] episodes/cond : $EPISODES"
-echo "[eval-suite] plot_level    : $PLOT_LEVEL"
 echo "[eval-suite] plot_scene    : $PLOT_SCENE"
 echo "[eval-suite] slots         : $SLOTS"
 echo "[eval-suite] scenarios     : $SCENARIOS"

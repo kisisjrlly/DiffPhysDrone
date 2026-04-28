@@ -9,12 +9,12 @@
       "cam_mat_spec": [0.04, 0.10]
     },
     "specular": {
-      "cam_ambient": [0.16, 0.28],
-      "cam_dir_intensity": [0.55, 1.00],
-      "cam_fog_beta": [0.012, 0.040],
-      "cam_airlight": [0.12, 0.30],
-      "cam_mat_obstacle": [0.58, 0.82],
-      "cam_mat_spec": [0.34, 0.58]
+      "cam_ambient": [0.10, 0.18],
+      "cam_dir_intensity": [0.35, 0.75],
+      "cam_fog_beta": [0.010, 0.030],
+      "cam_airlight": [0.12, 0.25],
+      "cam_mat_obstacle": [0.52, 0.78],
+      "cam_mat_spec": [0.04, 0.10]
     },
     "dark": {
       "cam_ambient": [0.018, 0.055],
@@ -27,35 +27,36 @@
   },
   "scene_effects": {
     "glare": {
-      "sun_sigma_u": 0.24,
-      "sun_sigma_v": 0.22,
-      "ambient_add": 4.2,
-      "active_drop": 0.72,
-      "active_recover": 0.95,
-      "glare_bias": 0.30,
-      "glare_exposure_gain": 2.30,
-      "glare_power_bias": 0.16,
-      "glare_power_gain": 1.45,
-      "power_rescue_bias": 0.16,
-      "power_rescue_exposure_gain": 0.60,
-      "power_quality_bonus": 0.78,
-      "quality_penalty": 2.75,
-      "valid_bias_scale": 0.16,
-      "hazard_half_y": 0.18,
+      "sun_sigma_u": 0.26,
+      "sun_sigma_v": 0.24,
+      "ambient_add": 4.8,
+      "active_drop": 0.78,
+      "active_recover": 1.25,
+      "glare_bias": 0.32,
+      "glare_exposure_gain": 4.60,
+      "glare_power_bias": 0.14,
+      "glare_power_gain": 1.90,
+      "power_rescue_bias": 0.14,
+      "power_rescue_exposure_gain": 0.58,
+      "power_quality_bonus": 1.35,
+      "quality_penalty": 1.35,
+      "valid_bias_scale": 0.08,
+      "hazard_half_y": 0.22,
       "hazard_half_z": 1.20,
-      "hazard_softness": 0.045
+      "hazard_softness": 0.060
     },
     "specular": {
-      "spec_add": 0.82,
+      "spec_add": 1.35,
       "spec_mask_sun_mix": 0.0,
       "spec_mask_hazard_mix": 1.0,
-      "power_washout_gamma": 1.65,
-      "power_washout_penalty": 1.25,
-      "power_washout_valid_bias": 0.22,
+      "power_washout_gamma": 2.20,
+      "power_washout_penalty": 4.00,
+      "power_washout_valid_bias": 0.55,
+      "power_washout_active_drop": 0.85,
       "hazard_mask_mix": 1.0,
-      "hazard_half_y": 0.18,
+      "hazard_half_y": 0.24,
       "hazard_half_z": 1.20,
-      "hazard_softness": 0.045
+      "hazard_softness": 0.060
     },
     "dark": {
       "dark_albedo_drop": 0.72,

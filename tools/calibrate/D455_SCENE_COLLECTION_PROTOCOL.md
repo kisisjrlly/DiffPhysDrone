@@ -15,7 +15,7 @@
 每个 regime 采集以下组合：
 
 - 开口位置：`far_left / left / right / far_right`
-- 强度等级：`l0 / l1 / l2 / l3`
+- 场景模式：`glare / specular / dark`，局部退化强度使用当前默认常数
 - 相机参数：固定低/中/高 power，固定低/中/高 exposure，固定低/中/高 gain
 
 ## 输出要求

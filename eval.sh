@@ -42,7 +42,7 @@ cam_profile=${CAM_PROFILE:-}
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-22-57-27/checkpoint0014.pth} # nodiff
 # ckpt_path=${CKPT:-checkpoint/2026-04-22-21-41-35/checkpoint0014.pth} # fixed
 # ckpt_path=${CKPT:-checkpoint/2026-04-25-10-51-34/checkpoint0049.pth} # nocamera
-ckpt_path=${CKPT:-checkpoint/2026-04-27-11-57-54/checkpoint0039.pth} # ours
+ckpt_path=${CKPT:-checkpoint/2026-04-28-11-11-28/checkpoint0039.pth} # ours
 # ckpt_path=${CKPT:-checkpoint/2026-04-26-17-31-21/checkpoint0049.pth} # fixed
 
 
@@ -63,7 +63,7 @@ eval_batch_size=${EVAL_BATCH_SIZE:-1}
 vis_enable=${VIS_ENABLE:-1}
 
 # 额外 eval 参数，例如：
-#   EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_level l2"
+#   EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_slot right"
 eval_extra_args=${EVAL_EXTRA_ARGS:-}
 
 # 可选 CSV 输出路径。

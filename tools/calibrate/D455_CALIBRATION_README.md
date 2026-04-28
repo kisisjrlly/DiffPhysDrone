@@ -26,7 +26,7 @@
 采集时按场景分开标注，然后把拟合结果写入对应场景的 profile。评估时使用：
 
 ```bash
-EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_level l2" bash eval.sh
-EVAL_EXTRA_ARGS="--scenarios specular --sun_glare_eval_level l2" bash eval.sh
-EVAL_EXTRA_ARGS="--scenarios dark --sun_glare_eval_level l2" bash eval.sh
+EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_slot right" bash eval.sh
+EVAL_EXTRA_ARGS="--scenarios specular --sun_glare_eval_slot right" bash eval.sh
+EVAL_EXTRA_ARGS="--scenarios dark --sun_glare_eval_slot right" bash eval.sh
 ```

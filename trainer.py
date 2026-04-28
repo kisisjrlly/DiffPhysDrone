@@ -265,6 +265,7 @@ def _teacher_inner_loop(env, env_snapshot, args,
                     pos=env.p[j].detach().cpu().numpy(),
                     target=env.p_target[j].detach().cpu().numpy(),
                     depth=None, cam=cam_vals, scalars=scene_scalars,
+                    raw_depth_img=scene_debug.get('images', {}).get('raw_depth_map'),
                     quality_img=scene_debug.get('images', {}).get('quality_map'),
                     invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
                     scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
@@ -667,6 +668,7 @@ def student_rollout(env, model, args, B, device, use_amp,
                 depth=depth_vis[j].detach().cpu().numpy(),
                 cam=cam_vals, scalars=step_scalars, main_img=main_img_np,
                 main_img_mode=main_img_mode, depth_img=depth_img_np,
+                raw_depth_img=scene_debug.get('images', {}).get('raw_depth_map'),
                 quality_img=scene_debug.get('images', {}).get('quality_map'),
                 invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
                 scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
@@ -861,12 +863,6 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
             smoother.add({f'scene/is_{name}': 1.0 if name == scene_name else 0.0})
     if scene_tag is not None and scene_tag != scene_name:
         smoother.add({f'scene/is_{scene_tag}': 1.0})
-    glare_level = getattr(env, 'current_sun_glare_level', None)
-    if glare_level is not None:
-        level_to_id = {'l0': 0.0, 'l1': 1.0, 'l2': 2.0, 'l3': 3.0}
-        smoother.add({'scene/glare_level_id': level_to_id.get(glare_level, -1.0)})
-
-
 def _build_loss_share_metrics(loss_scalars: dict, args, distill_coef_iter: float) -> dict:
     """Build weighted loss contribution and share metrics for WandB.
 

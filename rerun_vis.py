@@ -80,6 +80,11 @@ class RerunVis:
                     contents=[p("camera/depth_aux")],
                     name="depth",
                 ),
+                rrb.Spatial2DView(
+                    origin=p("camera/raw_depth"),
+                    contents=[p("camera/raw_depth")],
+                    name="raw_depth",
+                ),
                 rrb.Vertical(
                     rrb.Spatial2DView(
                         origin=p("camera/quality"),
@@ -870,6 +875,7 @@ class RerunVis:
                  depth=None, cam=None, scalars=None,
                  main_img=None, main_img_mode: str = "depth",
                  depth_img=None,
+                 raw_depth_img=None,
                  quality_img=None,
                  invalid_img=None,
                  scene_effect_img=None,
@@ -938,6 +944,8 @@ class RerunVis:
             depth_for_view = depth
         if depth_for_view is not None:
             rr.log(f"{phase}/camera/depth_aux", rr.Image(self._img_u8(depth_for_view, mode="depth_aux")))
+        if raw_depth_img is not None:
+            rr.log(f"{phase}/camera/raw_depth", rr.Image(self._img_u8(raw_depth_img, mode="depth_aux")))
         if quality_img is not None:
             rr.log(f"{phase}/camera/quality", rr.Image(self._img_u8(quality_img, mode="mask")))
         if invalid_img is not None:

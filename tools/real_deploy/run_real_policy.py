@@ -64,8 +64,6 @@ from config import (
     build_parser,
     parse_diff_sensor_impl,
     parse_scenarios,
-    parse_sun_glare_levels,
-    canonicalize_sun_glare_level,
     set_global_seed,
     validate_args,
     print_runtime_mode,
@@ -218,9 +216,6 @@ def load_project_args(args_file: str, checkpoint: str, override_tokens: list[str
     args = parser.parse_args(cfg_tokens)
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
-    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    if args.sun_glare_eval_level is not None:
-        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
     return args, args_path, cfg_tokens

@@ -28,10 +28,8 @@ if str(ROOT) not in sys.path:
 
 from config import (  # noqa: E402
     build_parser,
-    canonicalize_sun_glare_level,
     parse_diff_sensor_impl,
     parse_scenarios,
-    parse_sun_glare_levels,
     set_global_seed,
     validate_args,
 )
@@ -78,9 +76,6 @@ def _build_project_args(config_path: Path, overrides: list[str]):
     args = parser.parse_args(tokens)
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
-    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    if args.sun_glare_eval_level is not None:
-        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     args.batch_size = 1
     args.wandb_disabled = True
     args.vis_enable = False
@@ -241,11 +236,10 @@ def _restore_snapshot(env, snap):
 
 def _collect_policy_snapshots(model, env, args, device: torch.device,
                               episode: int, scene_name: str | None,
-                              scene_variant: str | None,
                               steps_to_probe: set[int]):
     B = env.batch_size
     use_amp = bool(args.amp and device.type == "cuda")
-    env.reset(scene_name=scene_name, scene_variant=scene_variant)
+    env.reset(scene_name=scene_name)
     model.reset()
 
     h = None
@@ -315,9 +309,8 @@ def _collect_policy_snapshots(model, env, args, device: torch.device,
     return snapshots
 
 
-def _manual_snapshots(env, args, episode: int, scene_name: str | None,
-                      scene_variant: str | None, xs: Iterable[float]):
-    env.reset(scene_name=scene_name, scene_variant=scene_variant)
+def _manual_snapshots(env, args, episode: int, scene_name: str | None, xs: Iterable[float]):
+    env.reset(scene_name=scene_name)
     B = env.batch_size
     device = env.device
     power = torch.full((B,), float(args.cam_power_baseline), device=device)
@@ -420,7 +413,6 @@ def _render_at_snapshot(env, args, snap, setting: CameraSetting):
         "spec_bloom_mean": _to_float(scalars.get("spec_bloom_mean"), 0.0),
         "motion_blur_mean": _to_float(scalars.get("motion_blur_mean"), 0.0),
         "decision_open_slot_id": _to_float(scalars.get("decision_open_slot_id"), 0.0),
-        "glare_level_id": _to_float(scalars.get("glare_level_id"), -1.0),
         "sensor_regime_id": _to_float(scalars.get("sensor_regime_id"), -1.0),
     }
     maps = {
@@ -600,8 +592,6 @@ def _make_arg_parser():
                         help="Directory for CSV/PNG outputs.")
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--scene_name", default="glare")
-    parser.add_argument("--scene_variant", default=None,
-                        help="Optional fixed scene variant, e.g. l2.")
     parser.add_argument("--probe_steps", default=None,
                         help="Comma-separated rollout steps to probe, e.g. 0,8,16,24.")
     parser.add_argument("--num_probe_states", type=int, default=8,
@@ -657,13 +647,12 @@ def main():
                 steps = _probe_steps(project_args.timesteps, script_args.probe_steps, script_args.num_probe_states)
                 snapshots = _collect_policy_snapshots(
                     model, env, project_args, device, ep,
-                    script_args.scene_name, script_args.scene_variant, steps,
+                    script_args.scene_name, steps,
                 )
             else:
                 xs = _parse_float_list(script_args.manual_xs)
                 snapshots = _manual_snapshots(
-                    env, project_args, ep,
-                    script_args.scene_name, script_args.scene_variant, xs,
+                    env, project_args, ep, script_args.scene_name, xs,
                 )
 
             for snap in snapshots:

@@ -10,7 +10,7 @@
 - 终点为 `[3.0, 0.0, 1.5]`
 - 中间有 occluder、三条 lane divider、一个四选一开口 gate
 - 每个 episode 随机或固定一个开口：`far_left / left / right / far_right`
-- `l0-l3` 控制局部退化强度
+- 局部退化强度使用当前默认常数，不再提供 `l0-l3` 档位
 
 ## Sensor Scenes
 
@@ -32,5 +32,4 @@
 ## 关键参数
 
 - `--scenarios glare specular dark`
-- `--sun_glare_levels l0 l1 l2 l3`
 - `--sun_glare_eval_slot far_left|left|right|far_right`

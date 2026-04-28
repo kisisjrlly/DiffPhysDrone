@@ -46,10 +46,7 @@ class MetricSmoother:
 
         if len(getattr(args, 'scenarios', ['glare', 'specular', 'dark'])) <= 1:
             for k in list(out.keys()):
-                if (
-                    k == 'scene/glare_level_id'
-                    or k.startswith('scene/is_')
-                ):
+                if k.startswith('scene/is_'):
                     continue
                 if k.startswith('scene/'):
                     out.pop(k, None)
@@ -238,8 +235,6 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         depth_min_valid=args.depth_min_valid,
         depth_max_range=args.depth_max_range,
         scenarios=args.scenarios,
-        sun_glare_levels=args.sun_glare_levels,
-        sun_glare_eval_level=args.sun_glare_eval_level if eval_mode else None,
         sun_glare_eval_slot=getattr(args, 'sun_glare_eval_slot', None) if eval_mode else None,
         sun_glare_randomize=args.sun_glare_randomize,
         sun_glare_ambient_min=args.sun_glare_ambient_min,

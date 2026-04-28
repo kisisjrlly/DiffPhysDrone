@@ -5,7 +5,6 @@ Render depth observations while the drone explicitly looks at the gate opening.
 This probe is meant for sanity-checking the simplified shared gate benchmark:
 
 - scenarios: glare / specular / dark
-- levels: l0-l3
 - slots: far_left / left / right / far_right
 - fixed drone positions along the approach path
 - fixed camera settings at each identical pose
@@ -37,11 +36,9 @@ if str(ROOT) not in sys.path:
 
 from config import (  # noqa: E402
     build_parser,
-    canonicalize_sun_glare_level,
     canonicalize_sun_glare_slot,
     parse_diff_sensor_impl,
     parse_scenarios,
-    parse_sun_glare_levels,
     set_global_seed,
     validate_args,
 )
@@ -53,7 +50,6 @@ from train_utils import build_env  # noqa: E402
 
 
 SLOT_ORDER = ("far_left", "left", "right", "far_right")
-LEVEL_ORDER = ("l0", "l1", "l2", "l3")
 SCENE_ORDER = ("glare", "specular", "dark")
 
 
@@ -87,9 +83,6 @@ def _build_project_args(config_path: Path, overrides: list[str]):
     args = parser.parse_args(_read_args_file(config_path) + list(overrides))
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
-    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    if args.sun_glare_eval_level is not None:
-        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     if getattr(args, "sun_glare_eval_slot", None) is not None:
         args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
     args.batch_size = 1
@@ -114,19 +107,6 @@ def _parse_scenes(items: list[str]) -> list[str]:
     raw = items or list(SCENE_ORDER)
     scenes = parse_scenarios(raw)
     return [s for s in SCENE_ORDER if s in scenes] + [s for s in scenes if s not in SCENE_ORDER]
-
-
-def _parse_levels(items: list[str]) -> list[str]:
-    raw = items or ["l2"]
-    levels = []
-    for item in raw:
-        for token in _parse_csv_tokens(item):
-            level = canonicalize_sun_glare_level(token)
-            if level not in LEVEL_ORDER:
-                raise ValueError(f"unsupported level: {token}")
-            if level not in levels:
-                levels.append(level)
-    return levels or ["l2"]
 
 
 def _parse_slots(items: list[str]) -> list[str]:
@@ -307,7 +287,6 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
     row = {
         "scene": env.current_scene_name,
         "scene_tag": env.current_scene_tag,
-        "level": env.current_sun_glare_level or "",
         "slot": str((env.current_scene_effects or {}).get("decision_open_slot_name", "")),
         "opening_y": float((env.current_scene_effects or {}).get("decision_open_slot_y", 0.0)),
         "gate_x": float((env.current_scene_effects or {}).get("geometry_gate_x", 0.0)),
@@ -444,7 +423,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         )
 
     fig.suptitle(
-        f"{first['scene']} {first['level']} {first['slot']} {first['pose']} "
+        f"{first['scene']} {first['slot']} {first['pose']} "
         f"pos=({first['x']:.2f},{first['y']:.2f},{first['z']:.2f}) "
         f"look=({first['look_target_x']:.2f},{first['look_target_y']:.2f},{first['look_target_z']:.2f})"
     )
@@ -455,13 +434,13 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
 
 
 def _expectation_rows(rows: list[dict]) -> list[dict]:
-    grouped: dict[tuple[str, str, str, str], list[dict]] = {}
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
     for row in rows:
-        key = (str(row["scene"]), str(row["level"]), str(row["slot"]), str(row["pose"]))
+        key = (str(row["scene"]), str(row["slot"]), str(row["pose"]))
         grouped.setdefault(key, []).append(row)
 
     out: list[dict] = []
-    for (scene, level, slot, pose), items in sorted(grouped.items()):
+    for (scene, slot, pose), items in sorted(grouped.items()):
         by_name = {str(r["setting"]): r for r in items}
         visible = max(
             max(float(r.get("scene_effect_mean", 0.0)) for r in items),
@@ -470,7 +449,6 @@ def _expectation_rows(rows: list[dict]) -> list[dict]:
         ) > 0.005
         record = {
             "scene": scene,
-            "level": level,
             "slot": slot,
             "pose": pose,
             "checked": 0.0,
@@ -531,9 +509,9 @@ def _write_report(path: Path, detail_rows: list[dict], expectation_rows: list[di
     checked = [r for r in expectation_rows if float(r.get("checked", 0.0)) > 0.5]
     passed = [r for r in checked if float(r.get("passed", 0.0)) > 0.5]
     fill_ranges = []
-    grouped: dict[tuple[str, str, str, str], list[dict]] = {}
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
     for row in detail_rows:
-        grouped.setdefault((row["scene"], row["level"], row["slot"], row["pose"]), []).append(row)
+        grouped.setdefault((row["scene"], row["slot"], row["pose"]), []).append(row)
     for items in grouped.values():
         vals = [float(r["local_fill"]) for r in items]
         fill_ranges.append(max(vals) - min(vals))
@@ -558,7 +536,7 @@ def _write_report(path: Path, detail_rows: list[dict], expectation_rows: list[di
         "",
         "- `opening_depth_probe_detail.csv`: one row per condition/pose/camera setting.",
         "- `opening_depth_probe_expectations.csv`: coarse automatic expectation checks.",
-        "- `panels/<scene>/<level>/<slot>/*.png`: visual panels.",
+        "- `panels/<scene>/<slot>/*.png`: visual panels.",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -569,7 +547,6 @@ def _make_arg_parser():
     parser.add_argument("--config", default="configs/paper_final_full.args")
     parser.add_argument("--out_dir", default="paper/experiment/results/opening_depth_probe")
     parser.add_argument("--scenarios", nargs="*", default=list(SCENE_ORDER))
-    parser.add_argument("--levels", nargs="*", default=["l2"])
     parser.add_argument("--slots", nargs="*", default=list(SLOT_ORDER))
     parser.add_argument("--xs", default="-2.8,-1.8,-0.8,0.0,0.55,1.05,1.45,1.70",
                         help="Comma-separated x positions before the gate.")
@@ -606,7 +583,6 @@ def main():
         raise RuntimeError("--device cuda requested but CUDA is unavailable")
 
     scenes = _parse_scenes(script_args.scenarios)
-    levels = _parse_levels(script_args.levels)
     slots = _parse_slots(script_args.slots)
     xs = _parse_float_list(script_args.xs)
     settings = _parse_camera_settings(script_args.camera_settings, project_args)
@@ -616,31 +592,26 @@ def main():
 
     with torch.no_grad():
         for scene in scenes:
-            for level in levels:
-                for slot in slots:
-                    cond_args = copy.deepcopy(project_args)
-                    cond_args.scenarios = [scene]
-                    cond_args.sun_glare_eval_level = level
-                    cond_args.sun_glare_eval_slot = slot
-                    env = build_env(1, cond_args, device, eval_mode=True)
-                    env.reset(scene_name=scene, scene_variant=level)
-                    target = _opening_target(env)
-                    poses = _make_poses(env, xs, script_args.path_y_mode)
+            for slot in slots:
+                cond_args = copy.deepcopy(project_args)
+                cond_args.scenarios = [scene]
+                cond_args.sun_glare_eval_slot = slot
+                env = build_env(1, cond_args, device, eval_mode=True)
+                env.reset(scene_name=scene)
+                target = _opening_target(env)
+                poses = _make_poses(env, xs, script_args.path_y_mode)
 
-                    for pose in poses:
-                        rendered = [_render_condition(env, cond_args, pose, target, setting)
-                                    for setting in settings]
-                        _add_reference_diffs(rendered, cond_args.depth_min_valid)
-                        detail_rows.extend(row for row, _ in rendered)
-                        if script_args.plots and (
-                            int(script_args.max_panels) <= 0 or panel_count < int(script_args.max_panels)
-                        ):
-                            panel_path = (
-                                out_dir / "panels" / scene / level / slot /
-                                f"{pose.name}.png"
-                            )
-                            _plot_panel(panel_path, rendered, cond_args)
-                            panel_count += 1
+                for pose in poses:
+                    rendered = [_render_condition(env, cond_args, pose, target, setting)
+                                for setting in settings]
+                    _add_reference_diffs(rendered, cond_args.depth_min_valid)
+                    detail_rows.extend(row for row, _ in rendered)
+                    if script_args.plots and (
+                        int(script_args.max_panels) <= 0 or panel_count < int(script_args.max_panels)
+                    ):
+                        panel_path = out_dir / "panels" / scene / slot / f"{pose.name}.png"
+                        _plot_panel(panel_path, rendered, cond_args)
+                        panel_count += 1
 
     expectation_rows = _expectation_rows(detail_rows)
     _write_csv(out_dir / "opening_depth_probe_detail.csv", detail_rows)
@@ -649,7 +620,7 @@ def main():
 
     checked = [r for r in expectation_rows if float(r.get("checked", 0.0)) > 0.5]
     passed = [r for r in checked if float(r.get("passed", 0.0)) > 0.5]
-    print(f"[opening-probe] scenes={scenes} levels={levels} slots={slots}")
+    print(f"[opening-probe] scenes={scenes} slots={slots}")
     print(f"[opening-probe] wrote detail rows: {len(detail_rows)}")
     print(f"[opening-probe] wrote panels: {panel_count}")
     print(f"[opening-probe] expectation pass rate: {len(passed) / max(len(checked), 1):.3f} ({len(passed)}/{len(checked)})")

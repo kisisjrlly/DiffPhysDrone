@@ -625,9 +625,8 @@ python3 tools/fit_d455_scene_profiles.py
 
 1. 自动附加 `--resume checkpoint_path`
 2. 解析 `scenarios`
-3. 解析 `sun_glare_levels`
-4. 设置随机种子
-5. 做参数合法性检查
+3. 设置随机种子
+4. 做参数合法性检查
 
 ### 为什么这是必要的
 

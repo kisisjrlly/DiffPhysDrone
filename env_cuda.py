@@ -74,8 +74,6 @@ class Env:
                  depth_min_valid=0.3,
                  depth_max_range=6.0,
                  scenarios=None,
-                 sun_glare_levels=None,
-                 sun_glare_eval_level=None,
                  sun_glare_eval_slot=None,
                  sun_glare_randomize=False,
                  sun_glare_ambient_min=0.06,
@@ -151,13 +149,8 @@ class Env:
         self.scenarios = self._normalize_scenarios(scenarios)
         self.current_scene_name = self.scenarios[0]
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
-        self.sun_glare_supported_levels = ('l0', 'l1', 'l2', 'l3')
-        self.sun_glare_levels = self._normalize_sun_glare_levels(sun_glare_levels)
-        self.sun_glare_eval_level = self._canonical_sun_glare_level(sun_glare_eval_level)
         self.sun_glare_eval_slot = self._canonical_sun_glare_slot(sun_glare_eval_slot)
-        self.current_scene_variant = None
         self.current_scene_tag = self.current_scene_name
-        self.current_sun_glare_level = None
         self.current_scene_effects = {}
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
@@ -308,7 +301,7 @@ class Env:
             ('passive_edge_gain', 0.85),
             ('passive_albedo_base', 0.35),
             ('passive_albedo_gain', 0.65),
-            ('active_range_base', 0.9),
+            ('active_range_base', 1.15),
             ('active_range_min_frac', 0.15),
             ('active_range_gain_frac', 0.85),
             ('active_range_gain_boost', 0.35),
@@ -328,7 +321,7 @@ class Env:
             ('quality_washout_penalty', 1.4),
             ('quality_spec_penalty', 2.0),
             ('quality_motion_penalty', 1.6),
-            ('quality_far_penalty', 2.2),
+            ('quality_far_penalty', 1.8),
             ('motion_blend_gain', 0.55),
             ('motion_blend_max', 0.85),
             ('flying_base', 0.12),
@@ -345,7 +338,7 @@ class Env:
             ('noise_spec_gain', 0.05),
             ('noise_std_min', 0.002),
             ('noise_std_max', 0.75),
-            ('valid_threshold_base', 0.45),
+            ('valid_threshold_base', 0.36),
             ('valid_bias_max', 0.35),
             ('valid_sigmoid_width', 0.08),
         ])
@@ -424,49 +417,6 @@ class Env:
     def _canonical_scene_name(self, name):
         return str(name).strip().lower().replace('-', '_')
 
-    def _canonical_sun_glare_level(self, level):
-        if level is None:
-            return None
-        token = str(level).strip().lower()
-        aliases = {
-            '0': 'l0',
-            'l0': 'l0',
-            'weak': 'l0',
-            'low': 'l0',
-            '1': 'l1',
-            'l1': 'l1',
-            'mild': 'l1',
-            'midlow': 'l1',
-            '2': 'l2',
-            'l2': 'l2',
-            'mid': 'l2',
-            'medium': 'l2',
-            'default': 'l2',
-            '3': 'l3',
-            'l3': 'l3',
-            'strong': 'l3',
-            'high': 'l3',
-        }
-        out = aliases.get(token, token)
-        if out not in self.sun_glare_supported_levels:
-            raise ValueError(
-                f"不支持的 sun_glare 档位 '{level}'，仅支持 {list(self.sun_glare_supported_levels)}"
-            )
-        return out
-
-    def _normalize_sun_glare_levels(self, levels):
-        if levels is None:
-            return ['l0', 'l1', 'l2', 'l3']
-        out = []
-        for raw in levels:
-            if raw is None:
-                continue
-            for token in str(raw).split(','):
-                name = self._canonical_sun_glare_level(token)
-                if name not in out:
-                    out.append(name)
-        return out or ['l0', 'l1', 'l2', 'l3']
-
     def _canonical_sun_glare_slot(self, slot):
         if slot is None:
             return None
@@ -506,13 +456,6 @@ class Env:
             )
         return name
 
-    def _choose_sun_glare_level(self, scene_variant=None):
-        if scene_variant is not None:
-            return self._canonical_sun_glare_level(scene_variant)
-        if self.eval_mode and self.sun_glare_eval_level is not None:
-            return self.sun_glare_eval_level
-        return random.choice(self.sun_glare_levels)
-
     def _sun_glare_opening_candidates(self):
         """
         Four candidate opening lanes, ordered from negative-y to positive-y.
@@ -546,130 +489,19 @@ class Env:
         """
         return self._choose_sun_glare_open_slot()['side']
 
-    def _apply_sun_glare_level(self, effects, level):
-        cfg = {
-            'l0': {
-                'severity_id': 0.0,
-                'local_effect_mul': 0.58,
-                'ambient_add_mul': 0.45,
-                'active_drop_mul': 0.70,
-                'active_recover_mul': 0.92,
-                'glare_bias_mul': 0.70,
-                'glare_exposure_gain_mul': 0.72,
-                'glare_power_bias_mul': 1.00,
-                'glare_power_gain_mul': 0.98,
-                'power_rescue_bias_mul': 1.00,
-                'power_rescue_exposure_gain_mul': 1.00,
-                'power_quality_bonus_mul': 0.68,
-                'quality_penalty_mul': 0.58,
-                'valid_bias_scale_mul': 0.70,
-                'sun_sigma_u_mul': 0.92,
-                'sun_sigma_v_mul': 0.92,
-            },
-            'l1': {
-                'severity_id': 1.0,
-                'local_effect_mul': 0.78,
-                'ambient_add_mul': 0.72,
-                'active_drop_mul': 0.86,
-                'active_recover_mul': 0.96,
-                'glare_bias_mul': 0.86,
-                'glare_exposure_gain_mul': 0.88,
-                'glare_power_bias_mul': 1.00,
-                'glare_power_gain_mul': 0.99,
-                'power_rescue_bias_mul': 1.00,
-                'power_rescue_exposure_gain_mul': 1.00,
-                'power_quality_bonus_mul': 0.84,
-                'quality_penalty_mul': 0.82,
-                'valid_bias_scale_mul': 0.86,
-                'sun_sigma_u_mul': 0.97,
-                'sun_sigma_v_mul': 0.97,
-            },
-            'l2': {
-                'severity_id': 2.0,
-                'local_effect_mul': 1.00,
-                'ambient_add_mul': 1.00,
-                'active_drop_mul': 1.00,
-                'active_recover_mul': 1.00,
-                'glare_bias_mul': 1.00,
-                'glare_exposure_gain_mul': 1.00,
-                'glare_power_bias_mul': 1.00,
-                'glare_power_gain_mul': 1.00,
-                'power_rescue_bias_mul': 1.00,
-                'power_rescue_exposure_gain_mul': 1.00,
-                'power_quality_bonus_mul': 1.00,
-                'quality_penalty_mul': 1.00,
-                'valid_bias_scale_mul': 1.00,
-                'sun_sigma_u_mul': 1.00,
-                'sun_sigma_v_mul': 1.00,
-            },
-            'l3': {
-                'severity_id': 3.0,
-                'local_effect_mul': 1.22,
-                'ambient_add_mul': 1.26,
-                'active_drop_mul': 1.10,
-                'active_recover_mul': 1.05,
-                'glare_bias_mul': 1.14,
-                'glare_exposure_gain_mul': 1.16,
-                'glare_power_bias_mul': 1.00,
-                'glare_power_gain_mul': 1.06,
-                'power_rescue_bias_mul': 1.00,
-                'power_rescue_exposure_gain_mul': 1.00,
-                'power_quality_bonus_mul': 1.18,
-                'quality_penalty_mul': 1.24,
-                'valid_bias_scale_mul': 1.16,
-                'sun_sigma_u_mul': 1.06,
-                'sun_sigma_v_mul': 1.06,
-            },
-        }[level]
-
-        out = dict(effects)
-        scaled_keys = {
-            'ambient_add': 'ambient_add_mul',
-            'active_drop': 'active_drop_mul',
-            'active_recover': 'active_recover_mul',
-            'glare_bias': 'glare_bias_mul',
-            'glare_exposure_gain': 'glare_exposure_gain_mul',
-            'glare_power_bias': 'glare_power_bias_mul',
-            'glare_power_gain': 'glare_power_gain_mul',
-            'power_rescue_bias': 'power_rescue_bias_mul',
-            'power_rescue_exposure_gain': 'power_rescue_exposure_gain_mul',
-            'power_quality_bonus': 'power_quality_bonus_mul',
-            'quality_penalty': 'quality_penalty_mul',
-            'valid_bias_scale': 'valid_bias_scale_mul',
-            'sun_sigma_u': 'sun_sigma_u_mul',
-            'sun_sigma_v': 'sun_sigma_v_mul',
-        }
-        for key, mul_key in scaled_keys.items():
-            if key in out:
-                out[key] = float(out[key]) * float(cfg[mul_key])
-        local_mul = float(cfg['local_effect_mul'])
-        for key in (
-            'spec_add',
-            'power_washout_penalty',
-            'power_washout_valid_bias',
-            'dark_albedo_drop',
-            'dark_active_drop',
-            'dark_underexposure_penalty',
-            'dark_passive_rescue',
-        ):
-            if key in out:
-                out[key] = float(out[key]) * local_mul
-        out['glare_level'] = level
-        out['glare_level_id'] = float(cfg['severity_id'])
-        return out
-
     def _sensor_scene_effects(self, scene_name):
         scene_name = self._canonical_sensor_scene(scene_name)
         if scene_name == 'specular':
             return {
                 'sensor_regime_name': 'specular',
                 'sensor_regime_id': 1.0,
-                'spec_add': 0.82,
+                'spec_add': 1.35,
                 'spec_mask_sun_mix': 0.0,
                 'spec_mask_hazard_mix': 1.0,
-                'power_washout_gamma': 1.65,
-                'power_washout_penalty': 1.25,
-                'power_washout_valid_bias': 0.22,
+                'power_washout_gamma': 2.20,
+                'power_washout_penalty': 4.00,
+                'power_washout_valid_bias': 0.55,
+                'power_washout_active_drop': 0.85,
                 'hazard_mask_mix': 1.0,
             }
         if scene_name == 'dark':
@@ -692,18 +524,18 @@ class Env:
         return {
             'sensor_regime_name': 'glare',
             'sensor_regime_id': 0.0,
-            'ambient_add': 4.4,
-            'active_drop': 0.76,
-            'active_recover': 1.02,
+            'ambient_add': 4.8,
+            'active_drop': 0.78,
+            'active_recover': 1.25,
             'glare_bias': 0.32,
-            'glare_exposure_gain': 2.55,
+            'glare_exposure_gain': 4.60,
             'glare_power_bias': 0.14,
-            'glare_power_gain': 1.55,
+            'glare_power_gain': 1.90,
             'power_rescue_bias': 0.14,
             'power_rescue_exposure_gain': 0.58,
-            'power_quality_bonus': 0.88,
-            'quality_penalty': 2.95,
-            'valid_bias_scale': 0.18,
+            'power_quality_bonus': 1.35,
+            'quality_penalty': 1.35,
+            'valid_bias_scale': 0.08,
             'hazard_mask_mix': 0.35,
         }
 
@@ -810,12 +642,10 @@ class Env:
             return name
         return random.choice(self.scenarios)
 
-    def _set_scene_name(self, scene_name, scene_variant=None):
+    def _set_scene_name(self, scene_name):
         self.current_scene_name = str(scene_name)
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
-        self.current_scene_variant = scene_variant
-        self.current_sun_glare_level = scene_variant
-        self.current_scene_tag = f'{self.current_scene_name}_{scene_variant}' if scene_variant else self.current_scene_name
+        self.current_scene_tag = self.current_scene_name
 
     def _sample_scene_tensor(self, lo, hi):
         return torch.empty((self.batch_size,), device=self.device).uniform_(float(lo), float(hi))
@@ -880,7 +710,7 @@ class Env:
             'scalars': {},
         }
 
-        for key in ('quality_map', 'invalid_mask', 'scene_effect_map', 'scene_mask'):
+        for key in ('raw_depth_map', 'quality_map', 'invalid_mask', 'scene_effect_map', 'scene_mask'):
             value = debug.get(key, None)
             if torch.is_tensor(value) and value.ndim >= 3 and value.shape[0] > 0:
                 idx = int(min(max(env_idx, 0), value.shape[0] - 1))
@@ -902,12 +732,12 @@ class Env:
             if self.sun_glare_randomize:
                 regime = str(scene_name)
                 if regime == 'specular':
-                    self._cam_ambient = self._sample_scene_tensor(0.16, 0.36)
-                    self._cam_dir_intensity = self._sample_scene_tensor(0.55, 1.35)
-                    self._cam_fog_beta = self._sample_scene_tensor(0.012, 0.060)
-                    self._cam_airlight = self._sample_scene_tensor(0.12, 0.42)
-                    self._cam_mat_obstacle = self._sample_scene_tensor(0.58, 0.90)
-                    self._cam_mat_spec = self._sample_scene_tensor(0.32, 0.72)
+                    self._cam_ambient = self._sample_scene_tensor(*self.sun_glare_ambient_range)
+                    self._cam_dir_intensity = self._sample_scene_tensor(*self.sun_glare_dir_range)
+                    self._cam_fog_beta = self._sample_scene_tensor(*self.sun_glare_fog_beta_range)
+                    self._cam_airlight = self._sample_scene_tensor(*self.sun_glare_airlight_range)
+                    self._cam_mat_obstacle = self._sample_scene_tensor(*self.sun_glare_mat_obstacle_range)
+                    self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
                 elif regime == 'dark':
                     self._cam_ambient = self._sample_scene_tensor(0.012, 0.070)
                     self._cam_dir_intensity = self._sample_scene_tensor(0.035, 0.18)
@@ -924,12 +754,12 @@ class Env:
                     self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
             else:
                 if scene_name == 'specular':
-                    self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.16, 0.28)
-                    self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.55, 1.00)
-                    self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.012, 0.040)
-                    self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.12, 0.30)
-                    self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.58, 0.82)
-                    self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.34, 0.58)
+                    self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
+                    self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.35, 0.75)
+                    self._cam_fog_beta = self._sample_scene_profile(scene_name, 'cam_fog_beta', 0.010, 0.030)
+                    self._cam_airlight = self._sample_scene_profile(scene_name, 'cam_airlight', 0.12, 0.25)
+                    self._cam_mat_obstacle = self._sample_scene_profile(scene_name, 'cam_mat_obstacle', 0.52, 0.78)
+                    self._cam_mat_spec = self._sample_scene_profile(scene_name, 'cam_mat_spec', 0.04, 0.10)
                 elif scene_name == 'dark':
                     self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.018, 0.055)
                     self._cam_dir_intensity = self._sample_scene_profile(scene_name, 'cam_dir_intensity', 0.040, 0.14)
@@ -1226,6 +1056,9 @@ class Env:
                 adj['quality_add'] = adj['quality_add'] - (
                     float(fx.get('power_washout_penalty', 0.0)) * power_overdrive
                 )
+                adj['active_mul'] = adj['active_mul'] * (
+                    1.0 - float(fx.get('power_washout_active_drop', 0.0)) * power_overdrive
+                ).clamp_min(0.03)
                 adj['valid_bias'] = adj['valid_bias'] + (
                     float(fx.get('power_washout_valid_bias', 0.0)) * power_overdrive
                 )
@@ -1307,21 +1140,14 @@ class Env:
                     device=self.device,
                     dtype=dtype,
                 ),
-                'glare_level_id': torch.full(
-                    (self.batch_size,),
-                    float(fx.get('glare_level_id', 0.0)),
-                    device=self.device,
-                    dtype=dtype,
-                ),
             }
 
         return adj
 
-    def _build_scene_geometry(self, scene_name, scene_variant=None):
+    def _build_scene_geometry(self, scene_name):
         if scene_name not in self.supported_scenarios:
             raise ValueError(f'未知场景: {scene_name}')
 
-        selected_variant = self._choose_sun_glare_level(scene_variant)
         open_slot = self._choose_sun_glare_open_slot()
         sensor_regime = scene_name
         gap_y_center = float(open_slot['y'])
@@ -1417,18 +1243,15 @@ class Env:
                     'sun_sigma_v': sun_sigma_v,
                 })
             effects.update(random_effects)
-        effects = self._apply_sun_glare_level(effects, selected_variant)
         effects = self._realign_sun_glare_effects(effects)
-        return voxels, start, goal, max_speed, margin, effects, selected_variant
+        return voxels, start, goal, max_speed, margin, effects
 
-    def reset(self, scene_name=None, scene_variant=None):
+    def reset(self, scene_name=None):
         """重置为固定小地图任务，并按 `scenarios` 选择简化场景。"""
         B = self.batch_size
         device = self.device
         scene_name = self._choose_scene_name(scene_name)
-        selected_variant = scene_variant
-        selected_variant = self._choose_sun_glare_level(scene_variant)
-        self._set_scene_name(scene_name, selected_variant)
+        self._set_scene_name(scene_name)
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
 
@@ -1448,9 +1271,8 @@ class Env:
 
         self.n_drones_per_group = 1
         self.drone_radius = self.fixed_drone_radius
-        voxels, start, goal, max_speed, margin, effects, selected_variant = self._build_scene_geometry(
-            scene_name, selected_variant)
-        self._set_scene_name(scene_name, selected_variant)
+        voxels, start, goal, max_speed, margin, effects = self._build_scene_geometry(scene_name)
+        self._set_scene_name(scene_name)
         self.current_scene_effects = effects
         self.max_speed = torch.full((B, 1), max_speed, device=device)
         self.margin = torch.full((B,), margin, device=device)
@@ -1762,6 +1584,7 @@ class Env:
         self._store_last_diff_depth_train_aux(train_aux)
         self._store_last_diff_depth_debug({
             'scene_name': self.current_scene_name,
+            'raw_depth_map': depth,
             'quality_map': quality,
             'invalid_mask': invalid_mask,
             'scene_effect_map': scene_effect_map,

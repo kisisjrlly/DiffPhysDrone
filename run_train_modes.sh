@@ -19,8 +19,7 @@ export all_proxy=http://127.0.0.1:7890
 #   BASE_CONFIG=configs/paper_final_full.args MODES="ours nondiff" bash run_train_modes.sh
 
 BASE_CONFIG=${BASE_CONFIG:-configs/paper_final_full.args}
-# MODES=${MODES:-"nocamera ours nondiff fix"}
-MODES=${MODES:-"ours nondiff"}
+MODES=${MODES:-"nocamera ours nondiff fix randfix"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 
 if [ ! -f "$BASE_CONFIG" ]; then

@@ -20,8 +20,6 @@ from config import (
     build_parser,
     parse_diff_sensor_impl,
     parse_scenarios,
-    parse_sun_glare_levels,
-    canonicalize_sun_glare_level,
     set_global_seed,
     validate_args,
     print_runtime_mode,
@@ -62,9 +60,6 @@ def parse_eval_args():
 
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
-    args.sun_glare_levels = parse_sun_glare_levels(args.sun_glare_levels)
-    if args.sun_glare_eval_level is not None:
-        args.sun_glare_eval_level = canonicalize_sun_glare_level(args.sun_glare_eval_level)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
 
@@ -95,11 +90,11 @@ def _write_csv_rows(path, rows):
         writer.writerows(rows)
 
 
-def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device, collect_trace=False):
+def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_trace=False):
     B = env.batch_size
     use_amp = bool(args.amp and device.type == 'cuda')
 
-    env.reset(scene_name=scene_name, scene_variant=scene_variant)
+    env.reset(scene_name=scene_name)
     model.reset()
     vis_episode_idx = int(getattr(args, 'vis_episode_idx', -1))
     log_vis = bool(vis.enabled and (vis_episode_idx < 0 or int(ep_idx) == vis_episode_idx))
@@ -300,6 +295,7 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
                 main_img=main_img_np,
                 main_img_mode=main_img_mode,
                 depth_img=depth_img_np,
+                raw_depth_img=scene_debug.get('images', {}).get('raw_depth_map'),
                 quality_img=scene_debug.get('images', {}).get('quality_map'),
                 invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
                 scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
@@ -327,7 +323,6 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
                 'episode_idx': int(ep_idx),
                 'step_idx': int(t),
                 'scene_name': str(getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', scene_name))),
-                'glare_level': getattr(env, 'current_sun_glare_level', None) or '',
                 'x': float(env.p[j, 0].detach().cpu().item()),
                 'y': float(env.p[j, 1].detach().cpu().item()),
                 'z': float(env.p[j, 2].detach().cpu().item()),
@@ -341,7 +336,6 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
                 'scene_effect_mean': float(scene_debug.get('scalars', {}).get('scene_effect_mean', 0.0)),
                 'glare_quality_mean': float(scene_debug.get('scalars', {}).get('glare_quality_mean', 0.0)),
                 'glare_invalid_rate': float(scene_debug.get('scalars', {}).get('glare_invalid_rate', 0.0)),
-                'glare_level_id': float(scene_debug.get('scalars', {}).get('glare_level_id', -1.0)),
                 'sensor_regime_id': float(scene_debug.get('scalars', {}).get('sensor_regime_id', -1.0)),
                 'decision_open_side_id': float(scene_debug.get('scalars', {}).get('decision_open_side_id', 0.0)),
                 'zone_enter_x': float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0)),
@@ -412,7 +406,6 @@ def run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, de
 
     metrics = {
         'scene_name': str(getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', scene_name))),
-        'glare_level': str(getattr(env, 'current_sun_glare_level', '') or ''),
         'success_rate': success_rate,
         'collision_rate': collision_rate,
         'goal_reach_rate': goal_reach_rate,
@@ -512,21 +505,14 @@ def main():
         eval_scenes = list(args.scenarios)
         for ep_idx in range(args.eval_episodes):
             scene_name = eval_scenes[ep_idx % len(eval_scenes)]
-            scene_variant = None
-            if args.sun_glare_eval_level is not None:
-                scene_variant = args.sun_glare_eval_level
-            elif len(eval_scenes) == 1:
-                scene_variant = args.sun_glare_levels[ep_idx % len(args.sun_glare_levels)]
-            else:
-                scene_variant = args.sun_glare_levels[0]
             if args.eval_trace_csv:
                 metrics, trace_rows = run_one_episode(
-                    ep_idx, scene_name, scene_variant, args, model, env, vis, device,
+                    ep_idx, scene_name, args, model, env, vis, device,
                     collect_trace=True,
                 )
                 trace_rows_all.extend(trace_rows)
             else:
-                metrics = run_one_episode(ep_idx, scene_name, scene_variant, args, model, env, vis, device)
+                metrics = run_one_episode(ep_idx, scene_name, args, model, env, vis, device)
             metrics = dict(metrics)
             metrics['episode_idx'] = int(ep_idx)
             ep_metrics.append(metrics)
