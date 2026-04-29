@@ -860,6 +860,26 @@ def _compute_emerging_metrics(rollout, loss_dict, env, args, smoother):
             smoother.add({f'scene/is_{name}': 1.0 if name == scene_name else 0.0})
     if scene_tag is not None and scene_tag != scene_name:
         smoother.add({f'scene/is_{scene_tag}': 1.0})
+
+
+def _compute_final_goal_distance_metric(rollout, env):
+    """Return final train-time goal distance in meters."""
+    positions = []
+    for p in rollout.get('p_history', []):
+        if isinstance(p, torch.Tensor):
+            positions.append(p.detach())
+    if isinstance(getattr(env, 'p', None), torch.Tensor):
+        positions.append(env.p.detach())
+
+    if not positions:
+        return {}
+
+    p_seq = torch.stack(positions)
+    target = env.p_target.detach().unsqueeze(0)
+    final_goal_dist = torch.norm(target - p_seq[-1:].detach(), dim=-1)
+    return {'goal_dist/final': float(final_goal_dist.mean().item())}
+
+
 def _build_loss_share_metrics(loss_scalars: dict, args, distill_coef_iter: float) -> dict:
     """Build weighted loss contribution and share metrics for WandB.
 
@@ -910,7 +930,7 @@ def _log_save_iter(rollout, loss_dict, env, args, i):
     p_history = loss_dict['p_history']
     v_history = loss_dict['v_history']
     act_buffer = loss_dict['act_buffer']
-    print("save check success:", i)
+    print("save checkpoint figures:", i)
 
     fig_p, ax = plt.subplots()
     ph = p_history[:, vid_idx].detach().cpu()
@@ -1027,8 +1047,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             vec_det = torch.stack([x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x
                                    for x in rollout['vec_to_pt_history']])
             distance_det = torch.norm(vec_det, 2, -1) - env.margin
-            success = torch.all(distance_det.flatten(0, 1) > 0, 0)
-            _success = success.sum() / B
+            collision_free = torch.all(distance_det.flatten(0, 1) > 0, 0)
+            collision_free_rate = collision_free.sum() / B
             v_det = torch.stack([x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x
                                  for x in rollout['v_history']])
             speed_history = v_det.norm(2, -1)
@@ -1060,8 +1080,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 _optimizer_step_and_maybe_advance_scheduler(optim, sched, scaler, use_amp=False)
             torch.cuda.synchronize()  # flush GPU queue to prevent display starvation
 
-            success = torch.all(distance.flatten(0, 1) > 0, 0)
-            _success = success.sum() / B
+            collision_free = torch.all(distance.flatten(0, 1) > 0, 0)
+            collision_free_rate = collision_free.sum() / B
             avg_speed = speed_history.mean(0)
         # wandb.watch(model, log="all")
         # wandb.watch(model, log=["gradients", "parameters"])
@@ -1097,12 +1117,13 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
 
             smoother.add({
                 'loss': float(loss.detach()),
-                'success': float(_success),
-                'collision_rate': float(1.0 - _success),
+                'collision_free_rate': float(collision_free_rate),
+                'collision_rate': float(1.0 - collision_free_rate),
                 'max_speed': float(speed_history.max(0).values.mean()),
                 'avg_speed': float(avg_speed.mean()),
-                'ar': float((success * avg_speed).mean()),
+                'ar': float((collision_free * avg_speed).mean()),
             })
+            smoother.add(_compute_final_goal_distance_metric(rollout, env))
 
             # Emerging metrics (shared for both branches)
             if tbptt_this_iter:

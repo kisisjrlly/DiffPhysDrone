@@ -520,10 +520,24 @@ class Env:
                 'power_washout_penalty': 5.80,
                 'power_washout_valid_bias': 0.92,
                 'power_washout_active_drop': 0.96,
+                'spec_exposure_washout_start': 0.42,
+                'spec_exposure_washout_gamma': 1.85,
+                'spec_exposure_washout_penalty': 4.20,
+                'spec_exposure_valid_bias': 0.62,
+                'spec_exposure_passive_drop': 0.82,
+                'spec_gain_washout_start': 0.30,
+                'spec_gain_washout_gamma': 1.65,
+                'spec_gain_washout_penalty': 1.15,
+                'spec_gain_valid_bias': 0.18,
                 'spec_safe_power_target': 0.28,
                 'spec_safe_power_width': 0.30,
+                'spec_safe_exposure_target': 0.30,
+                'spec_safe_exposure_width': 0.30,
+                'spec_safe_gain_target': 0.08,
+                'spec_safe_gain_width': 0.35,
                 'spec_low_power_quality_bonus': 0.54,
                 'spec_low_power_active_bonus': 0.38,
+                'spec_low_exposure_quality_bonus': 0.30,
                 'hazard_mask_mix': 1.0,
             }
         if scene_name == 'dark':
@@ -550,20 +564,20 @@ class Env:
             'active_drop': 0.58,
             'active_recover': 1.12,
             'glare_bias': 0.20,
-            'glare_exposure_gain': 2.70,
-            'glare_exposure_gamma': 2.20,
-            'glare_overexp_start': 0.36,
-            'glare_overexp_gain': 3.80,
-            'glare_active_saturation_drop': 0.55,
+            'glare_exposure_gain': 4.20,
+            'glare_exposure_gamma': 1.55,
+            'glare_overexp_start': 0.26,
+            'glare_overexp_gain': 6.80,
+            'glare_active_saturation_drop': 0.82,
             'glare_power_bias': 0.18,
-            'glare_power_gain': 1.85,
-            'glare_penalty_max': 1.20,
+            'glare_power_gain': 1.95,
+            'glare_penalty_max': 1.55,
             'power_rescue_bias': 0.18,
-            'power_rescue_exposure_gain': 1.20,
+            'power_rescue_exposure_gain': 1.45,
             'power_quality_bonus': 0.95,
-            'quality_penalty': 1.15,
-            'valid_bias_scale': 0.04,
-            'glare_valid_exposure_bias': 0.58,
+            'quality_penalty': 1.45,
+            'valid_bias_scale': 0.06,
+            'glare_valid_exposure_bias': 0.78,
             'hazard_mask_mix': 0.35,
         }
 
@@ -1267,23 +1281,70 @@ class Env:
                 power_overdrive = spec_mask * power_excess.pow(
                     float(fx.get('power_washout_gamma', 1.6))
                 )
+                exposure01_est = (
+                    (exposure_s - float(self.cam_sem.exposure_t_min)) /
+                    max(float(self.cam_sem.exposure_t_span), 1e-6)
+                ).clamp(0.0, 1.0)
+                exposure_map = exposure01_est[:, None, None]
+                exp_start = float(fx.get('spec_exposure_washout_start', 0.45))
+                exposure_excess = torch.relu(
+                    (exposure_map - exp_start) / max(1.0 - exp_start, 1e-4)
+                )
+                exposure_overdrive = spec_mask * exposure_excess.pow(
+                    float(fx.get('spec_exposure_washout_gamma', 1.6))
+                )
+                gain01_est = (
+                    (gain_scale - float(self.cam_sem.iso_gain_base)) /
+                    max(float(self.cam_sem.iso_gain_scale), 1e-6)
+                ).clamp(0.0, 1.0)
+                gain_map = gain01_est[:, None, None]
+                gain_start = float(fx.get('spec_gain_washout_start', 0.35))
+                gain_excess = torch.relu(
+                    (gain_map - gain_start) / max(1.0 - gain_start, 1e-4)
+                )
+                gain_overdrive = spec_mask * gain_excess.pow(
+                    float(fx.get('spec_gain_washout_gamma', 1.5))
+                )
                 safe_center = float(fx.get('spec_safe_power_target', 0.30))
                 safe_width = max(float(fx.get('spec_safe_power_width', 0.35)), 1e-4)
-                spec_safe = spec_mask * torch.exp(-((power_map - safe_center) / safe_width).pow(2.0))
-                extra_effect = torch.maximum(extra_effect, power_overdrive.clamp(0.0, 1.0))
+                safe_exp_center = float(fx.get('spec_safe_exposure_target', 0.30))
+                safe_exp_width = max(float(fx.get('spec_safe_exposure_width', 0.35)), 1e-4)
+                safe_gain_center = float(fx.get('spec_safe_gain_target', 0.08))
+                safe_gain_width = max(float(fx.get('spec_safe_gain_width', 0.35)), 1e-4)
+                spec_safe = spec_mask * torch.exp(
+                    -((power_map - safe_center) / safe_width).pow(2.0)
+                    -0.55 * ((exposure_map - safe_exp_center) / safe_exp_width).pow(2.0)
+                    -0.25 * ((gain_map - safe_gain_center) / safe_gain_width).pow(2.0)
+                )
+                spec_overdrive = (
+                    power_overdrive +
+                    exposure_overdrive +
+                    0.45 * gain_overdrive
+                ).clamp(0.0, 1.35)
+                extra_effect = torch.maximum(extra_effect, spec_overdrive.clamp(0.0, 1.0))
                 adj['spec_add'] = adj['spec_add'] + spec_mask * spec_add
                 adj['quality_add'] = adj['quality_add'] - (
                     float(fx.get('power_washout_penalty', 0.0)) * power_overdrive
+                    + float(fx.get('spec_exposure_washout_penalty', 0.0)) * exposure_overdrive
+                    + float(fx.get('spec_gain_washout_penalty', 0.0)) * gain_overdrive
                 )
                 adj['quality_add'] = adj['quality_add'] + (
-                    float(fx.get('spec_low_power_quality_bonus', 0.0)) * spec_safe
+                    (
+                        float(fx.get('spec_low_power_quality_bonus', 0.0)) +
+                        float(fx.get('spec_low_exposure_quality_bonus', 0.0))
+                    ) * spec_safe
                 )
                 adj['active_mul'] = adj['active_mul'] * (
                     1.0 - float(fx.get('power_washout_active_drop', 0.0)) * power_overdrive
                     + float(fx.get('spec_low_power_active_bonus', 0.0)) * spec_safe
                 ).clamp_min(0.03)
+                adj['passive_mul'] = adj['passive_mul'] * (
+                    1.0 - float(fx.get('spec_exposure_passive_drop', 0.0)) * exposure_overdrive
+                ).clamp_min(0.05)
                 adj['valid_bias'] = adj['valid_bias'] + (
-                    float(fx.get('power_washout_valid_bias', 0.0)) * power_overdrive
+                    float(fx.get('power_washout_valid_bias', 0.0)) * power_overdrive +
+                    float(fx.get('spec_exposure_valid_bias', 0.0)) * exposure_overdrive +
+                    float(fx.get('spec_gain_valid_bias', 0.0)) * gain_overdrive
                 )
 
             dark_drop = float(fx.get('dark_albedo_drop', 0.0))
@@ -1434,20 +1495,20 @@ class Env:
                 'active_drop': 0.58,
                 'active_recover': 1.12,
                 'glare_bias': 0.20,
-                'glare_exposure_gain': 2.70,
-                'glare_exposure_gamma': 2.20,
-                'glare_overexp_start': 0.36,
-                'glare_overexp_gain': 3.80,
-                'glare_active_saturation_drop': 0.55,
+                'glare_exposure_gain': 4.20,
+                'glare_exposure_gamma': 1.55,
+                'glare_overexp_start': 0.26,
+                'glare_overexp_gain': 6.80,
+                'glare_active_saturation_drop': 0.82,
                 'glare_power_bias': 0.18,
-                'glare_power_gain': 1.85,
-                'glare_penalty_max': 1.20,
+                'glare_power_gain': 1.95,
+                'glare_penalty_max': 1.55,
                 'power_rescue_bias': 0.18,
-                'power_rescue_exposure_gain': 1.20,
+                'power_rescue_exposure_gain': 1.45,
                 'power_quality_bonus': 0.95,
-                'quality_penalty': 1.15,
-                'valid_bias_scale': 0.04,
-                'glare_valid_exposure_bias': 0.58,
+                'quality_penalty': 1.45,
+                'valid_bias_scale': 0.06,
+                'glare_valid_exposure_bias': 0.78,
                 'sun_anchor': [3.00, gap_y_center + sun_y_offset, 1.65 + sun_z_offset],
                 'sun_y_offset': sun_y_offset,
                 'sun_sigma_u': sun_sigma_u,
