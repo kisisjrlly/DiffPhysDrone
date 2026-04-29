@@ -180,20 +180,6 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         else:
             target_v_raw = env.p_target - env.p.detach()
 
-        env.run(act_buffer[t], ctl_dt, target_v_raw)
-
-        # 记录推进后的最小安全边距，避免漏检“本步内发生”的碰撞
-        vec_after = env.find_vec_to_nearest_pt()
-        min_margin_after = (torch.norm(vec_after, 2, -1) - env.margin)
-        min_margin_now = torch.minimum(min_margin_before, min_margin_after)
-        min_margin_hist.append(min_margin_now)
-
-        # eval 规则：一旦发生碰撞，立即结束当前 episode
-        # 当前 batch 并行评估时，只要任一无人机碰撞就提前终止。
-        if bool((min_margin_now <= 0).any().item()):
-            collided = True
-            collided_step = t
-
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
         state, local_v = build_state_vector(
@@ -216,10 +202,12 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
 
         cam_params = cam_params.float()
 
-        power, exposure, gain, _ = update_camera_params(cam_params, power, exposure, gain, env)
-        power_hist.append(power.detach())
-        exposure_hist.append(exposure.detach())
-        gain_hist.append(gain.detach())
+        render_power = power
+        render_exposure = exposure
+        render_gain = gain
+        power_hist.append(render_power.detach())
+        exposure_hist.append(render_exposure.detach())
+        gain_hist.append(render_gain.detach())
 
         if args.use_dmpc and args.policy_output_intent and intent is not None:
             act_final, _ = decode_action_lqr(
@@ -232,6 +220,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         else:
             act_final, _ = decode_action_direct(act_raw, R, env, B, args.max_acc_cmd)
 
+        power, exposure, gain, _ = update_camera_params(cam_params, power, exposure, gain, env)
         act_buffer.append(act_final)
         speed_hist.append(env.v.norm(2, -1))
         goal_dist_hist.append((env.p_target - env.p).norm(2, -1))
@@ -247,9 +236,9 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         if log_vis:
             j = int(min(max(args.vis_env_idx, 0), B - 1))
             cam_vals = (
-                float(power[j].detach().cpu()),
-                float(exposure[j].detach().cpu()),
-                float(gain[j].detach().cpu()),
+                float(render_power[j].detach().cpu()),
+                float(render_exposure[j].detach().cpu()),
+                float(render_gain[j].detach().cpu()),
             )
 
             main_img_np = None
@@ -328,9 +317,9 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 'z': float(env.p[j, 2].detach().cpu().item()),
                 'speed_mps': float(env.v[j].norm(2).detach().cpu().item()),
                 'accel_norm_mps2': float(env.a[j].norm(2).detach().cpu().item()),
-                'power': float(power[j].detach().cpu().item()),
-                'exposure': float(exposure[j].detach().cpu().item()),
-                'gain': float(gain[j].detach().cpu().item()),
+                'power': float(render_power[j].detach().cpu().item()),
+                'exposure': float(render_exposure[j].detach().cpu().item()),
+                'gain': float(render_gain[j].detach().cpu().item()),
                 'fill_rate': fill_rate_scalar,
                 'fill_rate_soft': fill_rate_soft_scalar,
                 'scene_effect_mean': float(scene_debug.get('scalars', {}).get('scene_effect_mean', 0.0)),
@@ -338,17 +327,32 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 'glare_invalid_rate': float(scene_debug.get('scalars', {}).get('glare_invalid_rate', 0.0)),
                 'sensor_regime_id': float(scene_debug.get('scalars', {}).get('sensor_regime_id', -1.0)),
                 'decision_open_side_id': float(scene_debug.get('scalars', {}).get('decision_open_side_id', 0.0)),
+                'decision_open_slot_id': float(scene_debug.get('scalars', {}).get('decision_open_slot_id', 0.0)),
                 'zone_enter_x': float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0)),
                 'dist_to_goal_m': float((env.p_target[j] - env.p[j]).norm(2).detach().cpu().item()),
                 'collided': float(collided),
                 'depth_input_mode': depth_input_mode,
             })
 
+        env.run(act_buffer[t], ctl_dt, target_v_raw)
+
+        # 记录推进后的最小安全边距，避免漏检“本步内发生”的碰撞。
+        vec_after = env.find_vec_to_nearest_pt()
+        min_margin_after = (torch.norm(vec_after, 2, -1) - env.margin)
+        min_margin_now = torch.minimum(min_margin_before, min_margin_after)
+        min_margin_hist.append(min_margin_now)
+
+        # eval 规则：一旦发生碰撞，立即结束当前 episode。
+        # 当前 batch 并行评估时，只要任一无人机碰撞就提前终止。
+        if bool((min_margin_now <= 0).any().item()):
+            collided = True
+            collided_step = t
+
         if collided:
             print(f"[eval] collision detected at step={t}, early stop this episode.")
             break
-        if log_vis:
-            time.sleep(1.0/5)
+        # if log_vis:
+        #     time.sleep(1.0/5)
 
     min_margin_all = torch.stack(min_margin_hist).amin(dim=0)
 

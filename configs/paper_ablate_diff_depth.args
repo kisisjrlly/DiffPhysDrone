@@ -22,7 +22,9 @@
 --base_control_freq 15.0
 --cam_angle 20
 --scenarios glare specular dark
---scene_fit_profiles_path configs/scene_fit_profiles.json
+# Optional calibration-only profile override. Keep disabled for benchmark
+# training so the explicit randomization ranges below actually take effect.
+# --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 --drone_a 0.15
 --drone_c 0.075

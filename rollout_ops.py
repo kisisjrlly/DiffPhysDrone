@@ -77,6 +77,107 @@ def compute_depth_sensor_health(depth_obs, min_valid_depth: float = 0.3,
     return worst.mean(dim=1)
 
 
+def _as_bhw(x):
+    if x is None:
+        return None
+    if x.ndim == 2:
+        return x.unsqueeze(0)
+    if x.ndim == 4:
+        if x.shape[1] == 1:
+            return x[:, 0]
+        return x.mean(dim=1)
+    return x
+
+
+def compute_validity_fill_rate(valid_map):
+    """Return the mean valid-pixel probability for a [0,1] validity map."""
+    valid = _as_bhw(valid_map)
+    if valid is None:
+        return None
+    if valid.ndim != 3:
+        raise ValueError(
+            f"compute_validity_fill_rate expects [H,W], [B,H,W], or [B,C,H,W], got {tuple(valid.shape)}"
+        )
+    return valid.clamp(0.0, 1.0).mean()
+
+
+def compute_validity_sensor_health(valid_map, patch_rows: int = 6,
+                                   patch_cols: int = 8,
+                                   cvar_frac: float = 0.25):
+    """Patch/CVaR health for a dimensionless valid-probability map.
+
+    Unlike ``compute_depth_sensor_health``, this function does not apply a
+    metric depth threshold.  It is the correct loss-side companion for the
+    differentiable sensor model's internal valid probability.
+    """
+    valid = _as_bhw(valid_map)
+    if valid is None:
+        return None
+    if valid.ndim != 3:
+        raise ValueError(
+            f"compute_validity_sensor_health expects [H,W], [B,H,W], or [B,C,H,W], got {tuple(valid.shape)}"
+        )
+    rows = max(1, int(patch_rows))
+    cols = max(1, int(patch_cols))
+    patch_fill = F.adaptive_avg_pool2d(valid.clamp(0.0, 1.0)[:, None], (rows, cols)).flatten(1)
+    frac = min(max(float(cvar_frac), 0.0), 1.0)
+    k = max(1, int(math.ceil(patch_fill.shape[1] * frac))) if frac > 0.0 else 1
+    worst = torch.topk(patch_fill, k=k, dim=1, largest=False).values
+    return worst.mean(dim=1)
+
+
+def sensor_validity_maps(env):
+    """Fetch the latest differentiable validity maps exported by Env, if any."""
+    if env is None or not hasattr(env, 'get_last_diff_depth_train_aux'):
+        return None, None
+    aux = env.get_last_diff_depth_train_aux() or {}
+    valid_prob = aux.get('valid_prob_map', None)
+    hard_valid = aux.get('hard_valid_map', None)
+    return valid_prob, hard_valid
+
+
+def compute_render_health_metrics(env, depth_obs, min_valid_depth: float = 0.3,
+                                  patch_rows: int = 6, patch_cols: int = 8,
+                                  cvar_frac: float = 0.25):
+    """Compute fill/health metrics from the latest render in consistent units.
+
+    The loss-side signal should use the sensor model's dimensionless validity
+    probability when available.  Falling back to ``depth_obs`` keeps CUDA
+    backend / legacy paths functional, but those paths are not fully
+    differentiable through the Python sensor model.
+    """
+    valid_prob, hard_valid = sensor_validity_maps(env)
+    if valid_prob is not None:
+        fill_hard = (
+            compute_validity_fill_rate(hard_valid)
+            if hard_valid is not None else compute_validity_fill_rate(valid_prob.detach())
+        )
+        fill_soft = compute_validity_fill_rate(valid_prob)
+        fill_health = compute_validity_sensor_health(
+            valid_prob,
+            patch_rows=patch_rows,
+            patch_cols=patch_cols,
+            cvar_frac=cvar_frac,
+        )
+        return fill_hard, fill_soft, fill_health
+
+    fill_hard = compute_depth_fill_rate(depth_obs, min_valid_depth=min_valid_depth)
+    fill_soft = compute_depth_fill_rate(
+        depth_obs,
+        min_valid_depth=min_valid_depth,
+        softness=diff_depth_fill_softness(min_valid_depth),
+    )
+    fill_health = compute_depth_sensor_health(
+        depth_obs,
+        min_valid_depth=min_valid_depth,
+        softness=diff_depth_fill_softness(min_valid_depth),
+        patch_rows=patch_rows,
+        patch_cols=patch_cols,
+        cvar_frac=cvar_frac,
+    )
+    return fill_hard, fill_soft, fill_health
+
+
 def select_policy_depth_obs(depth_obs, mode: str = 'depth'):
     """Choose what depth tensor is actually fed into the policy network."""
     if depth_obs is None:

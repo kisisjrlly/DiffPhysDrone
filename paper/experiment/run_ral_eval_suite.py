@@ -365,7 +365,9 @@ def _compute_trace_diagnostics(trace_rows: list[dict], min_fill_rate: float,
         opening_y = float(opening_y_fallback or 0.0)
     else:
         opening_y = float(opening_y_raw)
-    opening_slot_id = float(rows[0].get("decision_open_side_id", 0.0) or 0.0)
+    opening_slot_id = float(
+        rows[0].get("decision_open_slot_id", rows[0].get("decision_open_side_id", 0.0)) or 0.0
+    )
     gate_row = min(rows, key=lambda r: abs(float(r.get("x", 0.0)) - GATE_X))
     y_at_gate = float(gate_row.get("y", 0.0))
     final_y = float(rows[-1].get("y", 0.0))

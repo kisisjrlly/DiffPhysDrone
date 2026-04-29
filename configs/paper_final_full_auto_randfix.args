@@ -35,7 +35,9 @@
 # --yaw_drift
 # --no_odom
 --scenarios glare specular dark
---scene_fit_profiles_path configs/scene_fit_profiles.json
+# Optional calibration-only profile override. Keep disabled for benchmark
+# training so the explicit randomization ranges below actually take effect.
+# --scene_fit_profiles_path configs/scene_fit_profiles.json
 
 # --ellipsoid_collision
 --drone_a 0.15

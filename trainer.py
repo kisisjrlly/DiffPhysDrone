@@ -36,8 +36,7 @@ from rollout_ops import (
     compute_target_velocity, decode_action_direct, decode_action_lqr,
     update_camera_params, diff_depth_exposure_to_time,
     init_camera_params, compute_camera_param_stats, compute_diff_depth_proxies,
-    compute_depth_fill_rate, compute_depth_sensor_health,
-    diff_depth_fill_softness, select_policy_depth_obs,
+    compute_render_health_metrics, select_policy_depth_obs,
 )
 from train_utils import (
     MetricSmoother, periodic_tail_ops, is_save_iter,
@@ -195,11 +194,10 @@ def _teacher_inner_loop(env, env_snapshot, args,
             )
             depth_obs_k, quality_k = render_sensors(
                 env, dt_k, power_k, exposure_k, gain_k, differentiable=sensor_differentiable)
-            fill_src_k = quality_k if quality_k is not None else depth_obs_k
-            fill_health_k = compute_depth_sensor_health(
-                fill_src_k,
+            _, _, fill_health_k = compute_render_health_metrics(
+                env,
+                depth_obs_k,
                 min_valid_depth=args.depth_min_valid,
-                softness=diff_depth_fill_softness(args.depth_min_valid),
                 patch_rows=args.diff_depth_health_patch_rows,
                 patch_cols=args.diff_depth_health_patch_cols,
                 cvar_frac=args.diff_depth_health_cvar_frac,
@@ -212,8 +210,6 @@ def _teacher_inner_loop(env, env_snapshot, args,
                 tv_raw_k = torch.squeeze(tv_raw_k[:, None] @ yaw_drift_R, 1)
             else:
                 tv_raw_k = env.p_target - env.p.detach()
-
-            env.run(act_buf_k[t], dt_k, tv_raw_k)
 
             R_k = build_local_frame(env)
             tv_k = compute_target_velocity(tv_raw_k, env)
@@ -235,13 +231,17 @@ def _teacher_inner_loop(env, env_snapshot, args,
 
             act_buf_k.append(a_final_k)
 
-            # Camera update
+            render_power_k = power_k
+            render_exposure_k = exposure_k
+            render_gain_k = gain_k
+
+            # Camera update controls the next rendered frame.
             power_k, exposure_k, gain_k, sensor_hist_entry = update_camera_params(
                 u_cam_guess[t], power_k, exposure_k, gain_k, env)
             c_sensor_hist.append(sensor_hist_entry)
-            c_power.append(power_k)
-            c_exposure.append(exposure_k)
-            c_gain.append(gain_k)
+            c_power.append(render_power_k)
+            c_exposure.append(render_exposure_k)
+            c_gain.append(render_gain_k)
 
             c_speed.append(env.v.norm(2, -1))
             c_fill.append(fill_health_k)
@@ -254,9 +254,9 @@ def _teacher_inner_loop(env, env_snapshot, args,
                     and k == args.teacher_inner_steps - 1
                     and t % max(args.vis_every_steps, 1) == 0):
                 j = int(min(max(args.vis_env_idx, 0), B - 1))
-                cam_vals = (float(power_k[j].detach().cpu()),
-                            float(exposure_k[j].detach().cpu()),
-                            float(gain_k[j].detach().cpu()))
+                cam_vals = (float(render_power_k[j].detach().cpu()),
+                            float(render_exposure_k[j].detach().cpu()),
+                            float(render_gain_k[j].detach().cpu()))
                 scene_debug = env.export_last_diff_depth_debug(j)
                 scene_scalars = dict(scene_debug.get('scalars', {}))
                 scene_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
@@ -274,6 +274,8 @@ def _teacher_inner_loop(env, env_snapshot, args,
                     main_fov_half_tan=float(env._fov_x_half_tan),
                     main_hw=(int(env.height), int(env.width)),
                     depth_hw=(int(env.height), int(env.width)))
+
+            env.run(act_buf_k[t], dt_k, tv_raw_k)
 
             # ---- TBPTT chunk boundary ----
             chunk_end_k = ((t + 1) % teacher_chunk_steps == 0) or (t == args.timesteps - 1)
@@ -433,23 +435,12 @@ def student_rollout(env, model, args, B, device, use_amp,
             env, ctl_dt, power, exposure, gain, differentiable=sensor_differentiable)
         policy_depth_obs = select_policy_depth_obs(depth_obs, getattr(args, 'policy_depth_mode', 'depth'))
         depth_vis = depth_obs
-        # fill_rate 用 quality 张量计算（而非 noisy_depth）：
-        # quality 是确定性的（无 randn），对 power/exposure/gain 可微，
-        # 避免了 noisy_depth 中随机噪声污染梯度，也消除了 depth_obs 双路径冲突。
-        fill_src = depth_quality if depth_quality is not None else depth_obs.detach()
-        fill_rate_t = compute_depth_fill_rate(
-            fill_src,
+        # Fill/health 用传感器内部有效概率图计算（0~1 语义），
+        # 不再把 quality 当作米制 depth 去套 depth_min_valid 阈值。
+        fill_rate_t, fill_rate_soft_t, fill_health_t = compute_render_health_metrics(
+            env,
+            depth_obs,
             min_valid_depth=args.depth_min_valid,
-        )
-        fill_rate_soft_t = compute_depth_fill_rate(
-            fill_src,
-            min_valid_depth=args.depth_min_valid,
-            softness=diff_depth_fill_softness(args.depth_min_valid),
-        )
-        fill_health_t = compute_depth_sensor_health(
-            fill_src,
-            min_valid_depth=args.depth_min_valid,
-            softness=diff_depth_fill_softness(args.depth_min_valid),
             patch_rows=args.diff_depth_health_patch_rows,
             patch_cols=args.diff_depth_health_patch_cols,
             cvar_frac=args.diff_depth_health_cvar_frac,
@@ -471,8 +462,6 @@ def student_rollout(env, model, args, B, device, use_amp,
             target_v_raw = torch.squeeze(target_v_raw[:, None] @ R_drift, 1)
         else:
             target_v_raw = env.p_target - env.p.detach()
-
-        env.run(act_buffer[t], ctl_dt, target_v_raw)
 
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
@@ -500,24 +489,18 @@ def student_rollout(env, model, args, B, device, use_amp,
         if args.enable_teacher_student_training:
             raw_cam_history.append(cam_params)
 
-        # Camera update
-        power, exposure, gain, cam_hist_entry = update_camera_params(
-            cam_params, power, exposure, gain, env)
-        cam_params_history.append(cam_hist_entry)
-
-        # Track histories
+        # Track current-frame camera/kinematic state. The camera update below
+        # affects the next rendered frame, so logs and depth stay time-aligned.
         if tbptt_this_iter:
             power_history.append(power.detach())
             exposure_history.append(exposure.detach())
             gain_history.append(gain.detach())
+            speed_for_depth_history.append(env.v.norm(2, -1).detach())
+            R_up_history.append(env.R[:, :, 2].detach().clone())
         else:
             power_history.append(power)
             exposure_history.append(exposure)
             gain_history.append(gain)
-        if tbptt_this_iter:
-            speed_for_depth_history.append(env.v.norm(2, -1).detach())
-            R_up_history.append(env.R[:, :, 2].detach().clone())
-        else:
             speed_for_depth_history.append(env.v.norm(2, -1))
             R_up_history.append(env.R[:, :, 2].clone())
 
@@ -531,17 +514,20 @@ def student_rollout(env, model, args, B, device, use_amp,
                 vec_now, solve_batched_dlqr)
         else:
             act_final, v_pred = decode_action_direct(act, R, env, B, args.max_acc_cmd)
+
+        render_power = power
+        render_exposure = exposure
+        render_gain = gain
+
+        # Camera update is causal: policy output at this frame controls the next
+        # depth render. The action command is appended to the delayed act buffer;
+        # the current physics step still consumes act_buffer[t].
+        power, exposure, gain, cam_hist_entry = update_camera_params(
+            cam_params, power, exposure, gain, env)
+        cam_params_history.append(cam_hist_entry)
         act = act_final
         act_buffer.append(act)
 
-        if tbptt_this_iter:
-            v_history.append(env.v.detach())
-            target_v_history.append(target_v.detach())
-        else:
-            v_history.append(env.v)
-            target_v_history.append(target_v)
-
-        # ── TBPTT chunk accumulation & backward ──
         if tbptt_this_iter:
             c_v_hist.append(env.v); c_tv_hist.append(target_v)
             c_vec_hist.append(vec_now)
@@ -549,9 +535,49 @@ def student_rollout(env, model, args, B, device, use_amp,
             c_speed.append(env.v.norm(2, -1))
             c_fill.append(fill_health_t)
             c_sensor_hist.append(cam_hist_entry)
-            c_exposure.append(exposure); c_gain.append(gain)
-            c_power.append(power)
+            c_exposure.append(render_exposure)
+            c_gain.append(render_gain)
+            c_power.append(render_power)
+            v_history.append(env.v.detach())
+            target_v_history.append(target_v.detach())
+        else:
+            v_history.append(env.v)
+            target_v_history.append(target_v)
 
+        # Visualization before physics integration: current position, depth and
+        # camera params all describe the same instant.
+        if should_vis_iter and args.vis_student and (t % max(args.vis_every_steps, 1) == 0):
+            j = int(min(max(args.vis_env_idx, 0), B - 1))
+            cam_vals = (float(power_history[-1][j].detach().cpu()),
+                        float(exposure_history[-1][j].detach().cpu()),
+                        float(gain_history[-1][j].detach().cpu()))
+            main_img_np = None
+            main_img_mode = 'depth'
+            depth_img_np = depth_obs[j].detach().cpu().numpy()
+            scene_debug = env.export_last_diff_depth_debug(j)
+            step_scalars = dict(scene_debug.get('scalars', {}))
+            step_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
+            vis.log_step(
+                phase='student', step_idx=t,
+                pos=env.p[j].detach().cpu().numpy(),
+                target=env.p_target[j].detach().cpu().numpy(),
+                depth=depth_vis[j].detach().cpu().numpy(),
+                cam=cam_vals, scalars=step_scalars, main_img=main_img_np,
+                main_img_mode=main_img_mode, depth_img=depth_img_np,
+                raw_depth_img=scene_debug.get('images', {}).get('raw_depth_map'),
+                quality_img=scene_debug.get('images', {}).get('quality_map'),
+                invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
+                scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
+                drone_R=env.R[j].detach().cpu().numpy(),
+                cam_R=env.R_cam[j].detach().cpu().numpy(),
+                main_fov_half_tan=float(env._fov_x_half_tan),
+                main_hw=(int(env.height), int(env.width)),
+                depth_hw=(int(env.height), int(env.width)))
+
+        env.run(act_buffer[t], ctl_dt, target_v_raw)
+
+        # ── TBPTT chunk accumulation & backward ──
+        if tbptt_this_iter:
             chunk_end = ((t + 1) % chunk_steps == 0) or (t == args.timesteps - 1)
             if chunk_end and len(c_v_hist) > 0:
                 v_ck = torch.stack(c_v_hist); tv_ck = torch.stack(c_tv_hist)
@@ -648,35 +674,6 @@ def student_rollout(env, model, args, B, device, use_amp,
                     exposure.detach(),
                     gain.detach(),
                 ], dim=-1)
-
-        # Visualization
-        if should_vis_iter and args.vis_student and (t % max(args.vis_every_steps, 1) == 0):
-            j = int(min(max(args.vis_env_idx, 0), B - 1))
-            cam_vals = (float(power[j].detach().cpu()),
-                        float(exposure[j].detach().cpu()),
-                        float(gain[j].detach().cpu()))
-            main_img_np = None
-            main_img_mode = 'depth'
-            depth_img_np = depth_obs[j].detach().cpu().numpy()
-            scene_debug = env.export_last_diff_depth_debug(j)
-            step_scalars = dict(scene_debug.get('scalars', {}))
-            step_scalars['scene_id'] = float(getattr(env, 'current_scene_id', 0))
-            vis.log_step(
-                phase='student', step_idx=t,
-                pos=env.p[j].detach().cpu().numpy(),
-                target=env.p_target[j].detach().cpu().numpy(),
-                depth=depth_vis[j].detach().cpu().numpy(),
-                cam=cam_vals, scalars=step_scalars, main_img=main_img_np,
-                main_img_mode=main_img_mode, depth_img=depth_img_np,
-                raw_depth_img=scene_debug.get('images', {}).get('raw_depth_map'),
-                quality_img=scene_debug.get('images', {}).get('quality_map'),
-                invalid_img=scene_debug.get('images', {}).get('invalid_mask'),
-                scene_effect_img=scene_debug.get('images', {}).get('scene_effect_map'),
-                drone_R=env.R[j].detach().cpu().numpy(),
-                cam_R=env.R_cam[j].detach().cpu().numpy(),
-                main_fov_half_tan=float(env._fov_x_half_tan),
-                main_hw=(int(env.height), int(env.width)),
-                depth_hw=(int(env.height), int(env.width)))
 
     # ── End of rollout loop ──
     # Package results for the caller (train loop)

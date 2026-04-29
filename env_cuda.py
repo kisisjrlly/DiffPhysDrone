@@ -341,6 +341,7 @@ class Env:
             ('valid_threshold_base', 0.36),
             ('valid_bias_max', 0.35),
             ('valid_sigmoid_width', 0.08),
+            ('output_valid_threshold', 0.08),
         ])
         self._sensor_model_params = OrderedDict(self._sensor_model_base_params)
 
@@ -524,18 +525,19 @@ class Env:
         return {
             'sensor_regime_name': 'glare',
             'sensor_regime_id': 0.0,
-            'ambient_add': 4.8,
-            'active_drop': 0.78,
-            'active_recover': 1.25,
-            'glare_bias': 0.32,
-            'glare_exposure_gain': 4.60,
-            'glare_power_bias': 0.14,
-            'glare_power_gain': 1.90,
-            'power_rescue_bias': 0.14,
-            'power_rescue_exposure_gain': 0.58,
-            'power_quality_bonus': 1.35,
-            'quality_penalty': 1.35,
-            'valid_bias_scale': 0.08,
+            'ambient_add': 1.60,
+            'active_drop': 0.45,
+            'active_recover': 0.95,
+            'glare_bias': 0.22,
+            'glare_exposure_gain': 1.40,
+            'glare_power_bias': 0.20,
+            'glare_power_gain': 1.65,
+            'glare_penalty_max': 0.95,
+            'power_rescue_bias': 0.18,
+            'power_rescue_exposure_gain': 0.35,
+            'power_quality_bonus': 0.65,
+            'quality_penalty': 0.65,
+            'valid_bias_scale': 0.02,
             'hazard_mask_mix': 0.35,
         }
 
@@ -596,6 +598,10 @@ class Env:
         if abs(hi - lo) <= 1e-9:
             return torch.full((self.batch_size,), lo, device=self.device)
         return self._sample_scene_tensor(lo, hi)
+
+    def _sample_scene_profile_or_range(self, scene_name, key, fallback_range):
+        lo, hi = self._ordered_range(*fallback_range)
+        return self._sample_scene_profile(scene_name, key, lo, hi)
 
     def _merge_scene_effects(self, scene_name, effects):
         merged = dict(effects)
@@ -710,7 +716,16 @@ class Env:
             'scalars': {},
         }
 
-        for key in ('raw_depth_map', 'quality_map', 'invalid_mask', 'scene_effect_map', 'scene_mask'):
+        for key in (
+            'raw_depth_map',
+            'quality_pre_valid',
+            'quality_map',
+            'valid_prob_map',
+            'hard_valid_map',
+            'invalid_mask',
+            'scene_effect_map',
+            'scene_mask',
+        ):
             value = debug.get(key, None)
             if torch.is_tensor(value) and value.ndim >= 3 and value.shape[0] > 0:
                 idx = int(min(max(env_idx, 0), value.shape[0] - 1))
@@ -732,26 +747,26 @@ class Env:
             if self.sun_glare_randomize:
                 regime = str(scene_name)
                 if regime == 'specular':
-                    self._cam_ambient = self._sample_scene_tensor(*self.sun_glare_ambient_range)
-                    self._cam_dir_intensity = self._sample_scene_tensor(*self.sun_glare_dir_range)
-                    self._cam_fog_beta = self._sample_scene_tensor(*self.sun_glare_fog_beta_range)
-                    self._cam_airlight = self._sample_scene_tensor(*self.sun_glare_airlight_range)
-                    self._cam_mat_obstacle = self._sample_scene_tensor(*self.sun_glare_mat_obstacle_range)
-                    self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
+                    self._cam_ambient = self._sample_scene_profile_or_range(regime, 'cam_ambient', self.sun_glare_ambient_range)
+                    self._cam_dir_intensity = self._sample_scene_profile_or_range(regime, 'cam_dir_intensity', self.sun_glare_dir_range)
+                    self._cam_fog_beta = self._sample_scene_profile_or_range(regime, 'cam_fog_beta', self.sun_glare_fog_beta_range)
+                    self._cam_airlight = self._sample_scene_profile_or_range(regime, 'cam_airlight', self.sun_glare_airlight_range)
+                    self._cam_mat_obstacle = self._sample_scene_profile_or_range(regime, 'cam_mat_obstacle', self.sun_glare_mat_obstacle_range)
+                    self._cam_mat_spec = self._sample_scene_profile_or_range(regime, 'cam_mat_spec', self.sun_glare_mat_spec_range)
                 elif regime == 'dark':
-                    self._cam_ambient = self._sample_scene_tensor(0.012, 0.070)
-                    self._cam_dir_intensity = self._sample_scene_tensor(0.035, 0.18)
-                    self._cam_fog_beta = self._sample_scene_tensor(0.002, 0.020)
-                    self._cam_airlight = self._sample_scene_tensor(0.010, 0.070)
-                    self._cam_mat_obstacle = self._sample_scene_tensor(0.22, 0.48)
-                    self._cam_mat_spec = self._sample_scene_tensor(0.00, 0.035)
+                    self._cam_ambient = self._sample_scene_profile(regime, 'cam_ambient', 0.012, 0.070)
+                    self._cam_dir_intensity = self._sample_scene_profile(regime, 'cam_dir_intensity', 0.035, 0.18)
+                    self._cam_fog_beta = self._sample_scene_profile(regime, 'cam_fog_beta', 0.002, 0.020)
+                    self._cam_airlight = self._sample_scene_profile(regime, 'cam_airlight', 0.010, 0.070)
+                    self._cam_mat_obstacle = self._sample_scene_profile(regime, 'cam_mat_obstacle', 0.22, 0.48)
+                    self._cam_mat_spec = self._sample_scene_profile(regime, 'cam_mat_spec', 0.00, 0.035)
                 else:
-                    self._cam_ambient = self._sample_scene_tensor(*self.sun_glare_ambient_range)
-                    self._cam_dir_intensity = self._sample_scene_tensor(*self.sun_glare_dir_range)
-                    self._cam_fog_beta = self._sample_scene_tensor(*self.sun_glare_fog_beta_range)
-                    self._cam_airlight = self._sample_scene_tensor(*self.sun_glare_airlight_range)
-                    self._cam_mat_obstacle = self._sample_scene_tensor(*self.sun_glare_mat_obstacle_range)
-                    self._cam_mat_spec = self._sample_scene_tensor(*self.sun_glare_mat_spec_range)
+                    self._cam_ambient = self._sample_scene_profile_or_range(regime, 'cam_ambient', self.sun_glare_ambient_range)
+                    self._cam_dir_intensity = self._sample_scene_profile_or_range(regime, 'cam_dir_intensity', self.sun_glare_dir_range)
+                    self._cam_fog_beta = self._sample_scene_profile_or_range(regime, 'cam_fog_beta', self.sun_glare_fog_beta_range)
+                    self._cam_airlight = self._sample_scene_profile_or_range(regime, 'cam_airlight', self.sun_glare_airlight_range)
+                    self._cam_mat_obstacle = self._sample_scene_profile_or_range(regime, 'cam_mat_obstacle', self.sun_glare_mat_obstacle_range)
+                    self._cam_mat_spec = self._sample_scene_profile_or_range(regime, 'cam_mat_spec', self.sun_glare_mat_spec_range)
             else:
                 if scene_name == 'specular':
                     self._cam_ambient = self._sample_scene_profile(scene_name, 'cam_ambient', 0.10, 0.18)
@@ -846,13 +861,17 @@ class Env:
         fov_x_half = max(float(self._fov_x_half_tan), 1e-4)
         fov_y_half = max(fov_x_half * float(self.height) / max(float(self.width), 1.0), 1e-4)
         denom = cam_x.abs().clamp_min(1e-4)
+        # Keep the projection convention identical to the CUDA depth renderer:
+        # ray = R[:,0] - row * R[:,2] - col * R[:,1].
+        # Therefore a point with positive camera-left/up coordinates appears at
+        # negative image column/row coordinates in the rendered depth image.
         u = self._require_finite_tensor(
             'scene_anchor_proj_u',
-            (cam[:, 1] / (denom * fov_x_half)).clamp(-4.0, 4.0),
+            (-cam[:, 1] / (denom * fov_x_half)).clamp(-4.0, 4.0),
         )
         v = self._require_finite_tensor(
             'scene_anchor_proj_v',
-            (cam[:, 2] / (denom * fov_y_half)).clamp(-4.0, 4.0),
+            (-cam[:, 2] / (denom * fov_y_half)).clamp(-4.0, 4.0),
         )
         visible = (cam_x > 0.05).to(dtype)
         return u, v, cam_x, visible
@@ -943,6 +962,19 @@ class Env:
         mask_v = torch.sigmoid((half_v - (grid_v - center_v[:, None, None]).abs()) / softness)
         return mask_u * mask_v
 
+    def _soft_halo_mask(self, mask, radius_px=4, blur_px=7):
+        radius = max(int(radius_px), 0)
+        halo = mask
+        if radius > 0:
+            kernel = 2 * radius + 1
+            halo = F.max_pool2d(halo[:, None], kernel, stride=1, padding=radius)[:, 0]
+        blur = max(int(blur_px), 0)
+        if blur > 1:
+            if blur % 2 == 0:
+                blur += 1
+            halo = F.avg_pool2d(halo[:, None], blur, stride=1, padding=blur // 2)[:, 0]
+        return halo.clamp(0.0, 1.0)
+
     def _scene_sensor_adjustments(self, depth, power01, exposure_s, gain_scale, motion, R_cam_world):
         dtype = depth.dtype
         zeros = torch.zeros_like(depth)
@@ -968,69 +1000,106 @@ class Env:
 
         if scene_name in self.supported_scenarios:
             regime = str(fx.get('sensor_regime_name', scene_name))
-            use_sun = regime == 'glare' and 'sun_anchor' in fx
-            if use_sun:
-                center_u, center_v, _, visible = self._project_world_point(
-                    fx['sun_anchor'], R_cam_world, dtype)
-                sun_los = self._voxel_line_of_sight_mask(fx['sun_anchor'], dtype)
-                sun_mask = self._make_gaussian_mask(
-                    center_u, center_v,
-                    fx.get('sun_sigma_u', 0.30),
-                    fx.get('sun_sigma_v', 0.24),
-                    dtype,
-                )
-                strength = self._require_finite_tensor(
-                    'sun_glare/strength',
-                    sun_mask * visible[:, None, None] * sun_los[:, None, None],
-                    scene_name,
-                )
-            else:
-                strength = zeros
-                sun_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
-
             hazard_mask = zeros
+            aperture_mask = zeros
+            aperture_halo = zeros
             if 'hazard_center' in fx:
                 hazard_u, hazard_v, hazard_x, hazard_visible = self._project_world_point(
                     fx['hazard_center'], R_cam_world, dtype)
-                hazard_los = self._voxel_line_of_sight_mask(fx['hazard_center'], dtype)
                 half_u, half_v = self._project_rect_half_extents(
                     hazard_x,
                     fx.get('hazard_half_y', 0.32),
                     fx.get('hazard_half_z', 1.35),
                     dtype,
                 )
-                hazard_mask = self._make_box_mask(
+                hazard_box = self._make_box_mask(
                     hazard_u,
                     hazard_v,
                     half_u,
                     half_v,
                     fx.get('hazard_softness', 0.055),
                     dtype,
-                ) * hazard_visible[:, None, None] * hazard_los[:, None, None]
+                ) * hazard_visible[:, None, None]
+
+                # Per-pixel occlusion gate.  A scalar LOS check to the opening
+                # center lets the glare blob spill across foreground walls.
+                # Pixels that hit before the gate plane are shadowed; pixels
+                # that see past the gate plane are the actual aperture.
+                softness = max(float(fx.get('gate_occlusion_softness', 0.08)), 1e-4)
+                front_margin = float(fx.get('gate_occlusion_front_margin', 0.10))
+                aperture_margin = float(fx.get('sun_aperture_depth_margin', 0.10))
+                gate_visible = torch.sigmoid(
+                    (depth - (hazard_x[:, None, None] - front_margin)) / softness
+                )
+                through_aperture = torch.sigmoid(
+                    (depth - (hazard_x[:, None, None] + aperture_margin)) / softness
+                )
+                hazard_mask = hazard_box * gate_visible
+                aperture_mask = hazard_box * through_aperture
+                aperture_halo = self._soft_halo_mask(
+                    aperture_mask,
+                    radius_px=fx.get('sun_halo_radius_px', 4),
+                    blur_px=fx.get('sun_halo_blur_px', 7),
+                )
                 hazard_mask = self._require_finite_tensor('sun_glare/hazard_mask', hazard_mask, scene_name)
+                aperture_mask = self._require_finite_tensor('sun_glare/aperture_mask', aperture_mask, scene_name)
+                aperture_halo = self._require_finite_tensor('sun_glare/aperture_halo', aperture_halo, scene_name)
+                hazard_mass = hazard_box.sum(dim=(-2, -1)).clamp_min(1e-6)
+                hazard_los = (hazard_mask.sum(dim=(-2, -1)) / hazard_mass).clamp(0.0, 1.0).detach()
             else:
                 hazard_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
 
-            local_mask = (strength + hazard_mask * float(fx.get('hazard_mask_mix', 0.35))).clamp(0.0, 1.0)
+            use_sun = regime == 'glare' and 'sun_anchor' in fx
+            if use_sun:
+                center_u, center_v, _, visible = self._project_world_point(
+                    fx['sun_anchor'], R_cam_world, dtype)
+                sun_mask = self._make_gaussian_mask(
+                    center_u, center_v,
+                    fx.get('sun_sigma_u', 0.30),
+                    fx.get('sun_sigma_v', 0.24),
+                    dtype,
+                )
+                aperture_gate = (
+                    aperture_mask +
+                    float(fx.get('sun_halo_mix', 0.55)) * aperture_halo
+                ).clamp(0.0, 1.0)
+                strength = self._require_finite_tensor(
+                    'sun_glare/strength',
+                    sun_mask * aperture_gate * visible[:, None, None],
+                    scene_name,
+                )
+                aperture_mass = aperture_gate.sum(dim=(-2, -1)).clamp_min(1e-6)
+                sun_los = (strength.sum(dim=(-2, -1)) / aperture_mass).clamp(0.0, 1.0).detach()
+            else:
+                strength = zeros
+                sun_los = torch.ones((self.batch_size,), device=self.device, dtype=dtype)
+
             glare_penalty = torch.zeros_like(strength)
             extra_effect = torch.zeros_like(strength)
 
             if regime == 'glare':
                 effect_strength = strength
+                exposure01_est = (
+                    (exposure_s - float(self.cam_sem.exposure_t_min)) /
+                    max(float(self.cam_sem.exposure_t_span), 1e-6)
+                ).clamp(0.0, 1.0)
+                glare_den = (
+                    float(fx.get('glare_power_bias', 0.18)) +
+                    float(fx.get('glare_power_gain', 1.55)) * power01[:, None, None]
+                ).clamp_min(1e-4)
                 glare_penalty = self._require_finite_tensor(
                     'sun_glare/glare_penalty',
-                    effect_strength * (
-                        float(fx.get('glare_bias', 0.24)) +
-                        float(fx.get('glare_exposure_gain', 1.70)) * exposure_s[:, None, None]
-                    ) / (
-                        float(fx.get('glare_power_bias', 0.18)) +
-                        float(fx.get('glare_power_gain', 1.55)) * power01[:, None, None]
-                    ),
+                    (
+                        effect_strength * (
+                            float(fx.get('glare_bias', 0.24)) +
+                            float(fx.get('glare_exposure_gain', 1.70)) * exposure01_est[:, None, None]
+                        ) / glare_den
+                    ).clamp_max(float(fx.get('glare_penalty_max', 0.95))),
                     scene_name,
                 )
                 power_rescue = effect_strength * power01[:, None, None] / (
                     float(fx.get('power_rescue_bias', 0.22)) +
-                    float(fx.get('power_rescue_exposure_gain', 0.85)) * exposure_s[:, None, None]
+                    float(fx.get('power_rescue_exposure_gain', 0.85)) * exposure01_est[:, None, None]
                 )
                 adj['ambient_add'] = adj['ambient_add'] + strength * float(fx.get('ambient_add', 2.2))
                 adj['active_mul'] = adj['active_mul'] * (
@@ -1106,11 +1175,24 @@ class Env:
                 )
                 adj['quality_add'] = adj['quality_add'] + dark_mask * dark_bonus[:, None, None]
 
-            adj['debug_scene_mask'] = hazard_mask
+            if regime == 'glare':
+                local_mask = (
+                    strength +
+                    float(fx.get('hazard_mask_mix', 0.35)) * aperture_halo
+                ).clamp(0.0, 1.0)
+                debug_scene_mask = aperture_mask
+            else:
+                local_mask = (
+                    strength +
+                    hazard_mask * float(fx.get('hazard_mask_mix', 0.35))
+                ).clamp(0.0, 1.0)
+                debug_scene_mask = hazard_mask
+
+            adj['debug_scene_mask'] = debug_scene_mask
             debug_effect = (glare_penalty + extra_effect + local_mask * 0.10).clamp(0.0, 1.0)
             adj['debug_effect_map'] = debug_effect
             adj['debug_scalars'] = {
-                'scene_mask_mean': self._spatial_mean(hazard_mask),
+                'scene_mask_mean': self._spatial_mean(debug_scene_mask),
                 'scene_effect_mean': self._spatial_mean(debug_effect),
                 'sensor_regime_id': torch.full(
                     (self.batch_size,),
@@ -1130,7 +1212,7 @@ class Env:
                 ),
                 'decision_open_slot_id': torch.full(
                     (self.batch_size,),
-                    float(fx.get('decision_open_side_id', 0.0)),
+                    float(fx.get('decision_open_slot_id', fx.get('decision_open_side_id', 0.0))),
                     device=self.device,
                     dtype=dtype,
                 ),
@@ -1194,6 +1276,7 @@ class Env:
             'hazard_softness': 0.045,
             'decision_open_side': str(open_slot['side']),
             'decision_open_side_id': float(open_slot['id']),
+            'decision_open_slot_id': float(open_slot['id']),
             'decision_open_slot_name': str(open_slot['name']),
             'decision_open_slot_y': float(gap_y_center),
             'geometry_occluder_x': float(occluder_x),
@@ -1205,18 +1288,19 @@ class Env:
         }
         if sensor_regime == 'glare':
             effects.update({
-                'ambient_add': 4.2,
-                'active_drop': 0.72,
+                'ambient_add': 1.60,
+                'active_drop': 0.45,
                 'active_recover': 0.95,
-                'glare_bias': 0.30,
-                'glare_exposure_gain': 2.30,
-                'glare_power_bias': 0.16,
-                'glare_power_gain': 1.45,
-                'power_rescue_bias': 0.16,
-                'power_rescue_exposure_gain': 0.60,
-                'power_quality_bonus': 0.78,
-                'quality_penalty': 2.75,
-                'valid_bias_scale': 0.16,
+                'glare_bias': 0.22,
+                'glare_exposure_gain': 1.40,
+                'glare_power_bias': 0.20,
+                'glare_power_gain': 1.65,
+                'glare_penalty_max': 0.95,
+                'power_rescue_bias': 0.18,
+                'power_rescue_exposure_gain': 0.35,
+                'power_quality_bonus': 0.65,
+                'quality_penalty': 0.65,
+                'valid_bias_scale': 0.02,
                 'sun_anchor': [3.00, gap_y_center + sun_y_offset, 1.65 + sun_z_offset],
                 'sun_y_offset': sun_y_offset,
                 'sun_sigma_u': sun_sigma_u,
@@ -1496,6 +1580,7 @@ class Env:
             - sp('quality_far_penalty') * far
         )
         quality = (quality + scene_adj['quality_add']).clamp(0.0, 1.0)
+        quality_pre_valid = quality
 
         v_cam = torch.einsum('bij,bj->bi', R_cam_world.transpose(1, 2), self.v)
         motion_h = v_cam[:, 1].abs()
@@ -1556,13 +1641,20 @@ class Env:
         noisy_depth = noisy_depth.clamp(min_valid, float(max_range))
         valid_threshold = sp('valid_threshold_base') + scene_adj['valid_bias'].clamp(0.0, sp('valid_bias_max'))
         valid = torch.sigmoid((quality - valid_threshold) / sp('valid_sigmoid_width'))
-        noisy_depth = noisy_depth * valid
-        quality = quality * valid
+        hard_valid = (valid > sp('output_valid_threshold')).to(noisy_depth.dtype)
+        valid_st = hard_valid.detach() - valid.detach() + valid
+        noisy_depth = noisy_depth * valid_st
+        quality = quality * valid_st
         scene_mask = scene_adj.get('debug_scene_mask', torch.zeros_like(depth))
         scene_effect_map = scene_adj.get('debug_effect_map', torch.zeros_like(depth))
-        invalid_mask = (1.0 - valid).clamp(0.0, 1.0)
+        invalid_mask = (1.0 - valid_st).clamp(0.0, 1.0)
         debug_scalars = dict(scene_adj.get('debug_scalars', {}))
-        train_aux = {}
+        train_aux = {
+            'quality_pre_valid': quality_pre_valid,
+            'valid_prob_map': valid,
+            'hard_valid_map': hard_valid,
+            'valid_st_map': valid_st,
+        }
         if self.current_scene_name in self.supported_scenarios:
             glare_mass = scene_mask.sum(dim=(-2, -1)).clamp_min(1e-6)
             glare_quality = (quality * scene_mask).sum(dim=(-2, -1)) / glare_mass
@@ -1585,7 +1677,10 @@ class Env:
         self._store_last_diff_depth_debug({
             'scene_name': self.current_scene_name,
             'raw_depth_map': depth,
+            'quality_pre_valid': quality_pre_valid,
             'quality_map': quality,
+            'valid_prob_map': valid,
+            'hard_valid_map': hard_valid,
             'invalid_mask': invalid_mask,
             'scene_effect_map': scene_effect_map,
             'scene_mask': scene_mask,
