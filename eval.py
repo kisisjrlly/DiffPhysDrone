@@ -118,7 +118,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
             start=env.p[j].detach().cpu().numpy(),
             target=env.p_target[j].detach().cpu().numpy(),
             scene_name=getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', None)),
-            scene_effects=getattr(env, 'current_scene_effects', None),
+            scene_effects=env.get_scene_effects_for_env(j) if hasattr(env, 'get_scene_effects_for_env') else getattr(env, 'current_scene_effects', None),
             step_idx=episode_step_base,
         )
 
@@ -328,7 +328,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 'sensor_regime_id': float(scene_debug.get('scalars', {}).get('sensor_regime_id', -1.0)),
                 'decision_open_side_id': float(scene_debug.get('scalars', {}).get('decision_open_side_id', 0.0)),
                 'decision_open_slot_id': float(scene_debug.get('scalars', {}).get('decision_open_slot_id', 0.0)),
-                'zone_enter_x': float(getattr(env, 'current_scene_effects', {}).get('zone_enter_x', 0.0)),
+                'zone_enter_x': float((env.get_scene_effects_for_env(j) if hasattr(env, 'get_scene_effects_for_env') else getattr(env, 'current_scene_effects', {})).get('zone_enter_x', 0.0)),
                 'dist_to_goal_m': float((env.p_target[j] - env.p[j]).norm(2).detach().cpu().item()),
                 'collided': float(collided),
                 'depth_input_mode': depth_input_mode,

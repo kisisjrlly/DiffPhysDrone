@@ -1001,7 +1001,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 start=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 scene_name=getattr(env, 'current_scene_tag', getattr(env, 'current_scene_name', None)),
-                scene_effects=getattr(env, 'current_scene_effects', None))
+                scene_effects=env.get_scene_effects_for_env(j) if hasattr(env, 'get_scene_effects_for_env') else getattr(env, 'current_scene_effects', None))
 
         # Teacher phase
         u_star, y_star, u_star_cam = None, None, None

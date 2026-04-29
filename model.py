@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from utils import g_decay
 
@@ -51,9 +52,11 @@ class Model(nn.Module):
         # 如果启用了相机状态观测，物理观测维度需要增加 3 维
         actual_obs_dim = dim_obs + (3 if self.include_camera_state_in_obs else 0)
 
-        # diff_depth-only：单深度分支编码器
+        # diff_depth-only：双通道深度分支编码器。
+        # channel 0: inverse depth / near obstacle cue
+        # channel 1: metric range / far opening cue
         self.stem = make_stem(
-            1,
+            2,
             192,
             small_input_friendly=True,
         )
@@ -125,9 +128,10 @@ class Model(nn.Module):
     def _depth_pipeline(self, depth_like: torch.Tensor):
         """
         diff_depth 深度输入流水线：
-        1) 深度反转并归一化（近处值更大，范围 [depth_min_valid~depth_max_range] -> [0,1]）
-        2) 使用 depth_nn_width/depth_nn_height 自适应下采样到策略输入尺寸
-        3) 保留无效深度为 0，避免被误当作近距离障碍物
+        1) 近障碍通道：深度反转并归一化，近处值更大。
+        2) 远处/开口通道：metric range 归一化，远处值更大。
+        3) 两个通道使用不同 pooling：近障碍用 max-pool，开口 cue 用 avg-pool。
+        4) 保留无效深度为 0，避免被误当作近距离障碍物或开口。
         """
         # 支持 (B,H,W) 或 (B,1,H,W)
         d = depth_like
@@ -143,22 +147,28 @@ class Model(nn.Module):
         inv = 1.0 / d_valid
         inv_min = 1.0 / max_depth
         inv_max = 1.0 / min_depth
-        x = (inv - inv_min) / (inv_max - inv_min)
-        x = x.clamp(0.0, 1.0) * valid.float()
+        near = ((inv - inv_min) / (inv_max - inv_min)).clamp(0.0, 1.0) * valid.float()
+        far = ((d_valid - min_depth) / (max_depth - min_depth)).clamp(0.0, 1.0) * valid.float()
 
         target_h = max(int(self.depth_nn_height), 1)
         target_w = max(int(self.depth_nn_width), 1)
-        up_h = max(int(x.shape[-2]), target_h)
-        up_w = max(int(x.shape[-1]), target_w)
-        if up_h != int(x.shape[-2]) or up_w != int(x.shape[-1]):
-            x = torch.nn.functional.interpolate(
-                x[:, None],
+        up_h = max(int(near.shape[-2]), target_h)
+        up_w = max(int(near.shape[-1]), target_w)
+        if up_h != int(near.shape[-2]) or up_w != int(near.shape[-1]):
+            near = F.interpolate(
+                near[:, None],
+                size=(up_h, up_w),
+                mode='nearest',
+            )[:, 0]
+            far = F.interpolate(
+                far[:, None],
                 size=(up_h, up_w),
                 mode='nearest',
             )[:, 0]
 
-        x = torch.nn.functional.adaptive_max_pool2d(x[:, None], (target_h, target_w))
-        return x
+        near = F.adaptive_max_pool2d(near[:, None], (target_h, target_w))
+        far = F.adaptive_avg_pool2d(far[:, None], (target_h, target_w))
+        return torch.cat([near, far], dim=1)
 
     def preprocess_depth_input(self, depth_obs=None, add_noise=False):
         """
@@ -188,11 +198,12 @@ class Model(nn.Module):
             inv = 1.0 / safe_depth
             inv_min = 1.0 / max_depth
             inv_max = 1.0 / min_depth
-            x_depth = ((inv - inv_min) / (inv_max - inv_min)).clamp(0.0, 1.0) * valid.float()
+            near = ((inv - inv_min) / (inv_max - inv_min)).clamp(0.0, 1.0) * valid.float()
+            far = ((safe_depth - min_depth) / (max_depth - min_depth)).clamp(0.0, 1.0) * valid.float()
+            x_depth = torch.stack([near, far], dim=1)
             if add_noise:
                 x_depth = (x_depth + torch.randn_like(x_depth) * 0.01).clamp(0.0, 1.0)
             x_depth = x_depth * 2.0 - 1.0
-            x_depth = self._as_bchw(x_depth)
 
         return x_depth
 

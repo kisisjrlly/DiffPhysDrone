@@ -481,6 +481,22 @@ class Env:
             raise RuntimeError(f"invalid sun_glare_eval_slot={self.sun_glare_eval_slot}")
         return dict(random.choice(self._sun_glare_opening_candidates()))
 
+    def _choose_sun_glare_open_slots_for_batch(self, batch_size):
+        """Return a balanced per-env slot schedule for one reset."""
+        batch_size = int(batch_size)
+        if batch_size <= 0:
+            return []
+        if self.eval_mode and self.sun_glare_eval_slot is not None:
+            return [self._choose_sun_glare_open_slot() for _ in range(batch_size)]
+
+        candidates = [dict(item) for item in self._sun_glare_opening_candidates()]
+        slots = []
+        while len(slots) < batch_size:
+            chunk = [dict(item) for item in candidates]
+            random.shuffle(chunk)
+            slots.extend(chunk)
+        return slots[:batch_size]
+
     def _choose_sun_glare_open_side(self):
         """
         Backward-compatible helper retained for old analysis scripts.
@@ -586,6 +602,79 @@ class Env:
         if not effect_payload and isinstance(payload.get('scene_profiles'), dict):
             effect_payload = payload.get('scene_profiles', {})
         self.scene_effect_overrides = self._normalize_profile_dict(effect_payload)
+
+    def _merge_batch_scene_effects(self, effects_list):
+        if not effects_list:
+            return {}
+
+        def _same_scalar(values):
+            first = values[0]
+            return all(v == first for v in values[1:])
+
+        def _same_numeric(values):
+            first = torch.as_tensor(values[0], dtype=torch.float32)
+            for value in values[1:]:
+                other = torch.as_tensor(value, dtype=torch.float32)
+                if first.shape != other.shape or not torch.allclose(first, other):
+                    return False
+            return True
+
+        merged = {}
+        keys = []
+        seen = set()
+        for effects in effects_list:
+            for key in effects.keys():
+                if key not in seen:
+                    seen.add(key)
+                    keys.append(key)
+
+        for key in keys:
+            values = [effects.get(key, None) for effects in effects_list]
+            if all(isinstance(v, str) for v in values):
+                merged[key] = values[0] if _same_scalar(values) else list(values)
+                continue
+
+            if all(isinstance(v, (int, float, bool)) for v in values):
+                merged[key] = float(values[0]) if _same_numeric(values) else torch.tensor(
+                    values, device=self.device, dtype=torch.float32)
+                continue
+
+            try:
+                if _same_numeric(values):
+                    same = torch.as_tensor(values[0], device=self.device, dtype=torch.float32)
+                    merged[key] = float(same.item()) if same.ndim == 0 else same
+                else:
+                    merged[key] = torch.as_tensor(values, device=self.device, dtype=torch.float32)
+                continue
+            except Exception:
+                pass
+
+            merged[key] = values[0] if _same_scalar(values) else list(values)
+        return merged
+
+    def get_scene_effects_for_env(self, env_idx=0):
+        effects = self.current_scene_effects or {}
+        if not effects:
+            return {}
+        idx = int(min(max(env_idx, 0), max(self.batch_size - 1, 0)))
+        vector_keys = {'hazard_center', 'sun_anchor'}
+        out = {}
+        for key, value in effects.items():
+            if torch.is_tensor(value):
+                v = value.detach()
+                if v.ndim >= 2 and v.shape[0] == self.batch_size:
+                    v = v[idx]
+                elif v.ndim == 1 and v.shape[0] == self.batch_size and key not in vector_keys:
+                    v = v[idx]
+                if v.ndim == 0:
+                    out[key] = float(v.detach().cpu().item())
+                else:
+                    out[key] = v.detach().cpu().tolist()
+            elif isinstance(value, (list, tuple)) and len(value) == self.batch_size:
+                out[key] = value[idx]
+            else:
+                out[key] = value
+        return out
 
     def _scene_profile_range(self, scene_name, key, default_lo, default_hi):
         profile = self.scene_sensor_profile_overrides.get(scene_name, {})
@@ -949,17 +1038,37 @@ class Env:
         fov_x_half = max(float(self._fov_x_half_tan), 1e-4)
         fov_y_half = max(fov_x_half * float(self.height) / max(float(self.width), 1.0), 1e-4)
         forward = cam_x.abs().clamp_min(0.25)
-        half_u = (float(half_y) / (forward * fov_x_half)).clamp(0.04, 1.25)
-        half_v = (float(half_z) / (forward * fov_y_half)).clamp(0.04, 1.25)
+        half_y_t = torch.as_tensor(half_y, device=self.device, dtype=dtype)
+        half_z_t = torch.as_tensor(half_z, device=self.device, dtype=dtype)
+        if half_y_t.ndim == 0:
+            half_y_t = half_y_t.expand(self.batch_size)
+        elif half_y_t.ndim == 1 and half_y_t.shape[0] == 1:
+            half_y_t = half_y_t.expand(self.batch_size)
+        if half_z_t.ndim == 0:
+            half_z_t = half_z_t.expand(self.batch_size)
+        elif half_z_t.ndim == 1 and half_z_t.shape[0] == 1:
+            half_z_t = half_z_t.expand(self.batch_size)
+        half_u = (half_y_t / (forward * fov_x_half)).clamp(0.04, 1.25)
+        half_v = (half_z_t / (forward * fov_y_half)).clamp(0.04, 1.25)
         return half_u.to(dtype=dtype), half_v.to(dtype=dtype)
 
     def _make_gaussian_mask(self, center_u, center_v, sigma_u, sigma_v, dtype):
         grid_u = self._img_grid_u.to(dtype=dtype)
         grid_v = self._img_grid_v.to(dtype=dtype)
-        sigma_u = max(float(sigma_u), 1e-3)
-        sigma_v = max(float(sigma_v), 1e-3)
-        du = (grid_u - center_u[:, None, None]) / sigma_u
-        dv = (grid_v - center_v[:, None, None]) / sigma_v
+        sigma_u_t = torch.as_tensor(sigma_u, device=self.device, dtype=dtype)
+        sigma_v_t = torch.as_tensor(sigma_v, device=self.device, dtype=dtype)
+        if sigma_u_t.ndim == 0:
+            sigma_u_t = sigma_u_t.expand(self.batch_size)
+        elif sigma_u_t.ndim == 1 and sigma_u_t.shape[0] == 1:
+            sigma_u_t = sigma_u_t.expand(self.batch_size)
+        if sigma_v_t.ndim == 0:
+            sigma_v_t = sigma_v_t.expand(self.batch_size)
+        elif sigma_v_t.ndim == 1 and sigma_v_t.shape[0] == 1:
+            sigma_v_t = sigma_v_t.expand(self.batch_size)
+        sigma_u_t = sigma_u_t.clamp_min(1e-3)
+        sigma_v_t = sigma_v_t.clamp_min(1e-3)
+        du = (grid_u - center_u[:, None, None]) / sigma_u_t[:, None, None]
+        dv = (grid_v - center_v[:, None, None]) / sigma_v_t[:, None, None]
         return torch.exp(-0.5 * (du.square() + dv.square()))
 
     def _make_box_mask(self, center_u, center_v, half_u, half_v, softness, dtype):
@@ -989,6 +1098,16 @@ class Env:
         dtype = depth.dtype
         zeros = torch.zeros_like(depth)
         ones = torch.ones_like(depth)
+
+        def _effect_tensor(key, default=0.0):
+            value = fx.get(key, default)
+            t = torch.as_tensor(value, device=self.device, dtype=dtype)
+            if t.ndim == 0:
+                return t.expand(self.batch_size)
+            if t.ndim == 1 and t.shape[0] == 1:
+                return t.expand(self.batch_size)
+            return t
+
         adj = {
             'ambient_mul': ones,
             'ambient_add': zeros,
@@ -1239,33 +1358,21 @@ class Env:
                 'hazard_mask_mean': self._spatial_mean(hazard_mask),
                 'sun_los_mean': sun_los.detach(),
                 'hazard_los_mean': hazard_los.detach(),
-                'decision_open_side_id': torch.full(
-                    (self.batch_size,),
-                    float(fx.get('decision_open_side_id', 0.0)),
-                    device=self.device,
-                    dtype=dtype,
+                'decision_open_side_id': _effect_tensor('decision_open_side_id', 0.0),
+                'decision_open_slot_id': _effect_tensor(
+                    'decision_open_slot_id',
+                    fx.get('decision_open_side_id', 0.0),
                 ),
-                'decision_open_slot_id': torch.full(
-                    (self.batch_size,),
-                    float(fx.get('decision_open_slot_id', fx.get('decision_open_side_id', 0.0))),
-                    device=self.device,
-                    dtype=dtype,
-                ),
-                'decision_open_slot_y': torch.full(
-                    (self.batch_size,),
-                    float(fx.get('decision_open_slot_y', 0.0)),
-                    device=self.device,
-                    dtype=dtype,
-                ),
+                'decision_open_slot_y': _effect_tensor('decision_open_slot_y', 0.0),
             }
 
         return adj
 
-    def _build_scene_geometry(self, scene_name):
+    def _build_scene_geometry(self, scene_name, open_slot=None):
         if scene_name not in self.supported_scenarios:
             raise ValueError(f'未知场景: {scene_name}')
 
-        open_slot = self._choose_sun_glare_open_slot()
+        open_slot = dict(open_slot) if open_slot is not None else self._choose_sun_glare_open_slot()
         sensor_regime = scene_name
         gap_y_center = float(open_slot['y'])
         start_y = 0.0
@@ -1310,7 +1417,7 @@ class Env:
             'hazard_half_z': 1.20,
             'hazard_softness': 0.045,
             'decision_open_side': str(open_slot['side']),
-            'decision_open_side_id': float(open_slot['id']),
+            'decision_open_side_id': -1.0 if str(open_slot['side']) == 'left' else 1.0,
             'decision_open_slot_id': float(open_slot['id']),
             'decision_open_slot_name': str(open_slot['name']),
             'decision_open_slot_y': float(gap_y_center),
@@ -1395,8 +1502,15 @@ class Env:
 
         self.n_drones_per_group = 1
         self.drone_radius = self.fixed_drone_radius
-        voxels, start, goal, max_speed, margin, effects = self._build_scene_geometry(scene_name)
+        slots = self._choose_sun_glare_open_slots_for_batch(B)
+        geometries = [self._build_scene_geometry(scene_name, open_slot=slot) for slot in slots]
         self._set_scene_name(scene_name)
+        voxels = torch.stack([item[0] for item in geometries], dim=0).clone()
+        start = torch.stack([item[1] for item in geometries], dim=0).clone()
+        goal = torch.stack([item[2] for item in geometries], dim=0).clone()
+        max_speed = float(geometries[0][3])
+        margin = float(geometries[0][4])
+        effects = self._merge_batch_scene_effects([item[5] for item in geometries])
         self.current_scene_effects = effects
         self.max_speed = torch.full((B, 1), max_speed, device=device)
         self.margin = torch.full((B,), margin, device=device)
@@ -1410,10 +1524,10 @@ class Env:
         self.balls = torch.empty((B, 0, 4), device=device)
         self.cyl = torch.empty((B, 0, 3), device=device)
         self.cyl_h = torch.empty((B, 0, 3), device=device)
-        self.voxels = voxels.unsqueeze(0).repeat(B, 1, 1).clone()
+        self.voxels = voxels
 
-        self.p = start.unsqueeze(0).repeat(B, 1).clone()
-        self.p_target = goal.unsqueeze(0).repeat(B, 1).clone()
+        self.p = start
+        self.p_target = goal
 
         self.v = torch.zeros((B, 3), device=device)
         self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * self.fixed_wind_scale
