@@ -102,12 +102,18 @@ class Model(nn.Module):
             self.fc_intent.weight.data.mul_(0.01)
             self.fc_intent.bias.data.zero_()
 
-        # 可微传感头（绝对参数）。camera head 与 flight head 共用 GRU hidden，
-        # 即 depth image + full state -> fused GRU hidden -> action/camera heads。
-        self.fc_cam = nn.Linear(192, 3, bias=True)
-        self.fc_cam.weight.data.mul_(0.01)
-        # 初始化偏置为 0，这样经过 sigmoid 后初始输出在 0.5 附近。
-        self.fc_cam.bias.data.zero_()
+        # Camera controller: image feature + current camera state only.
+        # It intentionally does not consume full odometry/target velocity, so
+        # camera changes must be driven by perceived image degradation.
+        self.cam_state_proj = nn.Linear(3, 64)
+        self.cam_state_norm = nn.LayerNorm(64)
+        self.fc_cam = nn.Sequential(
+            nn.Linear(192 + 64, 128, bias=True),
+            nn.LeakyReLU(0.05),
+            nn.Linear(128, 3, bias=True),
+        )
+        self.fc_cam[-1].weight.data.mul_(0.01)
+        self.fc_cam[-1].bias.data.zero_()
 
         # 全局使用的激活函数
         self.act = nn.LeakyReLU(0.05)
@@ -246,7 +252,12 @@ class Model(nn.Module):
         raw = self.fc(self.act(hx))
 
         act = raw
-        cam_raw = self.fc_cam(self.act(hx))
+        if self.include_camera_state_in_obs:
+            cam_state = v[:, -3:]
+        else:
+            cam_state = torch.zeros(v.shape[0], 3, device=v.device, dtype=v.dtype)
+        cam_feat = self.cam_state_norm(self.cam_state_proj(cam_state))
+        cam_raw = self.fc_cam(torch.cat([img_feat, cam_feat], dim=1))
         cam_params = torch.sigmoid(cam_raw)  # (Batch, 3)
         if return_intent and self.use_policy_intent:
             intent_raw = self.fc_intent(self.act(hx))

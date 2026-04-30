@@ -238,7 +238,8 @@ def _to_float(value, default: float = float("nan")) -> float:
 
 
 def _local_mask_metrics(depth_np: np.ndarray, quality_np: np.ndarray | None,
-                        mask_np: np.ndarray | None, min_valid: float) -> dict[str, float]:
+                        mask_np: np.ndarray | None, min_valid: float,
+                        raw_depth_np: np.ndarray | None = None) -> dict[str, float]:
     valid = depth_np > (float(min_valid) + 1e-6)
     if mask_np is not None and np.asarray(mask_np).size == depth_np.size:
         mask = np.asarray(mask_np, dtype=np.float32) > 0.05
@@ -263,6 +264,32 @@ def _local_mask_metrics(depth_np: np.ndarray, quality_np: np.ndarray | None,
         out["local_quality_mean"] = float(np.asarray(quality_np)[mask].mean())
     else:
         out["local_quality_mean"] = float("nan")
+
+    if raw_depth_np is not None and np.asarray(raw_depth_np).shape == depth_np.shape:
+        raw = np.asarray(raw_depth_np, dtype=np.float32)
+        padded = np.pad(raw, ((1, 1), (1, 1)), mode="edge")
+        windows = [
+            padded[dy:dy + raw.shape[0], dx:dx + raw.shape[1]]
+            for dy in range(3) for dx in range(3)
+        ]
+        local_max = np.maximum.reduce(windows)
+        local_min = np.minimum.reduce(windows)
+        edge = np.clip((local_max - local_min) / np.maximum(raw + 0.18, 1e-6), 0.0, 1.0)
+        edge_mask = mask & (edge > 0.08)
+        if np.any(edge_mask):
+            out["local_edge_area"] = float(edge_mask.mean())
+            out["local_edge_fill"] = float((valid & edge_mask).sum() / max(edge_mask.sum(), 1))
+            out["local_edge_quality_mean"] = (
+                float(np.asarray(quality_np)[edge_mask].mean()) if quality_np is not None else float("nan")
+            )
+        else:
+            out["local_edge_area"] = 0.0
+            out["local_edge_fill"] = 0.0
+            out["local_edge_quality_mean"] = float("nan")
+    else:
+        out["local_edge_area"] = 0.0
+        out["local_edge_fill"] = 0.0
+        out["local_edge_quality_mean"] = float("nan")
     return out
 
 
@@ -283,6 +310,7 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
 
     depth_np = depth[0].detach().cpu().numpy()
     quality_np = None if quality is None else quality[0].detach().cpu().numpy()
+    raw_depth_np = images.get("raw_depth_map")
     invalid_np = images.get("invalid_mask")
     effect_np = images.get("scene_effect_map")
     scene_mask_np = images.get("scene_mask")
@@ -327,10 +355,11 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "spec_bloom_mean": _to_float(scalars.get("spec_bloom_mean"), 0.0),
         "sensor_regime_id": _to_float(scalars.get("sensor_regime_id"), -1.0),
     }
-    row.update(_local_mask_metrics(depth_np, quality_np, scene_mask_np, args.depth_min_valid))
+    row.update(_local_mask_metrics(depth_np, quality_np, scene_mask_np, args.depth_min_valid, raw_depth_np))
 
     maps = {
         "depth": depth_np,
+        "raw_depth": raw_depth_np,
         "quality": quality_np,
         "invalid": invalid_np,
         "scene_effect": effect_np,
@@ -396,30 +425,37 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         return
 
     n = len(rendered)
-    fig, axes = plt.subplots(n, 5, figsize=(17, max(2.25 * n, 3.0)), squeeze=False)
+    fig, axes = plt.subplots(n, 6, figsize=(20, max(2.25 * n, 3.0)), squeeze=False)
     depth_cmap = plt.cm.viridis.copy()
     depth_cmap.set_bad("black")
     first = rendered[0][0]
     for r, (row, maps) in enumerate(rendered):
         depth = maps["depth"].astype(np.float32)
+        raw_depth = maps.get("raw_depth")
+        raw_show = None if raw_depth is None else raw_depth.astype(np.float32).copy()
         depth_show = depth.copy()
+        if raw_show is not None:
+            raw_show[raw_show <= float(args.depth_min_valid) + 1e-6] = np.nan
         depth_show[depth <= float(args.depth_min_valid) + 1e-6] = np.nan
         quality = maps["quality"]
         invalid = maps["invalid"]
         effect = maps["scene_effect"]
         mask = maps["scene_mask"]
 
-        axes[r, 0].imshow(depth_show, vmin=args.depth_min_valid, vmax=args.depth_max_range, cmap=depth_cmap)
-        axes[r, 0].set_title(f"{row['setting']} depth")
-        axes[r, 1].imshow(np.zeros_like(depth) if quality is None else quality, vmin=0, vmax=1, cmap="magma")
-        axes[r, 1].set_title(f"quality {row['quality_mean']:.2f}")
-        axes[r, 2].imshow(np.zeros_like(depth) if invalid is None else invalid, vmin=0, vmax=1, cmap="gray")
-        axes[r, 2].set_title(f"invalid {row['invalid_rate']:.2f}")
-        axes[r, 3].imshow(np.zeros_like(depth) if effect is None else effect, vmin=0, vmax=1, cmap="inferno")
-        axes[r, 3].set_title(f"effect {row['scene_effect_mean']:.2f}")
-        axes[r, 4].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
-        axes[r, 4].set_title(f"local fill {row['local_fill']:.2f}")
-        for c in range(5):
+        axes[r, 0].imshow(np.zeros_like(depth) if raw_show is None else raw_show,
+                          vmin=args.depth_min_valid, vmax=args.depth_max_range, cmap=depth_cmap)
+        axes[r, 0].set_title(f"{row['setting']} raw")
+        axes[r, 1].imshow(depth_show, vmin=args.depth_min_valid, vmax=args.depth_max_range, cmap=depth_cmap)
+        axes[r, 1].set_title("depth obs")
+        axes[r, 2].imshow(np.zeros_like(depth) if quality is None else quality, vmin=0, vmax=1, cmap="magma")
+        axes[r, 2].set_title(f"quality {row['quality_mean']:.2f}")
+        axes[r, 3].imshow(np.zeros_like(depth) if invalid is None else invalid, vmin=0, vmax=1, cmap="gray")
+        axes[r, 3].set_title(f"invalid {row['invalid_rate']:.2f}")
+        axes[r, 4].imshow(np.zeros_like(depth) if effect is None else effect, vmin=0, vmax=1, cmap="inferno")
+        axes[r, 4].set_title(f"effect {row['scene_effect_mean']:.2f}")
+        axes[r, 5].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
+        axes[r, 5].set_title(f"fill {row['local_fill']:.2f} edge {row.get('local_edge_fill', 0.0):.2f}")
+        for c in range(6):
             axes[r, c].set_xticks([])
             axes[r, c].set_yticks([])
         axes[r, 0].set_ylabel(

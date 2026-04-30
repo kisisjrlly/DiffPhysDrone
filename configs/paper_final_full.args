@@ -33,8 +33,8 @@
 --loss_v_window 12
 --coef_d_acc 0.1
 --coef_d_jerk 0.2
---coef_obj_avoidance 0.5
---coef_collide 10.0
+--coef_obj_avoidance 1.0
+--coef_collide 20.0
 
 --cam_power_baseline 0.5
 --coef_cam_smooth 0

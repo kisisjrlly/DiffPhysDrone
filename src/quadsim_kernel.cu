@@ -1205,24 +1205,35 @@ __device__ __forceinline__ void d455_quality_effect_core(
         const scalar_t rescue_window = sigmoid_d((scalar_t(0.30) - e01) / scalar_t(0.06));
         const scalar_t joint_sat = sigmoid_d((p - scalar_t(0.65)) / scalar_t(0.08)) *
                                    sigmoid_d((e01 - scalar_t(0.32)) / scalar_t(0.06));
-        const scalar_t penalty = mask * (scalar_t(0.88) * overexp + scalar_t(0.28) * joint_sat);
-        const scalar_t bonus = mask * rescue * rescue_window * scalar_t(0.24);
+        const scalar_t under_power = sigmoid_d((scalar_t(0.45) - p) / scalar_t(0.08));
+        const scalar_t penalty = mask * (
+            scalar_t(0.88) * overexp
+            + scalar_t(0.28) * joint_sat
+            + scalar_t(0.42) * under_power * rescue_window);
+        const scalar_t bonus = mask * rescue * rescue_window * scalar_t(0.30);
         quality = quality - penalty + bonus;
         effect = penalty;
     } else if (regime_id == 1) {
-        const scalar_t wash = sigmoid_d((p - scalar_t(0.30)) / scalar_t(0.055)) *
-                              (scalar_t(0.62) + scalar_t(0.38) * sigmoid_d((e01 - scalar_t(0.22)) / scalar_t(0.07)));
-        const scalar_t safe = sigmoid_d((scalar_t(0.40) - p) / scalar_t(0.075));
-        const scalar_t penalty = mask * wash * scalar_t(1.08);
-        const scalar_t bonus = mask * safe * scalar_t(0.30);
+        const scalar_t power_bloom = sigmoid_d((p - scalar_t(0.30)) / scalar_t(0.055)) *
+                                     (scalar_t(0.62) + scalar_t(0.38) * sigmoid_d((e01 - scalar_t(0.22)) / scalar_t(0.07)));
+        const scalar_t exposure_bloom = sigmoid_d((e01 - scalar_t(0.48)) / scalar_t(0.075)) *
+                                        (scalar_t(0.60) + scalar_t(0.40) * sigmoid_d((g01 - scalar_t(0.50)) / scalar_t(0.08)));
+        const scalar_t safe = sigmoid_d((scalar_t(0.38) - p) / scalar_t(0.075)) *
+                              sigmoid_d((scalar_t(0.56) - e01) / scalar_t(0.08));
+        const scalar_t penalty = mask * (scalar_t(1.02) * power_bloom + scalar_t(0.55) * exposure_bloom);
+        const scalar_t bonus = mask * safe * scalar_t(0.28);
         quality = quality - penalty + bonus;
         effect = penalty;
     } else {
-        const scalar_t rescue_raw =
-            sigmoid_d((e01 - scalar_t(0.36)) / scalar_t(0.08)) * scalar_t(0.55)
-            + sigmoid_d((g01 - scalar_t(0.32)) / scalar_t(0.09)) * scalar_t(0.45);
+        const scalar_t exposure_lift = sigmoid_d((e01 - scalar_t(0.62)) / scalar_t(0.070));
+        const scalar_t gain_lift = sigmoid_d((g01 - scalar_t(0.52)) / scalar_t(0.075));
+        const scalar_t projector_lift = sigmoid_d((p - scalar_t(0.45)) / scalar_t(0.10));
+        const scalar_t rescue_raw = exposure_lift * (
+            scalar_t(0.10)
+            + scalar_t(0.70) * gain_lift
+            + scalar_t(0.20) * projector_lift * gain_lift);
         const scalar_t rescue = min(rescue_raw, scalar_t(1));
-        const scalar_t need = mask * scalar_t(0.68);
+        const scalar_t need = mask * scalar_t(0.92);
         const scalar_t penalty = need * (scalar_t(1) - rescue);
         quality = quality - penalty + mask * rescue * scalar_t(0.24);
         effect = penalty;

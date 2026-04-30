@@ -220,7 +220,10 @@ class Env:
             'decision_open_slot_id': float(self.supported_slots.index(slot_name)),
             'decision_open_slot_y': float(gap_y),
             'hazard_center': [1.82, float(gap_y), 1.5],
-            'hazard_half_y': 0.18,
+            # Cover the opening plus the adjacent gate-frame edges.  The active
+            # sensing task depends on seeing those depth discontinuities, not
+            # only the flat back wall visible through the aperture.
+            'hazard_half_y': 0.34,
             'hazard_half_z': 1.20,
             'hazard_softness': 0.045,
             'geometry_occluder_x': 0.88,
@@ -454,23 +457,31 @@ class Env:
             rescue = torch.sigmoid((p - 0.50) / 0.09)
             rescue_window = torch.sigmoid((0.30 - e01) / 0.06)
             joint_sat = torch.sigmoid((p - 0.65) / 0.08) * torch.sigmoid((e01 - 0.32) / 0.06)
-            penalty = mask * (0.88 * overexp + 0.28 * joint_sat)
-            bonus = mask * rescue * rescue_window * 0.24
+            under_power = torch.sigmoid((0.45 - p) / 0.08)
+            penalty = mask * (0.88 * overexp + 0.28 * joint_sat + 0.42 * under_power * rescue_window)
+            bonus = mask * rescue * rescue_window * 0.30
             quality = quality - penalty + bonus
             effect = penalty
         elif regime == 1.0:  # specular: high projector power washes out reflective gate material.
-            wash = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
-            safe = torch.sigmoid((0.40 - p) / 0.075)
-            penalty = mask * wash * 1.08
-            bonus = mask * safe * 0.30
+            power_bloom = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
+            exposure_bloom = torch.sigmoid((e01 - 0.48) / 0.075) * (0.60 + 0.40 * torch.sigmoid((g01 - 0.50) / 0.08))
+            safe = torch.sigmoid((0.38 - p) / 0.075) * torch.sigmoid((0.56 - e01) / 0.08)
+            penalty = mask * (1.02 * power_bloom + 0.55 * exposure_bloom)
+            bonus = mask * safe * 0.28
             quality = quality - penalty + bonus
             effect = penalty
-        else:  # dark: low-reflectance frame needs exposure/gain to lift the return signal.
+        else:  # dark: low-reflectance frame needs exposure plus gain; power alone should not rescue it.
+            exposure_lift = torch.sigmoid((e01 - 0.62) / 0.070)
+            gain_lift = torch.sigmoid((g01 - 0.52) / 0.075)
+            projector_lift = torch.sigmoid((p - 0.45) / 0.10)
             rescue = (
-                torch.sigmoid((e01 - 0.36) / 0.08) * 0.55
-                + torch.sigmoid((g01 - 0.32) / 0.09) * 0.45
+                exposure_lift * (
+                    0.10
+                    + 0.70 * gain_lift
+                    + 0.20 * projector_lift * gain_lift
+                )
             ).clamp(max=1.0)
-            need = mask * 0.68
+            need = mask * 0.92
             penalty = need * (1.0 - rescue)
             quality = quality - penalty + mask * rescue * 0.24
             effect = penalty
