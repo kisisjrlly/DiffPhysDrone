@@ -102,12 +102,22 @@ class Model(nn.Module):
             self.fc_intent.weight.data.mul_(0.01)
             self.fc_intent.bias.data.zero_()
 
-        # 可微传感头（绝对参数）
-        # 输出 3 个传感器参数的绝对值：Power / Exposure / Gain
-        self.fc_cam = nn.Linear(192, 3, bias=True)
-        self.fc_cam.weight.data.mul_(0.01)
-        # 初始化偏置为 0，这样经过后续的 sigmoid 激活后，初始输出在 0.5 附近（即默认的居中参数）
-        self.fc_cam.bias.data.zero_()
+        # 可微传感头（绝对参数）。
+        #
+        # 注意：flight head 继续使用 image + 完整 state 的 GRU 表征；camera head
+        # 则只看当前图像特征和相机自身状态，避免学成“按绝对位置/目标速度排程调参”。
+        self.cam_state_proj = nn.Linear(3, 192, bias=False)
+        self.cam_state_proj.weight.data.mul_(0.1)
+        self.cam_feat_norm = nn.LayerNorm(192)
+        self.cam_head = nn.Sequential(
+            nn.Linear(192, 192, bias=False),
+            nn.LeakyReLU(0.05),
+            nn.Linear(192, 3, bias=True),
+        )
+        self.cam_head[0].weight.data.mul_(0.1)
+        self.cam_head[-1].weight.data.mul_(0.01)
+        # 初始化偏置为 0，这样经过 sigmoid 后初始输出在 0.5 附近。
+        self.cam_head[-1].bias.data.zero_()
 
         # 全局使用的激活函数
         self.act = nn.LeakyReLU(0.05)
@@ -207,6 +217,17 @@ class Model(nn.Module):
 
         return x_depth
 
+    def _camera_state_from_obs(self, v: torch.Tensor):
+        """Return normalized camera state [power, exposure, gain] in [-1, 1].
+
+        build_state_vector() appends camera state as the last 3 elements when
+        include_camera_state_in_obs is enabled.  If disabled, the camera branch
+        intentionally receives a neutral state instead of any odometry proxy.
+        """
+        if self.include_camera_state_in_obs:
+            return v[:, -3:]
+        return torch.zeros(v.shape[0], 3, device=v.device, dtype=v.dtype)
+
     def forward(self, v, hx=None, return_intent=False,
                 depth_obs=None, add_noise=False):
         """
@@ -236,17 +257,19 @@ class Model(nn.Module):
         img_feat = self.img_norm(img_feat)
         v_feat = self.v_norm(self.v_proj(v))
         fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
-        x = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
+        flight_feat = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）
-        hx = self.gru(x, hx)
+        hx = self.gru(flight_feat, hx)
         hx = self.hx_norm(hx + 0.1 * self.gru_residual(hx))
         
         # 输出动作头原始值
         raw = self.fc(self.act(hx))
 
         act = raw
-        cam_raw = self.fc_cam(self.act(hx))
+        cam_state = self._camera_state_from_obs(v)
+        cam_feat = self.cam_feat_norm(img_feat + self.cam_state_proj(cam_state))
+        cam_raw = self.cam_head(self.act(cam_feat))
         cam_params = torch.sigmoid(cam_raw)  # (Batch, 3)
         if return_intent and self.use_policy_intent:
             intent_raw = self.fc_intent(self.act(hx))

@@ -462,6 +462,7 @@ def print_runtime_mode(args):
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_eval_slot       : {getattr(args, 'sun_glare_eval_slot', None)}")
     print(f"camera_control_mode       : {args.camera_control_mode}")
+    print("camera_head_input         : image_feature + camera_state")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print(
         "sensor_health_loss       : "

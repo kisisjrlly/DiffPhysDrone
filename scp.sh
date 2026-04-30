@@ -2,7 +2,7 @@
 
 # ===================== 你只需要改这一行 =====================
 # path="checkpoint/2026-04-25-16-19-31/checkpoint0049.pth"
-path="checkpoint/2026-04-26-17-31-21/checkpoint0049.pth"
+path="checkpoint/2026-04-29-22-30-04/checkpoint0039.pth"
 # path="checkpoint/2026-04-26-11-24-40/checkpoint0034.pth"
 # ============================================================
 
