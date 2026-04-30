@@ -33,16 +33,18 @@ __global__ void nearest_pt_cuda_kernel(
     if (j >= nearest_pt.size(0)) return;
     const int b = idx % B; // 批次索引 (Batch index)
 
+    const scalar_t self_r = (scalar_t)drone_radius;
+
     // 当前无人机位置 (Current drone position)
     const scalar_t ox = pos[j][b][0];
     const scalar_t oy = pos[j][b][1];
     const scalar_t oz = pos[j][b][2];
 
     // 初始化最小距离为到地面的距离 (Initialize minimum distance to ground distance)
-    scalar_t min_dist = max(1e-3f, oz + 1);
+    scalar_t min_dist = max(1e-3f, oz + 1 - self_r);
     scalar_t nearest_ptx = ox;
     scalar_t nearest_pty = oy;
-    scalar_t nearest_ptz = min(-1., oz - 1e-3f);
+    scalar_t nearest_ptz = oz - min_dist;
 
     // 1. 计算到其他无人机的最近点 (Calculate nearest point to other drones)
     const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
@@ -55,7 +57,7 @@ __global__ void nearest_pt_cuda_kernel(
         
         // 计算距离 (Calculate distance)
         scalar_t dist = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + 4 * (oz - cz) * (oz - cz);
-        dist = max(1e-3f, sqrt(dist) - r);
+        dist = max(1e-3f, sqrt(dist) - r - self_r);
         
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
@@ -80,7 +82,7 @@ __global__ void nearest_pt_cuda_kernel(
         
         // 计算距离 (Calculate distance)
         scalar_t dist = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy) + (oz - cz) * (oz - cz);
-        dist = max(1e-3f, sqrt(dist) - r);
+        dist = max(1e-3f, sqrt(dist) - r - self_r);
         
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
@@ -104,7 +106,7 @@ __global__ void nearest_pt_cuda_kernel(
         
         // 计算距离 (仅考虑 xy 平面) (Calculate distance in xy plane only)
         scalar_t dist = (ox - cx) * (ox - cx) + (oy - cy) * (oy - cy);
-        dist = max(1e-3f, sqrt(dist) - r);
+        dist = max(1e-3f, sqrt(dist) - r - self_r);
         
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
@@ -127,7 +129,7 @@ __global__ void nearest_pt_cuda_kernel(
         
         // 计算距离 (仅考虑 xz 平面) (Calculate distance in xz plane only)
         scalar_t dist = (ox - cx) * (ox - cx) + (oz - cz) * (oz - cz);
-        dist = max(1e-3f, sqrt(dist) - r);
+        dist = max(1e-3f, sqrt(dist) - r - self_r);
         
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
@@ -159,16 +161,27 @@ __global__ void nearest_pt_cuda_kernel(
         scalar_t pty = cy + max(-ry, min(ry, oy - cy));
         scalar_t ptz = cz + max(-rz, min(rz, oz - cz));
         
-        // 计算距离 (Calculate distance)
-        scalar_t dist = (ptx - ox) * (ptx - ox) + (pty - oy) * (pty - oy) + (ptz - oz) * (ptz - oz);
-        dist = sqrt(dist);
+        // 计算到长方体表面的净空距离。返回点也必须放在净空距离处，
+        // 否则下游 loss/eval 仍然看到的是点质量到障碍物表面的距离。
+        scalar_t ddx = ptx - ox;
+        scalar_t ddy = pty - oy;
+        scalar_t ddz = ptz - oz;
+        scalar_t surface_dist = sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+        scalar_t dist = max(1e-3f, surface_dist - self_r);
         
         // 更新最近点 (Update nearest point if closer)
         if (dist < min_dist) {
             min_dist = dist;
-            nearest_ptx = ptx;
-            nearest_pty = pty;
-            nearest_ptz = ptz;
+            if (surface_dist > 1e-6f) {
+                scalar_t inv_dist = 1.0f / surface_dist;
+                nearest_ptx = ox + dist * ddx * inv_dist;
+                nearest_pty = oy + dist * ddy * inv_dist;
+                nearest_ptz = oz + dist * ddz * inv_dist;
+            } else {
+                nearest_ptx = ox;
+                nearest_pty = oy;
+                nearest_ptz = oz;
+            }
         }
     }
     
@@ -532,8 +545,11 @@ __device__ __forceinline__ scalar_t trace_ray_device(
         }
         scalar_t t_min_v = max(max(tx_min, ty_min), tz_min);
         scalar_t t_max_v = min(min(tx_max, ty_max), tz_max);
-        if (t_min_v < min_dist && t_min_v < t_max_v && t_min_v > 0)
-            min_dist = t_min_v;
+        if (t_min_v < t_max_v) {
+            scalar_t t_hit = t_min_v > (scalar_t)1e-5 ? t_min_v : t_max_v;
+            if (t_hit > (scalar_t)1e-5 && t_hit < min_dist)
+                min_dist = t_hit;
+        }
     }
 
     return min_dist;
@@ -714,10 +730,12 @@ __device__ __forceinline__ scalar_t trace_ray_with_normal_device(
 
         scalar_t t_min_v = max(max(tx_min, ty_min), tz_min);
         scalar_t t_max_v = min(min(tx_max, ty_max), tz_max);
-        if (t_min_v > 0 && t_min_v < t_max_v && t_min_v < min_dist) {
-            scalar_t px = ox + t_min_v * dx;
-            scalar_t py = oy + t_min_v * dy;
-            scalar_t pz = oz + t_min_v * dz;
+        if (t_min_v < t_max_v) {
+            scalar_t t_hit = t_min_v > (scalar_t)1e-5 ? t_min_v : t_max_v;
+            if (!(t_hit > (scalar_t)1e-5 && t_hit < min_dist)) continue;
+            scalar_t px = ox + t_hit * dx;
+            scalar_t py = oy + t_hit * dy;
+            scalar_t pz = oz + t_hit * dz;
             scalar_t lx = px - cx;
             scalar_t ly = py - cy;
             scalar_t lz = pz - cz;
@@ -737,7 +755,7 @@ __device__ __forceinline__ scalar_t trace_ray_with_normal_device(
                 ny = (scalar_t)0;
                 nz = (lz >= 0) ? (scalar_t)1 : (scalar_t)-1;
             }
-            min_dist = t_min_v;
+            min_dist = t_hit;
         }
     }
 

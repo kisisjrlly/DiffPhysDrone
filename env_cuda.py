@@ -96,6 +96,7 @@ class Env:
         self.sun_glare_eval_slot = self._canonical_slot(sun_glare_eval_slot)
         self.random_rotation = bool(random_rotation)
         self.random_rotation_max_rad = max(float(random_rotation_max_deg), 0.0) * math.pi / 180.0
+        self._eval_slot_cursor = 0
         self.current_scene_effects = {}
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
@@ -152,6 +153,10 @@ class Env:
         if self.eval_mode and self.sun_glare_eval_slot is not None:
             return [self.sun_glare_eval_slot] * B
         slots = list(self.supported_slots)
+        if self.eval_mode:
+            start = int(self._eval_slot_cursor)
+            self._eval_slot_cursor += int(B)
+            return [slots[(start + i) % len(slots)] for i in range(B)]
         return [slots[i % len(slots)] for i in range(B)]
 
     def _build_sun_glare_voxel_layout(self, gap_y_center, *, occluder_x=0.88,
