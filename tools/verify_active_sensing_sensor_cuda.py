@@ -67,10 +67,12 @@ def sensor_reference(depth, mask, power, exposure, gain, speed, regime_id, min_v
     effect = torch.zeros_like(raw)
 
     if int(regime_id) == 0:
-        overexp = torch.sigmoid((e01 - 0.20) / 0.055)
+        overexp = torch.sigmoid((e01 - 0.22) / 0.045)
         rescue = torch.sigmoid((p - 0.50) / 0.09)
-        penalty = mask * overexp * (0.78 - 0.38 * rescue)
-        bonus = mask * rescue * (1.0 - overexp) * 0.18
+        rescue_window = torch.sigmoid((0.30 - e01) / 0.06)
+        joint_sat = torch.sigmoid((p - 0.65) / 0.08) * torch.sigmoid((e01 - 0.32) / 0.06)
+        penalty = mask * (0.88 * overexp + 0.28 * joint_sat)
+        bonus = mask * rescue * rescue_window * 0.24
         quality = quality - penalty + bonus
         effect = penalty
     elif int(regime_id) == 1:

@@ -1200,10 +1200,13 @@ __device__ __forceinline__ void d455_quality_effect_core(
 
     scalar_t effect = scalar_t(0);
     if (regime_id == 0) {
-        const scalar_t overexp = sigmoid_d((e01 - scalar_t(0.20)) / scalar_t(0.055));
+        const scalar_t overexp = sigmoid_d((e01 - scalar_t(0.22)) / scalar_t(0.045));
         const scalar_t rescue = sigmoid_d((p - scalar_t(0.50)) / scalar_t(0.09));
-        const scalar_t penalty = mask * overexp * (scalar_t(0.78) - scalar_t(0.38) * rescue);
-        const scalar_t bonus = mask * rescue * (scalar_t(1) - overexp) * scalar_t(0.18);
+        const scalar_t rescue_window = sigmoid_d((scalar_t(0.30) - e01) / scalar_t(0.06));
+        const scalar_t joint_sat = sigmoid_d((p - scalar_t(0.65)) / scalar_t(0.08)) *
+                                   sigmoid_d((e01 - scalar_t(0.32)) / scalar_t(0.06));
+        const scalar_t penalty = mask * (scalar_t(0.88) * overexp + scalar_t(0.28) * joint_sat);
+        const scalar_t bonus = mask * rescue * rescue_window * scalar_t(0.24);
         quality = quality - penalty + bonus;
         effect = penalty;
     } else if (regime_id == 1) {

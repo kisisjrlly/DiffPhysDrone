@@ -44,9 +44,9 @@
 --coef_diff_depth_fill 0.0
 --diff_depth_min_fill_rate 0.0
 
---fixed_camera_power 0.40
---fixed_camera_exposure 0.90
---fixed_camera_gain 0.65
+--fixed_camera_power 0.50
+--fixed_camera_exposure 0.50
+--fixed_camera_gain 0.5
 --fixed_random_power_min 0.10
 --fixed_random_power_max 0.95
 --fixed_random_exposure_min 0.10
