@@ -1098,3 +1098,281 @@ std::vector<torch::Tensor> render_diff_depth_backward_cuda(
 
     return {grad_power, grad_exposure, grad_gain};
 }
+
+
+// ============================================================================
+// Minimal active-sensing fused sensor core.
+// Geometry depth is rendered elsewhere; this kernel only applies the simplified
+// camera-regime model and returns gradients for power/exposure/gain.
+// ============================================================================
+
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t sigmoid_d(scalar_t x) {
+    return scalar_t(1) / (scalar_t(1) + exp(-x));
+}
+
+template <typename scalar_t>
+__global__ void active_sensing_sensor_forward_kernel(
+    const scalar_t* __restrict__ depth,
+    const scalar_t* __restrict__ mask,
+    const scalar_t* __restrict__ power,
+    const scalar_t* __restrict__ exposure,
+    const scalar_t* __restrict__ gain,
+    scalar_t* __restrict__ depth_obs,
+    scalar_t* __restrict__ quality_obs,
+    scalar_t* __restrict__ quality,
+    scalar_t* __restrict__ valid_prob,
+    scalar_t* __restrict__ hard_valid,
+    scalar_t* __restrict__ effect,
+    int B,
+    int H,
+    int W,
+    int regime_id,
+    double min_valid_d,
+    double max_range_d) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = B * H * W;
+    if (idx >= N) return;
+    const int b = idx / (H * W);
+    const scalar_t min_valid = static_cast<scalar_t>(min_valid_d);
+    const scalar_t max_range = static_cast<scalar_t>(max_range_d);
+    scalar_t raw = depth[idx];
+    raw = min(max(raw, min_valid), max_range);
+    const scalar_t m = min(max(mask[idx], scalar_t(0)), scalar_t(1));
+    const scalar_t p = min(max(power[b], scalar_t(0)), scalar_t(1));
+    const scalar_t e = min(max(exposure[b], scalar_t(0)), scalar_t(1));
+    const scalar_t g = min(max(gain[b], scalar_t(0)), scalar_t(1));
+
+    scalar_t base = sigmoid_d((max_range - raw) / scalar_t(0.9));
+    base = base * (scalar_t(0.90) + scalar_t(0.18) * p + scalar_t(0.08) * e + scalar_t(0.06) * g);
+    scalar_t q = base;
+    scalar_t eff = scalar_t(0);
+
+    if (regime_id == 0) {
+        const scalar_t overexp = sigmoid_d((e - scalar_t(0.18)) / scalar_t(0.045));
+        const scalar_t rescue = sigmoid_d((p - scalar_t(0.56)) / scalar_t(0.08));
+        const scalar_t penalty = m * overexp * (scalar_t(0.95) - scalar_t(0.55) * rescue);
+        const scalar_t bonus = m * rescue * (scalar_t(1) - overexp) * scalar_t(0.20);
+        q = q - penalty + bonus;
+        eff = penalty;
+    } else if (regime_id == 1) {
+        const scalar_t sp_e = sigmoid_d((e - scalar_t(0.25)) / scalar_t(0.08));
+        const scalar_t wash = sigmoid_d((p - scalar_t(0.38)) / scalar_t(0.07)) * (scalar_t(0.55) + scalar_t(0.45) * sp_e);
+        const scalar_t safe = sigmoid_d((scalar_t(0.42) - p) / scalar_t(0.10));
+        const scalar_t penalty = m * wash * scalar_t(0.92);
+        const scalar_t bonus = m * safe * scalar_t(0.25);
+        q = q - penalty + bonus;
+        eff = penalty;
+    } else {
+        const scalar_t rescue =
+            sigmoid_d((e - scalar_t(0.48)) / scalar_t(0.08)) * scalar_t(0.55)
+            + sigmoid_d((g - scalar_t(0.42)) / scalar_t(0.08)) * scalar_t(0.45);
+        const scalar_t need = m * scalar_t(0.82);
+        const scalar_t penalty = need * (scalar_t(1) - rescue);
+        q = q - penalty + m * rescue * scalar_t(0.18);
+        eff = penalty;
+    }
+
+    scalar_t d_far = raw;
+    scalar_t d_near = raw;
+    const int local = idx - b * H * W;
+    const int row = local / W;
+    const int col = local % W;
+    for (int rr = -1; rr <= 1; ++rr) {
+        const int r = min(max(row + rr, 0), H - 1);
+        for (int cc = -1; cc <= 1; ++cc) {
+            const int c = min(max(col + cc, 0), W - 1);
+            const int nidx = b * H * W + r * W + c;
+            scalar_t nd = depth[nidx];
+            nd = min(max(nd, min_valid), max_range);
+            d_far = max(d_far, nd);
+            d_near = min(d_near, nd);
+        }
+    }
+    const scalar_t edge = min(max((d_far - d_near) / (raw + scalar_t(0.2)), scalar_t(0)), scalar_t(1));
+    q = q - scalar_t(0.12) * edge;
+    q = min(max(q, scalar_t(0)), scalar_t(1));
+    const scalar_t vp = sigmoid_d((q - scalar_t(0.42)) / scalar_t(0.055));
+    const scalar_t hv = vp > scalar_t(0.5) ? scalar_t(1) : scalar_t(0);
+    depth_obs[idx] = raw * hv;
+    quality_obs[idx] = q * hv;
+    quality[idx] = q;
+    valid_prob[idx] = vp;
+    hard_valid[idx] = hv;
+    effect[idx] = eff;
+}
+
+template <typename scalar_t>
+__global__ void active_sensing_sensor_backward_kernel(
+    const scalar_t* __restrict__ grad_quality,
+    const scalar_t* __restrict__ grad_effect,
+    const scalar_t* __restrict__ raw,
+    const scalar_t* __restrict__ mask,
+    const scalar_t* __restrict__ quality,
+    const scalar_t* __restrict__ power,
+    const scalar_t* __restrict__ exposure,
+    const scalar_t* __restrict__ gain,
+    scalar_t* __restrict__ grad_power_px,
+    scalar_t* __restrict__ grad_exposure_px,
+    scalar_t* __restrict__ grad_gain_px,
+    int B,
+    int H,
+    int W,
+    int regime_id,
+    double max_range_d) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int N = B * H * W;
+    if (idx >= N) return;
+    const int b = idx / (H * W);
+    const scalar_t m = min(max(mask[idx], scalar_t(0)), scalar_t(1));
+    const scalar_t p = min(max(power[b], scalar_t(0)), scalar_t(1));
+    const scalar_t e = min(max(exposure[b], scalar_t(0)), scalar_t(1));
+    const scalar_t g = min(max(gain[b], scalar_t(0)), scalar_t(1));
+    const scalar_t q = quality[idx];
+
+    scalar_t gq = grad_quality[idx];
+    if (q <= scalar_t(0) || q >= scalar_t(1)) {
+        // q clamp saturation. This matches torch.clamp subgradient convention
+        // well enough away from exact boundary and avoids bogus huge gradients.
+        gq = scalar_t(0);
+    }
+
+    const scalar_t max_range = static_cast<scalar_t>(max_range_d);
+    const scalar_t base_sig = sigmoid_d((max_range - raw[idx]) / scalar_t(0.9));
+    scalar_t dq_dp = base_sig * scalar_t(0.18);
+    scalar_t dq_de = base_sig * scalar_t(0.08);
+    scalar_t dq_dg = base_sig * scalar_t(0.06);
+    scalar_t deff_dp = scalar_t(0);
+    scalar_t deff_de = scalar_t(0);
+    scalar_t deff_dg = scalar_t(0);
+
+    if (regime_id == 0) {
+        const scalar_t overexp = sigmoid_d((e - scalar_t(0.18)) / scalar_t(0.045));
+        const scalar_t rescue = sigmoid_d((p - scalar_t(0.56)) / scalar_t(0.08));
+        const scalar_t do_de = overexp * (scalar_t(1) - overexp) / scalar_t(0.045);
+        const scalar_t dr_dp = rescue * (scalar_t(1) - rescue) / scalar_t(0.08);
+        deff_dp = m * overexp * scalar_t(-0.55) * dr_dp;
+        deff_de = m * do_de * (scalar_t(0.95) - scalar_t(0.55) * rescue);
+        dq_dp += m * dr_dp * (scalar_t(0.55) * overexp + scalar_t(0.20) * (scalar_t(1) - overexp));
+        dq_de += m * do_de * (-(scalar_t(0.95) - scalar_t(0.55) * rescue) - scalar_t(0.20) * rescue);
+    } else if (regime_id == 1) {
+        const scalar_t sp = sigmoid_d((p - scalar_t(0.38)) / scalar_t(0.07));
+        const scalar_t se = sigmoid_d((e - scalar_t(0.25)) / scalar_t(0.08));
+        const scalar_t safe = sigmoid_d((scalar_t(0.42) - p) / scalar_t(0.10));
+        const scalar_t dsp_dp = sp * (scalar_t(1) - sp) / scalar_t(0.07);
+        const scalar_t dse_de = se * (scalar_t(1) - se) / scalar_t(0.08);
+        const scalar_t dsafe_dp = -safe * (scalar_t(1) - safe) / scalar_t(0.10);
+        deff_dp = m * scalar_t(0.92) * dsp_dp * (scalar_t(0.55) + scalar_t(0.45) * se);
+        deff_de = m * scalar_t(0.92) * sp * scalar_t(0.45) * dse_de;
+        dq_dp += -m * scalar_t(0.92) * dsp_dp * (scalar_t(0.55) + scalar_t(0.45) * se)
+                 + m * scalar_t(0.25) * dsafe_dp;
+        dq_de += -m * scalar_t(0.92) * sp * scalar_t(0.45) * dse_de;
+    } else {
+        const scalar_t se = sigmoid_d((e - scalar_t(0.48)) / scalar_t(0.08));
+        const scalar_t sg = sigmoid_d((g - scalar_t(0.42)) / scalar_t(0.08));
+        const scalar_t dre_de = scalar_t(0.55) * se * (scalar_t(1) - se) / scalar_t(0.08);
+        const scalar_t drg_dg = scalar_t(0.45) * sg * (scalar_t(1) - sg) / scalar_t(0.08);
+        // q contribution from rescue: need*rescue + 0.18*m*rescue, need=0.82*m
+        const scalar_t scale = m * (scalar_t(0.82) + scalar_t(0.18));
+        deff_de = -m * scalar_t(0.82) * dre_de;
+        deff_dg = -m * scalar_t(0.82) * drg_dg;
+        dq_de += scale * dre_de;
+        dq_dg += scale * drg_dg;
+    }
+
+    // Clamp input params in forward. Grad is zero outside open interval.
+    const scalar_t ge = grad_effect[idx];
+    grad_power_px[idx] = (power[b] > scalar_t(0) && power[b] < scalar_t(1)) ? gq * dq_dp + ge * deff_dp : scalar_t(0);
+    grad_exposure_px[idx] = (exposure[b] > scalar_t(0) && exposure[b] < scalar_t(1)) ? gq * dq_de + ge * deff_de : scalar_t(0);
+    grad_gain_px[idx] = (gain[b] > scalar_t(0) && gain[b] < scalar_t(1)) ? gq * dq_dg + ge * deff_dg : scalar_t(0);
+}
+
+std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
+    torch::Tensor depth,
+    torch::Tensor mask,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    int regime_id,
+    double min_valid,
+    double max_range) {
+    TORCH_CHECK(depth.is_cuda(), "depth must be CUDA");
+    TORCH_CHECK(mask.is_cuda(), "mask must be CUDA");
+    TORCH_CHECK(depth.is_contiguous(), "depth must be contiguous");
+    TORCH_CHECK(mask.is_contiguous(), "mask must be contiguous");
+    const int B = depth.size(0);
+    const int H = depth.size(1);
+    const int W = depth.size(2);
+    auto depth_obs = torch::empty_like(depth);
+    auto quality_obs = torch::empty_like(depth);
+    auto quality = torch::empty_like(depth);
+    auto valid_prob = torch::empty_like(depth);
+    auto hard_valid = torch::empty_like(depth);
+    auto effect = torch::empty_like(depth);
+    const int N = B * H * W;
+    const int threads = 256;
+    const int blocks = (N + threads - 1) / threads;
+    AT_DISPATCH_FLOATING_TYPES(depth.scalar_type(), "active_sensing_sensor_forward_cuda", ([&] {
+        active_sensing_sensor_forward_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+            depth.data_ptr<scalar_t>(),
+            mask.data_ptr<scalar_t>(),
+            power.contiguous().data_ptr<scalar_t>(),
+            exposure.contiguous().data_ptr<scalar_t>(),
+            gain.contiguous().data_ptr<scalar_t>(),
+            depth_obs.data_ptr<scalar_t>(),
+            quality_obs.data_ptr<scalar_t>(),
+            quality.data_ptr<scalar_t>(),
+            valid_prob.data_ptr<scalar_t>(),
+            hard_valid.data_ptr<scalar_t>(),
+            effect.data_ptr<scalar_t>(),
+            B, H, W, regime_id, min_valid, max_range);
+    }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return {depth_obs, quality_obs, quality, valid_prob, hard_valid, effect};
+}
+
+std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
+    torch::Tensor grad_quality,
+    torch::Tensor grad_effect,
+    torch::Tensor raw,
+    torch::Tensor mask,
+    torch::Tensor quality,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    int regime_id,
+    double min_valid,
+    double max_range) {
+    (void)min_valid;
+    TORCH_CHECK(raw.is_cuda(), "raw must be CUDA");
+    const int B = raw.size(0);
+    const int H = raw.size(1);
+    const int W = raw.size(2);
+    auto grad_power_px = torch::empty_like(raw);
+    auto grad_exposure_px = torch::empty_like(raw);
+    auto grad_gain_px = torch::empty_like(raw);
+    const int N = B * H * W;
+    const int threads = 256;
+    const int blocks = (N + threads - 1) / threads;
+    AT_DISPATCH_FLOATING_TYPES(raw.scalar_type(), "active_sensing_sensor_backward_cuda", ([&] {
+        active_sensing_sensor_backward_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+            grad_quality.contiguous().data_ptr<scalar_t>(),
+            grad_effect.contiguous().data_ptr<scalar_t>(),
+            raw.contiguous().data_ptr<scalar_t>(),
+            mask.contiguous().data_ptr<scalar_t>(),
+            quality.contiguous().data_ptr<scalar_t>(),
+            power.contiguous().data_ptr<scalar_t>(),
+            exposure.contiguous().data_ptr<scalar_t>(),
+            gain.contiguous().data_ptr<scalar_t>(),
+            grad_power_px.data_ptr<scalar_t>(),
+            grad_exposure_px.data_ptr<scalar_t>(),
+            grad_gain_px.data_ptr<scalar_t>(),
+            B, H, W, regime_id, max_range);
+    }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return {
+        grad_power_px.sum({1, 2}),
+        grad_exposure_px.sum({1, 2}),
+        grad_gain_px.sum({1, 2})
+    };
+}

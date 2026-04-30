@@ -48,13 +48,8 @@ def _print_cuda_failure_summary(args, device, exc: Exception):
         f"scenarios={args.scenarios}"
     )
     print(
-        "[diag] 当前 diff_depth python 渲染 + full BPTT 会把整段 rollout 的计算图保留在显存里，"
-        "在 16GB GPU 上 batch 太大时容易先触发 OOM，随后表现成 cuDNN 初始化失败。"
-    )
-    print(
-        "[diag] 建议优先尝试：1) 降低 --batch_size 到 64~80；"
-        "2) 需要更大等效 batch 时再考虑 TBPTT；"
-        "3) 如果仍吃紧，再降低深度分辨率。"
+        "[diag] minimal branch uses full-BPTT direct-action training. "
+        "If this OOMs, reduce --batch_size first."
     )
 
 
@@ -93,20 +88,15 @@ def main():
     print("=" * 75 + "\n")
     print_runtime_mode(args)
 
-    # ── 4. Create environments ───────────────────────────────────────────
+    # ── 4. Create environment ────────────────────────────────────────────
     env_train = build_env(args.batch_size, args, device)
-    env_full = env_train
-    if (args.tbptt_enable and args.hybrid_full_bptt_every > 0
-            and args.hybrid_full_bptt_batch_size > 0
-            and args.hybrid_full_bptt_batch_size != args.batch_size):
-        env_full = build_env(args.hybrid_full_bptt_batch_size, args, device)
-        print(f"[info] 混合调度启用：完整BPTT每 {args.hybrid_full_bptt_every} 轮一次，batch={args.hybrid_full_bptt_batch_size}")
+    env_full = None
     # ── 5. Create model ──────────────────────────────────────────────────
     obs_dim = 7 if args.no_odom else 10
     model = Model(
         obs_dim, 6,
         include_camera_state_in_obs=args.include_camera_state_in_obs,
-        use_policy_intent=args.policy_output_intent,
+        use_policy_intent=False,
         intent_dim=9,
         depth_nn_width=args.depth_nn_width,
         depth_nn_height=args.depth_nn_height,

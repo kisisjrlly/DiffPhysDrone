@@ -124,6 +124,30 @@ std::vector<torch::Tensor> render_diff_depth_backward_cuda(
     int width,
     double max_range);
 
+// active-sensing minimal fused sensor core.
+std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
+    torch::Tensor depth,
+    torch::Tensor mask,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    int regime_id,
+    double min_valid,
+    double max_range);
+
+std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
+    torch::Tensor grad_quality,
+    torch::Tensor grad_effect,
+    torch::Tensor raw,
+    torch::Tensor mask,
+    torch::Tensor quality,
+    torch::Tensor power,
+    torch::Tensor exposure,
+    torch::Tensor gain,
+    int regime_id,
+    double min_valid,
+    double max_range);
+
 // ============================================================================
 // PyBind11 模块绑定 (PyBind11 module binding)
 // ============================================================================
@@ -136,4 +160,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("run_backward", &run_backward_cuda, "run_backward_cuda (CUDA)");
   m.def("render_diff_depth_forward", &render_diff_depth_forward_cuda, "render_diff_depth_forward (CUDA)");
   m.def("render_diff_depth_backward", &render_diff_depth_backward_cuda, "render_diff_depth_backward (CUDA)");
+  m.def("active_sensing_sensor_forward", &active_sensing_sensor_forward_cuda, "active_sensing_sensor_forward (CUDA)");
+  m.def("active_sensing_sensor_backward", &active_sensing_sensor_backward_cuda, "active_sensing_sensor_backward (CUDA)");
 }

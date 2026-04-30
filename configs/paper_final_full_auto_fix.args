@@ -1,49 +1,17 @@
-# =========================================================================
-# Fixed small-map perception-scenario config for diff_depth
-#
-# 目标：
-# 1) 使用固定 10m x 10m 小地图与简单几何，降低复杂避障难度
-# 2) 保留 scenarios，用于训练/测试可微感知调参能力
-# 3) 不回退到旧的大地图随机世界
-# =========================================================================
+# Minimal active-sensing simulation benchmark: fixed camera
+# Minimal active-sensing simulation benchmark
 
-# ----------------- Training scale -----------------
---batch_size 92
---num_iters 5
---timesteps 120
-
-# ----------------- TBPTT / schedule -----------------
-# --tbptt_enable
---tbptt_chunk_steps 10
---tbptt_chunk_accum 1
---hybrid_full_bptt_every 0
---hybrid_full_bptt_batch_size 64
-
-# ----------------- Optimization -----------------
+--batch_size 64
+--num_iters 5000
 --lr 5e-5
 --grad_decay 0.3
---max_acc_cmd 2.5
-
-# ----------------- Reproducibility -----------------
 --seed 42
-# --deterministic
+--no-deterministic
 
-# ----------------- Fixed small-map environment -----------------
---fov_x_half_tan 0.82
+--timesteps 120
 --base_control_freq 15.0
+--fov_x_half_tan 0.82
 --cam_angle 5
-# --yaw_drift
-# --no_odom
---scenarios glare specular dark
-# Optional calibration-only profile override. Keep disabled for benchmark
-# training so the explicit randomization ranges below actually take effect.
-# --scene_fit_profiles_path configs/scene_fit_profiles.json
-
-# --ellipsoid_collision
---drone_a 0.15
---drone_c 0.075
-
-# ----------------- Depth input -----------------
 --depth_width 64
 --depth_height 48
 --depth_min_valid 0.3
@@ -51,9 +19,15 @@
 --depth_nn_width 32
 --depth_nn_height 24
 --depth_use_pipeline
---diff_sensor_impl diff_depth=python
+--diff_sensor_impl diff_depth=cuda
 
-# ----------------- Core losses -----------------
+--scenarios glare specular dark
+--include_camera_state_in_obs
+--camera_control_mode learned
+--sensor_grad_mode full
+--policy_depth_mode depth
+--max_acc_cmd 2.5
+
 --coef_v 10.5
 --loss_v_window 12
 --coef_d_acc 0.1
@@ -61,64 +35,23 @@
 --coef_obj_avoidance 0.5
 --coef_collide 10.0
 
-# ----------------- Active sensing -----------------
---include_camera_state_in_obs
-# --policy_depth_mode depth # zero
-# --policy_depth_mode depth
---camera_control_mode learned # fixed / fixed_random_static / learned
---sensor_grad_mode full # detached / full
---policy_depth_mode depth
-# --camera_control_mode fixed
-# --sensor_grad_mode detached
---fixed_camera_power 0.75
---fixed_camera_exposure 0.45
---fixed_camera_gain 0.45
---fixed_random_power_min 0.45
+--cam_power_baseline 0.5
+--coef_cam_smooth 2.0
+--coef_diff_depth_power 4.0
+--coef_diff_depth_blur 0.0
+--coef_diff_depth_noise 0.0
+--coef_diff_depth_fill 0.0
+--diff_depth_min_fill_rate 0.0
+
+--fixed_camera_power 0.40
+--fixed_camera_exposure 0.90
+--fixed_camera_gain 0.65
+--fixed_random_power_min 0.10
 --fixed_random_power_max 0.95
---fixed_random_exposure_min 0.16
---fixed_random_exposure_max 0.82
+--fixed_random_exposure_min 0.10
+--fixed_random_exposure_max 0.92
 --fixed_random_gain_min 0.02
---fixed_random_gain_max 0.70
---coef_cam_smooth 12
-
---cam_realism_preset low
---cam_enable_specular
---cam_enable_motion_blur
---cam_noise_scale 1.0
---cam_blur_scale 1.0
---cam_fog_scale 1.0
---cam_lighting_scale 1.0
---cam_model_randomize
---cam_model_randomize_scale 0.12
---cam_power_baseline 0.50
-
---sun_glare_randomize
---sun_glare_ambient_min 0.04
---sun_glare_ambient_max 0.34
---sun_glare_dir_min 0.18
---sun_glare_dir_max 1.25
---sun_glare_airlight_min 0.03
---sun_glare_airlight_max 0.42
---sun_glare_fog_beta_min 0.004
---sun_glare_fog_beta_max 0.060
---sun_glare_mat_obstacle_min 0.30
---sun_glare_mat_obstacle_max 0.88
---sun_glare_mat_spec_min 0.00
---sun_glare_mat_spec_max 0.42
---sun_glare_sun_sigma_u_min 0.16
---sun_glare_sun_sigma_u_max 0.42
---sun_glare_sun_sigma_v_min 0.14
---sun_glare_sun_sigma_v_max 0.36
---sun_glare_sun_y_jitter 0.26
---sun_glare_sun_z_jitter 0.18
---sun_glare_occluder_x_jitter 0.12
---sun_glare_occluder_half_y_min 0.34
---sun_glare_occluder_half_y_max 0.50
---sun_glare_divider_x_jitter 0.10
---sun_glare_gate_x_jitter 0.10
---sun_glare_gap_half_w_min 0.14
---sun_glare_gap_half_w_max 0.22
---sun_glare_start_y_jitter 0.22
+--fixed_random_gain_max 0.90
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
@@ -129,54 +62,13 @@
 --cam_iso_gain_gamma 0.6
 --cam_shot_noise_base 0.01
 
---coef_diff_depth_power 6
---coef_diff_depth_blur 0.4
---coef_diff_depth_noise 0.02
---coef_diff_depth_fill 8.0
---diff_depth_min_fill_rate 0.55
---diff_depth_health_patch_rows 6
---diff_depth_health_patch_cols 8
---diff_depth_health_cvar_frac 0.25
-
-# ----------------- Teacher-student -----------------
-# --enable_teacher_student_training
---teacher_inner_steps 10
---teacher_inner_lr 0.005
---distill_coef 1.0
---student_physics_coef 0.6
---teacher_tbptt_chunk_steps 10
---distill_final_ratio 0.5
---student_noise_mode off
-
-# ----------------- Control architecture -----------------
-# --use_dmpc
-# --policy_output_intent
-# --inject_depth_into_lqr
---lqr_horizon 5
---lqr_reg 1e-3
---depth_safe_dist 0.6
---depth_repel_gain 1.0
-
-# ----------------- Visualization / logging -----------------
-# --vis_enable
 --vis_backend rerun
 --vis_env_idx 0
 --vis_every_iters 10
 --vis_every_steps 10
---vis_teacher
 --vis_student
-# --vis_spawn
-
---wandb_disabled
-# --wandb_log_raw_loss_terms
+# --vis_enable
+# --wandb_disabled
 # --no-amp
-
-# ================================================================
-# Generated by run_train_modes.sh
-# mode: fix
-# base_config: configs/paper_final_full.args
-# ================================================================
-# auto-generated mode overrides: fix
---policy_depth_mode depth
 --camera_control_mode fixed
 --sensor_grad_mode full

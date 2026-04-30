@@ -96,3 +96,81 @@ class DiffDepthFunction(torch.autograd.Function):
 
 
 diff_depth = DiffDepthFunction.apply
+
+
+class ActiveSensingSensorFunction(torch.autograd.Function):
+    """Fused CUDA core for the minimal active-sensing sensor model.
+
+    Inputs are a pre-rendered raw depth map and local scene mask.  Backward only
+    returns gradients for power/exposure/gain; geometry depth is intentionally
+    treated as non-differentiable in this branch.
+    """
+
+    @staticmethod
+    def forward(ctx, depth, mask, power, exposure, gain,
+                regime_id: int, min_valid: float, max_range: float):
+        out = quadsim_cuda.active_sensing_sensor_forward(
+            depth.contiguous(),
+            mask.contiguous(),
+            power.contiguous(),
+            exposure.contiguous(),
+            gain.contiguous(),
+            int(regime_id),
+            float(min_valid),
+            float(max_range),
+        )
+        depth_obs, quality_obs, quality, valid_prob, hard_valid, effect = out
+        raw = depth.clamp(float(min_valid), float(max_range)).contiguous()
+        ctx.save_for_backward(
+            raw, mask.contiguous(), quality, valid_prob, hard_valid,
+            power, exposure, gain)
+        ctx.regime_id = int(regime_id)
+        ctx.min_valid = float(min_valid)
+        ctx.max_range = float(max_range)
+        return depth_obs, quality_obs, quality, valid_prob, hard_valid, effect
+
+    @staticmethod
+    def backward(ctx, grad_depth_obs, grad_quality_obs,
+                 grad_quality, grad_valid_prob, grad_hard_valid, grad_effect):
+        (raw, mask, quality, valid_prob, hard_valid,
+         power, exposure, gain) = ctx.saved_tensors
+
+        zeros = torch.zeros_like(raw)
+        g_depth_obs = grad_depth_obs if grad_depth_obs is not None else zeros
+        g_quality_obs = grad_quality_obs if grad_quality_obs is not None else zeros
+        g_quality_out = grad_quality if grad_quality is not None else zeros
+        g_valid_prob = grad_valid_prob if grad_valid_prob is not None else zeros
+        g_effect = grad_effect if grad_effect is not None else zeros
+
+        # Reference graph:
+        #   valid_st = hard.detach() - valid.detach() + valid
+        #   depth_obs = raw * valid_st
+        #   quality_obs = quality * valid_st
+        #   valid = sigmoid((quality - 0.42) / 0.055)
+        # Combine all differentiable output paths into dL/dquality before
+        # entering the fused kernel.  hard_valid is intentionally non-diff.
+        dvalid_dquality = valid_prob * (1.0 - valid_prob) / 0.055
+        grad_quality_total = (
+            g_quality_out
+            + g_quality_obs * hard_valid
+            + (g_depth_obs * raw + g_quality_obs * quality + g_valid_prob) * dvalid_dquality
+        )
+
+        grad_power, grad_exposure, grad_gain = quadsim_cuda.active_sensing_sensor_backward(
+            grad_quality_total.contiguous(),
+            g_effect.contiguous(),
+            raw,
+            mask,
+            quality,
+            power,
+            exposure,
+            gain,
+            int(ctx.regime_id),
+            float(ctx.min_valid),
+            float(ctx.max_range),
+        )
+        _maybe_sync_backward()
+        return None, None, grad_power, grad_exposure, grad_gain, None, None, None
+
+
+active_sensing_sensor = ActiveSensingSensorFunction.apply

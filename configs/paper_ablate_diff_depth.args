@@ -1,75 +1,71 @@
-# =========================================================================
-# Ablation config for fixed-map diff_depth validation
-#
-# 与 paper_final_full.args 相比，更偏向“更轻量、更快验证”的训练设置。
-# =========================================================================
+# Minimal active-sensing simulation benchmark
 
 --batch_size 64
---num_iters 50000
---timesteps 80
-
---tbptt_chunk_steps 15
---tbptt_chunk_accum 1
---hybrid_full_bptt_every 0
---hybrid_full_bptt_batch_size 64
-
---lr 1e-4
---grad_decay 0.4
---max_acc_cmd 20.0
+--num_iters 5000
+--lr 5e-5
+--grad_decay 0.3
 --seed 42
+--no-deterministic
 
---fov_x_half_tan 0.82
+--timesteps 120
 --base_control_freq 15.0
---cam_angle 20
---scenarios glare specular dark
-# Optional calibration-only profile override. Keep disabled for benchmark
-# training so the explicit randomization ranges below actually take effect.
-# --scene_fit_profiles_path configs/scene_fit_profiles.json
-
---drone_a 0.15
---drone_c 0.075
-
---diff_sensor_impl diff_depth=python
---depth_width 32
---depth_height 24
---depth_nn_width 16
---depth_nn_height 12
+--fov_x_half_tan 0.82
+--cam_angle 5
+--depth_width 64
+--depth_height 48
+--depth_min_valid 0.3
+--depth_max_range 6.0
+--depth_nn_width 32
+--depth_nn_height 24
 --depth_use_pipeline
+--diff_sensor_impl diff_depth=cuda
 
---coef_v 2.3
---coef_collide 7.5
---coef_obj_avoidance 3.0
---coef_d_acc 0.01
---coef_d_jerk 0.001
-
+--scenarios glare specular dark
 --include_camera_state_in_obs
---coef_cam_smooth 0.01
+--camera_control_mode learned
+--sensor_grad_mode full
+--policy_depth_mode depth
+--max_acc_cmd 2.5
 
---coef_diff_depth_power 0.02
---coef_diff_depth_blur 0.02
---coef_diff_depth_noise 0.01
---coef_diff_depth_fill 4.0
---diff_depth_min_fill_rate 0.18
+--coef_v 10.5
+--loss_v_window 12
+--coef_d_acc 0.1
+--coef_d_jerk 0.2
+--coef_obj_avoidance 0.5
+--coef_collide 10.0
 
---cam_realism_preset low
---cam_enable_specular
---no-cam_enable_motion_blur
---cam_noise_scale 0.65
---cam_blur_scale 0.55
---cam_fog_scale 0.6
---cam_lighting_scale 0.9
---cam_model_randomize
---cam_model_randomize_scale 0.08
---cam_power_baseline 0.416667
+--cam_power_baseline 0.5
+--coef_cam_smooth 2.0
+--coef_diff_depth_power 4.0
+--coef_diff_depth_blur 0.0
+--coef_diff_depth_noise 0.0
+--coef_diff_depth_fill 0.0
+--diff_depth_min_fill_rate 0.0
+
+--fixed_camera_power 0.40
+--fixed_camera_exposure 0.90
+--fixed_camera_gain 0.65
+--fixed_random_power_min 0.10
+--fixed_random_power_max 0.95
+--fixed_random_exposure_min 0.10
+--fixed_random_exposure_max 0.92
+--fixed_random_gain_min 0.02
+--fixed_random_gain_max 0.90
 
 --cam_exposure_t_min 0.25
 --cam_exposure_t_span 2.75
---cam_exposure_eff_min 0.15
---cam_exposure_eff_max 4.0
+--cam_exposure_eff_min 0.25
+--cam_exposure_eff_max 3.0
 --cam_iso_gain_base 1.0
---cam_iso_gain_scale 10.0
---cam_iso_gain_gamma 1.2
---cam_shot_noise_base 0.03
+--cam_iso_gain_scale 0.8
+--cam_iso_gain_gamma 0.6
+--cam_shot_noise_base 0.01
 
---wandb_disabled
---amp
+--vis_backend rerun
+--vis_env_idx 0
+--vis_every_iters 10
+--vis_every_steps 10
+--vis_student
+# --vis_enable
+# --wandb_disabled
+# --no-amp
