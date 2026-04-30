@@ -38,6 +38,36 @@ def _compute_success_collision(p_history, distance, env):
     return success.float().mean(), collision.float().mean(), final_dist.mean()
 
 
+def _build_loss_contrib_metrics(loss_terms, args):
+    specs = [
+        ('v', 'loss_v', args.coef_v),
+        ('obj_avoidance', 'loss_obj_avoidance', args.coef_obj_avoidance),
+        ('collide', 'loss_collide', args.coef_collide),
+        ('d_acc', 'loss_d_acc', args.coef_d_acc),
+        ('d_jerk', 'loss_d_jerk', args.coef_d_jerk),
+        ('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth),
+        ('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power),
+    ]
+    contrib = {}
+    for name, key, coef in specs:
+        coef = float(coef)
+        if abs(coef) <= 1e-12:
+            continue
+        value = loss_terms.get(key, None)
+        if value is None:
+            continue
+        contrib[name] = coef * float(value.detach())
+    if not contrib:
+        return {}
+    total = sum(abs(v) for v in contrib.values())
+    total = total if total > 1e-12 else 1e-12
+    out = {}
+    for name, value in contrib.items():
+        out[f'loss_contrib/{name}'] = value
+        out[f'loss_share/{name}'] = abs(value) / total
+    return out
+
+
 def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     h = None
     act_buffer = [env.act] * 2
@@ -226,21 +256,15 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         pbar.set_description_str(f'loss: {float(loss.detach()):.3f}')
         log = {
             'loss': float(loss.detach()),
-            'loss_v': float(loss_terms['loss_v'].detach()),
-            'loss_obj_avoidance': float(loss_terms['loss_obj_avoidance'].detach()),
-            'loss_collide': float(loss_terms['loss_collide'].detach()),
-            'loss_d_acc': float(loss_terms['loss_d_acc'].detach()),
-            'loss_d_jerk': float(loss_terms['loss_d_jerk'].detach()),
-            'loss_cam_smooth': float(loss_terms['loss_cam_smooth'].detach()),
-            'loss_diff_depth_power': float(loss_terms['loss_diff_depth_power'].detach()),
             'collision_rate': float(collision_rate.detach()),
             'success_rate': float(success_rate.detach()),
-            'goal_dist/final': float(final_goal_dist.detach()),
+            'charts/goal_dist': float(final_goal_dist.detach()),
             'iter_per_sec': iter_per_sec,
             'sim_fps': sim_fps,
         }
+        log.update(_build_loss_contrib_metrics(loss_terms, args))
         log.update({f'cam/{k}': v for k, v in cam_stats.items()})
         smoother.add(log)
         if args.vis_enable:
-            vis.log_train_scalars({k: v for k, v in log.items() if k in {'loss', 'collision_rate', 'success_rate', 'goal_dist/final'}}, iter_idx=i)
+            vis.log_train_scalars({k: v for k, v in log.items() if k in {'loss', 'collision_rate', 'success_rate', 'charts/goal_dist'}}, iter_idx=i)
         periodic_tail_ops(i, checkpoint_dir, model, smoother)

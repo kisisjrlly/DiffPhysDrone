@@ -11,24 +11,21 @@ from env_cuda import Env
 class MetricSmoother:
     """Accumulates scalar metrics and flushes averaged values to WandB."""
 
-    ALLOWED = {
+    ALLOWED_EXACT = {
         'loss',
-        'loss_v',
-        'loss_obj_avoidance',
-        'loss_collide',
-        'loss_d_acc',
-        'loss_d_jerk',
-        'loss_cam_smooth',
-        'loss_diff_depth_power',
         'collision_rate',
         'success_rate',
-        'goal_dist/final',
+        'charts/goal_dist',
         'cam/power_mean',
         'cam/exposure_mean',
         'cam/gain_mean',
         'iter_per_sec',
         'sim_fps',
     }
+    ALLOWED_PREFIXES = (
+        'loss_contrib/',
+        'loss_share/',
+    )
 
     def __init__(self, args):
         self._q: dict[str, list[float]] = defaultdict(list)
@@ -36,7 +33,7 @@ class MetricSmoother:
 
     def add(self, d: dict):
         for k, v in d.items():
-            if k in self.ALLOWED:
+            if k in self.ALLOWED_EXACT or any(k.startswith(prefix) for prefix in self.ALLOWED_PREFIXES):
                 self._q[k].append(float(v))
 
     def flush(self, step: int):
