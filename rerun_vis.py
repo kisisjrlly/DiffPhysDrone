@@ -282,6 +282,7 @@ class RerunVis:
                         balls=None, voxels=None, cyl=None, cyl_h=None,
                         start=None, target=None,
                         scene_name=None, scene_effects=None,
+                        scene_yaw: float = 0.0,
                         max_speed=None, y_stretch=None, scale=None,
                         step_idx: int = 0):
         """Log one environment snapshot for global 3D inspection.
@@ -422,6 +423,23 @@ class RerunVis:
             hi = float(q50 + 0.5 * span)
             return lo, hi
 
+        yaw = float(scene_yaw or 0.0)
+        cyaw = float(np.cos(yaw))
+        syaw = float(np.sin(yaw))
+        Rz = np.array([[cyaw, -syaw, 0.0], [syaw, cyaw, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+
+        def _rot_points(points):
+            p = np.asarray(points, dtype=np.float32)
+            return p @ Rz.T
+
+        def _box_rotations(n):
+            if n <= 0 or abs(yaw) < 1e-7:
+                return None
+            try:
+                return [rr.datatypes.RotationAxisAngle([0.0, 0.0, 1.0], radians=yaw) for _ in range(int(n))]
+            except Exception:
+                return None
+
         z_samples = []
         y_samples = []
         if start is not None:
@@ -521,8 +539,13 @@ class RerunVis:
         if voxels is not None:
             v = np.asarray(voxels, dtype=np.float32)
             if v.size > 0:
+                v_centers = _rot_points(v[:, :3])
+                voxel_rots = _box_rotations(v.shape[0])
                 if hasattr(rr, "Mesh3D"):
                     vertex_positions, triangle_indices, vertex_normals = self._build_box_mesh(v)
+                    if abs(yaw) > 1e-7:
+                        vertex_positions = _rot_points(vertex_positions)
+                        vertex_normals = _rot_points(vertex_normals)
                     rr.log(
                         f"{phase}/world/voxels_mesh",
                         rr.Mesh3D(
@@ -536,8 +559,9 @@ class RerunVis:
                     rr.log(
                         f"{phase}/world/voxels",
                         rr.Boxes3D(
-                            centers=v[:, :3],
+                            centers=v_centers,
                             half_sizes=v[:, 3:6],
+                            rotations=voxel_rots,
                             colors=[[60, 200, 255, 170]] * v.shape[0],
                             radii=[box_r] * v.shape[0],
                         ),
@@ -547,7 +571,7 @@ class RerunVis:
                 edges = []
                 for row in v:
                     cx, cy, cz, hx, hy, hz = row.tolist()
-                    corners = np.array([
+                    corners = _rot_points(np.array([
                         [cx - hx, cy - hy, cz - hz],
                         [cx + hx, cy - hy, cz - hz],
                         [cx + hx, cy + hy, cz - hz],
@@ -556,7 +580,7 @@ class RerunVis:
                         [cx + hx, cy - hy, cz + hz],
                         [cx + hx, cy + hy, cz + hz],
                         [cx - hx, cy + hy, cz + hz],
-                    ], dtype=np.float32)
+                    ], dtype=np.float32))
                     idx = [(0, 1), (1, 2), (2, 3), (3, 0),
                            (4, 5), (5, 6), (6, 7), (7, 4),
                            (0, 4), (1, 5), (2, 6), (3, 7)]

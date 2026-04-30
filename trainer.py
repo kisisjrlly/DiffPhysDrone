@@ -6,6 +6,14 @@ import time
 import torch
 from torch.cuda.amp import autocast
 from tqdm import tqdm
+import wandb
+
+try:
+    from matplotlib import pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ModuleNotFoundError:
+    plt = None
+    MATPLOTLIB_AVAILABLE = False
 
 from losses import compute_camera_losses, compute_physics_losses, aggregate_loss
 from rollout_ops import (
@@ -66,6 +74,84 @@ def _build_loss_contrib_metrics(loss_terms, args):
         out[f'loss_contrib/{name}'] = value
         out[f'loss_share/{name}'] = abs(value) / total
     return out
+
+
+def _stack_history_for_plot(values):
+    if values is None or len(values) == 0:
+        return None
+    return torch.stack([v.detach() if isinstance(v, torch.Tensor) else torch.as_tensor(v) for v in values])
+
+
+def _plot_xyz(seq, title, labels=('x', 'y', 'z'), extra=None, ylabel=None):
+    fig, ax = plt.subplots(figsize=(7.2, 3.2))
+    for k, label in enumerate(labels):
+        ax.plot(seq[:, k].numpy(), label=label)
+    if extra:
+        for label, values in extra:
+            ax.plot(values.numpy(), '--', label=label)
+    ax.set_title(title)
+    ax.set_xlabel('timestep')
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.25)
+    ax.legend(loc='best')
+    fig.tight_layout()
+    return fig
+
+
+def _log_episode_history_plots(rollout, args, iter_idx):
+    """Log one rollout's time-series curves to WandB.
+
+    These are diagnostic plots, not smoothed training scalars.  They restore the
+    old p_history/camera-parameter view so a single episode's behavior can be
+    inspected directly in WandB.
+    """
+    if not MATPLOTLIB_AVAILABLE:
+        return
+    p_hist = _stack_history_for_plot(rollout.get('p_history'))
+    v_hist = _stack_history_for_plot(rollout.get('v_history'))
+    a_hist = _stack_history_for_plot(rollout.get('act_history'))
+    power_hist = _stack_history_for_plot(rollout.get('power_history'))
+    exposure_hist = _stack_history_for_plot(rollout.get('exposure_history'))
+    gain_hist = _stack_history_for_plot(rollout.get('gain_history'))
+    if p_hist is None or v_hist is None or a_hist is None:
+        return
+
+    B = int(p_hist.shape[1])
+    j = int(min(max(getattr(args, 'vis_env_idx', 0), 0), B - 1))
+    ph = p_hist[:, j].detach().cpu()
+    vh = v_hist[:, j].detach().cpu()
+    ah = a_hist[:, j].detach().cpu()
+
+    figs = []
+    try:
+        fig_p = _plot_xyz(ph, 'position history', ylabel='m')
+        figs.append(fig_p)
+        speed = vh.norm(2, -1)
+        fig_v = _plot_xyz(vh, 'velocity history', extra=[('speed', speed)], ylabel='m/s')
+        figs.append(fig_v)
+        acc_norm = ah.norm(2, -1)
+        fig_a = _plot_xyz(ah, 'acceleration command history', extra=[('norm', acc_norm)], ylabel='m/s^2')
+        figs.append(fig_a)
+
+        log_payload = {
+            'episode_history/p_history': wandb.Image(fig_p),
+            'episode_history/v_history': wandb.Image(fig_v),
+            'episode_history/a_history': wandb.Image(fig_a),
+        }
+        if power_hist is not None and exposure_hist is not None and gain_hist is not None:
+            cam = torch.stack([
+                power_hist[:, j].detach().cpu(),
+                exposure_hist[:, j].detach().cpu(),
+                gain_hist[:, j].detach().cpu(),
+            ], -1)
+            fig_cam = _plot_xyz(cam, 'camera parameter history', labels=('power', 'exposure', 'gain'), ylabel='0..1')
+            figs.append(fig_cam)
+            log_payload['episode_history/camera_params'] = wandb.Image(fig_cam)
+        wandb.log(log_payload, step=int(iter_idx) + 1)
+    finally:
+        for fig in figs:
+            plt.close(fig)
 
 
 def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
@@ -215,14 +301,15 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             j = int(min(max(args.vis_env_idx, 0), B - 1))
             vis.log_environment(
                 phase='student',
-                balls=env_train.balls[j].detach().cpu().numpy(),
-                voxels=env_train.voxels[j].detach().cpu().numpy(),
-                cyl=env_train.cyl[j].detach().cpu().numpy(),
-                cyl_h=env_train.cyl_h[j].detach().cpu().numpy(),
+                balls=env_train.get_world_balls_for_env(j),
+                voxels=env_train.get_world_voxels_for_env(j),
+                cyl=env_train.get_world_cyl_for_env(j),
+                cyl_h=env_train.get_world_cyl_h_for_env(j),
                 start=env_train.p[j].detach().cpu().numpy(),
                 target=env_train.p_target[j].detach().cpu().numpy(),
                 scene_name=getattr(env_train, 'current_scene_name', None),
                 scene_effects=env_train.get_scene_effects_for_env(j),
+                scene_yaw=env_train.get_scene_yaw_for_env(j),
             )
 
         rollout = _rollout(env_train, model, args, B, device, use_amp, vis, should_vis)
@@ -265,6 +352,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         log.update(_build_loss_contrib_metrics(loss_terms, args))
         log.update({f'cam/{k}': v for k, v in cam_stats.items()})
         smoother.add(log)
+        if should_vis and not args.wandb_disabled:
+            _log_episode_history_plots(rollout, args, i)
         if args.vis_enable:
             vis.log_train_scalars({k: v for k, v in log.items() if k in {'loss', 'collision_rate', 'success_rate', 'charts/goal_dist'}}, iter_idx=i)
         periodic_tail_ops(i, checkpoint_dir, model, smoother)

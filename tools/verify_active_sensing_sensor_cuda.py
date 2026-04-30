@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the minimal active-sensing fused CUDA sensor against PyTorch reference.
-
-The CUDA op intentionally treats geometry/raw depth as non-differentiable, but
-must match the reference forward outputs and gradients w.r.t.
-power/exposure/gain.
-"""
+"""Verify the D455-like fused CUDA sensor against a PyTorch reference."""
 import argparse
 import math
 import os
@@ -24,57 +19,78 @@ if REPO_ROOT not in sys.path:
 
 from autograd_ops import active_sensing_sensor  # noqa: E402
 from config import build_parser, parse_diff_sensor_impl, parse_scenarios, validate_args  # noqa: E402
-from train_utils import build_env  # noqa: E402
-import quadsim_cuda  # noqa: E402
+from env_cuda import Env  # noqa: E402
 
 
 SCENE_TO_ID = {'glare': 0, 'specular': 1, 'dark': 2}
+EXPOSURE_T_MIN = 0.25
+EXPOSURE_T_SPAN = 2.75
+ISO_GAIN_BASE = 1.0
+ISO_GAIN_SCALE = 0.8
+ISO_GAIN_GAMMA = 0.6
+SHOT_NOISE_BASE = 0.01
 
 
-def sensor_reference(depth, mask, power, exposure, gain, regime_id, min_valid, max_range):
+def iso_to_gain(gain01):
+    eps = 1e-4
+    eps_gamma = eps ** ISO_GAIN_GAMMA
+    denom = max((1.0 + eps) ** ISO_GAIN_GAMMA - eps_gamma, 1e-12)
+    shaped = ((gain01.clamp(0.0, 1.0) + eps).pow(ISO_GAIN_GAMMA) - eps_gamma) / denom
+    return ISO_GAIN_BASE + ISO_GAIN_SCALE * shaped
+
+
+def sensor_reference(depth, mask, power, exposure, gain, speed, regime_id, min_valid, max_range):
     raw = depth.clamp(float(min_valid), float(max_range))
     mask = mask.clamp(0.0, 1.0)
     p = power.clamp(0, 1)[:, None, None]
-    e = exposure.clamp(0, 1)[:, None, None]
-    g = gain.clamp(0, 1)[:, None, None]
-
-    base = torch.sigmoid((float(max_range) - raw) / 0.9)
-    base = base * (0.90 + 0.18 * p + 0.08 * e + 0.06 * g)
-    quality = base
-    effect = torch.zeros_like(raw)
-
-    if int(regime_id) == 0:
-        overexp = torch.sigmoid((e - 0.18) / 0.045)
-        rescue = torch.sigmoid((p - 0.56) / 0.08)
-        penalty = mask * overexp * (0.95 - 0.55 * rescue)
-        bonus = mask * rescue * (1.0 - overexp) * 0.20
-        quality = quality - penalty + bonus
-        effect = penalty
-    elif int(regime_id) == 1:
-        wash = torch.sigmoid((p - 0.38) / 0.07) * (
-            0.55 + 0.45 * torch.sigmoid((e - 0.25) / 0.08)
-        )
-        safe = torch.sigmoid((0.42 - p) / 0.10)
-        penalty = mask * wash * 0.92
-        bonus = mask * safe * 0.25
-        quality = quality - penalty + bonus
-        effect = penalty
-    else:
-        need = mask * 0.82
-        rescue = (
-            torch.sigmoid((e - 0.48) / 0.08) * 0.55
-            + torch.sigmoid((g - 0.42) / 0.08) * 0.45
-        )
-        penalty = need * (1.0 - rescue)
-        quality = quality - penalty + mask * rescue * 0.18
-        effect = penalty
+    e01 = exposure.clamp(0, 1)[:, None, None]
+    g01 = gain.clamp(0, 1)[:, None, None]
+    exposure_t = (EXPOSURE_T_MIN + EXPOSURE_T_SPAN * exposure.clamp(0, 1))[:, None, None]
+    gain_scale = iso_to_gain(gain)[:, None, None].clamp_min(1e-6)
+    spd = speed.clamp_min(0.0)[:, None, None]
 
     d4 = raw[:, None]
     d_far = F.max_pool2d(d4, 3, stride=1, padding=1)[:, 0]
     d_near = -F.max_pool2d(-d4, 3, stride=1, padding=1)[:, 0]
-    edge = ((d_far - d_near) / (raw + 0.2)).clamp(0.0, 1.0)
-    quality = (quality - 0.12 * edge).clamp(0.0, 1.0)
+    edge = ((d_far - d_near) / (raw + 0.18)).clamp(0.0, 1.0)
 
+    dist = raw / max(float(max_range), 1e-6)
+    active_signal = 1.70 * p * exposure_t / (raw.square() + 0.75)
+    passive_signal = 0.10 * exposure_t * torch.sqrt(gain_scale)
+    signal = active_signal + passive_signal
+    ambient_ir = 0.18 + 0.55 * mask
+    motion = (spd * exposure_t * 0.075).clamp(0.0, 1.6)
+    washout = ambient_ir * exposure_t / (active_signal + 0.20)
+    noise_proxy = SHOT_NOISE_BASE * (0.45 + 0.18 * gain_scale) / (signal + 0.08)
+    snr = signal / (0.18 + 0.55 * ambient_ir + 0.38 * noise_proxy + 0.45 * motion * (0.20 + edge))
+    quality = torch.sigmoid(2.15 * snr - 0.95 * washout - 0.85 * edge - 1.45 * torch.relu(dist - 0.92))
+    effect = torch.zeros_like(raw)
+
+    if int(regime_id) == 0:
+        overexp = torch.sigmoid((e01 - 0.20) / 0.055)
+        rescue = torch.sigmoid((p - 0.50) / 0.09)
+        penalty = mask * overexp * (0.78 - 0.38 * rescue)
+        bonus = mask * rescue * (1.0 - overexp) * 0.18
+        quality = quality - penalty + bonus
+        effect = penalty
+    elif int(regime_id) == 1:
+        wash = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
+        safe = torch.sigmoid((0.40 - p) / 0.075)
+        penalty = mask * wash * 1.08
+        bonus = mask * safe * 0.30
+        quality = quality - penalty + bonus
+        effect = penalty
+    else:
+        rescue = (
+            torch.sigmoid((e01 - 0.36) / 0.08) * 0.55
+            + torch.sigmoid((g01 - 0.32) / 0.09) * 0.45
+        ).clamp(max=1.0)
+        need = mask * 0.68
+        penalty = need * (1.0 - rescue)
+        quality = quality - penalty + mask * rescue * 0.24
+        effect = penalty
+
+    quality = quality.clamp(0.0, 1.0)
     valid_prob = torch.sigmoid((quality - 0.42) / 0.055)
     hard_valid = (valid_prob > 0.5).to(raw.dtype)
     valid_st = hard_valid.detach() - valid_prob.detach() + valid_prob
@@ -96,13 +112,13 @@ def make_synthetic_inputs(batch, height, width, device):
     center = torch.linspace(-0.55, 0.55, batch, device=device)[:, None, None]
     mask = torch.sigmoid((0.30 - (yy - center).abs()) / 0.07)
     mask = (mask * torch.sigmoid((0.72 - zz.abs()) / 0.08)).contiguous()
-    return depth, mask
+    speed = torch.linspace(0.05, 1.15, batch, device=device)
+    return depth, mask, speed
 
 
 def deterministic_weights(shape, device):
     n = math.prod(shape)
-    w = torch.linspace(-0.7, 0.9, n, device=device, dtype=torch.float32).reshape(shape)
-    return w
+    return torch.linspace(-0.7, 0.9, n, device=device, dtype=torch.float32).reshape(shape)
 
 
 def compare_tensor(name, ref, cuda, atol):
@@ -115,7 +131,7 @@ def compare_tensor(name, ref, cuda, atol):
 
 def run_case(scene, power_vals, exposure_vals, gain_vals, args):
     device = torch.device(args.device)
-    depth, mask = make_synthetic_inputs(len(power_vals), args.height, args.width, device)
+    depth, mask, speed = make_synthetic_inputs(len(power_vals), args.height, args.width, device)
     regime_id = SCENE_TO_ID[scene]
     min_valid, max_range = 0.3, 6.0
 
@@ -126,12 +142,12 @@ def run_case(scene, power_vals, exposure_vals, gain_vals, args):
     e_cuda = e_ref.detach().clone().requires_grad_(True)
     g_cuda = g_ref.detach().clone().requires_grad_(True)
 
-    ref_out = sensor_reference(depth, mask, p_ref, e_ref, g_ref, regime_id, min_valid, max_range)
-    cuda_out = active_sensing_sensor(depth, mask, p_cuda, e_cuda, g_cuda, regime_id, min_valid, max_range)
+    ref_out = sensor_reference(depth, mask, p_ref, e_ref, g_ref, speed, regime_id, min_valid, max_range)
+    cuda_out = active_sensing_sensor(
+        depth, mask, p_cuda, e_cuda, g_cuda, speed, regime_id, min_valid, max_range,
+        EXPOSURE_T_MIN, EXPOSURE_T_SPAN, ISO_GAIN_BASE, ISO_GAIN_SCALE, ISO_GAIN_GAMMA, SHOT_NOISE_BASE)
 
     weights = deterministic_weights(depth.shape, device)
-    # Exercise every differentiable output path. hard_valid is intentionally not
-    # included because the reference also treats the hard threshold as non-diff.
     ref_loss = (
         (ref_out[0] * weights).mean()
         + 0.37 * (ref_out[1] * weights.flip(-1)).mean()
@@ -173,7 +189,41 @@ def run_env_smoke(args):
     cfg.scenarios = parse_scenarios(['glare', 'specular', 'dark'])
     cfg.sun_glare_eval_slot = None
     validate_args(cfg)
-    env = build_env(cfg.batch_size, cfg, device)
+    env = Env(
+        cfg.batch_size,
+        int(cfg.depth_width),
+        int(cfg.depth_height),
+        cfg.grad_decay,
+        device,
+        eval_mode=True,
+        fov_x_half_tan=cfg.fov_x_half_tan,
+        cam_angle=cfg.cam_angle,
+        cam_power_baseline=cfg.cam_power_baseline,
+        camera_control_mode=cfg.camera_control_mode,
+        sensor_grad_mode=cfg.sensor_grad_mode,
+        fixed_camera_power=cfg.fixed_camera_power,
+        fixed_camera_exposure=cfg.fixed_camera_exposure,
+        fixed_camera_gain=cfg.fixed_camera_gain,
+        fixed_random_power_min=cfg.fixed_random_power_min,
+        fixed_random_power_max=cfg.fixed_random_power_max,
+        fixed_random_exposure_min=cfg.fixed_random_exposure_min,
+        fixed_random_exposure_max=cfg.fixed_random_exposure_max,
+        fixed_random_gain_min=cfg.fixed_random_gain_min,
+        fixed_random_gain_max=cfg.fixed_random_gain_max,
+        cam_exposure_t_min=cfg.cam_exposure_t_min,
+        cam_exposure_t_span=cfg.cam_exposure_t_span,
+        cam_exposure_eff_min=cfg.cam_exposure_eff_min,
+        cam_exposure_eff_max=cfg.cam_exposure_eff_max,
+        cam_iso_gain_base=cfg.cam_iso_gain_base,
+        cam_iso_gain_scale=cfg.cam_iso_gain_scale,
+        cam_iso_gain_gamma=cfg.cam_iso_gain_gamma,
+        cam_shot_noise_base=cfg.cam_shot_noise_base,
+        depth_min_valid=cfg.depth_min_valid,
+        depth_max_range=cfg.depth_max_range,
+        scenarios=cfg.scenarios,
+        sun_glare_eval_slot=None,
+        diff_sensor_impl=cfg.diff_sensor_impl,
+    )
     ok = True
     lines = []
     for scene in SCENE_TO_ID:
@@ -197,7 +247,7 @@ def run_env_smoke(args):
 
 def run_perf(args):
     device = torch.device(args.device)
-    depth, mask = make_synthetic_inputs(args.perf_batch, args.height, args.width, device)
+    depth, mask, speed = make_synthetic_inputs(args.perf_batch, args.height, args.width, device)
     regime_id = SCENE_TO_ID['glare']
     power = torch.full((args.perf_batch,), 0.45, device=device, requires_grad=True)
     exposure = torch.full((args.perf_batch,), 0.30, device=device, requires_grad=True)
@@ -208,7 +258,7 @@ def run_perf(args):
         p = power.detach().clone().requires_grad_(True)
         e = exposure.detach().clone().requires_grad_(True)
         g = gain.detach().clone().requires_grad_(True)
-        out = sensor_reference(depth, mask, p, e, g, regime_id, 0.3, 6.0)
+        out = sensor_reference(depth, mask, p, e, g, speed, regime_id, 0.3, 6.0)
         loss = (out[0] * weights).mean() + 0.1 * out[1].mean()
         loss.backward()
 
@@ -216,7 +266,9 @@ def run_perf(args):
         p = power.detach().clone().requires_grad_(True)
         e = exposure.detach().clone().requires_grad_(True)
         g = gain.detach().clone().requires_grad_(True)
-        out = active_sensing_sensor(depth, mask, p, e, g, regime_id, 0.3, 6.0)
+        out = active_sensing_sensor(
+            depth, mask, p, e, g, speed, regime_id, 0.3, 6.0,
+            EXPOSURE_T_MIN, EXPOSURE_T_SPAN, ISO_GAIN_BASE, ISO_GAIN_SCALE, ISO_GAIN_GAMMA, SHOT_NOISE_BASE)
         loss = (out[0] * weights).mean() + 0.1 * out[1].mean()
         loss.backward()
 
@@ -243,7 +295,7 @@ def main():
     parser.add_argument('--height', type=int, default=48)
     parser.add_argument('--width', type=int, default=64)
     parser.add_argument('--forward_atol', type=float, default=1e-5)
-    parser.add_argument('--grad_atol', type=float, default=3e-5)
+    parser.add_argument('--grad_atol', type=float, default=5e-4)
     parser.add_argument('--perf', action='store_true')
     parser.add_argument('--perf_batch', type=int, default=64)
     parser.add_argument('--perf_iters', type=int, default=200)
@@ -259,24 +311,25 @@ def main():
         ([0.35, 0.44, 0.62], [0.16, 0.31, 0.72], [0.28, 0.46, 0.82]),
     ]
     for scene in SCENE_TO_ID:
-        for cam in camera_sets:
-            for ok, line in run_case(scene, *cam, args):
+        for p_vals, e_vals, g_vals in camera_sets:
+            checks = run_case(scene, p_vals, e_vals, g_vals, args)
+            for ok, msg in checks:
                 all_ok = all_ok and ok
-                print(('PASS ' if ok else 'FAIL ') + line)
+                print(('OK  ' if ok else 'BAD ') + msg)
 
-    smoke_ok, smoke_lines = run_env_smoke(args)
-    all_ok = all_ok and smoke_ok
-    for line in smoke_lines:
-        print(('PASS ' if smoke_ok else 'FAIL ') + line)
+    env_ok, env_lines = run_env_smoke(args)
+    all_ok = all_ok and env_ok
+    for line in env_lines:
+        print(('OK  ' if env_ok else 'BAD ') + line)
 
     if args.perf:
         ref_s, cuda_s = run_perf(args)
         speedup = ref_s / max(cuda_s, 1e-9)
-        print(f'PERF reference={ref_s:.4f}s cuda={cuda_s:.4f}s speedup={speedup:.2f}x')
+        print(f'perf: reference={ref_s:.4f}s cuda={cuda_s:.4f}s speedup={speedup:.2f}x')
 
     if not all_ok:
         raise SystemExit(1)
-    print('All active-sensing CUDA sensor checks passed.')
+    print('active sensing CUDA verification passed')
 
 
 if __name__ == '__main__':

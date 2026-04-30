@@ -1100,15 +1100,115 @@ std::vector<torch::Tensor> render_diff_depth_backward_cuda(
 }
 
 
+
 // ============================================================================
-// Minimal active-sensing fused sensor core.
-// Geometry depth is rendered elsewhere; this kernel only applies the simplified
-// camera-regime model and returns gradients for power/exposure/gain.
+// D455-like active-sensing fused sensor core.
+// Geometry depth is rendered elsewhere; this kernel applies the active stereo
+// sensor model and returns gradients for power/exposure/gain.
 // ============================================================================
 
 template <typename scalar_t>
 __device__ __forceinline__ scalar_t sigmoid_d(scalar_t x) {
     return scalar_t(1) / (scalar_t(1) + exp(-x));
+}
+
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t d455_iso_gain_d(
+    scalar_t gain01,
+    scalar_t iso_gain_base,
+    scalar_t iso_gain_scale,
+    scalar_t iso_gain_gamma) {
+    const scalar_t eps = scalar_t(1e-4);
+    const scalar_t eps_gamma = pow(eps, iso_gain_gamma);
+    const scalar_t denom = max(pow(scalar_t(1) + eps, iso_gain_gamma) - eps_gamma, scalar_t(1e-12));
+    scalar_t g = min(max(gain01, scalar_t(0)), scalar_t(1));
+    scalar_t shaped = (pow(g + eps, iso_gain_gamma) - eps_gamma) / denom;
+    return iso_gain_base + iso_gain_scale * shaped;
+}
+
+template <typename scalar_t>
+__device__ __forceinline__ scalar_t d455_iso_gain_deriv_d(
+    scalar_t gain01,
+    scalar_t iso_gain_scale,
+    scalar_t iso_gain_gamma) {
+    const scalar_t eps = scalar_t(1e-4);
+    const scalar_t eps_gamma = pow(eps, iso_gain_gamma);
+    const scalar_t denom = max(pow(scalar_t(1) + eps, iso_gain_gamma) - eps_gamma, scalar_t(1e-12));
+    scalar_t g = min(max(gain01, scalar_t(0)), scalar_t(1));
+    return iso_gain_scale * iso_gain_gamma * pow(g + eps, iso_gain_gamma - scalar_t(1)) / denom;
+}
+
+template <typename scalar_t>
+__device__ __forceinline__ void d455_quality_effect_core(
+    scalar_t raw,
+    scalar_t edge,
+    scalar_t mask,
+    scalar_t power01,
+    scalar_t exposure01,
+    scalar_t gain01,
+    scalar_t speed,
+    int regime_id,
+    scalar_t max_range,
+    scalar_t exposure_t_min,
+    scalar_t exposure_t_span,
+    scalar_t iso_gain_base,
+    scalar_t iso_gain_scale,
+    scalar_t iso_gain_gamma,
+    scalar_t shot_noise_base,
+    scalar_t* quality_out,
+    scalar_t* effect_out) {
+    const scalar_t p = min(max(power01, scalar_t(0)), scalar_t(1));
+    const scalar_t e01 = min(max(exposure01, scalar_t(0)), scalar_t(1));
+    const scalar_t g01 = min(max(gain01, scalar_t(0)), scalar_t(1));
+    const scalar_t exposure_t = exposure_t_min + exposure_t_span * e01;
+    const scalar_t gain_scale = d455_iso_gain_d(g01, iso_gain_base, iso_gain_scale, iso_gain_gamma);
+    const scalar_t dist = raw / max(max_range, scalar_t(1e-6));
+
+    const scalar_t active_signal = scalar_t(1.70) * p * exposure_t / (raw * raw + scalar_t(0.75));
+    const scalar_t passive_signal = scalar_t(0.10) * exposure_t * sqrt(max(gain_scale, scalar_t(1e-6)));
+    const scalar_t signal = active_signal + passive_signal;
+    const scalar_t ambient_ir = scalar_t(0.18) + scalar_t(0.55) * mask;
+    const scalar_t motion = min(max(speed * exposure_t * scalar_t(0.075), scalar_t(0)), scalar_t(1.6));
+    const scalar_t washout = ambient_ir * exposure_t / (active_signal + scalar_t(0.20));
+    const scalar_t noise_proxy = shot_noise_base * (scalar_t(0.45) + scalar_t(0.18) * gain_scale) / (signal + scalar_t(0.08));
+    const scalar_t snr = signal / (
+        scalar_t(0.18) + scalar_t(0.55) * ambient_ir + scalar_t(0.38) * noise_proxy
+        + scalar_t(0.45) * motion * (scalar_t(0.20) + edge));
+    scalar_t quality = sigmoid_d(
+        scalar_t(2.15) * snr
+        - scalar_t(0.95) * washout
+        - scalar_t(0.85) * edge
+        - scalar_t(1.45) * max(dist - scalar_t(0.92), scalar_t(0)));
+
+    scalar_t effect = scalar_t(0);
+    if (regime_id == 0) {
+        const scalar_t overexp = sigmoid_d((e01 - scalar_t(0.20)) / scalar_t(0.055));
+        const scalar_t rescue = sigmoid_d((p - scalar_t(0.50)) / scalar_t(0.09));
+        const scalar_t penalty = mask * overexp * (scalar_t(0.78) - scalar_t(0.38) * rescue);
+        const scalar_t bonus = mask * rescue * (scalar_t(1) - overexp) * scalar_t(0.18);
+        quality = quality - penalty + bonus;
+        effect = penalty;
+    } else if (regime_id == 1) {
+        const scalar_t wash = sigmoid_d((p - scalar_t(0.30)) / scalar_t(0.055)) *
+                              (scalar_t(0.62) + scalar_t(0.38) * sigmoid_d((e01 - scalar_t(0.22)) / scalar_t(0.07)));
+        const scalar_t safe = sigmoid_d((scalar_t(0.40) - p) / scalar_t(0.075));
+        const scalar_t penalty = mask * wash * scalar_t(1.08);
+        const scalar_t bonus = mask * safe * scalar_t(0.30);
+        quality = quality - penalty + bonus;
+        effect = penalty;
+    } else {
+        const scalar_t rescue_raw =
+            sigmoid_d((e01 - scalar_t(0.36)) / scalar_t(0.08)) * scalar_t(0.55)
+            + sigmoid_d((g01 - scalar_t(0.32)) / scalar_t(0.09)) * scalar_t(0.45);
+        const scalar_t rescue = min(rescue_raw, scalar_t(1));
+        const scalar_t need = mask * scalar_t(0.68);
+        const scalar_t penalty = need * (scalar_t(1) - rescue);
+        quality = quality - penalty + mask * rescue * scalar_t(0.24);
+        effect = penalty;
+    }
+
+    *quality_out = min(max(quality, scalar_t(0)), scalar_t(1));
+    *effect_out = effect;
 }
 
 template <typename scalar_t>
@@ -1118,6 +1218,7 @@ __global__ void active_sensing_sensor_forward_kernel(
     const scalar_t* __restrict__ power,
     const scalar_t* __restrict__ exposure,
     const scalar_t* __restrict__ gain,
+    const scalar_t* __restrict__ speed,
     scalar_t* __restrict__ depth_obs,
     scalar_t* __restrict__ quality_obs,
     scalar_t* __restrict__ quality,
@@ -1129,69 +1230,45 @@ __global__ void active_sensing_sensor_forward_kernel(
     int W,
     int regime_id,
     double min_valid_d,
-    double max_range_d) {
+    double max_range_d,
+    double exposure_t_min_d,
+    double exposure_t_span_d,
+    double iso_gain_base_d,
+    double iso_gain_scale_d,
+    double iso_gain_gamma_d,
+    double shot_noise_base_d) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int N = B * H * W;
     if (idx >= N) return;
     const int b = idx / (H * W);
     const scalar_t min_valid = static_cast<scalar_t>(min_valid_d);
     const scalar_t max_range = static_cast<scalar_t>(max_range_d);
-    scalar_t raw = depth[idx];
-    raw = min(max(raw, min_valid), max_range);
-    const scalar_t m = min(max(mask[idx], scalar_t(0)), scalar_t(1));
-    const scalar_t p = min(max(power[b], scalar_t(0)), scalar_t(1));
-    const scalar_t e = min(max(exposure[b], scalar_t(0)), scalar_t(1));
-    const scalar_t g = min(max(gain[b], scalar_t(0)), scalar_t(1));
-
-    scalar_t base = sigmoid_d((max_range - raw) / scalar_t(0.9));
-    base = base * (scalar_t(0.90) + scalar_t(0.18) * p + scalar_t(0.08) * e + scalar_t(0.06) * g);
-    scalar_t q = base;
-    scalar_t eff = scalar_t(0);
-
-    if (regime_id == 0) {
-        const scalar_t overexp = sigmoid_d((e - scalar_t(0.18)) / scalar_t(0.045));
-        const scalar_t rescue = sigmoid_d((p - scalar_t(0.56)) / scalar_t(0.08));
-        const scalar_t penalty = m * overexp * (scalar_t(0.95) - scalar_t(0.55) * rescue);
-        const scalar_t bonus = m * rescue * (scalar_t(1) - overexp) * scalar_t(0.20);
-        q = q - penalty + bonus;
-        eff = penalty;
-    } else if (regime_id == 1) {
-        const scalar_t sp_e = sigmoid_d((e - scalar_t(0.25)) / scalar_t(0.08));
-        const scalar_t wash = sigmoid_d((p - scalar_t(0.38)) / scalar_t(0.07)) * (scalar_t(0.55) + scalar_t(0.45) * sp_e);
-        const scalar_t safe = sigmoid_d((scalar_t(0.42) - p) / scalar_t(0.10));
-        const scalar_t penalty = m * wash * scalar_t(0.92);
-        const scalar_t bonus = m * safe * scalar_t(0.25);
-        q = q - penalty + bonus;
-        eff = penalty;
-    } else {
-        const scalar_t rescue =
-            sigmoid_d((e - scalar_t(0.48)) / scalar_t(0.08)) * scalar_t(0.55)
-            + sigmoid_d((g - scalar_t(0.42)) / scalar_t(0.08)) * scalar_t(0.45);
-        const scalar_t need = m * scalar_t(0.82);
-        const scalar_t penalty = need * (scalar_t(1) - rescue);
-        q = q - penalty + m * rescue * scalar_t(0.18);
-        eff = penalty;
-    }
-
-    scalar_t d_far = raw;
-    scalar_t d_near = raw;
     const int local = idx - b * H * W;
     const int row = local / W;
     const int col = local % W;
+
+    scalar_t raw = min(max(depth[idx], min_valid), max_range);
+    scalar_t d_far = raw;
+    scalar_t d_near = raw;
     for (int rr = -1; rr <= 1; ++rr) {
         const int r = min(max(row + rr, 0), H - 1);
         for (int cc = -1; cc <= 1; ++cc) {
             const int c = min(max(col + cc, 0), W - 1);
             const int nidx = b * H * W + r * W + c;
-            scalar_t nd = depth[nidx];
-            nd = min(max(nd, min_valid), max_range);
+            scalar_t nd = min(max(depth[nidx], min_valid), max_range);
             d_far = max(d_far, nd);
             d_near = min(d_near, nd);
         }
     }
-    const scalar_t edge = min(max((d_far - d_near) / (raw + scalar_t(0.2)), scalar_t(0)), scalar_t(1));
-    q = q - scalar_t(0.12) * edge;
-    q = min(max(q, scalar_t(0)), scalar_t(1));
+    const scalar_t edge = min(max((d_far - d_near) / (raw + scalar_t(0.18)), scalar_t(0)), scalar_t(1));
+    scalar_t q;
+    scalar_t eff;
+    d455_quality_effect_core(
+        raw, edge, min(max(mask[idx], scalar_t(0)), scalar_t(1)), power[b], exposure[b], gain[b], max(speed[b], scalar_t(0)),
+        regime_id, max_range,
+        static_cast<scalar_t>(exposure_t_min_d), static_cast<scalar_t>(exposure_t_span_d),
+        static_cast<scalar_t>(iso_gain_base_d), static_cast<scalar_t>(iso_gain_scale_d),
+        static_cast<scalar_t>(iso_gain_gamma_d), static_cast<scalar_t>(shot_noise_base_d), &q, &eff);
     const scalar_t vp = sigmoid_d((q - scalar_t(0.42)) / scalar_t(0.055));
     const scalar_t hv = vp > scalar_t(0.5) ? scalar_t(1) : scalar_t(0);
     depth_obs[idx] = raw * hv;
@@ -1206,12 +1283,13 @@ template <typename scalar_t>
 __global__ void active_sensing_sensor_backward_kernel(
     const scalar_t* __restrict__ grad_quality,
     const scalar_t* __restrict__ grad_effect,
-    const scalar_t* __restrict__ raw,
+    const scalar_t* __restrict__ raw_in,
     const scalar_t* __restrict__ mask,
     const scalar_t* __restrict__ quality,
     const scalar_t* __restrict__ power,
     const scalar_t* __restrict__ exposure,
     const scalar_t* __restrict__ gain,
+    const scalar_t* __restrict__ speed,
     scalar_t* __restrict__ grad_power_px,
     scalar_t* __restrict__ grad_exposure_px,
     scalar_t* __restrict__ grad_gain_px,
@@ -1219,72 +1297,86 @@ __global__ void active_sensing_sensor_backward_kernel(
     int H,
     int W,
     int regime_id,
-    double max_range_d) {
+    double min_valid_d,
+    double max_range_d,
+    double exposure_t_min_d,
+    double exposure_t_span_d,
+    double iso_gain_base_d,
+    double iso_gain_scale_d,
+    double iso_gain_gamma_d,
+    double shot_noise_base_d) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int N = B * H * W;
     if (idx >= N) return;
     const int b = idx / (H * W);
-    const scalar_t m = min(max(mask[idx], scalar_t(0)), scalar_t(1));
-    const scalar_t p = min(max(power[b], scalar_t(0)), scalar_t(1));
-    const scalar_t e = min(max(exposure[b], scalar_t(0)), scalar_t(1));
-    const scalar_t g = min(max(gain[b], scalar_t(0)), scalar_t(1));
+    const int local = idx - b * H * W;
+    const int row = local / W;
+    const int col = local % W;
+    const scalar_t min_valid = static_cast<scalar_t>(min_valid_d);
+    const scalar_t max_range = static_cast<scalar_t>(max_range_d);
+    scalar_t raw = min(max(raw_in[idx], min_valid), max_range);
+    scalar_t d_far = raw;
+    scalar_t d_near = raw;
+    for (int rr = -1; rr <= 1; ++rr) {
+        const int r = min(max(row + rr, 0), H - 1);
+        for (int cc = -1; cc <= 1; ++cc) {
+            const int c = min(max(col + cc, 0), W - 1);
+            const int nidx = b * H * W + r * W + c;
+            scalar_t nd = min(max(raw_in[nidx], min_valid), max_range);
+            d_far = max(d_far, nd);
+            d_near = min(d_near, nd);
+        }
+    }
+    const scalar_t edge = min(max((d_far - d_near) / (raw + scalar_t(0.18)), scalar_t(0)), scalar_t(1));
     const scalar_t q = quality[idx];
-
     scalar_t gq = grad_quality[idx];
     if (q <= scalar_t(0) || q >= scalar_t(1)) {
-        // q clamp saturation. This matches torch.clamp subgradient convention
-        // well enough away from exact boundary and avoids bogus huge gradients.
         gq = scalar_t(0);
     }
+    const scalar_t geff = grad_effect[idx];
+    const scalar_t p0 = power[b];
+    const scalar_t e0 = exposure[b];
+    const scalar_t g0 = gain[b];
+    const scalar_t eps = scalar_t(1e-3);
+    const scalar_t m = min(max(mask[idx], scalar_t(0)), scalar_t(1));
+    const scalar_t spd = max(speed[b], scalar_t(0));
+    const scalar_t exposure_t_min = static_cast<scalar_t>(exposure_t_min_d);
+    const scalar_t exposure_t_span = static_cast<scalar_t>(exposure_t_span_d);
+    const scalar_t iso_gain_base = static_cast<scalar_t>(iso_gain_base_d);
+    const scalar_t iso_gain_scale = static_cast<scalar_t>(iso_gain_scale_d);
+    const scalar_t iso_gain_gamma = static_cast<scalar_t>(iso_gain_gamma_d);
+    const scalar_t shot_noise_base = static_cast<scalar_t>(shot_noise_base_d);
 
-    const scalar_t max_range = static_cast<scalar_t>(max_range_d);
-    const scalar_t base_sig = sigmoid_d((max_range - raw[idx]) / scalar_t(0.9));
-    scalar_t dq_dp = base_sig * scalar_t(0.18);
-    scalar_t dq_de = base_sig * scalar_t(0.08);
-    scalar_t dq_dg = base_sig * scalar_t(0.06);
-    scalar_t deff_dp = scalar_t(0);
-    scalar_t deff_de = scalar_t(0);
-    scalar_t deff_dg = scalar_t(0);
+    auto eval_param = [&](scalar_t pp, scalar_t ee, scalar_t gg, scalar_t* qq, scalar_t* eeff) {
+        d455_quality_effect_core(
+            raw, edge, m, pp, ee, gg, spd,
+            regime_id, max_range, exposure_t_min, exposure_t_span,
+            iso_gain_base, iso_gain_scale, iso_gain_gamma, shot_noise_base, qq, eeff);
+    };
 
-    if (regime_id == 0) {
-        const scalar_t overexp = sigmoid_d((e - scalar_t(0.18)) / scalar_t(0.045));
-        const scalar_t rescue = sigmoid_d((p - scalar_t(0.56)) / scalar_t(0.08));
-        const scalar_t do_de = overexp * (scalar_t(1) - overexp) / scalar_t(0.045);
-        const scalar_t dr_dp = rescue * (scalar_t(1) - rescue) / scalar_t(0.08);
-        deff_dp = m * overexp * scalar_t(-0.55) * dr_dp;
-        deff_de = m * do_de * (scalar_t(0.95) - scalar_t(0.55) * rescue);
-        dq_dp += m * dr_dp * (scalar_t(0.55) * overexp + scalar_t(0.20) * (scalar_t(1) - overexp));
-        dq_de += m * do_de * (-(scalar_t(0.95) - scalar_t(0.55) * rescue) - scalar_t(0.20) * rescue);
-    } else if (regime_id == 1) {
-        const scalar_t sp = sigmoid_d((p - scalar_t(0.38)) / scalar_t(0.07));
-        const scalar_t se = sigmoid_d((e - scalar_t(0.25)) / scalar_t(0.08));
-        const scalar_t safe = sigmoid_d((scalar_t(0.42) - p) / scalar_t(0.10));
-        const scalar_t dsp_dp = sp * (scalar_t(1) - sp) / scalar_t(0.07);
-        const scalar_t dse_de = se * (scalar_t(1) - se) / scalar_t(0.08);
-        const scalar_t dsafe_dp = -safe * (scalar_t(1) - safe) / scalar_t(0.10);
-        deff_dp = m * scalar_t(0.92) * dsp_dp * (scalar_t(0.55) + scalar_t(0.45) * se);
-        deff_de = m * scalar_t(0.92) * sp * scalar_t(0.45) * dse_de;
-        dq_dp += -m * scalar_t(0.92) * dsp_dp * (scalar_t(0.55) + scalar_t(0.45) * se)
-                 + m * scalar_t(0.25) * dsafe_dp;
-        dq_de += -m * scalar_t(0.92) * sp * scalar_t(0.45) * dse_de;
-    } else {
-        const scalar_t se = sigmoid_d((e - scalar_t(0.48)) / scalar_t(0.08));
-        const scalar_t sg = sigmoid_d((g - scalar_t(0.42)) / scalar_t(0.08));
-        const scalar_t dre_de = scalar_t(0.55) * se * (scalar_t(1) - se) / scalar_t(0.08);
-        const scalar_t drg_dg = scalar_t(0.45) * sg * (scalar_t(1) - sg) / scalar_t(0.08);
-        // q contribution from rescue: need*rescue + 0.18*m*rescue, need=0.82*m
-        const scalar_t scale = m * (scalar_t(0.82) + scalar_t(0.18));
-        deff_de = -m * scalar_t(0.82) * dre_de;
-        deff_dg = -m * scalar_t(0.82) * drg_dg;
-        dq_de += scale * dre_de;
-        dq_dg += scale * drg_dg;
-    }
+    scalar_t qp1, qp0, ep1, ep0;
+    scalar_t qe1, qe0, ee1, ee0;
+    scalar_t qg1, qg0, eg1, eg0;
+    eval_param(min(p0 + eps, scalar_t(1)), e0, g0, &qp1, &ep1);
+    eval_param(max(p0 - eps, scalar_t(0)), e0, g0, &qp0, &ep0);
+    eval_param(p0, min(e0 + eps, scalar_t(1)), g0, &qe1, &ee1);
+    eval_param(p0, max(e0 - eps, scalar_t(0)), g0, &qe0, &ee0);
+    eval_param(p0, e0, min(g0 + eps, scalar_t(1)), &qg1, &eg1);
+    eval_param(p0, e0, max(g0 - eps, scalar_t(0)), &qg0, &eg0);
 
-    // Clamp input params in forward. Grad is zero outside open interval.
-    const scalar_t ge = grad_effect[idx];
-    grad_power_px[idx] = (power[b] > scalar_t(0) && power[b] < scalar_t(1)) ? gq * dq_dp + ge * deff_dp : scalar_t(0);
-    grad_exposure_px[idx] = (exposure[b] > scalar_t(0) && exposure[b] < scalar_t(1)) ? gq * dq_de + ge * deff_de : scalar_t(0);
-    grad_gain_px[idx] = (gain[b] > scalar_t(0) && gain[b] < scalar_t(1)) ? gq * dq_dg + ge * deff_dg : scalar_t(0);
+    const scalar_t dp_den = min(p0 + eps, scalar_t(1)) - max(p0 - eps, scalar_t(0));
+    const scalar_t de_den = min(e0 + eps, scalar_t(1)) - max(e0 - eps, scalar_t(0));
+    const scalar_t dg_den = min(g0 + eps, scalar_t(1)) - max(g0 - eps, scalar_t(0));
+    const scalar_t dq_dp = (qp1 - qp0) / max(dp_den, scalar_t(1e-9));
+    const scalar_t dq_de = (qe1 - qe0) / max(de_den, scalar_t(1e-9));
+    const scalar_t dq_dg = (qg1 - qg0) / max(dg_den, scalar_t(1e-9));
+    const scalar_t deff_dp = (ep1 - ep0) / max(dp_den, scalar_t(1e-9));
+    const scalar_t deff_de = (ee1 - ee0) / max(de_den, scalar_t(1e-9));
+    const scalar_t deff_dg = (eg1 - eg0) / max(dg_den, scalar_t(1e-9));
+
+    grad_power_px[idx] = (p0 > scalar_t(0) && p0 < scalar_t(1)) ? gq * dq_dp + geff * deff_dp : scalar_t(0);
+    grad_exposure_px[idx] = (e0 > scalar_t(0) && e0 < scalar_t(1)) ? gq * dq_de + geff * deff_de : scalar_t(0);
+    grad_gain_px[idx] = (g0 > scalar_t(0) && g0 < scalar_t(1)) ? gq * dq_dg + geff * deff_dg : scalar_t(0);
 }
 
 std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
@@ -1293,11 +1385,19 @@ std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
     torch::Tensor power,
     torch::Tensor exposure,
     torch::Tensor gain,
+    torch::Tensor speed,
     int regime_id,
     double min_valid,
-    double max_range) {
+    double max_range,
+    double exposure_t_min,
+    double exposure_t_span,
+    double iso_gain_base,
+    double iso_gain_scale,
+    double iso_gain_gamma,
+    double shot_noise_base) {
     TORCH_CHECK(depth.is_cuda(), "depth must be CUDA");
     TORCH_CHECK(mask.is_cuda(), "mask must be CUDA");
+    TORCH_CHECK(speed.is_cuda(), "speed must be CUDA");
     TORCH_CHECK(depth.is_contiguous(), "depth must be contiguous");
     TORCH_CHECK(mask.is_contiguous(), "mask must be contiguous");
     const int B = depth.size(0);
@@ -1319,13 +1419,15 @@ std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
             power.contiguous().data_ptr<scalar_t>(),
             exposure.contiguous().data_ptr<scalar_t>(),
             gain.contiguous().data_ptr<scalar_t>(),
+            speed.contiguous().data_ptr<scalar_t>(),
             depth_obs.data_ptr<scalar_t>(),
             quality_obs.data_ptr<scalar_t>(),
             quality.data_ptr<scalar_t>(),
             valid_prob.data_ptr<scalar_t>(),
             hard_valid.data_ptr<scalar_t>(),
             effect.data_ptr<scalar_t>(),
-            B, H, W, regime_id, min_valid, max_range);
+            B, H, W, regime_id, min_valid, max_range,
+            exposure_t_min, exposure_t_span, iso_gain_base, iso_gain_scale, iso_gain_gamma, shot_noise_base);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return {depth_obs, quality_obs, quality, valid_prob, hard_valid, effect};
@@ -1340,10 +1442,16 @@ std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
     torch::Tensor power,
     torch::Tensor exposure,
     torch::Tensor gain,
+    torch::Tensor speed,
     int regime_id,
     double min_valid,
-    double max_range) {
-    (void)min_valid;
+    double max_range,
+    double exposure_t_min,
+    double exposure_t_span,
+    double iso_gain_base,
+    double iso_gain_scale,
+    double iso_gain_gamma,
+    double shot_noise_base) {
     TORCH_CHECK(raw.is_cuda(), "raw must be CUDA");
     const int B = raw.size(0);
     const int H = raw.size(1);
@@ -1364,10 +1472,12 @@ std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
             power.contiguous().data_ptr<scalar_t>(),
             exposure.contiguous().data_ptr<scalar_t>(),
             gain.contiguous().data_ptr<scalar_t>(),
+            speed.contiguous().data_ptr<scalar_t>(),
             grad_power_px.data_ptr<scalar_t>(),
             grad_exposure_px.data_ptr<scalar_t>(),
             grad_gain_px.data_ptr<scalar_t>(),
-            B, H, W, regime_id, max_range);
+            B, H, W, regime_id, min_valid, max_range,
+            exposure_t_min, exposure_t_span, iso_gain_base, iso_gain_scale, iso_gain_gamma, shot_noise_base);
     }));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return {

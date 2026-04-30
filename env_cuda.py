@@ -1,9 +1,17 @@
 import math
 import random
+import os
+import sys
 
 import torch
 import torch.nn.functional as F
-import quadsim_cuda
+try:
+    import quadsim_cuda
+except ModuleNotFoundError:
+    _src_dir = os.path.join(os.path.dirname(__file__), 'src')
+    if _src_dir not in sys.path:
+        sys.path.insert(0, _src_dir)
+    import quadsim_cuda
 
 from autograd_ops import run, active_sensing_sensor
 from camera_semantics import CameraSemantics
@@ -22,8 +30,8 @@ class Env:
     supported_slots = ('far_left', 'left', 'right', 'far_right')
     slot_y = {
         'far_left': -1.12,
-        'left': -0.42,
-        'right': 0.42,
+        'left': -0.56,
+        'right': 0.56,
         'far_right': 1.12,
     }
 
@@ -39,6 +47,7 @@ class Env:
                  cam_iso_gain_base=1.0, cam_iso_gain_scale=0.8, cam_iso_gain_gamma=0.6,
                  cam_shot_noise_base=0.01, depth_min_valid=0.3, depth_max_range=6.0,
                  scenarios=None, sun_glare_eval_slot=None, diff_sensor_impl=None,
+                 random_rotation=False, random_rotation_max_deg=45.0,
                  **_ignored) -> None:
         self.device = device
         self.batch_size = int(batch_size)
@@ -85,6 +94,8 @@ class Env:
         self.current_scene_name = self.scenarios[0]
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
         self.sun_glare_eval_slot = self._canonical_slot(sun_glare_eval_slot)
+        self.random_rotation = bool(random_rotation)
+        self.random_rotation_max_rad = max(float(random_rotation_max_deg), 0.0) * math.pi / 180.0
         self.current_scene_effects = {}
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
@@ -102,11 +113,10 @@ class Env:
         self.fixed_drag_linear = 0.35
         self.fixed_wind_scale = 0.03
 
-    @staticmethod
-    def _build_voxels(rows, device):
+    def _build_voxels(self, rows):
         if not rows:
-            return torch.empty((0, 6), device=device)
-        return torch.tensor(rows, device=device, dtype=torch.float32)
+            return torch.empty((0, 6), device=self.device)
+        return torch.tensor(rows, device=self.device, dtype=torch.float32)
 
     def _normalize_scenarios(self, scenarios):
         if scenarios is None:
@@ -144,35 +154,57 @@ class Env:
         slots = list(self.supported_slots)
         return [slots[i % len(slots)] for i in range(B)]
 
-    def _build_gate_layout(self, gap_y, gap_half_w=0.16):
-        d = self.device
-        # voxel rows are [cx, cy, cz, hx, hy, hz]
-        rows = []
-        rows.append([0.55, 0.0, 1.5, 0.10, 0.58, 1.35])  # central occluder
-        rows.extend([
-            [1.35, -0.77, 1.5, 0.08, 0.055, 1.2],
-            [1.35, 0.00, 1.5, 0.08, 0.055, 1.2],
-            [1.35, 0.77, 1.5, 0.08, 0.055, 1.2],
+    def _build_sun_glare_voxel_layout(self, gap_y_center, *, occluder_x=0.88,
+                                      occluder_half_y=0.48, divider_x=1.58,
+                                      gate_x=1.82, gap_half_w=0.18):
+        """
+        Probe-then-commit shared gate map.
+
+        This restores the original geometry: a central occluder, three thin
+        divider fins, a four-slot gate wall, and a back wall after the opening.
+        The public scene name only changes the local sensor degradation near
+        the opening; geometry stays identical for glare/specular/dark.
+        """
+        voxel_half_w = 0.25
+        voxel_half_h = 1.5
+
+        guide = self._build_voxels([
+            [-1.65, -1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
+            [-1.65,  1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
         ])
-        gate_x = 1.82
-        wall_half_y = 1.70
-        wall_half_z = 1.25
-        zc = 1.5
-        # gate wall split into left/right/top/bottom pieces around the slot.
-        y_min, y_max = -wall_half_y, wall_half_y
-        slot_min, slot_max = gap_y - gap_half_w, gap_y + gap_half_w
-        if slot_min > y_min:
-            cy = 0.5 * (y_min + slot_min)
-            hy = 0.5 * (slot_min - y_min)
-            rows.append([gate_x, cy, zc, 0.08, hy, wall_half_z])
-        if slot_max < y_max:
-            cy = 0.5 * (slot_max + y_max)
-            hy = 0.5 * (y_max - slot_max)
-            rows.append([gate_x, cy, zc, 0.08, hy, wall_half_z])
-        rows.append([gate_x, gap_y, 0.35, 0.08, gap_half_w, 0.20])
-        rows.append([gate_x, gap_y, 2.65, 0.08, gap_half_w, 0.20])
-        rows.append([2.75, 0.0, 1.5, 0.08, 1.8, 0.10])  # faint back cue
-        return self._build_voxels(rows, d)
+        occluder = self._build_voxels([
+            [float(occluder_x), 0.00, 1.5, 0.10, float(occluder_half_y), voxel_half_h],
+        ])
+        lane_dividers = self._build_voxels([
+            [float(divider_x), -0.84, 1.5, 0.22, 0.05, voxel_half_h],
+            [float(divider_x),  0.00, 1.5, 0.22, 0.05, voxel_half_h],
+            [float(divider_x),  0.84, 1.5, 0.22, 0.05, voxel_half_h],
+        ])
+        big = 4.0
+        wall_thickness = 0.15
+        gap_z_center = 1.50
+        gap_half_h = 1.05
+        gate_wall = self._build_voxels([
+            [float(gate_x), gap_y_center - float(gap_half_w) - big, gap_z_center, wall_thickness, big, big],
+            [float(gate_x), gap_y_center + float(gap_half_w) + big, gap_z_center, wall_thickness, big, big],
+            [float(gate_x), gap_y_center, gap_z_center + gap_half_h + big, wall_thickness, float(gap_half_w), big],
+            [float(gate_x), gap_y_center, gap_z_center - gap_half_h - big, wall_thickness, float(gap_half_w), big],
+        ])
+        back_wall = self._build_voxels([
+            [float(gate_x) + 1.83, 0.00, 1.5, 0.10, 1.30, voxel_half_h],
+        ])
+        return torch.cat([guide, occluder, lane_dividers, gate_wall, back_wall], dim=0)
+
+    def _rotation_z(self, yaw):
+        c = torch.cos(yaw)
+        s = torch.sin(yaw)
+        z = torch.zeros_like(yaw)
+        o = torch.ones_like(yaw)
+        return torch.stack([
+            c, -s, z,
+            s,  c, z,
+            z,  z, o,
+        ], -1).reshape(-1, 3, 3)
 
     def _scene_effects(self, scene_name, slot_name, gap_y):
         regime_id = float(self.scene_name_to_id[scene_name])
@@ -183,9 +215,12 @@ class Env:
             'decision_open_slot_id': float(self.supported_slots.index(slot_name)),
             'decision_open_slot_y': float(gap_y),
             'hazard_center': [1.82, float(gap_y), 1.5],
-            'hazard_half_y': 0.26,
-            'hazard_half_z': 0.95,
-            'hazard_softness': 0.055,
+            'hazard_half_y': 0.18,
+            'hazard_half_z': 1.20,
+            'hazard_softness': 0.045,
+            'geometry_occluder_x': 0.88,
+            'geometry_divider_x': 1.58,
+            'geometry_gate_x': 1.82,
         }
 
     def _merge_batch_effects(self, effects_list):
@@ -223,13 +258,31 @@ class Env:
             torch.sin(cam_angle), zeros, torch.cos(cam_angle),
         ], -1).reshape(B, 3, 3)
 
+        if self.random_rotation and self.random_rotation_max_rad > 0:
+            yaw = (torch.rand(B, device=device) * 2.0 - 1.0) * self.random_rotation_max_rad
+        else:
+            yaw = torch.zeros(B, device=device)
+        self.scene_yaw = yaw
+        self.R_scene = self._rotation_z(yaw)
+        self.R_scene_T = self.R_scene.transpose(1, 2).contiguous()
+
         slots = self._choose_slots(B)
         gap_y = torch.tensor([self.slot_y[s] for s in slots], device=device, dtype=torch.float32)
-        voxels = torch.stack([self._build_gate_layout(float(y)) for y in gap_y], dim=0)
+        voxels = torch.stack([self._build_sun_glare_voxel_layout(float(y)) for y in gap_y], dim=0)
         start_y = torch.zeros(B, device=device)
-        start = torch.stack([torch.full((B,), -2.8, device=device), start_y, torch.full((B,), 1.5, device=device)], -1)
-        goal = torch.tensor([3.0, 0.0, 1.5], device=device).expand(B, 3).clone()
+        start_local = torch.stack([torch.full((B,), -2.8, device=device), start_y, torch.full((B,), 1.5, device=device)], -1)
+        goal_local = torch.tensor([3.0, 0.0, 1.5], device=device).expand(B, 3).clone()
+        start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
+        goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
         effects = self._merge_batch_effects([self._scene_effects(scene_name, slots[i], float(gap_y[i])) for i in range(B)])
+        local_hazard = effects['hazard_center'].to(device=device, dtype=torch.float32)
+        effects['hazard_center_local'] = local_hazard.clone()
+        effects['hazard_center'] = torch.bmm(self.R_scene, local_hazard[:, :, None])[:, :, 0]
+        effects['scene_yaw'] = yaw
+        effects['geometry_start_local'] = start_local
+        effects['geometry_goal_local'] = goal_local
+        effects['geometry_start'] = start
+        effects['geometry_goal'] = goal
         self.current_scene_effects = effects
 
         self.n_drones_per_group = 1
@@ -332,60 +385,91 @@ class Env:
         yy, zz = torch.meshgrid(ys, zs, indexing='xy')
         yy = yy.unsqueeze(0)
         zz = zz.unsqueeze(0)
-        # Approximate projection: slot location maps horizontally by y offset.
-        cy = (center[:, 1] / 1.7).clamp(-0.9, 0.9)[:, None, None]
-        cz = torch.zeros((B, 1, 1), device=depth.device, dtype=depth.dtype)
-        sy = (half_y / 1.7).clamp_min(0.05)[:, None, None]
-        sz = (half_z / 1.3).clamp_min(0.10)[:, None, None]
-        soft = softness[:, None, None]
+
+        # Project the local sensor-degradation region into the current camera.
+        # This replaces the older slot_y -> image_x approximation.  The mask is
+        # deliberately detached from pose so the sensor model only exposes
+        # camera-parameter gradients; raw geometry remains non-differentiable.
+        R_cam_world = (self.R @ self.R_cam).detach().to(depth.device, depth.dtype)
+        pos = self.p.detach().to(depth.device, depth.dtype)
+        rel = center.detach() - pos
+        cam = torch.bmm(R_cam_world.transpose(1, 2), rel[:, :, None])[:, :, 0]
+        x = cam[:, 0]
+        x_safe = x.clamp_min(0.20)
+        fov_x = torch.as_tensor(float(self._fov_x_half_tan), device=depth.device, dtype=depth.dtype)
+        fov_y = fov_x * float(H) / float(max(W, 1))
+
+        cy = ((-cam[:, 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, None, None]
+        cz = ((-cam[:, 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, None, None]
+        sy = (half_y.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
+        sz = (half_z.to(depth.device, depth.dtype) / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
+        soft = (softness.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.025, 0.18)[:, None, None]
+        front_gate = torch.sigmoid((x - 0.08) / 0.04)[:, None, None]
         mask_y = torch.sigmoid((sy - (yy - cy).abs()) / soft)
         mask_z = torch.sigmoid((sz - (zz - cz).abs()) / soft)
-        range_gate = torch.sigmoid((float(self.depth_max_range) - depth) / 0.2)
-        return (mask_y * mask_z * range_gate).clamp(0.0, 1.0)
+        return (mask_y * mask_z * front_gate).clamp(0.0, 1.0)
 
-    def _sensor_reference(self, depth, power, exposure, gain):
-        max_range = float(self.depth_max_range)
+    def _sensor_reference(self, depth, power, exposure, gain, max_range=None):
+        max_range = float(self.depth_max_range if max_range is None else max_range)
         min_valid = float(self.depth_min_valid)
         raw = depth.clamp(min_valid, max_range)
         mask = self._scene_mask(raw)
         p = power.clamp(0, 1)[:, None, None]
-        e = exposure.clamp(0, 1)[:, None, None]
-        g = gain.clamp(0, 1)[:, None, None]
+        e01 = exposure.clamp(0, 1)[:, None, None]
+        g01 = gain.clamp(0, 1)[:, None, None]
+        exposure_t = self.cam_sem.exposure_to_time(exposure).clamp_min(1e-6)[:, None, None]
+        gain_scale = self.cam_sem.iso_to_gain(gain).clamp_min(1e-6)[:, None, None]
+        speed = self.v.norm(2, -1).detach().clamp_min(0.0)[:, None, None]
         regime = float(self.current_scene_id)
 
-        base = torch.sigmoid((max_range - raw) / 0.9)
-        base = base * (0.90 + 0.18 * p + 0.08 * e + 0.06 * g)
-        quality = base
-        effect = torch.zeros_like(raw)
-
-        if regime == 0.0:  # glare: exposure hurts; power rescues.
-            overexp = torch.sigmoid((e - 0.18) / 0.045)
-            rescue = torch.sigmoid((p - 0.56) / 0.08)
-            penalty = mask * overexp * (0.95 - 0.55 * rescue)
-            bonus = mask * rescue * (1.0 - overexp) * 0.20
-            quality = quality - penalty + bonus
-            effect = penalty
-        elif regime == 1.0:  # specular: high power washes out gate material.
-            wash = torch.sigmoid((p - 0.38) / 0.07) * (0.55 + 0.45 * torch.sigmoid((e - 0.25) / 0.08))
-            safe = torch.sigmoid((0.42 - p) / 0.10)
-            penalty = mask * wash * 0.92
-            bonus = mask * safe * 0.25
-            quality = quality - penalty + bonus
-            effect = penalty
-        else:  # dark: exposure/gain rescue low reflectance gate edges.
-            need = mask * 0.82
-            rescue = torch.sigmoid((e - 0.48) / 0.08) * 0.55 + torch.sigmoid((g - 0.42) / 0.08) * 0.45
-            penalty = need * (1.0 - rescue)
-            quality = quality - penalty + mask * rescue * 0.18
-            effect = penalty
-
-        # Mild edge degradation to keep the gate boundary important.
         d4 = raw[:, None]
         d_far = F.max_pool2d(d4, 3, stride=1, padding=1)[:, 0]
         d_near = -F.max_pool2d(-d4, 3, stride=1, padding=1)[:, 0]
-        edge = ((d_far - d_near) / (raw + 0.2)).clamp(0.0, 1.0)
-        quality = quality - 0.12 * edge
+        edge = ((d_far - d_near) / (raw + 0.18)).clamp(0.0, 1.0)
+
+        dist = raw / max(max_range, 1e-6)
+        active_signal = 1.70 * p * exposure_t / (raw.square() + 0.75)
+        passive_signal = 0.10 * exposure_t * torch.sqrt(gain_scale)
+        signal = active_signal + passive_signal
+        ambient_ir = 0.18 + 0.55 * mask
+        motion = (speed * exposure_t * 0.075).clamp(0.0, 1.6)
+        washout = ambient_ir * exposure_t / (active_signal + 0.20)
+        noise_proxy = float(self.cam_sem.shot_noise_base) * (0.45 + 0.18 * gain_scale) / (signal + 0.08)
+        snr = signal / (0.18 + 0.55 * ambient_ir + 0.38 * noise_proxy + 0.45 * motion * (0.20 + edge))
+        quality = torch.sigmoid(
+            2.15 * snr
+            - 0.95 * washout
+            - 0.85 * edge
+            - 1.45 * torch.relu(dist - 0.92)
+        )
+        effect = torch.zeros_like(raw)
+
+        if regime == 0.0:  # glare: exposure overexposes local IR/sun patch; power helps recover.
+            overexp = torch.sigmoid((e01 - 0.20) / 0.055)
+            rescue = torch.sigmoid((p - 0.50) / 0.09)
+            penalty = mask * overexp * (0.78 - 0.38 * rescue)
+            bonus = mask * rescue * (1.0 - overexp) * 0.18
+            quality = quality - penalty + bonus
+            effect = penalty
+        elif regime == 1.0:  # specular: high projector power washes out reflective gate material.
+            wash = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
+            safe = torch.sigmoid((0.40 - p) / 0.075)
+            penalty = mask * wash * 1.08
+            bonus = mask * safe * 0.30
+            quality = quality - penalty + bonus
+            effect = penalty
+        else:  # dark: low-reflectance frame needs exposure/gain to lift the return signal.
+            rescue = (
+                torch.sigmoid((e01 - 0.36) / 0.08) * 0.55
+                + torch.sigmoid((g01 - 0.32) / 0.09) * 0.45
+            ).clamp(max=1.0)
+            need = mask * 0.68
+            penalty = need * (1.0 - rescue)
+            quality = quality - penalty + mask * rescue * 0.24
+            effect = penalty
+
         quality = quality.clamp(0.0, 1.0)
+        quality_pre_valid = quality
 
         valid_prob = torch.sigmoid((quality - 0.42) / 0.055)
         hard_valid = (valid_prob > 0.5).to(raw.dtype)
@@ -399,10 +483,12 @@ class Env:
             'quality_mean': quality_obs.mean(dim=(-2, -1)),
             'invalid_rate': invalid.mean(dim=(-2, -1)),
             'scene_effect_mean': effect.mean(dim=(-2, -1)),
+            'scene_mask_mean': mask.mean(dim=(-2, -1)),
             'glare_quality_mean': (quality_obs * mask).sum(dim=(-2, -1)) / mask_mass,
             'glare_invalid_rate': (invalid * mask).sum(dim=(-2, -1)) / mask_mass,
         }
         self._store_last_diff_depth_train_aux({
+            'quality_pre_valid': quality_pre_valid,
             'valid_prob_map': valid_prob,
             'hard_valid_map': hard_valid,
             'valid_st_map': valid_st,
@@ -410,6 +496,7 @@ class Env:
         self._store_last_diff_depth_debug({
             'scene_name': self.current_scene_name,
             'raw_depth_map': raw,
+            'quality_pre_valid': quality_pre_valid,
             'quality_map': quality_obs,
             'valid_prob_map': valid_prob,
             'hard_valid_map': hard_valid,
@@ -426,8 +513,13 @@ class Env:
         raw = depth.clamp(min_valid, max_range)
         mask = self._scene_mask(raw)
         regime_id = int(self.current_scene_id)
+        speed = self.v.norm(2, -1).detach().to(raw.dtype)
         depth_obs, quality_obs, quality, valid_prob, hard_valid, effect = active_sensing_sensor(
-            raw, mask, power, exposure, gain, regime_id, min_valid, max_range)
+            raw, mask, power, exposure, gain, speed,
+            regime_id, min_valid, max_range,
+            self.cam_sem.exposure_t_min, self.cam_sem.exposure_t_span,
+            self.cam_sem.iso_gain_base, self.cam_sem.iso_gain_scale,
+            self.cam_sem.iso_gain_gamma, self.cam_sem.shot_noise_base)
         valid_st = hard_valid.detach() - valid_prob.detach() + valid_prob
         invalid = (1.0 - valid_st).clamp(0.0, 1.0)
         mask_mass = mask.sum(dim=(-2, -1)).clamp_min(1e-6)
@@ -435,10 +527,12 @@ class Env:
             'quality_mean': quality_obs.mean(dim=(-2, -1)),
             'invalid_rate': invalid.mean(dim=(-2, -1)),
             'scene_effect_mean': effect.mean(dim=(-2, -1)),
+            'scene_mask_mean': mask.mean(dim=(-2, -1)),
             'glare_quality_mean': (quality_obs * mask).sum(dim=(-2, -1)) / mask_mass,
             'glare_invalid_rate': (invalid * mask).sum(dim=(-2, -1)) / mask_mass,
         }
         self._store_last_diff_depth_train_aux({
+            'quality_pre_valid': quality,
             'valid_prob_map': valid_prob,
             'hard_valid_map': hard_valid,
             'valid_st_map': valid_st,
@@ -446,6 +540,7 @@ class Env:
         self._store_last_diff_depth_debug({
             'scene_name': self.current_scene_name,
             'raw_depth_map': raw,
+            'quality_pre_valid': quality,
             'quality_map': quality_obs,
             'valid_prob_map': valid_prob,
             'hard_valid_map': hard_valid,
@@ -460,6 +555,8 @@ class Env:
         _ = max_range
         B = power.shape[0]
         R_cam_world = (self.R @ self.R_cam).contiguous()
+        render_R = torch.bmm(self.R_scene_T, R_cam_world).contiguous()
+        render_p = torch.bmm(self.R_scene_T, self.p[:, :, None])[:, :, 0].contiguous()
         depth = torch.empty((B, self.height, self.width), device=power.device, dtype=power.dtype)
         quadsim_cuda.render_depth(
             depth,
@@ -467,37 +564,85 @@ class Env:
             self.cyl,
             self.cyl_h,
             self.voxels,
-            R_cam_world,
-            self.p.contiguous(),
+            render_R,
+            render_p,
             self.n_drones_per_group,
             float(self._fov_x_half_tan),
         )
         if self.diff_sensor_impl.get('diff_depth', 'cuda') == 'cuda':
             return self._sensor_cuda(depth, power, exposure, gain)
-        return self._sensor_reference(depth, power, exposure, gain)
+        return self._sensor_reference(depth, power, exposure, gain, max_range=max_range)
 
     def render(self, ctl_dt):
         _ = ctl_dt
         canvas = torch.empty((self.batch_size, self.height, self.width), device=self.device)
+        render_R = torch.bmm(self.R_scene_T, self.R @ self.R_cam).contiguous()
+        render_R_old = torch.bmm(self.R_scene_T, self.R_old @ self.R_cam).contiguous()
+        render_p = torch.bmm(self.R_scene_T, self.p[:, :, None])[:, :, 0].contiguous()
+        render_p_old = torch.bmm(self.R_scene_T, self.p_old[:, :, None])[:, :, 0].contiguous()
         quadsim_cuda.render(canvas, self.flow, self.balls, self.cyl, self.cyl_h,
-                            self.voxels, self.R @ self.R_cam, self.R_old, self.p,
-                            self.p_old, self.drone_radius, self.n_drones_per_group,
+                            self.voxels, render_R, render_R_old, render_p,
+                            render_p_old, self.drone_radius, self.n_drones_per_group,
                             self._fov_x_half_tan)
         return canvas, None
 
     def find_vec_to_nearest_pt(self):
-        p = self.p + self.v * self.sub_div
+        p_world = self.p + self.v * self.sub_div
+        p = torch.matmul(self.R_scene_T.unsqueeze(0), p_world.unsqueeze(-1)).squeeze(-1).contiguous()
         nearest_pt = torch.empty_like(p)
         if self.use_ellipsoid:
+            R_local = torch.bmm(self.R_scene_T, self.R).contiguous()
             quadsim_cuda.find_nearest_pt_ellipsoid(
                 nearest_pt, self.balls, self.cyl, self.cyl_h, self.voxels, p,
-                self.R.contiguous(), self.drone_radius, self.n_drones_per_group,
+                R_local, self.drone_radius, self.n_drones_per_group,
                 self.ellipsoid_a, self.ellipsoid_c)
         else:
             quadsim_cuda.find_nearest_pt(
                 nearest_pt, self.balls, self.cyl, self.cyl_h, self.voxels, p,
                 self.drone_radius, self.n_drones_per_group)
-        return nearest_pt - p
+        vec_local = nearest_pt - p
+        return torch.matmul(self.R_scene.unsqueeze(0), vec_local.unsqueeze(-1)).squeeze(-1)
+
+    def get_scene_yaw_for_env(self, env_idx=0):
+        idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        return float(self.scene_yaw[idx].detach().cpu().item())
+
+    def get_world_voxels_for_env(self, env_idx=0):
+        idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        return self.voxels[idx].detach().cpu().numpy()
+
+    def get_world_balls_for_env(self, env_idx=0):
+        idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        balls = self.balls[idx].detach()
+        if balls.numel() == 0:
+            return balls.detach().cpu().numpy()
+        centers = torch.matmul(self.R_scene[idx], balls[:, :3].T).T
+        out = balls.clone()
+        out[:, :3] = centers
+        return out.detach().cpu().numpy()
+
+    def get_world_cyl_for_env(self, env_idx=0):
+        idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        cyl = self.cyl[idx].detach()
+        if cyl.numel() == 0:
+            return cyl.detach().cpu().numpy()
+        centers = torch.cat([cyl[:, :2], torch.zeros((cyl.shape[0], 1), device=cyl.device, dtype=cyl.dtype)], dim=-1)
+        centers = torch.matmul(self.R_scene[idx], centers.T).T
+        out = cyl.clone()
+        out[:, :2] = centers[:, :2]
+        return out.detach().cpu().numpy()
+
+    def get_world_cyl_h_for_env(self, env_idx=0):
+        idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        cyl_h = self.cyl_h[idx].detach()
+        if cyl_h.numel() == 0:
+            return cyl_h.detach().cpu().numpy()
+        centers = torch.stack([cyl_h[:, 0], torch.zeros_like(cyl_h[:, 0]), cyl_h[:, 1]], dim=-1)
+        centers = torch.matmul(self.R_scene[idx], centers.T).T
+        out = cyl_h.clone()
+        out[:, 0] = centers[:, 0]
+        out[:, 1] = centers[:, 2]
+        return out.detach().cpu().numpy()
 
     def run(self, act_pred, ctl_dt=1/15, v_pred=None):
         self.dg = self.dg * math.sqrt(max(1 - ctl_dt / 4, 0.0)) + torch.randn_like(self.dg) * 0.2 * math.sqrt(ctl_dt / 4)

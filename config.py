@@ -44,6 +44,8 @@ def build_parser():
 
     parser.add_argument('--scenarios', nargs='*', default=list(SUPPORTED_SCENARIOS))
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None)
+    parser.add_argument('--random_rotation', default=False, action=argparse.BooleanOptionalAction)
+    parser.add_argument('--random_rotation_max_deg', type=float, default=45.0)
     parser.add_argument('--no_odom', default=False, action='store_true')
     parser.add_argument('--include_camera_state_in_obs', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--max_acc_cmd', type=float, default=2.5)
@@ -165,6 +167,8 @@ def validate_args(args):
         raise ValueError('--depth_max_range must be > --depth_min_valid')
     if args.loss_v_window < 1:
         raise ValueError('--loss_v_window must be >= 1')
+    if args.random_rotation_max_deg < 0:
+        raise ValueError('--random_rotation_max_deg must be >= 0')
     if not args.scenarios:
         raise ValueError('--scenarios needs at least one scenario')
     args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
@@ -189,6 +193,7 @@ def print_runtime_mode(args):
     print(f"policy_depth_mode         : {args.policy_depth_mode}")
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
+    print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print('camera_head_input         : fused_gru_hidden')
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")

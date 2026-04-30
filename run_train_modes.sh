@@ -8,7 +8,7 @@ export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 # Optional zero-depth counterfactual can be evaluated from the ours checkpoint.
 
 BASE_CONFIG=${BASE_CONFIG:-configs/paper_final_full.args}
-MODES=${MODES:-"ours fix randfix nondiff"}
+MODES=${MODES:-"ours"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 
 if [ ! -f "$BASE_CONFIG" ]; then

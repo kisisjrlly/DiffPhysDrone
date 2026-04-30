@@ -100,5 +100,7 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         depth_max_range=args.depth_max_range,
         scenarios=args.scenarios,
         sun_glare_eval_slot=getattr(args, 'sun_glare_eval_slot', None) if eval_mode else None,
+        random_rotation=args.random_rotation,
+        random_rotation_max_deg=args.random_rotation_max_deg,
         diff_sensor_impl=args.diff_sensor_impl,
     )

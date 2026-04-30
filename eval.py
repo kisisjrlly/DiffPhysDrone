@@ -70,14 +70,15 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         j = int(min(max(args.vis_env_idx, 0), B - 1))
         vis.log_environment(
             phase=vis_phase,
-            balls=env.balls[j].detach().cpu().numpy(),
-            voxels=env.voxels[j].detach().cpu().numpy(),
-            cyl=env.cyl[j].detach().cpu().numpy(),
-            cyl_h=env.cyl_h[j].detach().cpu().numpy(),
+            balls=env.get_world_balls_for_env(j),
+            voxels=env.get_world_voxels_for_env(j),
+            cyl=env.get_world_cyl_for_env(j),
+            cyl_h=env.get_world_cyl_h_for_env(j),
             start=env.p[j].detach().cpu().numpy(),
             target=env.p_target[j].detach().cpu().numpy(),
             scene_name=getattr(env, 'current_scene_name', None),
             scene_effects=env.get_scene_effects_for_env(j),
+            scene_yaw=env.get_scene_yaw_for_env(j),
             step_idx=0,
         )
 
@@ -224,6 +225,11 @@ def main():
         app_id='DiffPhysDrone-Eval',
         spawn=args.vis_spawn,
     )
+    if vis.enabled:
+        vis.send_eval_episode_blueprint(
+            num_episodes=int(args.eval_episodes),
+            vis_episode_idx=int(args.vis_episode_idx),
+        )
     episode_rows, trace_rows = [], []
     with torch.no_grad():
         for ep in range(args.eval_episodes):

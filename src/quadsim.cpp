@@ -131,9 +131,16 @@ std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
     torch::Tensor power,
     torch::Tensor exposure,
     torch::Tensor gain,
+    torch::Tensor speed,
     int regime_id,
     double min_valid,
-    double max_range);
+    double max_range,
+    double exposure_t_min,
+    double exposure_t_span,
+    double iso_gain_base,
+    double iso_gain_scale,
+    double iso_gain_gamma,
+    double shot_noise_base);
 
 std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
     torch::Tensor grad_quality,
@@ -144,9 +151,16 @@ std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
     torch::Tensor power,
     torch::Tensor exposure,
     torch::Tensor gain,
+    torch::Tensor speed,
     int regime_id,
     double min_valid,
-    double max_range);
+    double max_range,
+    double exposure_t_min,
+    double exposure_t_span,
+    double iso_gain_base,
+    double iso_gain_scale,
+    double iso_gain_gamma,
+    double shot_noise_base);
 
 // ============================================================================
 // PyBind11 模块绑定 (PyBind11 module binding)

@@ -1,6 +1,14 @@
 import torch
-import quadsim_cuda
 import os
+import sys
+
+try:
+    import quadsim_cuda
+except ModuleNotFoundError:
+    _src_dir = os.path.join(os.path.dirname(__file__), 'src')
+    if _src_dir not in sys.path:
+        sys.path.insert(0, _src_dir)
+    import quadsim_cuda
 
 
 # Phase 1 Optimization: Remove Python-layer redundant synchronization
@@ -107,33 +115,49 @@ class ActiveSensingSensorFunction(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, depth, mask, power, exposure, gain,
-                regime_id: int, min_valid: float, max_range: float):
+    def forward(ctx, depth, mask, power, exposure, gain, speed,
+                regime_id: int, min_valid: float, max_range: float,
+                exposure_t_min: float, exposure_t_span: float,
+                iso_gain_base: float, iso_gain_scale: float, iso_gain_gamma: float,
+                shot_noise_base: float):
         out = quadsim_cuda.active_sensing_sensor_forward(
             depth.contiguous(),
             mask.contiguous(),
             power.contiguous(),
             exposure.contiguous(),
             gain.contiguous(),
+            speed.contiguous(),
             int(regime_id),
             float(min_valid),
             float(max_range),
+            float(exposure_t_min),
+            float(exposure_t_span),
+            float(iso_gain_base),
+            float(iso_gain_scale),
+            float(iso_gain_gamma),
+            float(shot_noise_base),
         )
         depth_obs, quality_obs, quality, valid_prob, hard_valid, effect = out
         raw = depth.clamp(float(min_valid), float(max_range)).contiguous()
         ctx.save_for_backward(
             raw, mask.contiguous(), quality, valid_prob, hard_valid,
-            power, exposure, gain)
+            power, exposure, gain, speed)
         ctx.regime_id = int(regime_id)
         ctx.min_valid = float(min_valid)
         ctx.max_range = float(max_range)
+        ctx.exposure_t_min = float(exposure_t_min)
+        ctx.exposure_t_span = float(exposure_t_span)
+        ctx.iso_gain_base = float(iso_gain_base)
+        ctx.iso_gain_scale = float(iso_gain_scale)
+        ctx.iso_gain_gamma = float(iso_gain_gamma)
+        ctx.shot_noise_base = float(shot_noise_base)
         return depth_obs, quality_obs, quality, valid_prob, hard_valid, effect
 
     @staticmethod
     def backward(ctx, grad_depth_obs, grad_quality_obs,
                  grad_quality, grad_valid_prob, grad_hard_valid, grad_effect):
         (raw, mask, quality, valid_prob, hard_valid,
-         power, exposure, gain) = ctx.saved_tensors
+         power, exposure, gain, speed) = ctx.saved_tensors
 
         zeros = torch.zeros_like(raw)
         g_depth_obs = grad_depth_obs if grad_depth_obs is not None else zeros
@@ -165,12 +189,19 @@ class ActiveSensingSensorFunction(torch.autograd.Function):
             power,
             exposure,
             gain,
+            speed,
             int(ctx.regime_id),
             float(ctx.min_valid),
             float(ctx.max_range),
+            float(ctx.exposure_t_min),
+            float(ctx.exposure_t_span),
+            float(ctx.iso_gain_base),
+            float(ctx.iso_gain_scale),
+            float(ctx.iso_gain_gamma),
+            float(ctx.shot_noise_base),
         )
         _maybe_sync_backward()
-        return None, None, grad_power, grad_exposure, grad_gain, None, None, None
+        return None, None, grad_power, grad_exposure, grad_gain, None, None, None, None, None, None, None, None, None, None
 
 
 active_sensing_sensor = ActiveSensingSensorFunction.apply

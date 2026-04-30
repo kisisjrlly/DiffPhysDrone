@@ -44,7 +44,6 @@ from config import (  # noqa: E402
 )
 from rollout_ops import (  # noqa: E402
     compute_depth_fill_rate,
-    diff_depth_fill_softness,
 )
 from train_utils import build_env  # noqa: E402
 
@@ -161,6 +160,11 @@ def _parse_camera_settings(text: str | None, args) -> list[CameraSetting]:
 
 def _opening_target(env) -> torch.Tensor:
     fx = env.current_scene_effects or {}
+    center = fx.get("hazard_center", None)
+    if torch.is_tensor(center):
+        return center[0].detach().to(device=env.device, dtype=torch.float32)
+    if center is not None:
+        return torch.tensor(center, device=env.device, dtype=torch.float32).reshape(-1, 3)[0]
     gate_x = float(fx.get("geometry_gate_x", 1.82))
     slot_y = float(fx.get("decision_open_slot_y", 0.0))
     return torch.tensor([gate_x, slot_y, 1.50], device=env.device, dtype=torch.float32)
@@ -173,6 +177,8 @@ def _make_poses(env, xs: list[float], y_mode: str) -> list[ProbePose]:
     gate_x = float(fx.get("geometry_gate_x", 1.82))
     x_min = min(xs)
     denom = max(gate_x - x_min, 1e-6)
+    R_scene = getattr(env, "R_scene", None)
+    R0 = None if R_scene is None else R_scene[0].detach()
     poses: list[ProbePose] = []
     for idx, x in enumerate(xs):
         if y_mode == "slot":
@@ -182,7 +188,10 @@ def _make_poses(env, xs: list[float], y_mode: str) -> list[ProbePose]:
             y = (1.0 - alpha) * start_y + alpha * slot_y
         else:
             y = 0.0
-        poses.append(ProbePose(f"x{idx:02d}_{float(x):+.2f}", float(x), float(y), 1.50))
+        local = torch.tensor([float(x), float(y), 1.50], device=env.device, dtype=torch.float32)
+        world = local if R0 is None else torch.matmul(R0, local)
+        wx, wy, wz = [float(v) for v in world.detach().cpu().tolist()]
+        poses.append(ProbePose(f"x{idx:02d}_{float(x):+.2f}", wx, wy, wz))
     return poses
 
 
@@ -267,11 +276,7 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
 
     depth, quality = env.render_diff_depth(power, exposure, gain)
     fill = compute_depth_fill_rate(depth, min_valid_depth=args.depth_min_valid)
-    fill_soft = compute_depth_fill_rate(
-        depth,
-        min_valid_depth=args.depth_min_valid,
-        softness=diff_depth_fill_softness(args.depth_min_valid),
-    )
+    fill_soft = compute_depth_fill_rate(depth, min_valid_depth=args.depth_min_valid, softness=0.08)
     debug = env.export_last_diff_depth_debug(0)
     scalars = debug.get("scalars", {})
     images = debug.get("images", {})
@@ -286,7 +291,7 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
 
     row = {
         "scene": env.current_scene_name,
-        "scene_tag": env.current_scene_tag,
+        "scene_tag": getattr(env, "current_scene_tag", env.current_scene_name),
         "slot": str((env.current_scene_effects or {}).get("decision_open_slot_name", "")),
         "opening_y": float((env.current_scene_effects or {}).get("decision_open_slot_y", 0.0)),
         "gate_x": float((env.current_scene_effects or {}).get("geometry_gate_x", 0.0)),
@@ -310,7 +315,7 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "invalid_rate": _to_float(scalars.get("invalid_rate"), 0.0),
         "scene_effect_mean": _to_float(scalars.get("scene_effect_mean"), 0.0),
         "sun_mask_mean": _to_float(scalars.get("sun_mask_mean"), 0.0),
-        "hazard_mask_mean": _to_float(scalars.get("hazard_mask_mean"), 0.0),
+        "hazard_mask_mean": _to_float(scalars.get("hazard_mask_mean"), _to_float(scalars.get("scene_mask_mean"), 0.0)),
         "sun_los_mean": _to_float(scalars.get("sun_los_mean"), 0.0),
         "hazard_los_mean": _to_float(scalars.get("hazard_los_mean"), 0.0),
         "glare_quality_mean": _to_float(scalars.get("glare_quality_mean"), 0.0),
@@ -571,8 +576,8 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     project_args = _build_project_args(Path(script_args.config), project_overrides)
-    project_args.diff_sensor_impl["diff_depth"] = "python"
-    if not script_args.keep_scene_randomize:
+    project_args.diff_sensor_impl["diff_depth"] = "cuda"
+    if (not script_args.keep_scene_randomize) and hasattr(project_args, "sun_glare_randomize"):
         project_args.sun_glare_randomize = False
     if script_args.seed is not None:
         project_args.seed = int(script_args.seed)
