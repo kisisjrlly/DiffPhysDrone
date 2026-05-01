@@ -92,7 +92,7 @@ def build_parser():
 
     parser.add_argument('--wandb_disabled', default=False, action='store_true')
     parser.add_argument('--wandb_episode_history', default=True, action=argparse.BooleanOptionalAction)
-    parser.add_argument('--wandb_episode_history_every_iters', type=int, default=25)
+    parser.add_argument('--wandb_episode_history_every_iters', type=int, default=100)
     parser.add_argument('--vis_enable', default=False, action='store_true')
     parser.add_argument('--vis_backend', type=str, default='rerun', choices=['rerun'])
     parser.add_argument('--vis_env_idx', type=int, default=0)

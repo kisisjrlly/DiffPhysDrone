@@ -124,83 +124,35 @@ def _log_episode_history_plots(rollout, args, iter_idx):
     vh = v_hist[:, j].detach().cpu()
     ah = a_hist[:, j].detach().cpu()
 
-    speed = vh.norm(2, -1)
-    log_payload = {}
-    if power_hist is not None and exposure_hist is not None and gain_hist is not None:
-        power = power_hist[:, j].detach().cpu()
-        exposure = exposure_hist[:, j].detach().cpu()
-        gain = gain_hist[:, j].detach().cpu()
-        rows = []
-        for t in range(ph.shape[0]):
-            rows.append([
-                int(t),
-                float(ph[t, 0]), float(ph[t, 1]), float(ph[t, 2]),
-                float(vh[t, 0]), float(vh[t, 1]), float(vh[t, 2]),
-                float(speed[t]),
-                float(power[t]), float(exposure[t]), float(gain[t]),
-            ])
-        table = wandb.Table(
-            columns=[
-                'timestep',
-                'x', 'y', 'z',
-                'vx', 'vy', 'vz',
-                'speed',
-                'power', 'exposure', 'gain',
-            ],
-            data=rows,
-        )
-        log_payload.update({
-            'episode_history/position_xyz': wandb.plot.line_series(
-                xs=list(range(ph.shape[0])),
-                ys=[ph[:, 0].tolist(), ph[:, 1].tolist(), ph[:, 2].tolist()],
-                keys=['x', 'y', 'z'],
-                title='episode position',
-                xname='timestep',
-            ),
-            'episode_history/velocity_xyz': wandb.plot.line_series(
-                xs=list(range(vh.shape[0])),
-                ys=[vh[:, 0].tolist(), vh[:, 1].tolist(), vh[:, 2].tolist(), speed.tolist()],
-                keys=['vx', 'vy', 'vz', 'speed'],
-                title='episode velocity',
-                xname='timestep',
-            ),
-            'episode_history/camera_params_series': wandb.plot.line_series(
-                xs=list(range(power.shape[0])),
-                ys=[power.tolist(), exposure.tolist(), gain.tolist()],
-                keys=['power', 'exposure', 'gain'],
-                title='episode camera params',
-                xname='timestep',
-            ),
-            'episode_history/table': table,
-        })
+    if not MATPLOTLIB_AVAILABLE:
+        return
 
+    speed = vh.norm(2, -1)
     figs = []
     try:
-        if MATPLOTLIB_AVAILABLE:
-            fig_p = _plot_xyz(ph, 'position history', ylabel='m')
-            figs.append(fig_p)
-            fig_v = _plot_xyz(vh, 'velocity history', extra=[('speed', speed)], ylabel='m/s')
-            figs.append(fig_v)
-            acc_norm = ah.norm(2, -1)
-            fig_a = _plot_xyz(ah, 'acceleration command history', extra=[('norm', acc_norm)], ylabel='m/s^2')
-            figs.append(fig_a)
+        fig_p = _plot_xyz(ph, 'episode position', ylabel='m')
+        figs.append(fig_p)
+        fig_v = _plot_xyz(vh, 'episode velocity', extra=[('speed', speed)], ylabel='m/s')
+        figs.append(fig_v)
+        acc_norm = ah.norm(2, -1)
+        fig_a = _plot_xyz(ah, 'episode acceleration command', extra=[('norm', acc_norm)], ylabel='m/s^2')
+        figs.append(fig_a)
 
-            log_payload.update({
-                'episode_history/p_history': wandb.Image(fig_p),
-                'episode_history/v_history': wandb.Image(fig_v),
-                'episode_history/a_history': wandb.Image(fig_a),
-            })
-            if power_hist is not None and exposure_hist is not None and gain_hist is not None:
-                cam = torch.stack([
-                    power_hist[:, j].detach().cpu(),
-                    exposure_hist[:, j].detach().cpu(),
-                    gain_hist[:, j].detach().cpu(),
-                ], -1)
-                fig_cam = _plot_xyz(cam, 'camera parameter history', labels=('power', 'exposure', 'gain'), ylabel='0..1')
-                figs.append(fig_cam)
-                log_payload['episode_history/camera_params'] = wandb.Image(fig_cam)
-        if log_payload:
-            wandb.log(log_payload, step=int(iter_idx) + 1)
+        log_payload = {
+            'episode_history/position_xyz': wandb.Image(fig_p),
+            'episode_history/velocity_xyz': wandb.Image(fig_v),
+            'episode_history/a_history': wandb.Image(fig_a),
+        }
+        if power_hist is not None and exposure_hist is not None and gain_hist is not None:
+            cam = torch.stack([
+                power_hist[:, j].detach().cpu(),
+                exposure_hist[:, j].detach().cpu(),
+                gain_hist[:, j].detach().cpu(),
+            ], -1)
+            fig_cam = _plot_xyz(cam, 'episode camera params', labels=('power', 'exposure', 'gain'), ylabel='0..1')
+            figs.append(fig_cam)
+            log_payload['episode_history/camera_params'] = wandb.Image(fig_cam)
+        wandb.log(log_payload, step=int(iter_idx) + 1)
     finally:
         for fig in figs:
             plt.close(fig)
