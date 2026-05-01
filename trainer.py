@@ -156,6 +156,7 @@ def _log_episode_history_plots(rollout, args, iter_idx):
 
 def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     h = None
+    cam_h = None
     act_buffer = [env.act] * 2
     power, exposure, gain = init_camera_params(env, B, device)
     camera_initial = torch.stack([power.detach(), exposure.detach(), gain.detach()], -1)
@@ -187,7 +188,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         _ = local_v
 
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h = model(state, h, depth_obs=policy_depth_obs, add_noise=True)
+            act_raw, cam_params, h, cam_h = model(
+                state, h, depth_obs=policy_depth_obs, add_noise=True, cam_hx=cam_h)
         act_raw = act_raw.float()
         cam_params = cam_params.float()
 

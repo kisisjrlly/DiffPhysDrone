@@ -32,6 +32,8 @@ class Model(nn.Module):
 
         self.feat_dim = 96
         self.cam_state_dim = 32
+        self.cam_motion_dim = 32
+        self.cam_hidden_dim = 64
         self.state_feat_scale = 0.60
         self.state_dropout_p = 0.15
 
@@ -106,18 +108,23 @@ class Model(nn.Module):
             self.fc_intent.weight.data.mul_(0.01)
             self.fc_intent.bias.data.zero_()
 
-        # Camera controller: image feature + current camera state only.
-        # It intentionally does not consume full odometry/target velocity, so
-        # camera changes must be driven by perceived image degradation.
+        # Camera controller: image feature + current camera state + local
+        # velocity.  Local velocity is included because exposure/blur are
+        # motion-dependent, while target direction/distance are intentionally
+        # excluded to avoid a camera schedule keyed directly on task geometry.
         self.cam_state_proj = nn.Linear(3, self.cam_state_dim)
         self.cam_state_norm = nn.LayerNorm(self.cam_state_dim)
-        self.fc_cam = nn.Sequential(
-            nn.Linear(self.feat_dim + self.cam_state_dim, 64, bias=True),
+        self.cam_motion_proj = nn.Linear(3, self.cam_motion_dim)
+        self.cam_motion_norm = nn.LayerNorm(self.cam_motion_dim)
+        self.cam_pre = nn.Sequential(
+            nn.Linear(self.feat_dim + self.cam_state_dim + self.cam_motion_dim, self.cam_hidden_dim, bias=True),
             nn.LeakyReLU(0.05),
-            nn.Linear(64, 3, bias=True),
         )
-        self.fc_cam[-1].weight.data.mul_(0.01)
-        self.fc_cam[-1].bias.data.zero_()
+        self.cam_gru = nn.GRUCell(self.cam_hidden_dim, self.cam_hidden_dim)
+        self.cam_hx_norm = nn.LayerNorm(self.cam_hidden_dim)
+        self.fc_cam = nn.Linear(self.cam_hidden_dim, 3, bias=True)
+        self.fc_cam.weight.data.mul_(0.01)
+        self.fc_cam.bias.data.zero_()
 
         # 全局使用的激活函数
         self.act = nn.LeakyReLU(0.05)
@@ -218,17 +225,18 @@ class Model(nn.Module):
         return x_depth
 
     def forward(self, v, hx=None, return_intent=False,
-                depth_obs=None, add_noise=False):
+                depth_obs=None, add_noise=False, cam_hx=None):
         """
         前向传播函数。
         Args:
             x: 视觉观测输入（深度图 Tensor）。
             v: 物理状态观测输入（包含速度、姿态等，可能包含相机状态）。
-            hx: GRU 的隐藏状态（记忆）。
+            hx: flight GRU 的隐藏状态（记忆）。
+            cam_hx: camera GRU 的隐藏状态（只建模成像/运动状态历史）。
         Returns:
             flight_act: 飞行控制动作。
             cam_params: 相机控制参数（增量或绝对值）。
-            hx: 更新后的 GRU 隐藏状态。
+            hx/cam_hx: 更新后的 flight/camera GRU 隐藏状态。
         """
         # ==========================
         # A. 深度输入预处理
@@ -260,15 +268,21 @@ class Model(nn.Module):
         act = raw
         if self.include_camera_state_in_obs:
             cam_state = v[:, -3:]
+            local_v_for_cam = v[:, :3]
         else:
             cam_state = torch.zeros(v.shape[0], 3, device=v.device, dtype=v.dtype)
+            local_v_for_cam = v[:, :3] if v.shape[1] >= 3 else torch.zeros_like(cam_state)
         cam_feat = self.cam_state_norm(self.cam_state_proj(cam_state))
-        cam_raw = self.fc_cam(torch.cat([img_feat, cam_feat], dim=1))
+        cam_motion_feat = self.cam_motion_norm(self.cam_motion_proj(local_v_for_cam))
+        cam_in = self.cam_pre(torch.cat([img_feat, cam_feat, cam_motion_feat], dim=1))
+        cam_hx = self.cam_gru(cam_in, cam_hx)
+        cam_hx = self.cam_hx_norm(cam_hx)
+        cam_raw = self.fc_cam(self.act(cam_hx))
         cam_params = torch.sigmoid(cam_raw)  # (Batch, 3)
         if return_intent and self.use_policy_intent:
             intent_raw = self.fc_intent(self.act(hx))
-            return act, cam_params, hx, intent_raw
-        return act, cam_params, hx
+            return act, cam_params, hx, intent_raw, cam_hx
+        return act, cam_params, hx, cam_hx
 
 if __name__ == '__main__':
     # 简单的测试代码，确保模型可以被实例化

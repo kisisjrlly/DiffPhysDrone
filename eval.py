@@ -58,6 +58,24 @@ def _write_csv_rows(path, rows):
         writer.writerows(rows)
 
 
+def _min_margin_from_vec(vec_now, env):
+    """Return per-env signed clearance: <= 0 means collision."""
+    dist = torch.norm(vec_now, 2, -1)
+    batch_size = int(env.batch_size)
+    if dist.ndim == 1:
+        per_env = dist
+    elif dist.ndim == 2:
+        if dist.shape[0] == batch_size and dist.shape[1] != batch_size:
+            per_env = dist.min(dim=1).values
+        elif dist.shape[1] == batch_size:
+            per_env = dist.min(dim=0).values
+        else:
+            per_env = dist.min(dim=0).values
+    else:
+        per_env = dist.reshape(-1, batch_size).min(dim=0).values
+    return per_env - env.margin
+
+
 def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_trace=False):
     B = env.batch_size
     use_amp = bool(args.amp and device.type == 'cuda')
@@ -83,35 +101,52 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         )
 
     h = None
+    cam_h = None
     act_buffer = [env.act] * 2
     power, exposure, gain = init_camera_params(env, B, device)
     min_margin_hist, speed_hist, goal_dist_hist = [], [], []
     power_hist, exposure_hist, gain_hist, fill_hist = [], [], [], []
     trace_rows = [] if collect_trace else None
+    collided_cum = torch.zeros((B,), dtype=torch.bool, device=device)
+    reached_cum = torch.zeros((B,), dtype=torch.bool, device=device)
+    final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
+    stop_reason = 'timeout'
 
     for t in range(args.timesteps):
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
         exposure_delay = float(diff_depth_exposure_to_time(exposure.mean().detach(), camera_semantics=env.cam_sem)) * 0.01
         ctl_dt = base_dt + exposure_delay
+        vec_now = env.find_vec_to_nearest_pt()
+        min_margin_now = _min_margin_from_vec(vec_now, env)
+        goal_dist_now = torch.norm(env.p_target - env.p, dim=-1).detach()
+        collided_cum |= (min_margin_now <= 0)
+        reached_cum |= (goal_dist_now < 0.35)
+        final_goal_dist = goal_dist_now
+        if bool(collided_cum.any().item()):
+            min_margin_hist.append(min_margin_now.detach())
+            goal_dist_hist.append(goal_dist_now.detach())
+            speed_hist.append(env.v.norm(2, -1).detach())
+            stop_reason = 'collision'
+            break
+
         depth_obs, _ = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=False)
         policy_depth_obs = select_policy_depth_obs(depth_obs, args.policy_depth_mode)
-        vec_now = env.find_vec_to_nearest_pt()
-        min_margin_before = torch.norm(vec_now, 2, -1).min(1).values - env.margin
         target_v_raw = env.p_target - env.p.detach()
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
         state, local_v = build_state_vector(env, target_v, R, power, exposure, gain, args.no_odom, args.include_camera_state_in_obs)
         _ = local_v
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h = model(state, h, depth_obs=policy_depth_obs, add_noise=False)
+            act_raw, cam_params, h, cam_h = model(
+                state, h, depth_obs=policy_depth_obs, add_noise=False, cam_hx=cam_h)
         act_final, _v_pred = decode_action_direct(act_raw.float(), R, env, B, args.max_acc_cmd)
         render_power, render_exposure, render_gain = power, exposure, gain
         power, exposure, gain, _ = update_camera_params(cam_params.float(), power, exposure, gain, env)
         act_buffer.append(act_final)
 
         speed_hist.append(env.v.norm(2, -1).detach())
-        goal_dist_hist.append((env.p_target - env.p).norm(2, -1).detach())
-        min_margin_hist.append(min_margin_before.detach())
+        goal_dist_hist.append(goal_dist_now.detach())
+        min_margin_hist.append(min_margin_now.detach())
         power_hist.append(render_power.detach())
         exposure_hist.append(render_exposure.detach())
         gain_hist.append(render_gain.detach())
@@ -131,7 +166,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 'exposure': float(render_exposure[0].detach().cpu()),
                 'gain': float(render_gain[0].detach().cpu()),
                 'goal_dist': float(goal_dist_hist[-1][0].detach().cpu()),
-                'min_margin': float(min_margin_before[0].detach().cpu()),
+                'min_margin': float(min_margin_now[0].detach().cpu()),
                 'scene_effect_mean': scene_debug.get('scalars', {}).get('scene_effect_mean', 0.0),
             })
 
@@ -157,12 +192,22 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
             )
 
         env.run(act_buffer[t], ctl_dt, target_v_raw)
+        vec_after = env.find_vec_to_nearest_pt()
+        min_margin_after = _min_margin_from_vec(vec_after, env)
+        goal_dist_after = torch.norm(env.p_target - env.p, dim=-1).detach()
+        collided_cum |= (min_margin_after <= 0)
+        reached_cum |= (goal_dist_after < 0.35)
+        final_goal_dist = goal_dist_after
+        if bool(collided_cum.any().item()):
+            min_margin_hist.append(min_margin_after.detach())
+            goal_dist_hist.append(goal_dist_after.detach())
+            stop_reason = 'collision'
+            break
 
     min_margin = torch.stack(min_margin_hist)
     goal_dist = torch.stack(goal_dist_hist)
-    collided = torch.any(min_margin <= 0, dim=0)
-    reached = torch.any(goal_dist < 0.35, dim=0)
-    final_goal_dist = goal_dist[-1]
+    collided = collided_cum | torch.any(min_margin <= 0, dim=0)
+    reached = reached_cum | torch.any(goal_dist < 0.35, dim=0)
     success = reached & (~collided)
     cam_stats = compute_camera_param_stats(power_hist, exposure_hist, gain_hist)
     row = {
@@ -172,11 +217,13 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         'goal_reach_rate': float(reached.float().mean().cpu()),
         'final_goal_dist': float(final_goal_dist.mean().cpu()),
         'avg_speed': float(torch.stack(speed_hist).mean().cpu()),
-        'fill_rate': float(torch.stack(fill_hist).mean().cpu()),
+        'fill_rate': float(torch.stack(fill_hist).mean().cpu()) if fill_hist else 0.0,
         'opening_slot': env.get_scene_effects_for_env(0).get('decision_open_slot_name'),
         'power_mean': cam_stats.get('power_mean', 0.0),
         'exposure_mean': cam_stats.get('exposure_mean', 0.0),
         'gain_mean': cam_stats.get('gain_mean', 0.0),
+        'steps': int(min_margin.shape[0]),
+        'stop_reason': stop_reason,
     }
     print(
         f"[eval] episode={ep_idx + 1}/{args.eval_episodes} scene={scene_name} "

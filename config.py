@@ -195,7 +195,7 @@ def print_runtime_mode(args):
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
     print(f"camera_control_mode       : {args.camera_control_mode}")
-    print('camera_head_input         : fused_gru_hidden')
+    print('camera_head_input         : image_feature + camera_state + local_velocity -> camera_gru')
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print('environment               : active_sensing_shared_gate_minimal')
     print('=' * 75)
