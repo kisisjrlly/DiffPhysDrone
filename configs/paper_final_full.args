@@ -26,6 +26,8 @@
 --include_camera_state_in_obs
 --camera_control_mode learned
 --sensor_grad_mode full
+--cam_delta_max 0.05
+--cam_return_rate 0.05
 --policy_depth_mode depth
 --max_acc_cmd 2.5
 
@@ -33,16 +35,19 @@
 --loss_v_window 12
 --coef_d_acc 0.1
 --coef_d_jerk 0.2
---coef_obj_avoidance 0.5
---coef_collide 10.0
+--coef_obj_avoidance 1.0
+--coef_collide 1.0
 
 --cam_power_baseline 0.5
---coef_cam_smooth 0
+--coef_cam_smooth 0.5
 --coef_diff_depth_power 0.0
---coef_diff_depth_blur 0.0
---coef_diff_depth_noise 0.0
---coef_diff_depth_fill 0.0
---diff_depth_min_fill_rate 0.0
+--coef_diff_depth_blur 0.05
+--coef_diff_depth_noise 0.02
+--coef_diff_depth_fill 5.0
+--diff_depth_min_fill_rate 0.9
+--diff_depth_health_patch_rows 6
+--diff_depth_health_patch_cols 8
+--diff_depth_health_cvar_frac 0.25
 
 --fixed_camera_power 0.50
 --fixed_camera_exposure 0.50

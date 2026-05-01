@@ -19,19 +19,32 @@ def compute_depth_fill_rate(depth_obs, min_valid_depth: float = 0.3, softness=No
     return torch.sigmoid((depth_obs - float(min_valid_depth)) / float(softness)).mean()
 
 
-def sensor_validity_maps(env):
+def sensor_validity_map(env):
     aux = env.get_last_diff_depth_train_aux() if env is not None and hasattr(env, 'get_last_diff_depth_train_aux') else {}
-    return aux.get('valid_prob_map', None), aux.get('hard_valid_map', None)
+    return aux.get('valid_prob_map', None)
 
 
-def compute_render_health_metrics(env, depth_obs, min_valid_depth: float = 0.3, **_):
-    valid_prob, hard_valid = sensor_validity_maps(env)
+def compute_depth_fill_health(env, depth_obs, min_valid_depth: float = 0.3,
+                              patch_rows: int = 6, patch_cols: int = 8,
+                              cvar_frac: float = 0.25):
+    valid_prob = sensor_validity_map(env)
     if valid_prob is not None:
-        fill_soft = valid_prob.clamp(0.0, 1.0).mean()
-        fill_hard = hard_valid.clamp(0.0, 1.0).mean() if hard_valid is not None else fill_soft.detach()
-        return fill_hard, fill_soft, fill_soft
-    fill = compute_depth_fill_rate(depth_obs, min_valid_depth=min_valid_depth)
-    return fill, fill, fill
+        valid = valid_prob.clamp(0.0, 1.0)
+    else:
+        valid = (depth_obs >= float(min_valid_depth)).float()
+    if valid.ndim == 2:
+        valid = valid.unsqueeze(0)
+    elif valid.ndim == 4:
+        valid = valid[:, 0] if valid.shape[1] == 1 else valid.mean(dim=1)
+    if valid.ndim != 3:
+        raise ValueError(f'fill health expects [H,W], [B,H,W], or [B,C,H,W], got {tuple(valid.shape)}')
+    rows = max(1, int(patch_rows))
+    cols = max(1, int(patch_cols))
+    patch_fill = F.adaptive_avg_pool2d(valid[:, None], (rows, cols)).flatten(1)
+    frac = min(max(float(cvar_frac), 0.0), 1.0)
+    num_patches = int(patch_fill.shape[1])
+    k = num_patches if frac >= 1.0 else max(1, int(num_patches * frac + 0.999999))
+    return torch.topk(patch_fill, k=k, dim=1, largest=False).values.mean(dim=1)
 
 
 def render_sensors(env, ctl_dt, power, exposure, gain, differentiable=True):
@@ -64,9 +77,20 @@ def build_state_vector(env, target_v, R, power, exposure, gain, no_odom, include
     st = [tv_local, env.R[:, 2], env.margin[:, None]]
     if not no_odom:
         st.insert(0, local_v)
+    state = torch.cat(st, -1)
+
     if include_camera_state:
-        st.append(torch.stack([power * 2.0 - 1.0, exposure * 2.0 - 1.0, gain * 2.0 - 1.0], -1))
-    return torch.cat(st, -1), local_v
+        camera_state = torch.stack([power * 2.0 - 1.0, exposure * 2.0 - 1.0, gain * 2.0 - 1.0], -1)
+    else:
+        camera_state = torch.zeros_like(local_v)
+
+    speed_scale = getattr(env, 'max_speed', None)
+    if speed_scale is None:
+        local_v_norm = local_v
+    else:
+        local_v_norm = local_v / speed_scale.clamp_min(1e-3)
+    camera_motion_state = torch.cat([local_v_norm.clamp(-2.0, 2.0), env.R[:, :, 2]], -1)
+    return state, local_v, camera_state, camera_motion_state
 
 
 def compute_target_velocity(target_v_raw, env):
@@ -119,12 +143,20 @@ def update_camera_params(cam_params, power, exposure, gain, env):
         hist = torch.stack([power.detach(), exposure.detach(), gain.detach()], -1)
         return power.detach(), exposure.detach(), gain.detach(), hist
 
-    alpha = 0.7
-    p_new, e_new, g_new = cam_params.clamp(0.0, 1.0).unbind(-1)
-    power = alpha * power.detach() + (1.0 - alpha) * p_new
-    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_new
-    gain = alpha * gain.detach() + (1.0 - alpha) * g_new
-    return power, exposure, gain, cam_params
+    step = float(getattr(env, 'cam_delta_max', 0.02))
+    ret = float(getattr(env, 'cam_return_rate', 0.05))
+    delta = cam_params.clamp(-1.0, 1.0) * step
+    p_delta, e_delta, g_delta = delta.unbind(-1)
+    p_center = torch.full_like(power, float(getattr(env, 'fixed_camera_power', 0.5)))
+    e_center = torch.full_like(exposure, float(getattr(env, 'fixed_camera_exposure', 0.5)))
+    g_center = torch.full_like(gain, float(getattr(env, 'fixed_camera_gain', 0.5)))
+    power = power + p_delta + ret * (p_center - power.detach())
+    exposure = exposure + e_delta + ret * (e_center - exposure.detach())
+    gain = gain + g_delta + ret * (g_center - gain.detach())
+    power = power.clamp(0.08, 0.95)
+    exposure = exposure.clamp(0.08, 0.95)
+    gain = gain.clamp(0.02, 0.95)
+    return power, exposure, gain, torch.stack([power, exposure, gain], -1)
 
 
 def _stack_history_or_tensor(values):

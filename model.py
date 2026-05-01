@@ -18,7 +18,8 @@ class Model(nn.Module):
         Args:
             dim_obs: 基础物理观测维度（通常是7维无里程计，或10维带里程计）。
             dim_action: 飞行控制动作维度（默认6维：3维加速度 + 3维速度预测）。
-            include_camera_state_in_obs: 是否将当前相机状态加入到观测向量中。
+            include_camera_state_in_obs: 是否允许 camera head 使用当前相机状态。
+                flight head 始终不直接接收相机状态，避免 camera 参数成为动作捷径。
         """
         super().__init__()
         self.include_camera_state_in_obs = bool(include_camera_state_in_obs)
@@ -56,9 +57,6 @@ class Model(nn.Module):
                 nn.Linear(64 * 2 * 4, feat_dim, bias=False),
             )
 
-        # 如果启用了相机状态观测，物理观测维度需要增加 3 维
-        actual_obs_dim = dim_obs + (3 if self.include_camera_state_in_obs else 0)
-
         # diff_depth-only：双通道深度分支编码器。
         # channel 0: inverse depth / near obstacle cue
         # channel 1: metric range / far opening cue
@@ -69,7 +67,7 @@ class Model(nn.Module):
         )
 
         # 状态向量投影层：容量故意小一些，避免 fixed/randfix 过度依赖状态/时间模板。
-        self.v_proj = nn.Linear(actual_obs_dim, self.feat_dim)
+        self.v_proj = nn.Linear(dim_obs, self.feat_dim)
         self.v_proj.weight.data.mul_(0.25)
 
         # 多模态门控融合（替代简单相加）
@@ -109,12 +107,12 @@ class Model(nn.Module):
             self.fc_intent.bias.data.zero_()
 
         # Camera controller: image feature + current camera state + local
-        # velocity.  Local velocity is included because exposure/blur are
+        # motion/attitude.  Local motion is included because exposure/blur are
         # motion-dependent, while target direction/distance are intentionally
         # excluded to avoid a camera schedule keyed directly on task geometry.
         self.cam_state_proj = nn.Linear(3, self.cam_state_dim)
         self.cam_state_norm = nn.LayerNorm(self.cam_state_dim)
-        self.cam_motion_proj = nn.Linear(3, self.cam_motion_dim)
+        self.cam_motion_proj = nn.Linear(6, self.cam_motion_dim)
         self.cam_motion_norm = nn.LayerNorm(self.cam_motion_dim)
         self.cam_pre = nn.Sequential(
             nn.Linear(self.feat_dim + self.cam_state_dim + self.cam_motion_dim, self.cam_hidden_dim, bias=True),
@@ -225,13 +223,16 @@ class Model(nn.Module):
         return x_depth
 
     def forward(self, v, hx=None, return_intent=False,
-                depth_obs=None, add_noise=False, cam_hx=None):
+                depth_obs=None, add_noise=False, cam_hx=None,
+                camera_state=None, camera_motion_state=None):
         """
         前向传播函数。
         Args:
             x: 视觉观测输入（深度图 Tensor）。
-            v: 物理状态观测输入（包含速度、姿态等，可能包含相机状态）。
+            v: flight 物理状态观测输入（不包含相机状态）。
             hx: flight GRU 的隐藏状态（记忆）。
+            camera_state: 当前 power/exposure/gain，归一化到 [-1, 1]。
+            camera_motion_state: 局部速度 + 姿态/up，用于 motion-aware camera 控制。
             cam_hx: camera GRU 的隐藏状态（只建模成像/运动状态历史）。
         Returns:
             flight_act: 飞行控制动作。
@@ -266,19 +267,21 @@ class Model(nn.Module):
         raw = self.fc(self.act(hx))
 
         act = raw
-        if self.include_camera_state_in_obs:
-            cam_state = v[:, -3:]
-            local_v_for_cam = v[:, :3]
-        else:
+        if camera_state is None or not self.include_camera_state_in_obs:
             cam_state = torch.zeros(v.shape[0], 3, device=v.device, dtype=v.dtype)
-            local_v_for_cam = v[:, :3] if v.shape[1] >= 3 else torch.zeros_like(cam_state)
+        else:
+            cam_state = camera_state.to(device=v.device, dtype=v.dtype)
+        if camera_motion_state is None:
+            camera_motion_state = torch.zeros(v.shape[0], 6, device=v.device, dtype=v.dtype)
+        else:
+            camera_motion_state = camera_motion_state.to(device=v.device, dtype=v.dtype)
         cam_feat = self.cam_state_norm(self.cam_state_proj(cam_state))
-        cam_motion_feat = self.cam_motion_norm(self.cam_motion_proj(local_v_for_cam))
+        cam_motion_feat = self.cam_motion_norm(self.cam_motion_proj(camera_motion_state))
         cam_in = self.cam_pre(torch.cat([img_feat, cam_feat, cam_motion_feat], dim=1))
         cam_hx = self.cam_gru(cam_in, cam_hx)
         cam_hx = self.cam_hx_norm(cam_hx)
         cam_raw = self.fc_cam(self.act(cam_hx))
-        cam_params = torch.sigmoid(cam_raw)  # (Batch, 3)
+        cam_params = torch.tanh(cam_raw)  # normalized camera delta in [-1, 1]
         if return_intent and self.use_policy_intent:
             intent_raw = self.fc_intent(self.act(hx))
             return act, cam_params, hx, intent_raw, cam_hx

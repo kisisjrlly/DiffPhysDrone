@@ -2,6 +2,8 @@
 import torch
 import torch.nn.functional as F
 
+from rollout_ops import diff_depth_exposure_to_time
+
 
 def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int = 12):
     if v_hist.shape[0] <= win:
@@ -53,8 +55,8 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
                           fill_rate_seq=None, min_fill_rate=0.0,
                           camera_semantics=None, power_baseline: float = 0.5,
                           cam_initial=None):
-    _ = exposure_seq, gain_seq, speed_seq, fill_rate_seq, min_fill_rate, camera_semantics
-    device = _infer_loss_device(cam_hist, power_seq, cam_initial)
+    device = _infer_loss_device(
+        cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq, cam_initial)
     result = {
         'loss_cam_smooth': torch.zeros((), device=device),
         'loss_diff_depth_power': torch.zeros((), device=device),
@@ -73,6 +75,17 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
             result['loss_cam_smooth'] = cam_for_smooth.diff(1, 0).pow(2).mean()
     if power_seq is not None:
         result['loss_diff_depth_power'] = F.relu(power_seq - float(power_baseline)).pow(2).mean()
+    if exposure_seq is not None and speed_seq is not None:
+        exp_phys = diff_depth_exposure_to_time(
+            exposure_seq,
+            camera_semantics=camera_semantics,
+        )
+        result['loss_diff_depth_blur'] = (speed_seq * exp_phys).pow(2).mean()
+    if gain_seq is not None:
+        result['loss_diff_depth_noise'] = gain_seq.pow(2).mean()
+    if fill_rate_seq is not None:
+        fill_gap = F.relu(float(min_fill_rate) - fill_rate_seq)
+        result['loss_diff_depth_fill'] = fill_gap.pow(2).mean()
     return result
 
 
@@ -85,6 +98,9 @@ def aggregate_loss(physics_losses, camera_losses, args):
         + args.coef_collide * physics_losses['loss_collide']
         + args.coef_cam_smooth * camera_losses['loss_cam_smooth']
         + args.coef_diff_depth_power * camera_losses['loss_diff_depth_power']
+        + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
+        + args.coef_diff_depth_noise * camera_losses['loss_diff_depth_noise']
+        + args.coef_diff_depth_fill * camera_losses['loss_diff_depth_fill']
     )
     all_losses = {
         'loss_v': physics_losses['loss_v'],

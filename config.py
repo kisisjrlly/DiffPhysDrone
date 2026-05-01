@@ -27,6 +27,7 @@ def build_parser():
     parser.add_argument('--coef_obj_avoidance', type=float, default=0.5)
     parser.add_argument('--coef_d_acc', type=float, default=0.1)
     parser.add_argument('--coef_d_jerk', type=float, default=0.2)
+    parser.add_argument('--collision_clearance', type=float, default=0.0011)
 
     parser.add_argument('--fov_x_half_tan', type=float, default=0.82)
     parser.add_argument('--timesteps', type=int, default=120)
@@ -53,6 +54,8 @@ def build_parser():
     parser.add_argument('--camera_control_mode', type=str, default='learned',
                         choices=['learned', 'fixed', 'fixed_random_static'])
     parser.add_argument('--sensor_grad_mode', type=str, default='full', choices=['full', 'detached'])
+    parser.add_argument('--cam_delta_max', type=float, default=0.02)
+    parser.add_argument('--cam_return_rate', type=float, default=0.05)
     parser.add_argument('--cam_power_baseline', type=float, default=0.5)
     parser.add_argument('--coef_cam_smooth', type=float, default=2.0)
     parser.add_argument('--coef_diff_depth_power', type=float, default=4.0)
@@ -60,6 +63,9 @@ def build_parser():
     parser.add_argument('--coef_diff_depth_noise', type=float, default=0.0)
     parser.add_argument('--coef_diff_depth_fill', type=float, default=0.0)
     parser.add_argument('--diff_depth_min_fill_rate', type=float, default=0.0)
+    parser.add_argument('--diff_depth_health_patch_rows', type=int, default=6)
+    parser.add_argument('--diff_depth_health_patch_cols', type=int, default=8)
+    parser.add_argument('--diff_depth_health_cvar_frac', type=float, default=0.25)
     parser.add_argument('--fixed_camera_power', type=float, default=0.4)
     parser.add_argument('--fixed_camera_exposure', type=float, default=0.9)
     parser.add_argument('--fixed_camera_gain', type=float, default=0.65)
@@ -85,6 +91,8 @@ def build_parser():
     parser.add_argument('--yaw_drift', default=False, action='store_true')
 
     parser.add_argument('--wandb_disabled', default=False, action='store_true')
+    parser.add_argument('--wandb_episode_history', default=True, action=argparse.BooleanOptionalAction)
+    parser.add_argument('--wandb_episode_history_every_iters', type=int, default=25)
     parser.add_argument('--vis_enable', default=False, action='store_true')
     parser.add_argument('--vis_backend', type=str, default='rerun', choices=['rerun'])
     parser.add_argument('--vis_env_idx', type=int, default=0)
@@ -167,8 +175,22 @@ def validate_args(args):
         raise ValueError('--depth_max_range must be > --depth_min_valid')
     if args.loss_v_window < 1:
         raise ValueError('--loss_v_window must be >= 1')
+    if args.collision_clearance < 0:
+        raise ValueError('--collision_clearance must be >= 0')
     if args.random_rotation_max_deg < 0:
         raise ValueError('--random_rotation_max_deg must be >= 0')
+    if args.cam_delta_max < 0:
+        raise ValueError('--cam_delta_max must be >= 0')
+    if args.cam_return_rate < 0:
+        raise ValueError('--cam_return_rate must be >= 0')
+    if args.diff_depth_health_patch_rows < 1:
+        raise ValueError('--diff_depth_health_patch_rows must be >= 1')
+    if args.diff_depth_health_patch_cols < 1:
+        raise ValueError('--diff_depth_health_patch_cols must be >= 1')
+    if not (0.0 <= args.diff_depth_health_cvar_frac <= 1.0):
+        raise ValueError('--diff_depth_health_cvar_frac must be in [0, 1]')
+    if args.wandb_episode_history_every_iters < 1:
+        raise ValueError('--wandb_episode_history_every_iters must be >= 1')
     if not args.scenarios:
         raise ValueError('--scenarios needs at least one scenario')
     args.sun_glare_eval_slot = canonicalize_sun_glare_slot(args.sun_glare_eval_slot)
@@ -194,8 +216,18 @@ def print_runtime_mode(args):
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
+    print(f"collision_clearance      : {args.collision_clearance} m")
     print(f"camera_control_mode       : {args.camera_control_mode}")
-    print('camera_head_input         : image_feature + camera_state + local_velocity -> camera_gru')
+    print(f"camera_output             : delta clipped by cam_delta_max={args.cam_delta_max}, return_rate={args.cam_return_rate}")
+    print('flight_head_input         : image_feature + flight_state(no camera_state) -> flight_gru')
+    print('camera_head_input         : image_feature + camera_state + local_velocity/up -> camera_gru')
+    print(
+        'depth_fill_loss          : '
+        f'patch_cvar rows={args.diff_depth_health_patch_rows}, '
+        f'cols={args.diff_depth_health_patch_cols}, '
+        f'frac={args.diff_depth_health_cvar_frac}, '
+        f'target={args.diff_depth_min_fill_rate}'
+    )
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print('environment               : active_sensing_shared_gate_minimal')
     print('=' * 75)

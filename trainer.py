@@ -27,7 +27,7 @@ from rollout_ops import (
     diff_depth_exposure_to_time,
     init_camera_params,
     compute_camera_param_stats,
-    compute_render_health_metrics,
+    compute_depth_fill_health,
 )
 from train_utils import MetricSmoother, periodic_tail_ops
 
@@ -38,8 +38,8 @@ def _stack_or_none(values):
     return torch.stack(values)
 
 
-def _compute_success_collision(p_history, distance, env):
-    collision = torch.any(distance.flatten(0, 1) <= 0, dim=0)
+def _compute_success_collision(p_history, clearance, env, args):
+    collision = torch.any(clearance.flatten(0, 1) <= float(args.collision_clearance), dim=0)
     final_dist = torch.norm(env.p_target - p_history[-1], dim=-1)
     reached = final_dist < 0.35
     success = reached & (~collision)
@@ -55,6 +55,9 @@ def _build_loss_contrib_metrics(loss_terms, args):
         ('d_jerk', 'loss_d_jerk', args.coef_d_jerk),
         ('cam_smooth', 'loss_cam_smooth', args.coef_cam_smooth),
         ('diff_depth_power', 'loss_diff_depth_power', args.coef_diff_depth_power),
+        ('diff_depth_blur', 'loss_diff_depth_blur', args.coef_diff_depth_blur),
+        ('diff_depth_noise', 'loss_diff_depth_noise', args.coef_diff_depth_noise),
+        ('diff_depth_fill', 'loss_diff_depth_fill', args.coef_diff_depth_fill),
     ]
     contrib = {}
     for name, key, coef in specs:
@@ -106,8 +109,6 @@ def _log_episode_history_plots(rollout, args, iter_idx):
     old p_history/camera-parameter view so a single episode's behavior can be
     inspected directly in WandB.
     """
-    if not MATPLOTLIB_AVAILABLE:
-        return
     p_hist = _stack_history_for_plot(rollout.get('p_history'))
     v_hist = _stack_history_for_plot(rollout.get('v_history'))
     a_hist = _stack_history_for_plot(rollout.get('act_history'))
@@ -123,32 +124,83 @@ def _log_episode_history_plots(rollout, args, iter_idx):
     vh = v_hist[:, j].detach().cpu()
     ah = a_hist[:, j].detach().cpu()
 
+    speed = vh.norm(2, -1)
+    log_payload = {}
+    if power_hist is not None and exposure_hist is not None and gain_hist is not None:
+        power = power_hist[:, j].detach().cpu()
+        exposure = exposure_hist[:, j].detach().cpu()
+        gain = gain_hist[:, j].detach().cpu()
+        rows = []
+        for t in range(ph.shape[0]):
+            rows.append([
+                int(t),
+                float(ph[t, 0]), float(ph[t, 1]), float(ph[t, 2]),
+                float(vh[t, 0]), float(vh[t, 1]), float(vh[t, 2]),
+                float(speed[t]),
+                float(power[t]), float(exposure[t]), float(gain[t]),
+            ])
+        table = wandb.Table(
+            columns=[
+                'timestep',
+                'x', 'y', 'z',
+                'vx', 'vy', 'vz',
+                'speed',
+                'power', 'exposure', 'gain',
+            ],
+            data=rows,
+        )
+        log_payload.update({
+            'episode_history/position_xyz': wandb.plot.line_series(
+                xs=list(range(ph.shape[0])),
+                ys=[ph[:, 0].tolist(), ph[:, 1].tolist(), ph[:, 2].tolist()],
+                keys=['x', 'y', 'z'],
+                title='episode position',
+                xname='timestep',
+            ),
+            'episode_history/velocity_xyz': wandb.plot.line_series(
+                xs=list(range(vh.shape[0])),
+                ys=[vh[:, 0].tolist(), vh[:, 1].tolist(), vh[:, 2].tolist(), speed.tolist()],
+                keys=['vx', 'vy', 'vz', 'speed'],
+                title='episode velocity',
+                xname='timestep',
+            ),
+            'episode_history/camera_params_series': wandb.plot.line_series(
+                xs=list(range(power.shape[0])),
+                ys=[power.tolist(), exposure.tolist(), gain.tolist()],
+                keys=['power', 'exposure', 'gain'],
+                title='episode camera params',
+                xname='timestep',
+            ),
+            'episode_history/table': table,
+        })
+
     figs = []
     try:
-        fig_p = _plot_xyz(ph, 'position history', ylabel='m')
-        figs.append(fig_p)
-        speed = vh.norm(2, -1)
-        fig_v = _plot_xyz(vh, 'velocity history', extra=[('speed', speed)], ylabel='m/s')
-        figs.append(fig_v)
-        acc_norm = ah.norm(2, -1)
-        fig_a = _plot_xyz(ah, 'acceleration command history', extra=[('norm', acc_norm)], ylabel='m/s^2')
-        figs.append(fig_a)
+        if MATPLOTLIB_AVAILABLE:
+            fig_p = _plot_xyz(ph, 'position history', ylabel='m')
+            figs.append(fig_p)
+            fig_v = _plot_xyz(vh, 'velocity history', extra=[('speed', speed)], ylabel='m/s')
+            figs.append(fig_v)
+            acc_norm = ah.norm(2, -1)
+            fig_a = _plot_xyz(ah, 'acceleration command history', extra=[('norm', acc_norm)], ylabel='m/s^2')
+            figs.append(fig_a)
 
-        log_payload = {
-            'episode_history/p_history': wandb.Image(fig_p),
-            'episode_history/v_history': wandb.Image(fig_v),
-            'episode_history/a_history': wandb.Image(fig_a),
-        }
-        if power_hist is not None and exposure_hist is not None and gain_hist is not None:
-            cam = torch.stack([
-                power_hist[:, j].detach().cpu(),
-                exposure_hist[:, j].detach().cpu(),
-                gain_hist[:, j].detach().cpu(),
-            ], -1)
-            fig_cam = _plot_xyz(cam, 'camera parameter history', labels=('power', 'exposure', 'gain'), ylabel='0..1')
-            figs.append(fig_cam)
-            log_payload['episode_history/camera_params'] = wandb.Image(fig_cam)
-        wandb.log(log_payload, step=int(iter_idx) + 1)
+            log_payload.update({
+                'episode_history/p_history': wandb.Image(fig_p),
+                'episode_history/v_history': wandb.Image(fig_v),
+                'episode_history/a_history': wandb.Image(fig_a),
+            })
+            if power_hist is not None and exposure_hist is not None and gain_hist is not None:
+                cam = torch.stack([
+                    power_hist[:, j].detach().cpu(),
+                    exposure_hist[:, j].detach().cpu(),
+                    gain_hist[:, j].detach().cpu(),
+                ], -1)
+                fig_cam = _plot_xyz(cam, 'camera parameter history', labels=('power', 'exposure', 'gain'), ylabel='0..1')
+                figs.append(fig_cam)
+                log_payload['episode_history/camera_params'] = wandb.Image(fig_cam)
+        if log_payload:
+            wandb.log(log_payload, step=int(iter_idx) + 1)
     finally:
         for fig in figs:
             plt.close(fig)
@@ -173,15 +225,21 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         ctl_dt = base_dt + exposure_delay
 
         depth_obs, _ = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=sensor_differentiable)
-        fill_hard, fill_soft, fill_health = compute_render_health_metrics(env, depth_obs, min_valid_depth=args.depth_min_valid)
-        _ = fill_hard, fill_soft
+        depth_fill = compute_depth_fill_health(
+            env,
+            depth_obs,
+            min_valid_depth=args.depth_min_valid,
+            patch_rows=args.diff_depth_health_patch_rows,
+            patch_cols=args.diff_depth_health_patch_cols,
+            cvar_frac=args.diff_depth_health_cvar_frac,
+        )
         policy_depth_obs = select_policy_depth_obs(depth_obs, args.policy_depth_mode)
 
         vec_now = env.find_vec_to_nearest_pt()
         target_v_raw = env.p_target - env.p.detach()
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
-        state, local_v = build_state_vector(
+        state, local_v, camera_state, camera_motion_state = build_state_vector(
             env, target_v, R, power, exposure, gain,
             args.no_odom, args.include_camera_state_in_obs,
         )
@@ -189,7 +247,13 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
 
         with autocast(enabled=use_amp):
             act_raw, cam_params, h, cam_h = model(
-                state, h, depth_obs=policy_depth_obs, add_noise=True, cam_hx=cam_h)
+                state, h,
+                depth_obs=policy_depth_obs,
+                add_noise=True,
+                cam_hx=cam_h,
+                camera_state=camera_state,
+                camera_motion_state=camera_motion_state,
+            )
         act_raw = act_raw.float()
         cam_params = cam_params.float()
 
@@ -208,7 +272,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         exposure_history.append(render_exposure)
         gain_history.append(render_gain)
         speed_history.append(env.v.norm(2, -1))
-        fill_history.append(fill_health)
+        fill_history.append(depth_fill)
 
         if should_vis and args.vis_student and (t % max(args.vis_every_steps, 1) == 0):
             j = int(min(max(args.vis_env_idx, 0), B - 1))
@@ -282,8 +346,8 @@ def _loss_from_rollout(rollout, env, args):
         cam_initial=rollout['camera_initial'],
     )
     loss, loss_terms = aggregate_loss(physics_losses, camera_losses, args)
-    distance = torch.norm(vec_history + 1e-6, 2, -1) - env.margin
-    return loss, loss_terms, p_history, distance
+    clearance = torch.norm(vec_history + 1e-6, 2, -1)
+    return loss, loss_terms, p_history, clearance
 
 
 def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoint_dir, device):
@@ -315,7 +379,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             )
 
         rollout = _rollout(env_train, model, args, B, device, use_amp, vis, should_vis)
-        loss, loss_terms, p_history, distance = _loss_from_rollout(rollout, env_train, args)
+        loss, loss_terms, p_history, clearance = _loss_from_rollout(rollout, env_train, args)
 
         optim.zero_grad(set_to_none=True)
         if torch.isfinite(loss):
@@ -335,7 +399,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         if device.type == 'cuda':
             torch.cuda.synchronize()
 
-        success_rate, collision_rate, final_goal_dist = _compute_success_collision(p_history.detach(), distance.detach(), env_train)
+        success_rate, collision_rate, final_goal_dist = _compute_success_collision(
+            p_history.detach(), clearance.detach(), env_train, args)
         cam_stats = compute_camera_param_stats(
             rollout['power_history'], rollout['exposure_history'], rollout['gain_history'])
         iter_time = time.time() - iter_tic
@@ -354,7 +419,12 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         log.update(_build_loss_contrib_metrics(loss_terms, args))
         log.update({f'cam/{k}': v for k, v in cam_stats.items()})
         smoother.add(log)
-        if should_vis and not args.wandb_disabled:
+        should_log_episode_history = (
+            not args.wandb_disabled
+            and bool(args.wandb_episode_history)
+            and (i % max(args.wandb_episode_history_every_iters, 1) == 0)
+        )
+        if should_log_episode_history:
             _log_episode_history_plots(rollout, args, i)
         if args.vis_enable:
             vis.log_train_scalars({k: v for k, v in log.items() if k in {'loss', 'collision_rate', 'success_rate', 'charts/goal_dist'}}, iter_idx=i)

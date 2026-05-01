@@ -38,6 +38,7 @@ class Env:
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.82,
                  eval_mode=False, cam_angle=5, ellipsoid_a=0.0, ellipsoid_c=0.0,
                  cam_power_baseline=0.5, camera_control_mode='learned', sensor_grad_mode='full',
+                 cam_delta_max=0.02, cam_return_rate=0.05,
                  fixed_camera_power=0.4, fixed_camera_exposure=0.9, fixed_camera_gain=0.65,
                  fixed_random_power_min=0.1, fixed_random_power_max=0.95,
                  fixed_random_exposure_min=0.1, fixed_random_exposure_max=0.92,
@@ -72,6 +73,8 @@ class Env:
         self.cam_power_baseline = float(cam_power_baseline)
         self.camera_control_mode = str(camera_control_mode).lower()
         self.sensor_grad_mode = str(sensor_grad_mode).lower()
+        self.cam_delta_max = float(cam_delta_max)
+        self.cam_return_rate = float(cam_return_rate)
         self.fixed_camera_power = float(fixed_camera_power)
         self.fixed_camera_exposure = float(fixed_camera_exposure)
         self.fixed_camera_gain = float(fixed_camera_gain)
