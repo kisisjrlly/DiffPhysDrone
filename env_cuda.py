@@ -281,7 +281,7 @@ class Env:
         gap_y = torch.tensor([self.slot_y[s] for s in slots], device=device, dtype=torch.float32)
         voxels = torch.stack([self._build_sun_glare_voxel_layout(float(y)) for y in gap_y], dim=0)
         start_y = torch.zeros(B, device=device)
-        start_local = torch.stack([torch.full((B,), -2.8, device=device), start_y, torch.full((B,), 1.5, device=device)], -1)
+        start_local = torch.stack([torch.full((B,), -1.2, device=device), start_y, torch.full((B,), 1.5, device=device)], -1)
         goal_local = torch.tensor([3.0, 0.0, 1.5], device=device).expand(B, 3).clone()
         start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
         goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
