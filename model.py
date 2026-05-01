@@ -30,23 +30,28 @@ class Model(nn.Module):
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
 
+        self.feat_dim = 96
+        self.cam_state_dim = 32
+        self.state_feat_scale = 0.60
+        self.state_dropout_p = 0.15
+
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
             return nn.Sequential(
-                nn.Conv2d(cin, 32, 3, padding=1, bias=False),
+                nn.Conv2d(cin, 16, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(32, 64, 3, stride=2, padding=1, bias=False),
+                nn.Conv2d(16, 32, 3, stride=2, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(64, 128, 3, padding=1, bias=False),
+                nn.Conv2d(32, 64, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.AdaptiveAvgPool2d((3, 6)),
+                nn.AdaptiveAvgPool2d((2, 4)),
             )
 
         def make_stem(cin: int, feat_dim: int, small_input_friendly: bool = False):
             return nn.Sequential(
                 make_spatial_stem(cin, small_input_friendly=small_input_friendly),
                 nn.Flatten(),
-                nn.Linear(128 * 3 * 6, feat_dim, bias=False),
+                nn.Linear(64 * 2 * 4, feat_dim, bias=False),
             )
 
         # 如果启用了相机状态观测，物理观测维度需要增加 3 维
@@ -57,60 +62,59 @@ class Model(nn.Module):
         # channel 1: metric range / far opening cue
         self.stem = make_stem(
             2,
-            192,
+            self.feat_dim,
             small_input_friendly=True,
         )
 
-        # 状态向量投影层：将无人机的物理状态（速度、姿态、目标距离等）映射到 192 维
-        self.v_proj = nn.Linear(actual_obs_dim, 192)
-        # 初始化权重，乘以 0.5 使其初始输出较小，防止物理状态特征在初期淹没视觉特征
-        self.v_proj.weight.data.mul_(0.5)
+        # 状态向量投影层：容量故意小一些，避免 fixed/randfix 过度依赖状态/时间模板。
+        self.v_proj = nn.Linear(actual_obs_dim, self.feat_dim)
+        self.v_proj.weight.data.mul_(0.25)
 
         # 多模态门控融合（替代简单相加）
         # 目标：防止训练后期某一模态长期压制另一模态
-        self.img_norm = nn.LayerNorm(192)
-        self.v_norm = nn.LayerNorm(192)
+        self.img_norm = nn.LayerNorm(self.feat_dim)
+        self.v_norm = nn.LayerNorm(self.feat_dim)
         self.fuse_gate = nn.Sequential(
-            nn.Linear(192 * 2, 192, bias=True),
+            nn.Linear(self.feat_dim * 2, self.feat_dim, bias=True),
             nn.LeakyReLU(0.05),
-            nn.Linear(192, 192, bias=True),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=True),
             nn.Sigmoid(),
         )
         self.fuse_gate[-2].weight.data.mul_(0.1)
-        self.fuse_gate[-2].bias.data.zero_()
+        self.fuse_gate[-2].bias.data.fill_(0.35)
 
         # 门控循环单元 (GRU)：用于处理时序信息，赋予无人机记忆能力
         # 因为无人机只能看到当前的深度图（部分可观测环境 POMDP），需要记忆来推断自身速度和环境结构
-        self.gru = nn.GRUCell(192, 192)
+        self.gru = nn.GRUCell(self.feat_dim, self.feat_dim)
         # GRU 后残差稳态头：提升记忆表达稳定性，缓解后期策略抖动
         self.gru_residual = nn.Sequential(
-            nn.Linear(192, 192, bias=False),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=False),
             nn.LeakyReLU(0.05),
-            nn.Linear(192, 192, bias=False),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=False),
         )
         self.gru_residual[-1].weight.data.mul_(0.01)
-        self.hx_norm = nn.LayerNorm(192)
+        self.hx_norm = nn.LayerNorm(self.feat_dim)
 
         # 动作输出头 (Action Head)
-        self.fc = nn.Linear(192, dim_action, bias=False)
+        self.fc = nn.Linear(self.feat_dim, dim_action, bias=False)
         self.fc.weight.data.mul_(0.01)
         self._flight_dim = dim_action
 
         # 可选的意图输出头（用于意图域训练 + dLQR）
         if self.use_policy_intent:
-            self.fc_intent = nn.Linear(192, intent_dim, bias=True)
+            self.fc_intent = nn.Linear(self.feat_dim, intent_dim, bias=True)
             self.fc_intent.weight.data.mul_(0.01)
             self.fc_intent.bias.data.zero_()
 
         # Camera controller: image feature + current camera state only.
         # It intentionally does not consume full odometry/target velocity, so
         # camera changes must be driven by perceived image degradation.
-        self.cam_state_proj = nn.Linear(3, 64)
-        self.cam_state_norm = nn.LayerNorm(64)
+        self.cam_state_proj = nn.Linear(3, self.cam_state_dim)
+        self.cam_state_norm = nn.LayerNorm(self.cam_state_dim)
         self.fc_cam = nn.Sequential(
-            nn.Linear(192 + 64, 128, bias=True),
+            nn.Linear(self.feat_dim + self.cam_state_dim, 64, bias=True),
             nn.LeakyReLU(0.05),
-            nn.Linear(128, 3, bias=True),
+            nn.Linear(64, 3, bias=True),
         )
         self.fc_cam[-1].weight.data.mul_(0.01)
         self.fc_cam[-1].bias.data.zero_()
@@ -240,7 +244,9 @@ class Model(nn.Module):
         # ==========================
         # 门控融合：平衡视觉特征与状态向量，降低单模态长期压制风险
         img_feat = self.img_norm(img_feat)
-        v_feat = self.v_norm(self.v_proj(v))
+        v_feat = self.v_norm(self.v_proj(v)) * self.state_feat_scale
+        if self.training and self.state_dropout_p > 0.0:
+            v_feat = F.dropout(v_feat, p=self.state_dropout_p, training=True)
         fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
         flight_feat = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
         
