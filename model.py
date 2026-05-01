@@ -31,30 +31,35 @@ class Model(nn.Module):
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
 
-        self.feat_dim = 96
-        self.cam_state_dim = 32
-        self.cam_motion_dim = 32
-        self.cam_hidden_dim = 64
-        self.state_feat_scale = 0.60
-        self.state_dropout_p = 0.15
+        # Keep the policy intentionally small for the shared-gate benchmark.
+        # The task should be solved by useful depth observations, not by a
+        # high-capacity recurrent policy memorizing a timing template.
+        self.feat_dim = 32
+        self.cam_state_dim = 12
+        self.cam_motion_dim = 12
+        self.cam_hidden_dim = 24
+        self.state_feat_scale = 0.50
+        self.state_dropout_p = 0.10
+        self.spatial_pool_hw = (3, 6)
+        self.stem_channels = 24
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
             return nn.Sequential(
-                nn.Conv2d(cin, 16, 3, padding=1, bias=False),
+                nn.Conv2d(cin, 8, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(16, 32, 3, stride=2, padding=1, bias=False),
+                nn.Conv2d(8, 16, 3, stride=2, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(32, 64, 3, padding=1, bias=False),
+                nn.Conv2d(16, self.stem_channels, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.AdaptiveAvgPool2d((2, 4)),
+                nn.AdaptiveAvgPool2d(self.spatial_pool_hw),
             )
 
         def make_stem(cin: int, feat_dim: int, small_input_friendly: bool = False):
             return nn.Sequential(
                 make_spatial_stem(cin, small_input_friendly=small_input_friendly),
                 nn.Flatten(),
-                nn.Linear(64 * 2 * 4, feat_dim, bias=False),
+                nn.Linear(self.stem_channels * self.spatial_pool_hw[0] * self.spatial_pool_hw[1], feat_dim, bias=False),
             )
 
         # diff_depth-only：双通道深度分支编码器。
@@ -70,29 +75,15 @@ class Model(nn.Module):
         self.v_proj = nn.Linear(dim_obs, self.feat_dim)
         self.v_proj.weight.data.mul_(0.25)
 
-        # 多模态门控融合（替代简单相加）
-        # 目标：防止训练后期某一模态长期压制另一模态
+        # Lightweight additive fusion.  This deliberately avoids a larger
+        # gating MLP so fixed-camera baselines cannot solve the task mostly by
+        # fitting a rich state/time template.
         self.img_norm = nn.LayerNorm(self.feat_dim)
         self.v_norm = nn.LayerNorm(self.feat_dim)
-        self.fuse_gate = nn.Sequential(
-            nn.Linear(self.feat_dim * 2, self.feat_dim, bias=True),
-            nn.LeakyReLU(0.05),
-            nn.Linear(self.feat_dim, self.feat_dim, bias=True),
-            nn.Sigmoid(),
-        )
-        self.fuse_gate[-2].weight.data.mul_(0.1)
-        self.fuse_gate[-2].bias.data.fill_(0.35)
 
         # 门控循环单元 (GRU)：用于处理时序信息，赋予无人机记忆能力
         # 因为无人机只能看到当前的深度图（部分可观测环境 POMDP），需要记忆来推断自身速度和环境结构
         self.gru = nn.GRUCell(self.feat_dim, self.feat_dim)
-        # GRU 后残差稳态头：提升记忆表达稳定性，缓解后期策略抖动
-        self.gru_residual = nn.Sequential(
-            nn.Linear(self.feat_dim, self.feat_dim, bias=False),
-            nn.LeakyReLU(0.05),
-            nn.Linear(self.feat_dim, self.feat_dim, bias=False),
-        )
-        self.gru_residual[-1].weight.data.mul_(0.01)
         self.hx_norm = nn.LayerNorm(self.feat_dim)
 
         # 动作输出头 (Action Head)
@@ -251,17 +242,16 @@ class Model(nn.Module):
         # ==========================
         # C. 多模态融合 + 时序建模
         # ==========================
-        # 门控融合：平衡视觉特征与状态向量，降低单模态长期压制风险
+        # 小容量融合：保留视觉和状态，但不给额外的大门控网络。
         img_feat = self.img_norm(img_feat)
         v_feat = self.v_norm(self.v_proj(v)) * self.state_feat_scale
         if self.training and self.state_dropout_p > 0.0:
             v_feat = F.dropout(v_feat, p=self.state_dropout_p, training=True)
-        fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
-        flight_feat = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
+        flight_feat = self.act(img_feat + v_feat)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）
         hx = self.gru(flight_feat, hx)
-        hx = self.hx_norm(hx + 0.1 * self.gru_residual(hx))
+        hx = self.hx_norm(hx)
         
         # 输出动作头原始值
         raw = self.fc(self.act(hx))

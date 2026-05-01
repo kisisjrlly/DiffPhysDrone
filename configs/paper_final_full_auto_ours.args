@@ -15,8 +15,8 @@
 --depth_height 48
 --depth_min_valid 0.05
 --depth_max_range 24
---depth_nn_width 32
---depth_nn_height 24
+--depth_nn_width 64
+--depth_nn_height 48
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
