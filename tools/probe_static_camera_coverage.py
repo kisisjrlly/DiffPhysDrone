@@ -109,7 +109,13 @@ def _render_score(env, args, pose: ProbePose, target: torch.Tensor, setting: Gri
     images = debug.get("images", {})
     depth_np = depth[0].detach().cpu().numpy()
     quality_np = None if quality is None else quality[0].detach().cpu().numpy()
-    local = _local_mask_metrics(depth_np, quality_np, images.get("scene_mask"), args.depth_min_valid)
+    local = _local_mask_metrics(
+        depth_np,
+        quality_np,
+        images.get("scene_mask"),
+        args.depth_min_valid,
+        images.get("raw_depth_map"),
+    )
     row = {
         "scene": env.current_scene_name,
         "sample": int(getattr(env, "_probe_sample_idx", 0)),
@@ -320,7 +326,11 @@ def _make_arg_parser():
     parser.add_argument("--exposures", default="0.15,0.30,0.45,0.60,0.75,0.90")
     parser.add_argument("--gains", default="0.05,0.25,0.45,0.65")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--sensor_impl", default="cuda", choices=["cuda", "python"],
+                        help="Implementation used by env.render_diff_depth for the differentiable depth sensor.")
     parser.add_argument("--keep_scene_randomize", action="store_true")
+    parser.add_argument("--keep_random_rotation", action="store_true",
+                        help="Keep --random_rotation from config. Default disables it for geometry-readable probes.")
     parser.add_argument("--random_samples", type=int, default=1,
                         help="Number of reset samples per scene/slot. Useful with --keep_scene_randomize.")
     parser.add_argument("--seed", type=int, default=None)
@@ -340,9 +350,11 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     project_args = _build_project_args(Path(script_args.config), project_overrides)
-    project_args.diff_sensor_impl["diff_depth"] = "python"
+    project_args.diff_sensor_impl["diff_depth"] = str(script_args.sensor_impl)
     if not script_args.keep_scene_randomize:
         project_args.sun_glare_randomize = False
+    if not script_args.keep_random_rotation:
+        project_args.random_rotation = False
     if script_args.seed is not None:
         project_args.seed = int(script_args.seed)
     set_global_seed(project_args.seed, project_args.deterministic)

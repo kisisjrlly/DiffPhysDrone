@@ -79,9 +79,10 @@ def sensor_reference(depth, mask, power, exposure, gain, speed, regime_id, min_v
     elif int(regime_id) == 1:
         power_bloom = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
         exposure_bloom = torch.sigmoid((e01 - 0.48) / 0.075) * (0.60 + 0.40 * torch.sigmoid((g01 - 0.50) / 0.08))
-        safe = torch.sigmoid((0.38 - p) / 0.075) * torch.sigmoid((0.56 - e01) / 0.08)
-        penalty = mask * (1.02 * power_bloom + 0.55 * exposure_bloom)
-        bonus = mask * safe * 0.28
+        safe = torch.sigmoid((0.42 - p) / 0.070) * torch.sigmoid((0.52 - e01) / 0.08)
+        very_safe = torch.sigmoid((0.24 - p) / 0.055) * torch.sigmoid((0.30 - e01) / 0.07)
+        penalty = mask * (1.06 * power_bloom + 0.58 * exposure_bloom)
+        bonus = mask * (0.36 * safe + 0.20 * very_safe)
         quality = quality - penalty + bonus
         effect = penalty
     else:

@@ -316,6 +316,15 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
     scene_mask_np = images.get("scene_mask")
     valid = depth_np > (float(args.depth_min_valid) + 1e-6)
     valid_depth = depth_np[valid]
+    pos_world = torch.tensor([pose.x, pose.y, pose.z], device=device, dtype=torch.float32)
+    R_scene_T = getattr(env, "R_scene_T", None)
+    if torch.is_tensor(R_scene_T) and R_scene_T.ndim == 3 and R_scene_T.shape[0] > 0:
+        pos_local = torch.matmul(R_scene_T[0].to(device=device, dtype=torch.float32), pos_world)
+        target_local = torch.matmul(R_scene_T[0].to(device=device, dtype=torch.float32), target.to(device=device, dtype=torch.float32))
+    else:
+        pos_local = pos_world
+        target_local = target.to(device=device, dtype=torch.float32)
+    fx = env.current_scene_effects or {}
 
     row = {
         "scene": env.current_scene_name,
@@ -327,10 +336,20 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "x": pose.x,
         "y": pose.y,
         "z": pose.z,
+        "local_x": float(pos_local[0].detach().cpu().item()),
+        "local_y": float(pos_local[1].detach().cpu().item()),
+        "local_z": float(pos_local[2].detach().cpu().item()),
         "look_target_x": float(target[0].detach().cpu().item()),
         "look_target_y": float(target[1].detach().cpu().item()),
         "look_target_z": float(target[2].detach().cpu().item()),
+        "look_target_local_x": float(target_local[0].detach().cpu().item()),
+        "look_target_local_y": float(target_local[1].detach().cpu().item()),
+        "look_target_local_z": float(target_local[2].detach().cpu().item()),
         "look_distance": float(torch.norm(target - torch.tensor([pose.x, pose.y, pose.z], device=target.device)).detach().cpu().item()),
+        "occluder_x": _to_float(fx.get("geometry_occluder_x"), 0.88),
+        "occluder_half_y": _to_float(fx.get("geometry_occluder_half_y"), 0.48),
+        "divider_x": _to_float(fx.get("geometry_divider_x"), 1.58),
+        "gap_half_w": _to_float(fx.get("geometry_gap_half_w"), 0.18),
         "setting": setting.name,
         "power": float(setting.power),
         "exposure": float(setting.exposure),
@@ -366,6 +385,83 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "scene_mask": scene_mask_np,
     }
     return row, maps
+
+
+def _plot_topdown_overview(ax, row: dict, args):
+    import matplotlib.patches as patches
+
+    def rect(cx, cy, hx, hy, *, facecolor, edgecolor="black", lw=0.8, alpha=1.0, zorder=2):
+        ax.add_patch(patches.Rectangle(
+            (float(cx) - float(hx), float(cy) - float(hy)),
+            2.0 * float(hx),
+            2.0 * float(hy),
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            linewidth=lw,
+            alpha=alpha,
+            zorder=zorder,
+        ))
+
+    gate_x = float(row.get("gate_x", 1.82))
+    slot_y = float(row.get("opening_y", 0.0))
+    gap_half_w = float(row.get("gap_half_w", 0.18))
+    occluder_x = float(row.get("occluder_x", 0.88))
+    occluder_half_y = float(row.get("occluder_half_y", 0.48))
+    divider_x = float(row.get("divider_x", 1.58))
+    drone_x = float(row.get("local_x", row.get("x", 0.0)))
+    drone_y = float(row.get("local_y", row.get("y", 0.0)))
+    look_x = float(row.get("look_target_local_x", row.get("look_target_x", gate_x)))
+    look_y = float(row.get("look_target_local_y", row.get("look_target_y", slot_y)))
+
+    # Static map, in the environment-local x/y plane.
+    rect(-1.65, -1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
+    rect(-1.65, 1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
+    rect(occluder_x, 0.0, 0.10, occluder_half_y, facecolor="0.30", edgecolor="black", lw=1.0)
+    for y in (-0.84, 0.0, 0.84):
+        rect(divider_x, y, 0.22, 0.05, facecolor="0.42", edgecolor="black")
+
+    y_min, y_max = -1.70, 1.70
+    wall_hx = 0.15
+    if slot_y - gap_half_w > y_min:
+        cy = 0.5 * (y_min + slot_y - gap_half_w)
+        hy = 0.5 * (slot_y - gap_half_w - y_min)
+        rect(gate_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
+    if y_max > slot_y + gap_half_w:
+        cy = 0.5 * (slot_y + gap_half_w + y_max)
+        hy = 0.5 * (y_max - slot_y - gap_half_w)
+        rect(gate_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
+    rect(gate_x, slot_y, wall_hx * 1.15, gap_half_w, facecolor=(0.20, 0.70, 0.25, 0.22),
+         edgecolor=(0.20, 0.70, 0.25), lw=1.5, alpha=1.0, zorder=3)
+    rect(gate_x + 1.83, 0.0, 0.10, 1.30, facecolor="0.55", edgecolor="0.25", lw=0.9, alpha=0.75)
+
+    # Drone, camera optical axis, and approximate horizontal FOV.
+    dx, dy = look_x - drone_x, look_y - drone_y
+    norm = max((dx * dx + dy * dy) ** 0.5, 1e-6)
+    ux, uy = dx / norm, dy / norm
+    left_x, left_y = -uy, ux
+    fov_half = math.atan(float(getattr(args, "fov_x_half_tan", 0.82)))
+    fov_len = min(max(norm, 0.65), 1.45)
+    ca, sa = math.cos(fov_half), math.sin(fov_half)
+    ray1 = (ca * ux + sa * left_x, ca * uy + sa * left_y)
+    ray2 = (ca * ux - sa * left_x, ca * uy - sa * left_y)
+    ax.plot([drone_x, drone_x + fov_len * ray1[0]], [drone_y, drone_y + fov_len * ray1[1]],
+            color="#2b6cb0", lw=1.0, alpha=0.75, zorder=4)
+    ax.plot([drone_x, drone_x + fov_len * ray2[0]], [drone_y, drone_y + fov_len * ray2[1]],
+            color="#2b6cb0", lw=1.0, alpha=0.75, zorder=4)
+    ax.plot([drone_x, look_x], [drone_y, look_y], color="#2b6cb0", lw=1.5, alpha=0.9, zorder=4)
+    ax.scatter([drone_x], [drone_y], s=52, c="#ffffff", edgecolors="#111111", linewidths=1.2, zorder=5)
+    ax.arrow(drone_x, drone_y, 0.28 * ux, 0.28 * uy, width=0.012, head_width=0.08,
+             length_includes_head=True, color="#2b6cb0", zorder=6)
+    ax.scatter([look_x], [look_y], marker="x", s=48, c="#d62728", linewidths=1.5, zorder=6)
+    ax.scatter([3.0], [0.0], marker="*", s=70, c="#f2c94c", edgecolors="black", linewidths=0.6, zorder=4)
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(min(-2.05, drone_x - 0.45), max(gate_x + 2.15, drone_x + 0.65))
+    ax.set_ylim(-1.82, 1.82)
+    ax.set_title("top-down map")
+    ax.set_xlabel("local x")
+    ax.set_ylabel("local y")
+    ax.grid(True, alpha=0.22, linewidth=0.6)
 
 
 def _add_reference_diffs(rendered: list[tuple[dict, dict[str, np.ndarray | None]]],
@@ -425,7 +521,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         return
 
     n = len(rendered)
-    fig, axes = plt.subplots(n, 6, figsize=(20, max(2.25 * n, 3.0)), squeeze=False)
+    fig, axes = plt.subplots(n, 7, figsize=(23.5, max(2.25 * n, 3.0)), squeeze=False)
     depth_cmap = plt.cm.viridis.copy()
     depth_cmap.set_bad("black")
     first = rendered[0][0]
@@ -455,6 +551,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         axes[r, 4].set_title(f"effect {row['scene_effect_mean']:.2f}")
         axes[r, 5].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
         axes[r, 5].set_title(f"fill {row['local_fill']:.2f} edge {row.get('local_edge_fill', 0.0):.2f}")
+        _plot_topdown_overview(axes[r, 6], row, args)
         for c in range(6):
             axes[r, c].set_xticks([])
             axes[r, c].set_yticks([])
@@ -596,8 +693,12 @@ def _make_arg_parser():
     parser.add_argument("--camera_settings", default=None,
                         help="Optional semicolon list: name:p,e,g;name2:p,e,g")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--sensor_impl", default="cuda", choices=["cuda", "python"],
+                        help="Implementation used by env.render_diff_depth for the differentiable depth sensor.")
     parser.add_argument("--keep_scene_randomize", action="store_true",
                         help="Keep --sun_glare_randomize from config. Default disables it for controlled probes.")
+    parser.add_argument("--keep_random_rotation", action="store_true",
+                        help="Keep --random_rotation from config. Default disables it for geometry-readable probes.")
     parser.add_argument("--plots", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max_panels", type=int, default=0,
                         help="If >0, stop writing panels after this many images while still writing CSV rows.")
@@ -612,9 +713,11 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     project_args = _build_project_args(Path(script_args.config), project_overrides)
-    project_args.diff_sensor_impl["diff_depth"] = "cuda"
+    project_args.diff_sensor_impl["diff_depth"] = str(script_args.sensor_impl)
     if (not script_args.keep_scene_randomize) and hasattr(project_args, "sun_glare_randomize"):
         project_args.sun_glare_randomize = False
+    if (not script_args.keep_random_rotation) and hasattr(project_args, "random_rotation"):
+        project_args.random_rotation = False
     if script_args.seed is not None:
         project_args.seed = int(script_args.seed)
     set_global_seed(project_args.seed, project_args.deterministic)

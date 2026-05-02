@@ -184,6 +184,7 @@ def main():
         set_global_seed(int(script_args.seed))
 
     project_args = _build_project_args(Path(script_args.config), overrides)
+    project_args.random_rotation = False
     device = torch.device(script_args.device)
     scenes = _parse_scenes(script_args.scenarios)
     slots = _parse_slots(script_args.slots)

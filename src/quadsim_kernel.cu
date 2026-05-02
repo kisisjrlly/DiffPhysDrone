@@ -1218,10 +1218,12 @@ __device__ __forceinline__ void d455_quality_effect_core(
                                      (scalar_t(0.62) + scalar_t(0.38) * sigmoid_d((e01 - scalar_t(0.22)) / scalar_t(0.07)));
         const scalar_t exposure_bloom = sigmoid_d((e01 - scalar_t(0.48)) / scalar_t(0.075)) *
                                         (scalar_t(0.60) + scalar_t(0.40) * sigmoid_d((g01 - scalar_t(0.50)) / scalar_t(0.08)));
-        const scalar_t safe = sigmoid_d((scalar_t(0.38) - p) / scalar_t(0.075)) *
-                              sigmoid_d((scalar_t(0.56) - e01) / scalar_t(0.08));
-        const scalar_t penalty = mask * (scalar_t(1.02) * power_bloom + scalar_t(0.55) * exposure_bloom);
-        const scalar_t bonus = mask * safe * scalar_t(0.28);
+        const scalar_t safe = sigmoid_d((scalar_t(0.42) - p) / scalar_t(0.070)) *
+                              sigmoid_d((scalar_t(0.52) - e01) / scalar_t(0.08));
+        const scalar_t very_safe = sigmoid_d((scalar_t(0.24) - p) / scalar_t(0.055)) *
+                                   sigmoid_d((scalar_t(0.30) - e01) / scalar_t(0.07));
+        const scalar_t penalty = mask * (scalar_t(1.06) * power_bloom + scalar_t(0.58) * exposure_bloom);
+        const scalar_t bonus = mask * (scalar_t(0.36) * safe + scalar_t(0.20) * very_safe);
         quality = quality - penalty + bonus;
         effect = penalty;
     } else {
