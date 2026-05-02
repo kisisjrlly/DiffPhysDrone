@@ -31,16 +31,17 @@ class Model(nn.Module):
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
 
-        # Keep the policy intentionally tiny for the single-wall benchmark.
-        # The task should be solved by useful depth observations, not by a
-        # high-capacity recurrent policy memorizing a timing template.
+        # Keep the policy intentionally small, but make the flight path
+        # visually dominant.  The state branch is only a low-dimensional
+        # motion cue; spatial decisions should mostly come from depth.
         self.feat_dim = 24
+        self.state_bottleneck_dim = 6
         self.cam_state_dim = 8
         self.cam_motion_dim = 8
         self.cam_hidden_dim = 16
-        self.state_feat_scale = 0.35
-        self.state_dropout_p = 0.15
-        self.spatial_pool_hw = (2, 4)
+        self.state_feat_scale = 0.18
+        self.state_dropout_p = 0.35
+        self.spatial_pool_hw = (3, 6)
         self.stem_channels = 12
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
@@ -55,31 +56,31 @@ class Model(nn.Module):
                 nn.AdaptiveAvgPool2d(self.spatial_pool_hw),
             )
 
-        def make_stem(cin: int, feat_dim: int, small_input_friendly: bool = False):
-            return nn.Sequential(
-                make_spatial_stem(cin, small_input_friendly=small_input_friendly),
-                nn.Flatten(),
-                nn.Linear(self.stem_channels * self.spatial_pool_hw[0] * self.spatial_pool_hw[1], feat_dim, bias=False),
-            )
-
         # diff_depth-only：双通道深度分支编码器。
         # channel 0: inverse depth / near obstacle cue
         # channel 1: metric range / far opening cue
-        self.stem = make_stem(
+        self.spatial_stem = make_spatial_stem(
             2,
-            self.feat_dim,
             small_input_friendly=True,
         )
+        spatial_flat_dim = self.stem_channels * self.spatial_pool_hw[0] * self.spatial_pool_hw[1]
+        self.spatial_proj = nn.Linear(spatial_flat_dim, self.feat_dim, bias=False)
+        self.spatial_attn = nn.Conv2d(self.stem_channels, 1, 1, bias=True)
+        self.attn_proj = nn.Linear(self.stem_channels, self.feat_dim, bias=False)
+        self.spatial_attn.weight.data.mul_(0.01)
+        self.spatial_attn.bias.data.zero_()
 
-        # 状态向量投影层：容量故意小一些，避免 fixed/randfix 过度依赖状态/时间模板。
-        self.v_proj = nn.Linear(dim_obs, self.feat_dim)
-        self.v_proj.weight.data.mul_(0.25)
+        # 状态向量只经过很小的瓶颈，避免策略用目标方向/时间模板绕开 depth。
+        self.v_bottleneck = nn.Linear(dim_obs, self.state_bottleneck_dim)
+        self.v_bottleneck.weight.data.mul_(0.35)
+        self.v_bottleneck.bias.data.zero_()
+        self.v_proj = nn.Linear(self.state_bottleneck_dim, self.feat_dim, bias=False)
+        self.v_proj.weight.data.mul_(0.35)
 
-        # Lightweight additive fusion.  This deliberately avoids a larger
-        # gating MLP so fixed-camera baselines cannot solve the task mostly by
-        # fitting a rich state/time template.
+        # Lightweight additive fusion.  Depth owns the main feature stream;
+        # state contributes a small residual cue for velocity/attitude.
         self.img_norm = nn.LayerNorm(self.feat_dim)
-        self.v_norm = nn.LayerNorm(self.feat_dim)
+        self.state_norm = nn.LayerNorm(self.state_bottleneck_dim)
 
         # 门控循环单元 (GRU)：用于处理时序信息，赋予无人机记忆能力
         # 因为无人机只能看到当前的深度图（部分可观测环境 POMDP），需要记忆来推断自身速度和环境结构
@@ -213,6 +214,19 @@ class Model(nn.Module):
 
         return x_depth
 
+    def encode_depth_feature(self, x_depth: torch.Tensor):
+        spatial = self.spatial_stem(x_depth)
+        flat_feat = self.spatial_proj(spatial.flatten(1))
+
+        # Learned spatial attention over the coarse depth grid.  This keeps
+        # "where is the useful visual cue" learnable without hard-coding a
+        # wall/gap detector into the policy.
+        b, c, h, w = spatial.shape
+        attn = torch.softmax(self.spatial_attn(spatial).flatten(1), dim=1)
+        cells = spatial.flatten(2).transpose(1, 2)
+        attn_feat = (cells * attn.unsqueeze(-1)).sum(dim=1).reshape(b, c)
+        return self.img_norm(flat_feat + self.attn_proj(attn_feat))
+
     def forward(self, v, hx=None, return_intent=False,
                 depth_obs=None, add_noise=False, cam_hx=None,
                 camera_state=None, camera_motion_state=None):
@@ -237,16 +251,18 @@ class Model(nn.Module):
         # ==========================
         # B. 视觉特征提取
         # ==========================
-        img_feat = self.stem(x)
+        img_feat = self.encode_depth_feature(x)
         
         # ==========================
         # C. 多模态融合 + 时序建模
         # ==========================
-        # 小容量融合：保留视觉和状态，但不给额外的大门控网络。
-        img_feat = self.img_norm(img_feat)
-        v_feat = self.v_norm(self.v_proj(v)) * self.state_feat_scale
+        # 视觉主干 + 弱状态旁路。状态仍然提供速度/姿态/目标方向，
+        # 但空间判断更依赖 depth 的质量。
+        v_low = torch.tanh(self.v_bottleneck(v))
+        v_low = self.state_norm(v_low)
         if self.training and self.state_dropout_p > 0.0:
-            v_feat = F.dropout(v_feat, p=self.state_dropout_p, training=True)
+            v_low = F.dropout(v_low, p=self.state_dropout_p, training=True)
+        v_feat = self.v_proj(v_low) * self.state_feat_scale
         flight_feat = self.act(img_feat + v_feat)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）

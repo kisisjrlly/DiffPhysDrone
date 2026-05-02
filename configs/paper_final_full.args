@@ -20,7 +20,7 @@
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
---scenarios glare specular dark
+--scenarios specular
 --random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
@@ -50,9 +50,9 @@
 
 --cam_power_baseline 0.5
 --coef_cam_smooth 0.2
---coef_diff_depth_power 0.2
---coef_diff_depth_blur 0.01
---coef_diff_depth_noise 0.01
+--coef_diff_depth_power 0.0
+--coef_diff_depth_blur 0.00
+--coef_diff_depth_noise 0.00
 --coef_diff_depth_fill 5.0
 --diff_depth_min_fill_rate 0.75
 --diff_depth_health_patch_rows 6

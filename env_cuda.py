@@ -211,7 +211,7 @@ class Env:
         gap_half_w = self.simple_gate_half_y if gap_half_w is None else float(gap_half_w)
         gap_half_h = self.simple_gate_half_z if gap_half_h is None else float(gap_half_h)
         wall_half_y = 1.0
-        wall_half_z = self.simple_wall_half_z
+        wall_half_z = self.simple_wall_half_z * 2
         wall_thickness = 0.10
         back_wall_x = float(self.simple_goal_x) + 0.75
         back_wall_half_y = 3.0
