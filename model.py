@@ -33,23 +33,23 @@ class Model(nn.Module):
 
         # Flight needs enough state capacity for tracking/braking/hovering,
         # while depth should still own the spatial part of the decision.
-        self.feat_dim = 28
-        self.state_hidden_dim = 14
-        self.cam_state_dim = 8
-        self.cam_motion_dim = 8
-        self.cam_hidden_dim = 14
-        self.state_dropout_p = 0.20
+        self.feat_dim = 20
+        self.state_hidden_dim = 10
+        self.cam_state_dim = 6
+        self.cam_motion_dim = 6
+        self.cam_hidden_dim = 10
+        self.state_dropout_p = 0.25
         self.spatial_pool_hw = (3, 6)
-        self.stem_channels = 14
+        self.stem_channels = 10
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
             return nn.Sequential(
                 nn.Conv2d(cin, 8, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(8, 10, 3, stride=2, padding=1, bias=False),
+                nn.Conv2d(8, 8, 3, stride=2, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(10, self.stem_channels, 3, padding=1, bias=False),
+                nn.Conv2d(8, self.stem_channels, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
                 nn.AdaptiveAvgPool2d(self.spatial_pool_hw),
             )

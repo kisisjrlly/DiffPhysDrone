@@ -50,7 +50,7 @@
 
 --cam_power_baseline 0.5
 --coef_cam_smooth 0.2
---coef_diff_depth_power 1.0
+--coef_diff_depth_power 0.2
 --coef_diff_depth_blur 0.1
 --coef_diff_depth_noise 0.005
 --coef_diff_depth_fill 5.0
