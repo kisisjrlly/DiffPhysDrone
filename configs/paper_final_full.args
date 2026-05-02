@@ -21,16 +21,16 @@
 --diff_sensor_impl diff_depth=cuda
 
 --scenarios specular
---random_rotation
+# --random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
 --simple_goal_x 1.5
 --simple_wall_x 0.0
---simple_gate_y_min -1.0
---simple_gate_y_max 1.0
+--simple_gate_y_min -0.55
+--simple_gate_y_max 0.55
 --simple_gate_half_y 0.18
---simple_gate_half_y_min 0.18
---simple_gate_half_y_max 0.20
+--simple_gate_half_y_min 0.24
+--simple_gate_half_y_max 0.24
 --simple_gate_half_z 0.26
 --simple_gate_z 1.50
 --include_camera_state_in_obs
@@ -43,8 +43,8 @@
 
 --coef_v 10.5
 --loss_v_window 12
---coef_d_acc 0.1
---coef_d_jerk 0.2
+--coef_d_acc 0.05
+--coef_d_jerk 0.05
 --coef_obj_avoidance 0.0
 --coef_collide 6.0
 

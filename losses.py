@@ -32,9 +32,12 @@ def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
 
     dist = torch.norm(vec_chunk + 1e-6, 2, -1) - margin
     with torch.no_grad():
+        # dist shape is [T, lookahead_substep, B].  The derivative is along
+        # the short p + v * dt lookahead samples, not along rollout time.
         v_to = (-torch.diff(dist, 1, 1) * 135).clamp_min(1)
-    loss_avoid = barrier(dist[:, 1:], v_to)
-    loss_collide = F.softplus(dist[:, 1:].clamp(min=-3.0).mul(-32)).mul(v_to).mean()
+    dist_next = dist[:, 1:]
+    loss_avoid = barrier(dist_next, v_to)
+    loss_collide = F.softplus(dist_next.clamp(min=-3.0).mul(-32)).mul(v_to).mean()
     return {
         'loss_v': loss_v,
         'loss_d_acc': loss_d_acc,
