@@ -1,6 +1,6 @@
 # Minimal active-sensing simulation benchmark
 
---batch_size 128
+--batch_size 96
 --num_iters 3000
 --lr 8e-5
 --grad_decay 0.3

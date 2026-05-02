@@ -94,8 +94,14 @@ def build_state_vector(env, target_v, R, power, exposure, gain, no_odom, include
 
 
 def compute_target_velocity(target_v_raw, env):
-    tv_n = torch.norm(target_v_raw, 2, -1, keepdim=True).clamp_min(1e-6)
-    return target_v_raw / tv_n * env.max_speed
+    goal_dist = torch.norm(target_v_raw, 2, -1, keepdim=True)
+    tv_dir = target_v_raw / goal_dist.clamp_min(1e-6)
+    # Slow down near the target instead of asking the policy to fly through it
+    # at max speed.  The stop radius is task-generic and only depends on the
+    # vehicle speed scale, not on wall/gap geometry.
+    slow_radius = float(getattr(env, 'target_slow_radius', 0.8))
+    speed_scale = (goal_dist / max(slow_radius, 1e-6)).clamp(0.0, 1.0)
+    return tv_dir * env.max_speed * speed_scale
 
 
 def decode_action_direct(raw_act, R, env, B, max_acc_cmd):

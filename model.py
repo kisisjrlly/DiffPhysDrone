@@ -31,27 +31,25 @@ class Model(nn.Module):
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
 
-        # Keep the policy intentionally small, but make the flight path
-        # visually dominant.  The state branch is only a low-dimensional
-        # motion cue; spatial decisions should mostly come from depth.
-        self.feat_dim = 24
-        self.state_bottleneck_dim = 6
-        self.cam_state_dim = 8
-        self.cam_motion_dim = 8
-        self.cam_hidden_dim = 16
-        self.state_feat_scale = 0.18
-        self.state_dropout_p = 0.35
+        # Flight needs enough state capacity for tracking/braking/hovering,
+        # while depth should still own the spatial part of the decision.
+        self.feat_dim = 96
+        self.state_hidden_dim = 48
+        self.cam_state_dim = 12
+        self.cam_motion_dim = 12
+        self.cam_hidden_dim = 32
+        self.state_dropout_p = 0.05
         self.spatial_pool_hw = (3, 6)
-        self.stem_channels = 12
+        self.stem_channels = 48
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
             return nn.Sequential(
-                nn.Conv2d(cin, 6, 3, padding=1, bias=False),
+                nn.Conv2d(cin, 16, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(6, 12, 3, stride=2, padding=1, bias=False),
+                nn.Conv2d(16, 32, 3, stride=2, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(12, self.stem_channels, 3, padding=1, bias=False),
+                nn.Conv2d(32, self.stem_channels, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
                 nn.AdaptiveAvgPool2d(self.spatial_pool_hw),
             )
@@ -70,21 +68,40 @@ class Model(nn.Module):
         self.spatial_attn.weight.data.mul_(0.01)
         self.spatial_attn.bias.data.zero_()
 
-        # 状态向量只经过很小的瓶颈，避免策略用目标方向/时间模板绕开 depth。
-        self.v_bottleneck = nn.Linear(dim_obs, self.state_bottleneck_dim)
-        self.v_bottleneck.weight.data.mul_(0.35)
-        self.v_bottleneck.bias.data.zero_()
-        self.v_proj = nn.Linear(self.state_bottleneck_dim, self.feat_dim, bias=False)
-        self.v_proj.weight.data.mul_(0.35)
+        # State branch is strong enough to learn target tracking, braking, and
+        # hovering.  It still cannot bypass depth entirely because fusion stays
+        # gated with the depth feature at the same dimensionality.
+        self.v_proj = nn.Sequential(
+            nn.Linear(dim_obs, self.state_hidden_dim, bias=True),
+            nn.LeakyReLU(0.05),
+            nn.Linear(self.state_hidden_dim, self.feat_dim, bias=False),
+        )
+        self.v_proj[0].weight.data.mul_(0.5)
+        self.v_proj[0].bias.data.zero_()
+        self.v_proj[-1].weight.data.mul_(0.5)
 
-        # Lightweight additive fusion.  Depth owns the main feature stream;
-        # state contributes a small residual cue for velocity/attitude.
+        # Gated fusion lets state dominate low-level stabilization when needed
+        # and depth dominate spatial correction near obstacles/openings.
         self.img_norm = nn.LayerNorm(self.feat_dim)
-        self.state_norm = nn.LayerNorm(self.state_bottleneck_dim)
+        self.v_norm = nn.LayerNorm(self.feat_dim)
+        self.fuse_gate = nn.Sequential(
+            nn.Linear(self.feat_dim * 2, self.feat_dim, bias=True),
+            nn.LeakyReLU(0.05),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=True),
+            nn.Sigmoid(),
+        )
+        self.fuse_gate[-2].weight.data.mul_(0.1)
+        self.fuse_gate[-2].bias.data.zero_()
 
         # 门控循环单元 (GRU)：用于处理时序信息，赋予无人机记忆能力
         # 因为无人机只能看到当前的深度图（部分可观测环境 POMDP），需要记忆来推断自身速度和环境结构
         self.gru = nn.GRUCell(self.feat_dim, self.feat_dim)
+        self.gru_residual = nn.Sequential(
+            nn.Linear(self.feat_dim, self.feat_dim, bias=False),
+            nn.LeakyReLU(0.05),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=False),
+        )
+        self.gru_residual[-1].weight.data.mul_(0.01)
         self.hx_norm = nn.LayerNorm(self.feat_dim)
 
         # 动作输出头 (Action Head)
@@ -256,18 +273,17 @@ class Model(nn.Module):
         # ==========================
         # C. 多模态融合 + 时序建模
         # ==========================
-        # 视觉主干 + 弱状态旁路。状态仍然提供速度/姿态/目标方向，
-        # 但空间判断更依赖 depth 的质量。
-        v_low = torch.tanh(self.v_bottleneck(v))
-        v_low = self.state_norm(v_low)
+        # State branch handles tracking/braking/hovering; depth branch handles
+        # obstacle/opening-dependent spatial corrections.
+        v_feat = self.v_norm(self.v_proj(v))
         if self.training and self.state_dropout_p > 0.0:
-            v_low = F.dropout(v_low, p=self.state_dropout_p, training=True)
-        v_feat = self.v_proj(v_low) * self.state_feat_scale
-        flight_feat = self.act(img_feat + v_feat)
+            v_feat = F.dropout(v_feat, p=self.state_dropout_p, training=True)
+        fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
+        flight_feat = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）
         hx = self.gru(flight_feat, hx)
-        hx = self.hx_norm(hx)
+        hx = self.hx_norm(hx + 0.1 * self.gru_residual(hx))
         
         # 输出动作头原始值
         raw = self.fc(self.act(hx))

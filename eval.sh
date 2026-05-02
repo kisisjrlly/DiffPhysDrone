@@ -9,7 +9,7 @@ set -euo pipefail
 export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 
 task=${TASK:-paper_final_full}
-ckpt_path=${CKPT:-checkpoint/2026-05-02-17-14-41/checkpoint0014.pth}
+ckpt_path=${CKPT:-checkpoint/2026-05-02-21-47-04/checkpoint0009.pth}
 eval_episodes=${EVAL_EPISODES:-10}
 vis_episode_idx=${VIS_EPISODE_IDX:--1}
 eval_batch_size=${EVAL_BATCH_SIZE:-1}
