@@ -20,17 +20,17 @@
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
---scenarios specular
-# --random_rotation
+--scenarios glare specular dark
+--random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
 --simple_goal_x 1.5
 --simple_wall_x 0.0
---simple_gate_y_min -0.55
---simple_gate_y_max 0.55
+--simple_gate_y_min -0.75
+--simple_gate_y_max 0.75
 --simple_gate_half_y 0.18
---simple_gate_half_y_min 0.24
---simple_gate_half_y_max 0.24
+--simple_gate_half_y_min 0.20
+--simple_gate_half_y_max 0.22
 --simple_gate_half_z 0.26
 --simple_gate_z 1.50
 --include_camera_state_in_obs
@@ -47,9 +47,9 @@
 
 --cam_power_baseline 0.5
 --coef_cam_smooth 0.2
---coef_diff_depth_power 0.0
---coef_diff_depth_blur 0.00
---coef_diff_depth_noise 0.00
+--coef_diff_depth_power 10.0
+--coef_diff_depth_blur 0.1
+--coef_diff_depth_noise 0.005
 --coef_diff_depth_fill 5.0
 --diff_depth_min_fill_rate 0.75
 --diff_depth_health_patch_rows 6
