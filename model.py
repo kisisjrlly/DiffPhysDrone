@@ -33,23 +33,23 @@ class Model(nn.Module):
 
         # Flight needs enough state capacity for tracking/braking/hovering,
         # while depth should still own the spatial part of the decision.
-        self.feat_dim = 36
-        self.state_hidden_dim = 18
+        self.feat_dim = 28
+        self.state_hidden_dim = 14
         self.cam_state_dim = 8
         self.cam_motion_dim = 8
-        self.cam_hidden_dim = 18
-        self.state_dropout_p = 0.15
+        self.cam_hidden_dim = 14
+        self.state_dropout_p = 0.20
         self.spatial_pool_hw = (3, 6)
-        self.stem_channels = 18
+        self.stem_channels = 14
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
             return nn.Sequential(
                 nn.Conv2d(cin, 8, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(8, 12, 3, stride=2, padding=1, bias=False),
+                nn.Conv2d(8, 10, 3, stride=2, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(12, self.stem_channels, 3, padding=1, bias=False),
+                nn.Conv2d(10, self.stem_channels, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
                 nn.AdaptiveAvgPool2d(self.spatial_pool_hw),
             )
@@ -89,7 +89,7 @@ class Model(nn.Module):
             nn.Sigmoid(),
         )
         self.fuse_gate[0].weight.data.mul_(0.1)
-        self.fuse_gate[0].bias.data.zero_()
+        self.fuse_gate[0].bias.data.fill_(0.25)
 
         # 门控循环单元 (GRU)：用于处理时序信息，赋予无人机记忆能力
         # 因为无人机只能看到当前的深度图（部分可观测环境 POMDP），需要记忆来推断自身速度和环境结构

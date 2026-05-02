@@ -51,7 +51,7 @@
 --coef_diff_depth_blur 0.1
 --coef_diff_depth_noise 0.005
 --coef_diff_depth_fill 5.0
---diff_depth_min_fill_rate 0.75
+--diff_depth_min_fill_rate 0.65
 --diff_depth_health_patch_rows 6
 --diff_depth_health_patch_cols 8
 --diff_depth_health_cvar_frac 0.25
