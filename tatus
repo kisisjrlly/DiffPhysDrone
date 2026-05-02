@@ -1,0 +1,504 @@
+[33mcommit c3c033dff03b350927eeaeabcfbe531452cfc295[m[33m ([m[1;36mHEAD -> [m[1;32mactive-sensing-sim-minimal[m[33m, [m[1;31morigin/active-sensing-sim-minimal[m[33m)[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat May 2 11:29:11 2026 +0800
+
+    before much easy env
+
+[33mcommit d76cec8e75a9248eb13853f842cac1ab07f034c5[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat May 2 00:08:14 2026 +0800
+
+    fix the bug of run train mode sh
+
+[33mcommit ec269ba4a5cb06fab182e1a15069ab3419e219f7[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 23:43:01 2026 +0800
+
+    change model small and large depth input
+
+[33mcommit 10c0558c31dcddf7d1b6a12a3f29b1aa7c005fb8[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 23:22:33 2026 +0800
+
+    fix fix and randfix run train modes
+
+[33mcommit d8153d24b1568ce81ce9d7502b50f303ea2ce550[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 23:01:23 2026 +0800
+
+    change start x to -1.2
+
+[33mcommit a678844b1559bef41955d189604f629f7243fc9e[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 21:22:07 2026 +0800
+
+    update some wandb figure
+
+[33mcommit 368af533ce6b136a6eadadaac74ba5aaf0e55a19[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 18:36:20 2026 +0800
+
+    add diff depth loss
+
+[33mcommit e2626859359e968463d90a8256e3b70073312ce6[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 11:45:25 2026 +0800
+
+    tune model structure
+
+[33mcommit 27f4e25716e54684935c27333b905e2cff72b274[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri May 1 10:36:15 2026 +0800
+
+    tun mode weak
+
+[33mcommit 5e8067ca98734742f92bd282edb929803b5ecdc4[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 22:29:07 2026 +0800
+
+    change camera model and tune some para
+
+[33mcommit 85a3bb89610027ef84392bb529ab71a15e2ec5e5[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 20:47:28 2026 +0800
+
+    tune some para
+
+[33mcommit 6f85b2a381b67bf154f7f08bba454529bfb37e45[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 20:22:00 2026 +0800
+
+    fix some bug and tune some para
+
+[33mcommit 9dff2251313f020ae14effcb32b268598d8b6721[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 18:06:31 2026 +0800
+
+    fix more bugs and add random rotation
+
+[33mcommit 8078f3f0872068505ebc076b833f745711d9577b[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 14:38:57 2026 +0800
+
+    and loss item to wandb
+
+[33mcommit 3565df78f4677ac5305aaa47bd854b0110a52e15[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 14:26:35 2026 +0800
+
+    Create minimal active sensing simulation branch
+
+[33mcommit caee44fc1b37fa655d1a9f26440c9274240385e3[m[33m ([m[1;31morigin/diff-depth-only[m[33m, [m[1;32mdiff-depth-only[m[33m)[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 30 10:50:49 2026 +0800
+
+    unlink gru with camera para model and change camera loss coef to 0
+
+[33mcommit 746b8dda83dbd96d14037c546a2f32f2b6cc8fc5[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Apr 29 22:29:00 2026 +0800
+
+    update para to try make ours better
+
+[33mcommit 225b4a2870475e51e69663231b3e130492695540[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Apr 29 20:32:00 2026 +0800
+
+    update some logic to try make it better
+
+[33mcommit ca1065d7b490f463fd2162562c1b314fdef6f856[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Apr 29 14:15:04 2026 +0800
+
+    fix some para for better scene charactic
+
+[33mcommit 365d934458b8afcf10a75837cda6626f03c9a5db[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Apr 29 10:47:11 2026 +0800
+
+    fix some bugs
+
+[33mcommit 99367056ce45880eb5ea5b73117c5af472955d12[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Apr 28 17:12:49 2026 +0800
+
+    tune some scene for new best result
+
+[33mcommit 6d4fcf41c458c9d2f6bd9121ecc9e33a7e4dd33c[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Mon Apr 27 22:50:13 2026 +0800
+
+    update scene to one map with three scene
+
+[33mcommit 237823080381f9e5337aefa36c388b7aed0bd974[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Mon Apr 27 20:25:33 2026 +0800
+
+    add pathc/CVAR sensor health loss
+
+[33mcommit 2d1b8dd959391d9649ea4a649600444b37873c75[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Mon Apr 27 14:44:06 2026 +0800
+
+    add more regime of sun glare to sovle the problem of ours and fixed and remove some power loss item
+
+[33mcommit dbb7fc65e4195c1645043f17fb6b9c186836005b[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sun Apr 26 17:03:52 2026 +0800
+
+    update sun galre scene after find fix are similar to our mode
+
+[33mcommit b3814a7a350dfc7038a5004d01038cb45cf84ab0[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Apr 25 16:17:35 2026 +0800
+
+    tune some cof for bad behaviour
+
+[33mcommit f1b788c10a0b936207037850739b0ddd18a71416[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Apr 25 10:50:27 2026 +0800
+
+    smooth the iso gain and try to fix the hang situation
+
+[33mcommit 7f46dc42357ff0d79aa661fc704198573caf0b46[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Apr 25 10:37:50 2026 +0800
+
+    remove some scene specific loss shaping
+
+[33mcommit 7c54b3d3e1b6bead0820f06fcf0bf0682586effb[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Apr 24 15:58:37 2026 +0800
+
+    change cam agnle from20 to 5 and add more item to rerun
+
+[33mcommit 06c8b038baa85b697adeb3945f726227ee63f34d[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Apr 24 11:25:57 2026 +0800
+
+    add new sun glare scene and real deploy sh
+
+[33mcommit e38cff64cec6bb65a9a849bb6a5942c9d0d0f04c[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 23 21:43:33 2026 +0800
+
+    try to train good but failed because every mode can success
+
+[33mcommit 9d6b81ef2bf0210304374bc18379f31c675d72b4[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 23 16:23:11 2026 +0800
+
+    fix some bug and add real fly script
+
+[33mcommit 9ec2c075476517c236e108c6d95ff4e05fa34106[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Apr 22 17:10:36 2026 +0800
+
+    add three method to eval with simple sun glare
+
+[33mcommit db4a9db04a2594f48be8505f08723386e2829007[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Apr 22 10:12:55 2026 +0800
+
+    add some md before paper experiment
+
+[33mcommit eaf83b9a8b5c7bda51e928cb50156e2844bdb0fa[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Apr 21 10:10:54 2026 +0800
+
+    can reach sun glare goal but came param are not good
+
+[33mcommit 60ce57ffafa6754554318e97e590a71f01db38e9[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Mon Apr 20 10:23:58 2026 +0800
+
+    add more ral doc and local sun glare
+
+[33mcommit 83fb608af6e38756e80f9dbaa08765b707c14b0e[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Apr 18 21:44:50 2026 +0800
+
+    add more metrics to wandb
+
+[33mcommit 3b7fc94125be5fdf7719e8050a3af920b10805f7[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Apr 18 18:18:14 2026 +0800
+
+    fix some error of base env
+
+[33mcommit 73cb512b2adceee100f87e8665026327c393bf68[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Apr 18 17:14:34 2026 +0800
+
+    simple the obstacle env and add real d455 data get tools
+
+[33mcommit 0935ec626b8181f1d5976bab94ceeee595c6f121[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Apr 17 16:42:26 2026 +0800
+
+    fix some bug and tune
+
+[33mcommit 1b98b45c0e85900f694672e8e853c3138779c7e2[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sun Apr 12 18:16:33 2026 +0800
+
+    change to diff-depth-only
+
+[33mcommit 9330024462324861adfca8af539c302ed1a851b6[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Apr 2 16:20:51 2026 +0800
+
+    update readme and eval sh
+
+[33mcommit f19818c3ea4ec9a7bc80377424e960461aed46df[m
+Merge: a335c07 fb81f9e
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Mar 31 20:47:06 2026 +0800
+
+    Merge branch 'master' of https://github.com/kisisjrlly/DiffPhysDrone
+
+[33mcommit a335c07c859fbe384948295978b5951e9d675b0f[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Mar 31 20:42:35 2026 +0800
+
+    try to fix loss nan
+
+[33mcommit fb81f9e1f837c6adf7651b463e4c9de12924d5c2[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Sat Mar 28 18:21:57 2026 +0800
+
+    change imx477 to imx296 and update model
+
+[33mcommit 05c4f130ffc881acb31897d6e83cb9d4f01d08e9[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Mar 27 17:09:22 2026 +0800
+
+    update eval rerun
+
+[33mcommit 0bc967fbb02a0732247ac56bf0dc16b11ccb4f91[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Mar 27 16:41:58 2026 +0800
+
+    train in docker good
+
+[33mcommit f965dcbe2c47bed2ceee59853830f3aca55e63fc[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Mar 26 21:35:33 2026 +0800
+
+    update readme
+
+[33mcommit 687ce95a765de8575b336000c865d306a6cf37d5[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Mar 26 21:32:26 2026 +0800
+
+    fix the logic of model preprocess
+
+[33mcommit 5006cf1be5b3b056164c24ace9be8c319c51831d[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Mar 20 21:48:32 2026 +0800
+
+    release the nan and hang case and add eval hs
+
+[33mcommit b91bd1c8d90fff6ece3b54c3f5fb42cf75a27b98[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Wed Mar 18 17:27:18 2026 +0800
+
+    rename method
+
+[33mcommit df5b70abefdfed8dd1ba98d72a8321f8f3cb6344[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Mar 17 16:02:50 2026 +0800
+
+    add complete yuvy cuda implment
+
+[33mcommit 7f5b4f5f039817e9713d2370220c2658fa60d44b[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Mar 17 13:32:49 2026 +0800
+
+    add luma cuda implement
+
+[33mcommit 8925289ffa33e9ae34996670925f2b2bb44b1902[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Mar 13 20:23:14 2026 +0800
+
+    add conda env yaml
+
+[33mcommit b341499e20663862dd02f0473b37ccd71f99fca7[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Mar 13 16:46:23 2026 +0800
+
+    add requirement
+
+[33mcommit bf2b25f30fb2ea4780cd09e40f74d045e350dccd[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Fri Mar 13 16:36:10 2026 +0800
+
+    fix some bug and improment
+
+[33mcommit 868136011dd6eb9f9225603f1b3aab6d054ac9be[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Mar 12 22:51:49 2026 +0800
+
+    add torch cuda sysc to stop system broken error but run slow
+
+[33mcommit 1650562e8c50f7b4991533b2d48ce27f6b1c4e8a[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Mar 12 16:49:00 2026 +0800
+
+    reconstruct the code file
+
+[33mcommit 040a0ef112865f2a6acff04c43a16d98036c5c2a[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Thu Mar 12 14:54:07 2026 +0800
+
+    remove some nan operation and fix some bug
+
+[33mcommit 3241174fb69e3e142c1bc7d4ef8c7c072077acde[m
+Author: kisisjrlly <1690253916@qq.com>
+Date:   Tue Mar 10 16:28:16 2026 +0800
+
+    add diff tof and preprocess before nn according to diffphsdrone paper
+
+[33mcommit 218db988c5d0c8d3ae3d3da2fb17321c193f26ed[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Mon Mar 9 22:20:06 2026 +0800
+
+    last change to diff yuv with un-diff depth mode, will change to diff depth mode
+
+[33mcommit 61de5e8c0792c4a8666725a0d0c625387e0cfa76[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Sat Mar 7 16:02:15 2026 +0800
+
+    fix some bug of gdac
+
+[33mcommit 953c435f477a607f74ebec1c3c5f266022fa9533[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Fri Mar 6 17:18:46 2026 +0800
+
+    add diff imx477 with PMD flexx2
+
+[33mcommit 6bc7066a1e66f3b940f622769afe7535f428e4e7[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 18:26:03 2026 +0800
+
+    Add detailed Chinese comments to run.sh
+
+[33mcommit 4e973bd88f6bf1ca0190584146098948e1e3e6f4[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 14:26:40 2026 +0800
+
+    Add detailed Chinese comments to eval_wall_slit.py
+
+[33mcommit b70abf7627df9fef48e979254c553c80efd4dfb4[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 14:24:43 2026 +0800
+
+    Add detailed Chinese comments to quadsim_kernel.cu
+
+[33mcommit 29d477a0bee0a7dc9b0c192e2da62b0d298fb6ec[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 14:17:38 2026 +0800
+
+    Add detailed Chinese comments to dynamics_kernel.cu
+
+[33mcommit 879677215098a3cf02101919f8b39ba334319cab[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 14:00:35 2026 +0800
+
+    Add detailed Chinese comments to src/test.py
+
+[33mcommit e77918e6564d2fd2f80c74c7e70e16a5714a411c[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 13:59:33 2026 +0800
+
+    Add detailed Chinese comments to src/setup.py
+
+[33mcommit 68bb60721c5ca16d3db37355c2222a65b55b2903[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 13:59:06 2026 +0800
+
+    Add detailed Chinese comments to src/quadsim.cpp
+
+[33mcommit 527a6c49e818f5e3f1a53ddafdcf5dfba57b1f5e[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 13:58:23 2026 +0800
+
+    Add detailed Chinese comments to env_cuda.py and model.py
+
+[33mcommit 9350a7e67bc00afdff38419770882f26af65d58f[m
+Author: zhaoguodong <1690253916@qq.com>
+Date:   Tue Feb 24 13:58:12 2026 +0800
+
+    Add detailed Chinese comments to main_cuda.py
+
+[33mcommit c0abf2b20daf2598d8b9628e43bd390b9ecb1434[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Thu Feb 12 15:03:19 2026 +0800
+
+    add run sh
+
+[33mcommit 454f035a14fdf6d8185d744cd74ede6e4b9bf8d3[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Thu Feb 12 14:51:26 2026 +0800
+
+    add dgac and optical loss and so on according to papaer.md
+
+[33mcommit 7a9bfed6eb0a5b07777cbbfef698196b736be897[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Wed Feb 11 21:47:52 2026 +0800
+
+    add thin wall slint
+
+[33mcommit 7d75fe77a0519a5bba6224585ddc4baf0a16d9d3[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Wed Feb 11 17:36:18 2026 +0800
+
+    add more md
+
+[33mcommit a46f0d6f2c0c49b11b5acf9976e8d5dd7991fb2e[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Wed Feb 11 15:36:31 2026 +0800
+
+    change tensorboard to wandb
+
+[33mcommit 5220eabde5c7b15b28f868a206c8412219bde224[m
+Author: qq_28258903 <qq_28258903@noreply.gitcode.com>
+Date:   Wed Feb 11 15:09:25 2026 +0800
+
+    add diff render
+
+[33mcommit 271936190b5c2a5e760230e718fa6b167718a5bf[m[33m ([m[1;31mupstream/master[m[33m, [m[1;31mupstream/HEAD[m[33m)[m
+Author: HenryHuYu <443303575@qq.com>
+Date:   Wed Jun 25 11:42:09 2025 +0800
+
+    update readme
+
+[33mcommit 5e1a718e8b367c5ed71b80261bd15037a338d17b[m
+Author: HenryHuYu <443303575@qq.com>
+Date:   Wed Jun 25 11:38:24 2025 +0800
+
+    update
+
+[33mcommit 66516c68dd36750ec2d35ec24b632fbff4f73c44[m
+Author: HenryHuYu <443303575@qq.com>
+Date:   Wed Jun 25 11:37:33 2025 +0800
+
+    update
+
+[33mcommit c3c80760b8467ac94a56c5757105952f430f9a7f[m
+Author: zyayoung <1328410180@qq.com>
+Date:   Wed Apr 30 20:52:11 2025 -0400
+
+    Update README.md
+
+[33mcommit 52f7a642b19193784b80000fa59013a0c45980c8[m
+Author: HenryHuYu <443303575@qq.com>
+Date:   Wed Apr 23 11:28:56 2025 +0800
+
+    clear readme
+
+[33mcommit 5a96a9fd67b0b9e5d3242b55f98e2560f6da895a[m[33m ([m[1;33mtag: v1.0[m[33m)[m
+Author: HenryHuYu <443303575@qq.com>
+Date:   Fri Apr 18 13:07:30 2025 +0800
+
+    first commit

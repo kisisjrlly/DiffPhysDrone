@@ -147,3 +147,59 @@
 6. `model.py`
 7. `autograd_ops.py`
 8. `src/quadsim_kernel.cu`
+
+# 当前git提交(c3c033dff03b350927eeaeabcfbe531452cfc295)对应的TODO
+
+下一步不要继续盲跑三场景 end-to-end。我建议按这个顺序做：
+
+1. **先把问题拆开验证**
+   - 只训练 `glare` 一个场景。
+   - 起点混合：一部分正常起点，一部分直接从 occluder 后 / gate 前开始。
+   - 目标：确认 learned camera 至少能在单场景下学到合理相机参数，并成功穿 gate。
+
+2. **把 camera head 改成“模式选择 + 小残差”**
+   不再让网络直接连续搜索 `power/exposure/gain`。改成：
+   ```python
+   cam = softmax(mode_logits) @ preset_table + small_delta
+   ```
+   例如：
+   - `glare`: 高 power、低 exposure、低 gain
+   - `specular`: 低/中 power、低 exposure、低 gain
+   - `dark`: 高 power、高 exposure、高 gain
+
+   这样网络学的是“当前像哪个场景，我该选哪个模式”，比从 3 个连续值里自己摸索容易很多。
+
+3. **加入 reset curriculum**
+   训练时不要全从最远起点开始。建议早期：
+   - 30% 正常起点
+   - 40% occluder 后方，已经能看到 opening cue
+   - 30% gate approach，马上需要看清 gate edge
+
+   后期再逐渐提高正常起点比例。否则相机策略的有效梯度太晚出现，模型容易先学成“停在 occluder 前比较安全”。
+
+4. **单场景通过后，再做三场景**
+   顺序：
+   - `glare only`
+   - `specular only`
+   - `dark only`
+   - `glare + specular`
+   - `glare + specular + dark`
+
+   每一步都看 camera 参数是否符合预期，而不是只看 success rate。
+
+5. **训练指标先看这几个**
+   - `goal_dist` 是否下降
+   - `collision_rate` 是否真实下降
+   - `cam_power/exposure/gain` 是否分场景分化
+   - `diff_depth_fill / blur / noise` 是否真的影响 camera
+   - episode 轨迹里无人机是否穿 gate，而不是绕逻辑漏洞
+
+6. **固定参数 baseline 要重新定义**
+   fixed/randfix 不能参与 diff-depth 相机质量 loss，否则它们会通过飞行速度、姿态间接优化 sensor loss，和 learned camera 的对比会混掉。fixed/randfix 应主要优化飞行任务本身。
+
+我的建议是下一步直接实现两个核心改动：
+
+- `camera mode selector + residual`
+- `reset curriculum`
+
+然后先跑 `glare only`。只要单场景都学不会，就不要继续三场景。当前最关键的问题不是再调一点 loss，而是把学习问题从“太晚、太耦合、太连续”改成“早看到、可分类、可优化”。
