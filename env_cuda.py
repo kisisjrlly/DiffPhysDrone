@@ -19,20 +19,20 @@ from utils import g_decay
 
 
 class Env:
-    """Minimal shared-gate active-sensing environment.
+    """Minimal single-wall active-sensing environment.
 
-    Geometry is fixed across scenarios: start -> occluder -> gate wall with one
-    slot -> goal.  Scenarios only change the local sensor degradation around
-    the visible opening/gate material.
+    Geometry is deliberately small: one start, one goal, and one wall with a
+    narrow gate at a random lateral position.  Scenarios only change the local
+    sensor degradation around the gate material.
     """
 
     supported_scenarios = ('glare', 'specular', 'dark')
     supported_slots = ('far_left', 'left', 'right', 'far_right')
     slot_y = {
-        'far_left': -1.12,
-        'left': -0.56,
-        'right': 0.56,
-        'far_right': 1.12,
+        'far_left': -0.54,
+        'left': -0.18,
+        'right': 0.18,
+        'far_right': 0.54,
     }
 
     def __init__(self, batch_size, width, height, grad_decay, device='cpu', fov_x_half_tan=0.82,
@@ -49,6 +49,11 @@ class Env:
                  cam_shot_noise_base=0.01, depth_min_valid=0.3, depth_max_range=6.0,
                  scenarios=None, sun_glare_eval_slot=None, diff_sensor_impl=None,
                  random_rotation=False, random_rotation_max_deg=45.0,
+                 simple_start_x=-1.0, simple_goal_x=1.8, simple_wall_x=0.65,
+                 simple_gate_y_min=-0.55, simple_gate_y_max=0.55,
+                 simple_gate_half_y=0.20, simple_gate_half_y_min=None, simple_gate_half_y_max=None,
+                 simple_gate_half_z=0.26,
+                 simple_gate_z=1.50,
                  **_ignored) -> None:
         self.device = device
         self.batch_size = int(batch_size)
@@ -103,6 +108,19 @@ class Env:
         self.current_scene_effects = {}
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
+        self.simple_start_x = float(simple_start_x)
+        self.simple_goal_x = float(simple_goal_x)
+        self.simple_wall_x = float(simple_wall_x)
+        self.simple_gate_y_min = float(simple_gate_y_min)
+        self.simple_gate_y_max = float(simple_gate_y_max)
+        self.simple_gate_half_y = float(simple_gate_half_y)
+        self.simple_gate_half_y_min = self.simple_gate_half_y if simple_gate_half_y_min is None else float(simple_gate_half_y_min)
+        self.simple_gate_half_y_max = self.simple_gate_half_y if simple_gate_half_y_max is None else float(simple_gate_half_y_max)
+        if self.simple_gate_half_y_max < self.simple_gate_half_y_min:
+            self.simple_gate_half_y_min, self.simple_gate_half_y_max = self.simple_gate_half_y_max, self.simple_gate_half_y_min
+        self.simple_gate_half_z = float(simple_gate_half_z)
+        self.simple_gate_z = float(simple_gate_z)
+        self.simple_wall_half_z = 1.0
 
         impl = {'diff_depth': 'cuda'}
         if diff_sensor_impl is not None:
@@ -162,46 +180,49 @@ class Env:
             return [slots[(start + i) % len(slots)] for i in range(B)]
         return [slots[i % len(slots)] for i in range(B)]
 
-    def _build_sun_glare_voxel_layout(self, gap_y_center, *, occluder_x=0.88,
-                                      occluder_half_y=0.48, divider_x=1.58,
-                                      gate_x=1.82, gap_half_w=0.18):
-        """
-        Probe-then-commit shared gate map.
+    def _slot_name_from_gate_y(self, y):
+        vals = {name: abs(float(y) - float(v)) for name, v in self.slot_y.items()}
+        return min(vals, key=vals.get)
 
-        This restores the original geometry: a central occluder, three thin
-        divider fins, a four-slot gate wall, and a back wall after the opening.
-        The public scene name only changes the local sensor degradation near
-        the opening; geometry stays identical for glare/specular/dark.
-        """
-        voxel_half_w = 0.25
-        voxel_half_h = 1.5
+    def _choose_gate_centers(self, B):
+        if self.eval_mode and self.sun_glare_eval_slot is not None:
+            slots = self._choose_slots(B)
+            gate_y = torch.tensor([self.slot_y[s] for s in slots], device=self.device, dtype=torch.float32)
+            return gate_y, slots
+        lo = min(self.simple_gate_y_min, self.simple_gate_y_max)
+        hi = max(self.simple_gate_y_min, self.simple_gate_y_max)
+        gate_y = torch.empty((B,), device=self.device).uniform_(lo, hi)
+        slots = [self._slot_name_from_gate_y(float(y)) for y in gate_y.detach().cpu().tolist()]
+        return gate_y, slots
 
-        guide = self._build_voxels([
-            [-1.65, -1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-            [-1.65,  1.48, 1.5, voxel_half_w, voxel_half_w, voxel_half_h],
-        ])
-        occluder = self._build_voxels([
-            [float(occluder_x), 0.00, 1.5, 0.10, float(occluder_half_y), voxel_half_h],
-        ])
-        lane_dividers = self._build_voxels([
-            [float(divider_x), -0.84, 1.5, 0.22, 0.05, voxel_half_h],
-            [float(divider_x),  0.00, 1.5, 0.22, 0.05, voxel_half_h],
-            [float(divider_x),  0.84, 1.5, 0.22, 0.05, voxel_half_h],
-        ])
-        big = 4.0
-        wall_thickness = 0.15
-        gap_z_center = 1.50
-        gap_half_h = 1.05
+    def _choose_gate_half_widths(self, B):
+        lo = min(self.simple_gate_half_y_min, self.simple_gate_half_y_max)
+        hi = max(self.simple_gate_half_y_min, self.simple_gate_half_y_max)
+        if abs(hi - lo) < 1e-9:
+            return torch.full((B,), float(lo), device=self.device, dtype=torch.float32)
+        return torch.empty((B,), device=self.device, dtype=torch.float32).uniform_(lo, hi)
+
+    def _build_sun_glare_voxel_layout(self, gap_y_center, *, gate_x=None,
+                                      gap_half_w=None, gap_half_h=None,
+                                      gate_z=None):
+        """Single wall with a narrow gate."""
+        gate_x = self.simple_wall_x if gate_x is None else float(gate_x)
+        gate_z = self.simple_gate_z if gate_z is None else float(gate_z)
+        gap_half_w = self.simple_gate_half_y if gap_half_w is None else float(gap_half_w)
+        gap_half_h = self.simple_gate_half_z if gap_half_h is None else float(gap_half_h)
+        wall_half_y = 1.0
+        wall_half_z = self.simple_wall_half_z
+        wall_thickness = 0.10
+        back_wall_x = float(self.simple_goal_x) + 0.75
+        back_wall_half_y = 3.0
         gate_wall = self._build_voxels([
-            [float(gate_x), gap_y_center - float(gap_half_w) - big, gap_z_center, wall_thickness, big, big],
-            [float(gate_x), gap_y_center + float(gap_half_w) + big, gap_z_center, wall_thickness, big, big],
-            [float(gate_x), gap_y_center, gap_z_center + gap_half_h + big, wall_thickness, float(gap_half_w), big],
-            [float(gate_x), gap_y_center, gap_z_center - gap_half_h - big, wall_thickness, float(gap_half_w), big],
+            [float(gate_x), gap_y_center - float(gap_half_w) - wall_half_y, gate_z, wall_thickness, wall_half_y, wall_half_z],
+            [float(gate_x), gap_y_center + float(gap_half_w) + wall_half_y, gate_z, wall_thickness, wall_half_y, wall_half_z],
+            [back_wall_x, 0.0, gate_z, wall_thickness, back_wall_half_y, wall_half_z],
+            # [float(gate_x), gap_y_center, gate_z + gap_half_h + wall_half_z, wall_thickness, float(gap_half_w), wall_half_z],
+            # [float(gate_x), gap_y_center, gate_z - gap_half_h - wall_half_z, wall_thickness, float(gap_half_w), wall_half_z],
         ])
-        back_wall = self._build_voxels([
-            [float(gate_x) + 1.83, 0.00, 1.5, 0.10, 1.30, voxel_half_h],
-        ])
-        return torch.cat([guide, occluder, lane_dividers, gate_wall, back_wall], dim=0)
+        return gate_wall
 
     def _rotation_z(self, yaw):
         c = torch.cos(yaw)
@@ -214,24 +235,40 @@ class Env:
             z,  z, o,
         ], -1).reshape(-1, 3, 3)
 
-    def _scene_effects(self, scene_name, slot_name, gap_y):
+    def _scene_effects(self, scene_name, slot_name, gap_y, gap_half_w):
         regime_id = float(self.scene_name_to_id[scene_name])
+        gap_half_w = float(gap_half_w)
+        region_kind = 'opening' if str(scene_name) == 'glare' else 'vertical_edges'
+        if region_kind == 'opening':
+            hazard_half_y = gap_half_w
+            hazard_half_z = float(self.simple_gate_half_z)
+        else:
+            hazard_half_y = float(gap_half_w + 0.20)
+            hazard_half_z = float(self.simple_wall_half_z)
         return {
+            'geometry_kind': 'single_wall_gate',
             'sensor_regime_name': scene_name,
             'sensor_regime_id': regime_id,
             'decision_open_slot_name': slot_name,
             'decision_open_slot_id': float(self.supported_slots.index(slot_name)),
             'decision_open_slot_y': float(gap_y),
-            'hazard_center': [1.82, float(gap_y), 1.5],
-            # Cover the opening plus the adjacent gate-frame edges.  The active
-            # sensing task depends on seeing those depth discontinuities, not
-            # only the flat back wall visible through the aperture.
-            'hazard_half_y': 0.34,
-            'hazard_half_z': 1.20,
+            'hazard_center': [self.simple_wall_x, float(gap_y), self.simple_gate_z],
+            # Glare is a backlight seen through the aperture. Specular/dark are
+            # material effects on the gate frame edges.
+            'hazard_region_kind': region_kind,
+            'hazard_half_y': hazard_half_y,
+            'hazard_half_z': hazard_half_z,
+            'hazard_edge_half_y': 0.055,
             'hazard_softness': 0.045,
-            'geometry_occluder_x': 0.88,
-            'geometry_divider_x': 1.58,
-            'geometry_gate_x': 1.82,
+            'geometry_gate_x': float(self.simple_wall_x),
+            'geometry_wall_x': float(self.simple_wall_x),
+            'geometry_gap_half_w': gap_half_w,
+            'geometry_gap_half_h': float(self.simple_gate_half_z),
+            'geometry_gate_z': float(self.simple_gate_z),
+            'geometry_wall_half_z': float(self.simple_wall_half_z),
+            'geometry_back_wall_x': float(self.simple_goal_x + 0.75),
+            'geometry_start_x': float(self.simple_start_x),
+            'geometry_goal_x': float(self.simple_goal_x),
         }
 
     def _merge_batch_effects(self, effects_list):
@@ -277,15 +314,25 @@ class Env:
         self.R_scene = self._rotation_z(yaw)
         self.R_scene_T = self.R_scene.transpose(1, 2).contiguous()
 
-        slots = self._choose_slots(B)
-        gap_y = torch.tensor([self.slot_y[s] for s in slots], device=device, dtype=torch.float32)
-        voxels = torch.stack([self._build_sun_glare_voxel_layout(float(y)) for y in gap_y], dim=0)
+        gap_y, slots = self._choose_gate_centers(B)
+        gap_half_y = self._choose_gate_half_widths(B)
+        voxels = torch.stack([
+            self._build_sun_glare_voxel_layout(float(y), gap_half_w=float(w))
+            for y, w in zip(gap_y, gap_half_y)
+        ], dim=0)
         start_y = torch.zeros(B, device=device)
-        start_local = torch.stack([torch.full((B,), -1.2, device=device), start_y, torch.full((B,), 1.5, device=device)], -1)
-        goal_local = torch.tensor([3.0, 0.0, 1.5], device=device).expand(B, 3).clone()
+        start_local = torch.stack([
+            torch.full((B,), float(self.simple_start_x), device=device),
+            start_y,
+            torch.full((B,), float(self.simple_gate_z), device=device),
+        ], -1)
+        goal_local = torch.tensor([float(self.simple_goal_x), 0.0, float(self.simple_gate_z)], device=device).expand(B, 3).clone()
         start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
         goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
-        effects = self._merge_batch_effects([self._scene_effects(scene_name, slots[i], float(gap_y[i])) for i in range(B)])
+        effects = self._merge_batch_effects([
+            self._scene_effects(scene_name, slots[i], float(gap_y[i]), float(gap_half_y[i]))
+            for i in range(B)
+        ])
         local_hazard = effects['hazard_center'].to(device=device, dtype=torch.float32)
         effects['hazard_center_local'] = local_hazard.clone()
         effects['hazard_center'] = torch.bmm(self.R_scene, local_hazard[:, :, None])[:, :, 0]
@@ -383,19 +430,20 @@ class Env:
         half_y = effects['hazard_half_y']
         half_z = effects['hazard_half_z']
         softness = effects['hazard_softness']
-        if not torch.is_tensor(half_y):
-            half_y = torch.full((B,), float(half_y), device=depth.device)
-        if not torch.is_tensor(half_z):
-            half_z = torch.full((B,), float(half_z), device=depth.device)
-        if not torch.is_tensor(softness):
-            softness = torch.full((B,), float(softness), device=depth.device)
+        def _batch_scalar(value, default):
+            if value is None:
+                value = default
+            if torch.is_tensor(value):
+                return value.to(depth.device, depth.dtype)
+            return torch.full((B,), float(value), device=depth.device, dtype=depth.dtype)
+        half_y = _batch_scalar(half_y, 0.25)
+        half_z = _batch_scalar(half_z, 1.0)
+        softness = _batch_scalar(softness, 0.045)
         center = center.to(depth.device, depth.dtype)
 
         ys = torch.linspace(-1.0, 1.0, W, device=depth.device, dtype=depth.dtype)
         zs = torch.linspace(-1.0, 1.0, H, device=depth.device, dtype=depth.dtype)
         yy, zz = torch.meshgrid(ys, zs, indexing='xy')
-        yy = yy.unsqueeze(0)
-        zz = zz.unsqueeze(0)
 
         # Project the local sensor-degradation region into the current camera.
         # This replaces the older slot_y -> image_x approximation.  The mask is
@@ -403,12 +451,41 @@ class Env:
         # camera-parameter gradients; raw geometry remains non-differentiable.
         R_cam_world = (self.R @ self.R_cam).detach().to(depth.device, depth.dtype)
         pos = self.p.detach().to(depth.device, depth.dtype)
+        fov_x = torch.as_tensor(float(self._fov_x_half_tan), device=depth.device, dtype=depth.dtype)
+        fov_y = fov_x * float(H) / float(max(W, 1))
+        region_kind = str(effects.get('hazard_region_kind', 'box'))
+
+        if region_kind == 'vertical_edges':
+            gap_half_w = _batch_scalar(effects.get('geometry_gap_half_w'), self.simple_gate_half_y)
+            edge_half_y = _batch_scalar(effects.get('hazard_edge_half_y'), 0.055)
+            edge_half_z = half_z
+            local_y_axis_world = self.R_scene[:, :, 1].detach().to(depth.device, depth.dtype)
+            edge_centers = torch.stack([
+                center - gap_half_w[:, None] * local_y_axis_world,
+                center + gap_half_w[:, None] * local_y_axis_world,
+            ], dim=1)
+            rel = edge_centers.detach() - pos[:, None, :]
+            cam = torch.einsum('bij,bkj->bki', R_cam_world.transpose(1, 2), rel)
+            x = cam[..., 0]
+            x_safe = x.clamp_min(0.20)
+            cy = ((-cam[..., 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, :, None, None]
+            cz = ((-cam[..., 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, :, None, None]
+            sy = (edge_half_y[:, None] / x_safe / fov_x).clamp(0.025, 0.50)[:, :, None, None]
+            sz = (edge_half_z[:, None] / x_safe / fov_y).clamp(0.08, 1.25)[:, :, None, None]
+            soft = (softness[:, None] / x_safe / fov_x).clamp(0.020, 0.18)[:, :, None, None]
+            yy_e = yy[None, None]
+            zz_e = zz[None, None]
+            front_gate = torch.sigmoid((x - 0.08) / 0.04)[:, :, None, None]
+            mask_y = torch.sigmoid((sy - (yy_e - cy).abs()) / soft)
+            mask_z = torch.sigmoid((sz - (zz_e - cz).abs()) / soft)
+            return (mask_y * mask_z * front_gate).amax(dim=1).clamp(0.0, 1.0)
+
+        yy = yy.unsqueeze(0)
+        zz = zz.unsqueeze(0)
         rel = center.detach() - pos
         cam = torch.bmm(R_cam_world.transpose(1, 2), rel[:, :, None])[:, :, 0]
         x = cam[:, 0]
         x_safe = x.clamp_min(0.20)
-        fov_x = torch.as_tensor(float(self._fov_x_half_tan), device=depth.device, dtype=depth.dtype)
-        fov_y = fov_x * float(H) / float(max(W, 1))
 
         cy = ((-cam[:, 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, None, None]
         cz = ((-cam[:, 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, None, None]
@@ -457,21 +534,35 @@ class Env:
 
         if regime == 0.0:  # glare: projector power helps only before exposure saturation.
             overexp = torch.sigmoid((e01 - 0.22) / 0.045)
+            gain_sat = torch.sigmoid((g01 - 0.28) / 0.055)
+            gain_exposure_sat = torch.sigmoid(((g01 + 0.85 * e01) - 0.52) / 0.070)
             rescue = torch.sigmoid((p - 0.50) / 0.09)
             rescue_window = torch.sigmoid((0.30 - e01) / 0.06)
             joint_sat = torch.sigmoid((p - 0.65) / 0.08) * torch.sigmoid((e01 - 0.32) / 0.06)
             under_power = torch.sigmoid((0.45 - p) / 0.08)
-            penalty = mask * (0.88 * overexp + 0.28 * joint_sat + 0.42 * under_power * rescue_window)
-            bonus = mask * rescue * rescue_window * 0.30
+            penalty = mask * (
+                0.88 * overexp
+                + 0.28 * joint_sat
+                + 0.42 * under_power * rescue_window
+                + 0.72 * gain_sat
+                + 0.44 * gain_exposure_sat
+            )
+            low_gain_window = torch.sigmoid((0.26 - g01) / 0.06)
+            bonus = mask * rescue * rescue_window * low_gain_window * 0.34
             quality = quality - penalty + bonus
             effect = penalty
         elif regime == 1.0:  # specular: high projector power washes out reflective gate material.
             power_bloom = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
             exposure_bloom = torch.sigmoid((e01 - 0.48) / 0.075) * (0.60 + 0.40 * torch.sigmoid((g01 - 0.50) / 0.08))
-            safe = torch.sigmoid((0.42 - p) / 0.070) * torch.sigmoid((0.52 - e01) / 0.08)
+            gain_bloom = torch.sigmoid((g01 - 0.36) / 0.060) * (0.55 + 0.45 * torch.sigmoid((e01 - 0.28) / 0.07))
+            safe = (
+                torch.sigmoid((0.42 - p) / 0.070)
+                * torch.sigmoid((0.52 - e01) / 0.08)
+                * torch.sigmoid((0.42 - g01) / 0.07)
+            )
             very_safe = torch.sigmoid((0.24 - p) / 0.055) * torch.sigmoid((0.30 - e01) / 0.07)
-            penalty = mask * (1.06 * power_bloom + 0.58 * exposure_bloom)
-            bonus = mask * (0.36 * safe + 0.20 * very_safe)
+            penalty = mask * (1.06 * power_bloom + 0.58 * exposure_bloom + 0.74 * gain_bloom)
+            bonus = mask * (0.38 * safe + 0.18 * very_safe)
             quality = quality - penalty + bonus
             effect = penalty
         else:  # dark: low-reflectance frame needs exposure plus gain; power alone should not rescue it.

@@ -325,13 +325,22 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         pos_local = pos_world
         target_local = target.to(device=device, dtype=torch.float32)
     fx = env.current_scene_effects or {}
+    goal_local_fx = fx.get("geometry_goal_local", None)
+    if torch.is_tensor(goal_local_fx):
+        goal_local_vec = goal_local_fx[0] if goal_local_fx.ndim >= 2 else goal_local_fx
+        goal_local_x = float(goal_local_vec[0].detach().cpu().item())
+        goal_local_y = float(goal_local_vec[1].detach().cpu().item())
+    else:
+        goal_local_x, goal_local_y = 3.0, 0.0
 
     row = {
         "scene": env.current_scene_name,
         "scene_tag": getattr(env, "current_scene_tag", env.current_scene_name),
         "slot": str((env.current_scene_effects or {}).get("decision_open_slot_name", "")),
+        "geometry_kind": str((env.current_scene_effects or {}).get("geometry_kind", "")),
         "opening_y": float((env.current_scene_effects or {}).get("decision_open_slot_y", 0.0)),
         "gate_x": float((env.current_scene_effects or {}).get("geometry_gate_x", 0.0)),
+        "wall_x": float((env.current_scene_effects or {}).get("geometry_wall_x", (env.current_scene_effects or {}).get("geometry_gate_x", 0.0))),
         "pose": pose.name,
         "x": pose.x,
         "y": pose.y,
@@ -350,6 +359,10 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "occluder_half_y": _to_float(fx.get("geometry_occluder_half_y"), 0.48),
         "divider_x": _to_float(fx.get("geometry_divider_x"), 1.58),
         "gap_half_w": _to_float(fx.get("geometry_gap_half_w"), 0.18),
+        "gap_half_h": _to_float(fx.get("geometry_gap_half_h"), 1.05),
+        "geometry_goal_x": _to_float(fx.get("geometry_goal_x"), 3.0),
+        "goal_local_x": goal_local_x,
+        "goal_local_y": goal_local_y,
         "setting": setting.name,
         "power": float(setting.power),
         "exposure": float(setting.exposure),
@@ -402,7 +415,8 @@ def _plot_topdown_overview(ax, row: dict, args):
             zorder=zorder,
         ))
 
-    gate_x = float(row.get("gate_x", 1.82))
+    geometry_kind = str(row.get("geometry_kind", ""))
+    gate_x = float(row.get("gate_x", row.get("wall_x", 1.82)))
     slot_y = float(row.get("opening_y", 0.0))
     gap_half_w = float(row.get("gap_half_w", 0.18))
     occluder_x = float(row.get("occluder_x", 0.88))
@@ -414,14 +428,15 @@ def _plot_topdown_overview(ax, row: dict, args):
     look_y = float(row.get("look_target_local_y", row.get("look_target_y", slot_y)))
 
     # Static map, in the environment-local x/y plane.
-    rect(-1.65, -1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
-    rect(-1.65, 1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
-    rect(occluder_x, 0.0, 0.10, occluder_half_y, facecolor="0.30", edgecolor="black", lw=1.0)
-    for y in (-0.84, 0.0, 0.84):
-        rect(divider_x, y, 0.22, 0.05, facecolor="0.42", edgecolor="black")
-
-    y_min, y_max = -1.70, 1.70
+    y_min, y_max = -1.35, 1.35
     wall_hx = 0.15
+    if geometry_kind != "single_wall_gate":
+        rect(-1.65, -1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
+        rect(-1.65, 1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
+        rect(occluder_x, 0.0, 0.10, occluder_half_y, facecolor="0.30", edgecolor="black", lw=1.0)
+        for y in (-0.84, 0.0, 0.84):
+            rect(divider_x, y, 0.22, 0.05, facecolor="0.42", edgecolor="black")
+        y_min, y_max = -1.70, 1.70
     if slot_y - gap_half_w > y_min:
         cy = 0.5 * (y_min + slot_y - gap_half_w)
         hy = 0.5 * (slot_y - gap_half_w - y_min)
@@ -432,7 +447,8 @@ def _plot_topdown_overview(ax, row: dict, args):
         rect(gate_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
     rect(gate_x, slot_y, wall_hx * 1.15, gap_half_w, facecolor=(0.20, 0.70, 0.25, 0.22),
          edgecolor=(0.20, 0.70, 0.25), lw=1.5, alpha=1.0, zorder=3)
-    rect(gate_x + 1.83, 0.0, 0.10, 1.30, facecolor="0.55", edgecolor="0.25", lw=0.9, alpha=0.75)
+    if geometry_kind != "single_wall_gate":
+        rect(gate_x + 1.83, 0.0, 0.10, 1.30, facecolor="0.55", edgecolor="0.25", lw=0.9, alpha=0.75)
 
     # Drone, camera optical axis, and approximate horizontal FOV.
     dx, dy = look_x - drone_x, look_y - drone_y
@@ -453,11 +469,13 @@ def _plot_topdown_overview(ax, row: dict, args):
     ax.arrow(drone_x, drone_y, 0.28 * ux, 0.28 * uy, width=0.012, head_width=0.08,
              length_includes_head=True, color="#2b6cb0", zorder=6)
     ax.scatter([look_x], [look_y], marker="x", s=48, c="#d62728", linewidths=1.5, zorder=6)
-    ax.scatter([3.0], [0.0], marker="*", s=70, c="#f2c94c", edgecolors="black", linewidths=0.6, zorder=4)
+    goal_x = float(row.get("goal_local_x", row.get("geometry_goal_x", 3.0)))
+    goal_y = float(row.get("goal_local_y", 0.0))
+    ax.scatter([goal_x], [goal_y], marker="*", s=70, c="#f2c94c", edgecolors="black", linewidths=0.6, zorder=4)
 
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlim(min(-2.05, drone_x - 0.45), max(gate_x + 2.15, drone_x + 0.65))
-    ax.set_ylim(-1.82, 1.82)
+    ax.set_xlim(min(-1.25, drone_x - 0.45), max(goal_x + 0.35, gate_x + 0.55, drone_x + 0.65))
+    ax.set_ylim(y_min - 0.12, y_max + 0.12)
     ax.set_title("top-down map")
     ax.set_xlabel("local x")
     ax.set_ylabel("local y")
@@ -686,7 +704,7 @@ def _make_arg_parser():
     parser.add_argument("--out_dir", default="paper/experiment/results/opening_depth_probe")
     parser.add_argument("--scenarios", nargs="*", default=list(SCENE_ORDER))
     parser.add_argument("--slots", nargs="*", default=list(SLOT_ORDER))
-    parser.add_argument("--xs", default="-2.8,-1.8,-0.8,0.0,0.55,1.05,1.45,1.70",
+    parser.add_argument("--xs", default="-0.90,-0.55,-0.20,0.15,0.45,0.62",
                         help="Comma-separated x positions before the gate.")
     parser.add_argument("--path_y_mode", default="slot", choices=["center", "blend", "slot"],
                         help="Position y coordinate; camera always looks at the opening center.")

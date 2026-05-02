@@ -31,26 +31,26 @@ class Model(nn.Module):
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
 
-        # Keep the policy intentionally small for the shared-gate benchmark.
+        # Keep the policy intentionally tiny for the single-wall benchmark.
         # The task should be solved by useful depth observations, not by a
         # high-capacity recurrent policy memorizing a timing template.
-        self.feat_dim = 32
-        self.cam_state_dim = 12
-        self.cam_motion_dim = 12
-        self.cam_hidden_dim = 24
-        self.state_feat_scale = 0.50
-        self.state_dropout_p = 0.10
-        self.spatial_pool_hw = (3, 6)
-        self.stem_channels = 24
+        self.feat_dim = 24
+        self.cam_state_dim = 8
+        self.cam_motion_dim = 8
+        self.cam_hidden_dim = 16
+        self.state_feat_scale = 0.35
+        self.state_dropout_p = 0.15
+        self.spatial_pool_hw = (2, 4)
+        self.stem_channels = 12
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
             return nn.Sequential(
-                nn.Conv2d(cin, 8, 3, padding=1, bias=False),
+                nn.Conv2d(cin, 6, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(8, 16, 3, stride=2, padding=1, bias=False),
+                nn.Conv2d(6, 12, 3, stride=2, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
-                nn.Conv2d(16, self.stem_channels, 3, padding=1, bias=False),
+                nn.Conv2d(12, self.stem_channels, 3, padding=1, bias=False),
                 nn.LeakyReLU(0.05),
                 nn.AdaptiveAvgPool2d(self.spatial_pool_hw),
             )

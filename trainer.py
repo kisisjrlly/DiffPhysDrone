@@ -85,14 +85,14 @@ def _stack_history_for_plot(values):
     return torch.stack([v.detach() if isinstance(v, torch.Tensor) else torch.as_tensor(v) for v in values])
 
 
-def _plot_xyz(seq, title, labels=('x', 'y', 'z'), extra=None, ylabel=None):
+def _plot_xyz(seq, title, labels=('x', 'y', 'z'), extra=None, ylabel=None, subtitle=None):
     fig, ax = plt.subplots(figsize=(7.2, 3.2))
     for k, label in enumerate(labels):
         ax.plot(seq[:, k].numpy(), label=label)
     if extra:
         for label, values in extra:
             ax.plot(values.numpy(), '--', label=label)
-    ax.set_title(title)
+    ax.set_title(title if not subtitle else f'{title}\n{subtitle}')
     ax.set_xlabel('timestep')
     if ylabel:
         ax.set_ylabel(ylabel)
@@ -102,7 +102,50 @@ def _plot_xyz(seq, title, labels=('x', 'y', 'z'), extra=None, ylabel=None):
     return fig
 
 
-def _log_episode_history_plots(rollout, args, iter_idx):
+def _episode_history_metadata(env, env_idx):
+    if env is None:
+        return '', {}
+    scene_name = str(getattr(env, 'current_scene_name', 'unknown'))
+    scene_id = float(getattr(env, 'current_scene_id', -1))
+    fx = {}
+    try:
+        fx = env.get_scene_effects_for_env(env_idx)
+    except Exception:
+        fx = {}
+    slot = str(fx.get('decision_open_slot_name', 'unknown'))
+    gate_y = fx.get('decision_open_slot_y', None)
+    gate_half_y = fx.get('geometry_gap_half_w', None)
+    yaw = None
+    try:
+        yaw = float(env.get_scene_yaw_for_env(env_idx))
+    except Exception:
+        pass
+    parts = [f'scene={scene_name}', f'slot={slot}', f'env={int(env_idx)}']
+    if gate_y is not None:
+        parts.append(f'gate_y={float(gate_y):+.3f}')
+    if gate_half_y is not None:
+        parts.append(f'gate_half_y={float(gate_half_y):.3f}')
+    if yaw is not None:
+        parts.append(f'yaw={yaw:+.2f}rad')
+    scalars = {'episode_history/scene_id': scene_id}
+    if gate_y is not None:
+        scalars['episode_history/gate_y'] = float(gate_y)
+    if gate_half_y is not None:
+        scalars['episode_history/gate_half_y'] = float(gate_half_y)
+    return ' | '.join(parts), scalars
+
+
+def _to_local_position_history(ph, env, env_idx):
+    if env is None or not hasattr(env, 'R_scene_T'):
+        return None
+    try:
+        R_scene_T = env.R_scene_T[int(env_idx)].detach().cpu()
+        return torch.matmul(ph, R_scene_T.T)
+    except Exception:
+        return None
+
+
+def _log_episode_history_plots(rollout, args, iter_idx, env=None):
     """Log one rollout's time-series curves to WandB.
 
     These are diagnostic plots, not smoothed training scalars.  They restore the
@@ -123,6 +166,8 @@ def _log_episode_history_plots(rollout, args, iter_idx):
     ph = p_hist[:, j].detach().cpu()
     vh = v_hist[:, j].detach().cpu()
     ah = a_hist[:, j].detach().cpu()
+    local_ph = _to_local_position_history(ph, env, j)
+    meta_title, meta_scalars = _episode_history_metadata(env, j)
 
     if not MATPLOTLIB_AVAILABLE:
         return
@@ -130,28 +175,42 @@ def _log_episode_history_plots(rollout, args, iter_idx):
     speed = vh.norm(2, -1)
     figs = []
     try:
-        fig_p = _plot_xyz(ph, 'episode position', ylabel='m')
+        fig_p = _plot_xyz(ph, 'episode position world xyz', ylabel='m', subtitle=meta_title)
         figs.append(fig_p)
-        fig_v = _plot_xyz(vh, 'episode velocity', extra=[('speed', speed)], ylabel='m/s')
+        fig_p_local = None
+        if local_ph is not None:
+            fig_p_local = _plot_xyz(local_ph, 'episode position local xyz', ylabel='m', subtitle=meta_title)
+            figs.append(fig_p_local)
+        fig_v = _plot_xyz(vh, 'episode velocity world xyz', extra=[('speed', speed)], ylabel='m/s', subtitle=meta_title)
         figs.append(fig_v)
         acc_norm = ah.norm(2, -1)
-        fig_a = _plot_xyz(ah, 'episode acceleration command', extra=[('norm', acc_norm)], ylabel='m/s^2')
+        fig_a = _plot_xyz(ah, 'episode acceleration command', extra=[('norm', acc_norm)], ylabel='m/s^2', subtitle=meta_title)
         figs.append(fig_a)
 
         log_payload = {
-            'episode_history/position_xyz': wandb.Image(fig_p),
-            'episode_history/velocity_xyz': wandb.Image(fig_v),
-            'episode_history/a_history': wandb.Image(fig_a),
+            'episode_history/position_xyz': wandb.Image(fig_p, caption=meta_title),
+            'episode_history/position_xyz_world': wandb.Image(fig_p, caption=meta_title),
+            'episode_history/velocity_xyz': wandb.Image(fig_v, caption=meta_title),
+            'episode_history/a_history': wandb.Image(fig_a, caption=meta_title),
         }
+        if fig_p_local is not None:
+            log_payload['episode_history/position_xyz_local'] = wandb.Image(fig_p_local, caption=meta_title)
+        log_payload.update(meta_scalars)
         if power_hist is not None and exposure_hist is not None and gain_hist is not None:
             cam = torch.stack([
                 power_hist[:, j].detach().cpu(),
                 exposure_hist[:, j].detach().cpu(),
                 gain_hist[:, j].detach().cpu(),
             ], -1)
-            fig_cam = _plot_xyz(cam, 'episode camera params', labels=('power', 'exposure', 'gain'), ylabel='0..1')
+            fig_cam = _plot_xyz(
+                cam,
+                'episode camera params',
+                labels=('power', 'exposure', 'gain'),
+                ylabel='0..1',
+                subtitle=meta_title,
+            )
             figs.append(fig_cam)
-            log_payload['episode_history/camera_params'] = wandb.Image(fig_cam)
+            log_payload['episode_history/camera_params'] = wandb.Image(fig_cam, caption=meta_title)
         wandb.log(log_payload, step=int(iter_idx) + 1)
     finally:
         for fig in figs:
@@ -377,7 +436,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             and (i % max(args.wandb_episode_history_every_iters, 1) == 0)
         )
         if should_log_episode_history:
-            _log_episode_history_plots(rollout, args, i)
+            _log_episode_history_plots(rollout, args, i, env=env_train)
         if args.vis_enable:
             vis.log_train_scalars({k: v for k, v in log.items() if k in {'loss', 'collision_rate', 'success_rate', 'charts/goal_dist'}}, iter_idx=i)
         periodic_tail_ops(i, checkpoint_dir, model, smoother)

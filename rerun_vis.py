@@ -731,17 +731,59 @@ class RerunVis:
                 )
             if 'hazard_center' in fx:
                 hazard = np.asarray(fx['hazard_center'], dtype=np.float32).reshape(3)
-                rr.log(
-                    f"{phase}/world/scene/local_sensor_region",
-                    rr.Boxes3D(
-                        centers=[hazard.tolist()],
-                        half_sizes=[[0.035, float(fx.get('hazard_half_y', 0.25)), float(fx.get('hazard_half_z', 1.20))]],
-                        colors=[color],
-                        radii=[0.004],
-                        labels=[label],
-                        show_labels=True,
-                    ),
-                )
+                try:
+                    gate_x = float(fx.get('geometry_gate_x', fx.get('geometry_wall_x', hazard[0])))
+                    gate_y = float(fx.get('decision_open_slot_y', 0.0))
+                    gate_z = float(fx.get('geometry_gate_z', hazard[2]))
+                    gap_half_w = float(fx.get('geometry_gap_half_w', 0.18))
+                    gap_half_h = float(fx.get('geometry_gap_half_h', 0.26))
+                    edge_local = np.asarray([
+                        [gate_x, gate_y - gap_half_w, gate_z],
+                        [gate_x, gate_y + gap_half_w, gate_z],
+                    ], dtype=np.float32)
+                    edge_world = _rot_points(edge_local)
+                    if str(fx.get('hazard_region_kind', 'box')) == 'vertical_edges':
+                        edge_half_y = float(fx.get('hazard_edge_half_y', 0.055))
+                        edge_half_z = float(fx.get('hazard_half_z', 1.00))
+                        rr.log(
+                            f"{phase}/world/scene/local_sensor_region",
+                            rr.Boxes3D(
+                                centers=edge_world.tolist(),
+                                half_sizes=[[0.035, edge_half_y, edge_half_z]] * 2,
+                                rotations=_box_rotations(2),
+                                colors=[color, color],
+                                radii=[0.004, 0.004],
+                                labels=[label, label],
+                                show_labels=True,
+                            ),
+                        )
+                    else:
+                        rr.log(
+                            f"{phase}/world/scene/local_sensor_region",
+                            rr.Boxes3D(
+                                centers=[hazard.tolist()],
+                                half_sizes=[[0.035, float(fx.get('hazard_half_y', 0.25)), float(fx.get('hazard_half_z', 1.20))]],
+                                rotations=_box_rotations(1),
+                                colors=[color],
+                                radii=[0.004],
+                                labels=[label],
+                                show_labels=True,
+                            ),
+                        )
+                    rr.log(
+                        f"{phase}/world/scene/gate_vertical_edges",
+                        rr.Boxes3D(
+                            centers=edge_world.tolist(),
+                            half_sizes=[[0.045, 0.012, gap_half_h]] * 2,
+                            rotations=_box_rotations(2),
+                            colors=[[255, 255, 255, 220], [255, 255, 255, 220]],
+                            radii=[0.004, 0.004],
+                            labels=["GATE_EDGE", "GATE_EDGE"],
+                            show_labels=True,
+                        ),
+                    )
+                except Exception:
+                    pass
 
     def _scalar_msg(self, v: float):
         """API compatibility: rerun-sdk uses Scalars, older variants may expose Scalar."""

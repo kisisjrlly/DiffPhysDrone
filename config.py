@@ -47,6 +47,16 @@ def build_parser():
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None)
     parser.add_argument('--random_rotation', default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('--random_rotation_max_deg', type=float, default=45.0)
+    parser.add_argument('--simple_start_x', type=float, default=-1.0)
+    parser.add_argument('--simple_goal_x', type=float, default=1.8)
+    parser.add_argument('--simple_wall_x', type=float, default=0.65)
+    parser.add_argument('--simple_gate_y_min', type=float, default=-0.55)
+    parser.add_argument('--simple_gate_y_max', type=float, default=0.55)
+    parser.add_argument('--simple_gate_half_y', type=float, default=0.20)
+    parser.add_argument('--simple_gate_half_y_min', type=float, default=None)
+    parser.add_argument('--simple_gate_half_y_max', type=float, default=None)
+    parser.add_argument('--simple_gate_half_z', type=float, default=0.26)
+    parser.add_argument('--simple_gate_z', type=float, default=1.50)
     parser.add_argument('--no_odom', default=False, action='store_true')
     parser.add_argument('--include_camera_state_in_obs', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--max_acc_cmd', type=float, default=2.5)
@@ -179,6 +189,21 @@ def validate_args(args):
         raise ValueError('--collision_clearance must be >= 0')
     if args.random_rotation_max_deg < 0:
         raise ValueError('--random_rotation_max_deg must be >= 0')
+    if args.simple_goal_x <= args.simple_start_x:
+        raise ValueError('--simple_goal_x must be greater than --simple_start_x')
+    if args.simple_wall_x <= args.simple_start_x or args.simple_wall_x >= args.simple_goal_x:
+        raise ValueError('--simple_wall_x must be between start and goal')
+    if args.simple_gate_half_y <= 0 or args.simple_gate_half_z <= 0:
+        raise ValueError('--simple_gate_half_y/--simple_gate_half_z must be > 0')
+    if (args.simple_gate_half_y_min is None) != (args.simple_gate_half_y_max is None):
+        raise ValueError('--simple_gate_half_y_min and --simple_gate_half_y_max must be set together')
+    if args.simple_gate_half_y_min is None:
+        args.simple_gate_half_y_min = args.simple_gate_half_y
+        args.simple_gate_half_y_max = args.simple_gate_half_y
+    if args.simple_gate_half_y_min <= 0 or args.simple_gate_half_y_max <= 0:
+        raise ValueError('--simple_gate_half_y_min/max must be > 0')
+    if args.simple_gate_half_y_max < args.simple_gate_half_y_min:
+        raise ValueError('--simple_gate_half_y_max must be >= --simple_gate_half_y_min')
     if args.cam_delta_max < 0:
         raise ValueError('--cam_delta_max must be >= 0')
     if args.cam_return_rate < 0:
@@ -229,7 +254,12 @@ def print_runtime_mode(args):
         f'target={args.diff_depth_min_fill_rate}'
     )
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
-    print('environment               : active_sensing_shared_gate_minimal')
+    print(
+        'environment               : single_wall_random_gate '
+        f'wall_x={args.simple_wall_x}, gate_half_y={args.simple_gate_half_y_min}'
+        f'..{args.simple_gate_half_y_max}, '
+        f'gate_half_z={args.simple_gate_half_z}'
+    )
     print('=' * 75)
 
 
