@@ -9,7 +9,10 @@ set -euo pipefail
 export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 
 task=${TASK:-paper_final_full}
-ckpt_path=${CKPT:-checkpoint/2026-05-03-11-47-46/checkpoint0014.pth}
+# ckpt_path=${CKPT:-checkpoint/2026-05-03-15-26-54/checkpoint0014.pth} # ours
+# ckpt_path=${CKPT:-checkpoint/2026-05-03-15-28-43/checkpoint0014.pth}
+ckpt_path=${CKPT:-checkpoint/camera_pretrain_20260503/camera_head_pretrained_best.pth}
+# checkpoint/2026-05-03-15-28-53/checkpoint0014.pth # randfix
 eval_episodes=${EVAL_EPISODES:-10}
 vis_episode_idx=${VIS_EPISODE_IDX:--1}
 eval_batch_size=${EVAL_BATCH_SIZE:-1}

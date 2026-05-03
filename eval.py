@@ -7,7 +7,7 @@ import torch
 from torch.cuda.amp.autocast_mode import autocast
 
 from config import build_parser, parse_diff_sensor_impl, parse_scenarios, set_global_seed, validate_args, canonicalize_sun_glare_slot, print_runtime_mode
-from model import Model
+from model import Model, load_model_state_dict
 from rerun_vis import RerunVis
 from rollout_ops import (
     render_sensors,
@@ -333,7 +333,7 @@ def main():
     ).to(device)
     print(f'[eval] loading checkpoint: {args.resume}')
     state_dict = torch.load(args.resume, map_location=device)
-    model.load_state_dict(state_dict)
+    load_model_state_dict(model, state_dict, allow_missing_camera_adapter=True)
     model.eval()
 
     vis = RerunVis(

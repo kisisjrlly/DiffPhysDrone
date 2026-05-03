@@ -1,0 +1,21 @@
+/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python -u \
+  tools/run_camera_teacher_pipeline.py \
+  --stage all \
+  --config configs/paper_final_full.args \
+  --flight_checkpoint checkpoint/2026-05-03-15-28-53/checkpoint0014.pth \
+  --work_dir paper/experiment/results/camera_teacher_pipeline_20260503 \
+  --pretrain_dir checkpoint/camera_pretrain_20260503 \
+  --scenarios glare specular dark \
+  --rollouts_per_scene 12 \
+  --collect_batch_size 12 \
+  --timesteps 80 \
+  --teacher_steps 50 \
+  --teacher_lr 0.10 \
+  --coef_nominal_when_healthy 0.5 \
+  --nominal_fill_margin 0.12 \
+  --pretrain_epochs 40 \
+  --pretrain_batch_size 8 \
+  --pretrain_lr 2e-4 \
+  --eval_modes fixed randfix learned learned_detached \
+  --eval_episodes 300 \
+  --device cuda

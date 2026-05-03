@@ -29,8 +29,8 @@
 --simple_gate_y_min -0.75
 --simple_gate_y_max 0.75
 --simple_gate_half_y 0.18
---simple_gate_half_y_min 0.20
---simple_gate_half_y_max 0.22
+--simple_gate_half_y_min 0.18
+--simple_gate_half_y_max 0.20
 --simple_gate_half_z 0.26
 --simple_gate_z 1.50
 --include_camera_state_in_obs

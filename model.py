@@ -4,6 +4,45 @@ import torch.nn.functional as F
 
 from utils import g_decay
 
+
+OPTIONAL_CAMERA_ADAPTER_PREFIXES = (
+    'cam_spatial_stem',
+    'cam_spatial_proj',
+    'cam_img_adapter',
+    'cam_img_norm',
+)
+
+
+def load_model_state_dict(model: nn.Module, state_dict, *, allow_missing_camera_adapter: bool = False):
+    """Load a checkpoint while optionally allowing newly-added camera adapters.
+
+    Fixed/randfix flight checkpoints trained before the camera visual adapter do
+    not contain those parameters.  We allow only that specific missing set so
+    flight-policy checkpoint problems still fail loudly.
+    """
+    result = model.load_state_dict(state_dict, strict=False)
+    missing = list(result.missing_keys)
+    unexpected = list(result.unexpected_keys)
+    if allow_missing_camera_adapter:
+        bad_missing = [
+            key for key in missing
+            if not key.startswith(OPTIONAL_CAMERA_ADAPTER_PREFIXES)
+        ]
+    else:
+        bad_missing = missing
+    if bad_missing or unexpected:
+        raise RuntimeError(
+            'checkpoint is incompatible with current Model: '
+            f'missing={bad_missing}, unexpected={unexpected}'
+        )
+    if missing:
+        print(
+            '[model] initialized new camera adapter parameters: '
+            + ', '.join(missing)
+        )
+    return result
+
+
 class Model(nn.Module):
     def __init__(self, dim_obs=9, dim_action=3,
                  include_camera_state_in_obs=False,
@@ -111,6 +150,31 @@ class Model(nn.Module):
         # motion/attitude.  Local motion is included because exposure/blur are
         # motion-dependent, while target direction/distance are intentionally
         # excluded to avoid a camera schedule keyed directly on task geometry.
+        #
+        # The camera branch gets its own lightweight visual adapter.  This is
+        # important for teacher distillation: flight depth features are trained
+        # for control, while camera tuning needs image-quality cues such as
+        # local invalid/washed/dark regions.  The adapter is residual and small,
+        # so it can learn those cues without changing the frozen flight policy.
+        self.cam_spatial_stem = nn.Sequential(
+            nn.Conv2d(2, 4, 3, padding=1, bias=False),
+            nn.LeakyReLU(0.05),
+            nn.Conv2d(4, 4, 3, stride=2, padding=1, bias=False),
+            nn.LeakyReLU(0.05),
+            nn.AdaptiveAvgPool2d((2, 3)),
+        )
+        self.cam_spatial_proj = nn.Linear(4 * 2 * 3, self.feat_dim, bias=True)
+        self.cam_spatial_proj.weight.data.mul_(0.05)
+        self.cam_spatial_proj.bias.data.zero_()
+        self.cam_img_adapter = nn.Sequential(
+            nn.LayerNorm(self.feat_dim),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=True),
+            nn.LeakyReLU(0.05),
+            nn.Linear(self.feat_dim, self.feat_dim, bias=True),
+        )
+        self.cam_img_adapter[-1].weight.data.mul_(0.01)
+        self.cam_img_adapter[-1].bias.data.zero_()
+        self.cam_img_norm = nn.LayerNorm(self.feat_dim)
         self.cam_state_proj = nn.Linear(3, self.cam_state_dim)
         self.cam_state_norm = nn.LayerNorm(self.cam_state_dim)
         self.cam_motion_proj = nn.Linear(6, self.cam_motion_dim)
@@ -289,9 +353,15 @@ class Model(nn.Module):
             camera_motion_state = torch.zeros(v.shape[0], 6, device=v.device, dtype=v.dtype)
         else:
             camera_motion_state = camera_motion_state.to(device=v.device, dtype=v.dtype)
+        cam_spatial = self.cam_spatial_proj(self.cam_spatial_stem(x).flatten(1))
+        cam_img_feat = self.cam_img_norm(
+            img_feat
+            + 0.25 * self.cam_img_adapter(img_feat)
+            + 0.35 * cam_spatial
+        )
         cam_feat = self.cam_state_norm(self.cam_state_proj(cam_state))
         cam_motion_feat = self.cam_motion_norm(self.cam_motion_proj(camera_motion_state))
-        cam_in = self.cam_pre(torch.cat([img_feat, cam_feat, cam_motion_feat], dim=1))
+        cam_in = self.cam_pre(torch.cat([cam_img_feat, cam_feat, cam_motion_feat], dim=1))
         cam_hx = self.cam_gru(cam_in, cam_hx)
         cam_hx = self.cam_hx_norm(cam_hx)
         cam_raw = self.fc_cam(self.act(cam_hx))

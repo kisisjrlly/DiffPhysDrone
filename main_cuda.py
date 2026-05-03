@@ -17,7 +17,7 @@ import wandb
 # torch.autograd.set_detect_anomaly(True)
 
 from config import parse_args, print_runtime_mode
-from model import Model
+from model import Model, load_model_state_dict
 from rerun_vis import RerunVis
 from train_utils import build_env, estimate_optimizer_steps
 from trainer import train
@@ -119,7 +119,7 @@ def main():
     if args.resume:
         print(f"[info] 从 {args.resume} 恢复训练")
         state_dict = torch.load(args.resume, map_location=device)
-        model.load_state_dict(state_dict)
+        load_model_state_dict(model, state_dict, allow_missing_camera_adapter=True)
 
     # ── 8. Optimizer & scheduler ─────────────────────────────────────────
     optim = AdamW(model.parameters(), args.lr)
