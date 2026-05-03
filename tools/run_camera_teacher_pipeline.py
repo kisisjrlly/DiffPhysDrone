@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Orchestrate fixed-policy camera-teacher collection, pretraining, and eval.
+"""Orchestrate frozen-policy camera-teacher collection, pretraining, and eval.
 
 This script is intentionally thin: the heavy work stays in
 generate_camera_teacher_dataset.py, pretrain_camera_head.py, and eval.py.  The
@@ -319,7 +319,16 @@ def _parse_args():
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"])
     parser.add_argument("--dry_run", action="store_true")
-    parser.add_argument("--teacher_source", choices=["rollout_local", "trajectory_diffopt"], default="rollout_local")
+    parser.add_argument(
+        "--teacher_source",
+        choices=["closed_loop_diffopt", "rollout_local", "trajectory_diffopt"],
+        default="closed_loop_diffopt",
+        help=(
+            "closed_loop_diffopt/rollout_local: fly the frozen checkpoint and "
+            "optimize a camera target at each visited state.  trajectory_diffopt: "
+            "use scripted wall-crossing trajectories."
+        ),
+    )
 
     parser.add_argument("--reuse_dataset", default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument("--reuse_pretrain", default=True, action=argparse.BooleanOptionalAction)
@@ -334,6 +343,16 @@ def _parse_args():
     parser.add_argument("--teacher_every", type=int, default=1)
     parser.add_argument("--teacher_camera_ema", default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument("--teacher_ema_alpha", type=float, default=0.7)
+    parser.add_argument(
+        "--rollout_camera_mode",
+        choices=["fixed", "fixed_random_static"],
+        default="fixed_random_static",
+        help=(
+            "Camera mode for collecting closed-loop states.  For a randfix-trained "
+            "flight checkpoint, fixed_random_static usually matches the policy's "
+            "training distribution best."
+        ),
+    )
     parser.add_argument("--coef_nominal_when_healthy", type=float, default=0.5)
     parser.add_argument("--nominal_fill_margin", type=float, default=0.12)
     parser.add_argument("--slots", nargs="*", default=["left", "right"])
@@ -442,6 +461,7 @@ def main() -> None:
                 "--teacher_lr", str(args.teacher_lr),
                 "--teacher_every", str(args.teacher_every),
                 "--teacher_ema_alpha", str(args.teacher_ema_alpha),
+                "--rollout_camera_mode", str(args.rollout_camera_mode),
                 "--coef_nominal_when_healthy", str(args.coef_nominal_when_healthy),
                 "--nominal_fill_margin", str(args.nominal_fill_margin),
                 "--seed", str(args.seed),
