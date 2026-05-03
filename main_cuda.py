@@ -94,7 +94,7 @@ def main():
     # ── 5. Create model ──────────────────────────────────────────────────
     obs_dim = 7 if args.no_odom else 10
     model = Model(
-        obs_dim, 6,
+        obs_dim, 3,
         include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=False,
         intent_dim=9,
@@ -119,11 +119,7 @@ def main():
     if args.resume:
         print(f"[info] 从 {args.resume} 恢复训练")
         state_dict = torch.load(args.resume, map_location=device)
-        missing, unexpected = model.load_state_dict(state_dict, False)
-        if missing:
-            print("missing_keys:", missing)
-        if unexpected:
-            print("unexpected_keys:", unexpected)
+        model.load_state_dict(state_dict)
 
     # ── 8. Optimizer & scheduler ─────────────────────────────────────────
     optim = AdamW(model.parameters(), args.lr)

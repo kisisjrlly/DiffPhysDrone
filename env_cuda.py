@@ -22,7 +22,7 @@ class Env:
     """Minimal single-wall active-sensing environment.
 
     Geometry is deliberately small: one start, one goal, and one wall with a
-    narrow gate at a random lateral position.  Scenarios only change the local
+    narrow vertical slit at a random lateral position.  Scenarios only change the local
     sensor degradation around the gate material.
     """
 
@@ -223,13 +223,16 @@ class Env:
         return torch.empty((B,), device=self.device, dtype=torch.float32).uniform_(lo, hi)
 
     def _build_sun_glare_voxel_layout(self, gap_y_center, *, gate_x=None,
-                                      gap_half_w=None, gap_half_h=None,
+                                      gap_half_w=None,
                                       gate_z=None):
-        """Single wall with a narrow gate."""
+        """Single wall with a narrow vertical slit.
+
+        There is no top/bottom gate geometry.  The z extent configured by
+        simple_gate_half_z is only used by the sensor-effect mask.
+        """
         gate_x = self.simple_wall_x if gate_x is None else float(gate_x)
         gate_z = self.simple_gate_z if gate_z is None else float(gate_z)
         gap_half_w = self.simple_gate_half_y if gap_half_w is None else float(gap_half_w)
-        gap_half_h = self.simple_gate_half_z if gap_half_h is None else float(gap_half_h)
         wall_half_y = 1.0
         wall_half_z = self.simple_wall_half_z * 2
         wall_thickness = 0.10
@@ -239,8 +242,6 @@ class Env:
             [float(gate_x), gap_y_center - float(gap_half_w) - wall_half_y, gate_z, wall_thickness, wall_half_y, wall_half_z],
             [float(gate_x), gap_y_center + float(gap_half_w) + wall_half_y, gate_z, wall_thickness, wall_half_y, wall_half_z],
             [back_wall_x, 0.0, gate_z, wall_thickness, back_wall_half_y, wall_half_z],
-            # [float(gate_x), gap_y_center, gate_z + gap_half_h + wall_half_z, wall_thickness, float(gap_half_w), wall_half_z],
-            # [float(gate_x), gap_y_center, gate_z - gap_half_h - wall_half_z, wall_thickness, float(gap_half_w), wall_half_z],
         ])
         return gate_wall
 
@@ -266,7 +267,7 @@ class Env:
             hazard_half_y = float(gap_half_w + 0.20)
             hazard_half_z = float(self.simple_wall_half_z)
         return {
-            'geometry_kind': 'single_wall_gate',
+            'geometry_kind': 'single_wall_slit',
             'sensor_regime_name': scene_name,
             'sensor_regime_id': regime_id,
             'decision_open_slot_name': slot_name,
@@ -283,7 +284,8 @@ class Env:
             'geometry_gate_x': float(self.simple_wall_x),
             'geometry_wall_x': float(self.simple_wall_x),
             'geometry_gap_half_w': gap_half_w,
-            'geometry_gap_half_h': float(self.simple_gate_half_z),
+            'sensor_effect_half_z': float(self.simple_gate_half_z),
+            'geometry_gap_half_h': float(self.simple_wall_half_z),
             'geometry_gate_z': float(self.simple_gate_z),
             'geometry_wall_half_z': float(self.simple_wall_half_z),
             'geometry_back_wall_x': float(self.simple_goal_x + 0.75),

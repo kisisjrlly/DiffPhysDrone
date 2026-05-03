@@ -42,7 +42,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import set_global_seed  # noqa: E402
+from losses import compute_camera_losses  # noqa: E402
 from train_utils import build_env  # noqa: E402
+from rollout_ops import compute_depth_fill_health, init_camera_params  # noqa: E402
 from tools.probe_opening_depth_views import (  # noqa: E402
     CameraSetting,
     _add_reference_diffs,
@@ -179,6 +181,7 @@ def _diffopt_camera(env, cond_args, pose, target, init_peg: tuple[float, float, 
 
         trace_rows.append({
             **trace_prefix,
+            "optimizer": "edge_visibility_diffopt",
             "step": step,
             "power": float(peg[0].detach().cpu().item()),
             "exposure": float(peg[1].detach().cpu().item()),
@@ -194,6 +197,153 @@ def _diffopt_camera(env, cond_args, pose, target, init_peg: tuple[float, float, 
         result.row["candidate_setting"] = "gradient_optimized"
         result.row["diffopt_steps"] = int(steps)
         result.row["diffopt_lr"] = float(lr)
+    return result, trace_rows
+
+
+def _parse_trainloss_speed(env, raw: str | float | int) -> float:
+    text = str(raw).strip().lower()
+    if text in {"max", "max_speed", "auto"}:
+        max_speed = getattr(env, "max_speed", None)
+        if torch.is_tensor(max_speed):
+            return float(max_speed.detach().reshape(-1)[0].cpu().item())
+        return float(getattr(env, "fixed_max_speed", 0.0))
+    if text in {"zero", "static", "stationary"}:
+        return 0.0
+    return max(0.0, float(raw))
+
+
+def _default_trainloss_init(env, device: torch.device) -> tuple[float, float, float]:
+    with torch.no_grad():
+        power, exposure, gain = init_camera_params(env, 1, device)
+    return (
+        float(power.reshape(-1)[0].detach().cpu().item()),
+        float(exposure.reshape(-1)[0].detach().cpu().item()),
+        float(gain.reshape(-1)[0].detach().cpu().item()),
+    )
+
+
+def _apply_probe_speed(env, pose, target, speed_mps: float):
+    speed = float(speed_mps)
+    if speed <= 0.0:
+        env.v.zero_()
+        return
+    pos = torch.tensor([pose.x, pose.y, pose.z], device=env.device, dtype=torch.float32)
+    direction = target.to(device=env.device, dtype=torch.float32) - pos
+    direction = F.normalize(direction, dim=0)
+    env.v = direction.unsqueeze(0).repeat(env.batch_size, 1) * speed
+
+
+def _camera_trainloss_at_pose(env, cond_args, pose, target, peg: torch.Tensor,
+                              init_peg: tuple[float, float, float],
+                              speed_mps: float) -> tuple[torch.Tensor, dict[str, torch.Tensor], torch.Tensor]:
+    _set_pose_look_at(env, pose, target)
+    _apply_probe_speed(env, pose, target, speed_mps)
+    power = peg[0:1]
+    exposure = peg[1:2]
+    gain = peg[2:3]
+    depth, _ = env.render_diff_depth(power, exposure, gain)
+    fill = compute_depth_fill_health(
+        env,
+        depth,
+        min_valid_depth=float(cond_args.depth_min_valid),
+        patch_rows=int(cond_args.diff_depth_health_patch_rows),
+        patch_cols=int(cond_args.diff_depth_health_patch_cols),
+        cvar_frac=float(cond_args.diff_depth_health_cvar_frac),
+    )
+    cam_hist = peg.reshape(1, 1, 3)
+    init = torch.tensor(init_peg, device=peg.device, dtype=peg.dtype).reshape(1, 3)
+    speed_seq = torch.full((1, 1), float(speed_mps), device=peg.device, dtype=peg.dtype)
+    losses = compute_camera_losses(
+        cam_hist,
+        power.reshape(1, 1),
+        exposure.reshape(1, 1),
+        gain.reshape(1, 1),
+        speed_seq,
+        fill.reshape(1, 1),
+        min_fill_rate=float(cond_args.diff_depth_min_fill_rate),
+        camera_semantics=env.cam_sem,
+        power_baseline=float(cond_args.cam_power_baseline),
+        cam_initial=init,
+    )
+    weighted = {
+        "cam_smooth": float(cond_args.coef_cam_smooth) * losses["loss_cam_smooth"],
+        "power": float(cond_args.coef_diff_depth_power) * losses["loss_diff_depth_power"],
+        "blur": float(cond_args.coef_diff_depth_blur) * losses["loss_diff_depth_blur"],
+        "noise": float(cond_args.coef_diff_depth_noise) * losses["loss_diff_depth_noise"],
+        "fill": float(cond_args.coef_diff_depth_fill) * losses["loss_diff_depth_fill"],
+    }
+    total = sum(weighted.values())
+    out = dict(losses)
+    out.update({f"weighted_{key}": value for key, value in weighted.items()})
+    return total, out, fill
+
+
+def _trainloss_terms_to_row(total, terms, fill, speed_mps: float, cond_args) -> dict[str, float]:
+    row = {
+        "train_loss_total": float(total.detach().cpu().item()),
+        "train_fill_health": float(fill.detach().reshape(-1)[0].cpu().item()),
+        "train_speed_mps": float(speed_mps),
+        "train_min_fill_rate": float(cond_args.diff_depth_min_fill_rate),
+    }
+    for key, value in terms.items():
+        name = key.replace("loss_diff_depth_", "").replace("loss_", "")
+        row[f"train_loss_{name}"] = float(value.detach().cpu().item())
+    return row
+
+
+def _annotate_training_loss(result: MethodResult, env, cond_args, pose, target,
+                            init_peg: tuple[float, float, float],
+                            speed_mps: float) -> MethodResult:
+    device = env.device
+    peg = torch.tensor(
+        [float(result.row["power"]), float(result.row["exposure"]), float(result.row["gain"])],
+        device=device,
+        dtype=torch.float32,
+    )
+    with torch.no_grad():
+        total, terms, fill = _camera_trainloss_at_pose(
+            env, cond_args, pose, target, peg, init_peg, speed_mps)
+    result.row.update(_trainloss_terms_to_row(total, terms, fill, speed_mps, cond_args))
+    return result
+
+
+def _trainloss_diffopt_camera(env, cond_args, pose, target,
+                              init_peg: tuple[float, float, float],
+                              steps: int, lr: float, speed_mps: float,
+                              trace_prefix: dict) -> tuple[MethodResult, list[dict]]:
+    device = env.device
+    init = torch.tensor(init_peg, device=device, dtype=torch.float32)
+    logits = _logit01(init).detach().clone().requires_grad_(True)
+    opt = torch.optim.Adam([logits], lr=float(lr))
+    trace_rows: list[dict] = []
+
+    for step in range(max(0, int(steps))):
+        opt.zero_grad(set_to_none=True)
+        peg = torch.sigmoid(logits).clamp(0.001, 0.999)
+        total, terms, fill = _camera_trainloss_at_pose(
+            env, cond_args, pose, target, peg, init_peg, speed_mps)
+        total.backward()
+        opt.step()
+
+        row = {
+            **trace_prefix,
+            "optimizer": "training_loss_diffopt",
+            "step": step,
+            "power": float(peg[0].detach().cpu().item()),
+            "exposure": float(peg[1].detach().cpu().item()),
+            "gain": float(peg[2].detach().cpu().item()),
+            **_trainloss_terms_to_row(total, terms, fill, speed_mps, cond_args),
+        }
+        trace_rows.append(row)
+
+    with torch.no_grad():
+        final = torch.sigmoid(logits).clamp(0.001, 0.999).detach().cpu().numpy().tolist()
+        setting = CameraSetting("trainloss_diffopt", float(final[0]), float(final[1]), float(final[2]))
+        result = _render_setting(env, cond_args, pose, target, setting, "trainloss_diffopt")
+        result.row["candidate_setting"] = "training_loss_optimized"
+        result.row["trainloss_diffopt_steps"] = int(steps)
+        result.row["trainloss_diffopt_lr"] = float(lr)
+        _annotate_training_loss(result, env, cond_args, pose, target, init_peg, speed_mps)
     return result, trace_rows
 
 
@@ -213,6 +363,7 @@ def _write_report(path: Path, rows: list[dict]):
         "- `randfix_best`: best of random static samples at the same pose; this is a generous randfix upper bound.",
         "- `oracle_grid`: best p/e/g from a dense hand grid.",
         "- `diffopt`: p/e/g optimized directly through the differentiable sensor at the same pose.",
+        "- `trainloss_diffopt`: p/e/g optimized against the same camera loss used by training.",
         "",
         "Important reading rule:",
         "",
@@ -227,20 +378,32 @@ def _write_report(path: Path, rows: list[dict]):
         by_power: dict[str, list[float]] = {}
         by_exposure: dict[str, list[float]] = {}
         by_gain: dict[str, list[float]] = {}
+        by_train_loss: dict[str, list[float]] = {}
+        by_train_fill: dict[str, list[float]] = {}
         for row in items:
             method = str(row.get("method", ""))
             by_method.setdefault(method, []).append(float(row.get("score", 0.0)))
             by_power.setdefault(method, []).append(float(row.get("power", 0.0)))
             by_exposure.setdefault(method, []).append(float(row.get("exposure", 0.0)))
             by_gain.setdefault(method, []).append(float(row.get("gain", 0.0)))
+            if "train_loss_total" in row:
+                by_train_loss.setdefault(method, []).append(float(row.get("train_loss_total", 0.0)))
+                by_train_fill.setdefault(method, []).append(float(row.get("train_fill_health", 0.0)))
         lines.append(f"## {scene}")
         for method in sorted(by_method):
             scores = by_method[method]
+            train_loss_txt = ""
+            if method in by_train_loss:
+                train_loss_txt = (
+                    f" train_loss={np.mean(by_train_loss[method]):.4f}"
+                    f" train_fill={np.mean(by_train_fill[method]):.3f}"
+                )
             lines.append(
                 f"- `{method}` score={np.mean(scores):.3f} "
                 f"p/e/g={np.mean(by_power[method]):.2f}/"
                 f"{np.mean(by_exposure[method]):.2f}/"
                 f"{np.mean(by_gain[method]):.2f}"
+                f"{train_loss_txt}"
             )
         ranked = sorted(
             ((method, float(np.mean(scores))) for method, scores in by_method.items()),
@@ -252,6 +415,15 @@ def _write_report(path: Path, rows: list[dict]):
         for idx, (method, score) in enumerate(ranked, start=1):
             lines.append(f"{idx}. `{method}` score={score:.3f}")
         lines.append("")
+        if by_train_loss:
+            train_ranked = sorted(
+                ((method, float(np.mean(values))) for method, values in by_train_loss.items()),
+                key=lambda x: x[1],
+            )
+            lines.append("Training-loss ranking:")
+            for idx, (method, value) in enumerate(train_ranked, start=1):
+                lines.append(f"{idx}. `{method}` train_loss={value:.4f}")
+            lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -276,6 +448,32 @@ def _write_rankings(path: Path, rows: list[dict]):
                 "local_edge_fill": row.get("local_edge_fill", 0.0),
                 "local_edge_quality_mean": row.get("local_edge_quality_mean", 0.0),
                 "invalid_rate": row.get("invalid_rate", 0.0),
+                "train_loss_total": row.get("train_loss_total", ""),
+                "train_fill_health": row.get("train_fill_health", ""),
+            })
+    _write_csv(path, out)
+
+
+def _write_trainloss_rankings(path: Path, rows: list[dict]):
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
+    for row in rows:
+        grouped.setdefault((str(row["scene"]), str(row["slot"]), str(row["pose"])), []).append(row)
+    out: list[dict] = []
+    for (scene, slot, pose), items in sorted(grouped.items()):
+        ranked = sorted(items, key=lambda r: float(r.get("train_loss_total", float("inf"))))
+        for rank, row in enumerate(ranked, start=1):
+            out.append({
+                "scene": scene,
+                "slot": slot,
+                "pose": pose,
+                "rank": rank,
+                "method": row.get("method", ""),
+                "train_loss_total": row.get("train_loss_total", 0.0),
+                "train_fill_health": row.get("train_fill_health", 0.0),
+                "score": row.get("score", 0.0),
+                "power": row.get("power", 0.0),
+                "exposure": row.get("exposure", 0.0),
+                "gain": row.get("gain", 0.0),
             })
     _write_csv(path, out)
 
@@ -417,6 +615,16 @@ def _make_arg_parser():
     parser.add_argument("--diffopt_init", default="0.50,0.35,0.25")
     parser.add_argument("--diffopt_steps", type=int, default=40)
     parser.add_argument("--diffopt_lr", type=float, default=0.18)
+    parser.add_argument("--trainloss_diffopt", action=argparse.BooleanOptionalAction, default=True,
+                        help="Also optimize p/e/g against the same camera loss used during training.")
+    parser.add_argument("--trainloss_diffopt_init", default=None,
+                        help="Initial p,e,g for training-loss optimization. Default uses learned-mode initial camera state.")
+    parser.add_argument("--trainloss_diffopt_steps", type=int, default=None,
+                        help="Defaults to --diffopt_steps.")
+    parser.add_argument("--trainloss_diffopt_lr", type=float, default=None,
+                        help="Defaults to --diffopt_lr.")
+    parser.add_argument("--trainloss_speed", default="max_speed",
+                        help="Speed used by blur loss for fixed-pose train-loss optimization: max_speed, zero, or numeric m/s.")
     parser.add_argument("--randfix_k", type=int, default=24)
     parser.add_argument("--oracle_powers", default="0.18,0.32,0.50,0.70,0.90,0.96")
     parser.add_argument("--oracle_exposures", default="0.14,0.24,0.34,0.50,0.66,0.82,0.92")
@@ -452,6 +660,16 @@ def main():
         float(project_args.fixed_camera_gain),
     ))
     diffopt_init = _parse_triplet(script_args.diffopt_init, (0.50, 0.35, 0.25))
+    trainloss_steps = (
+        int(script_args.diffopt_steps)
+        if script_args.trainloss_diffopt_steps is None
+        else int(script_args.trainloss_diffopt_steps)
+    )
+    trainloss_lr = (
+        float(script_args.diffopt_lr)
+        if script_args.trainloss_diffopt_lr is None
+        else float(script_args.trainloss_diffopt_lr)
+    )
     oracle = _candidate_grid(
         _parse_float_list(script_args.oracle_powers),
         _parse_float_list(script_args.oracle_exposures),
@@ -474,13 +692,21 @@ def main():
             env.reset(scene_name=scene)
             target = _opening_target(env)
             poses = _make_poses(env, xs, script_args.path_y_mode)
+            trainloss_init = _parse_triplet(
+                script_args.trainloss_diffopt_init,
+                _default_trainloss_init(env, device),
+            )
+            trainloss_speed = _parse_trainloss_speed(env, script_args.trainloss_speed)
 
             for pose in poses:
                 rendered: list[MethodResult] = []
 
                 fixed_setting = CameraSetting("fixed", *fixed_peg)
                 with torch.no_grad():
-                    rendered.append(_render_setting(env, cond_args, pose, target, fixed_setting, "fixed"))
+                    fixed_result = _render_setting(env, cond_args, pose, target, fixed_setting, "fixed")
+                    _annotate_training_loss(
+                        fixed_result, env, cond_args, pose, target, trainloss_init, trainloss_speed)
+                    rendered.append(fixed_result)
 
                 randfix = [
                     CameraSetting(
@@ -495,6 +721,8 @@ def main():
                     env, cond_args, pose, target, randfix, "randfix_best",
                     write_rows=bool(script_args.write_candidates),
                 )
+                _annotate_training_loss(
+                    rand_best, env, cond_args, pose, target, trainloss_init, trainloss_speed)
                 rendered.append(rand_best)
                 candidate_rows.extend(rand_rows)
 
@@ -502,6 +730,8 @@ def main():
                     env, cond_args, pose, target, oracle, "oracle_grid",
                     write_rows=bool(script_args.write_candidates),
                 )
+                _annotate_training_loss(
+                    oracle_best, env, cond_args, pose, target, trainloss_init, trainloss_speed)
                 rendered.append(oracle_best)
                 candidate_rows.extend(oracle_rows)
 
@@ -521,8 +751,31 @@ def main():
                         "local_y": float(rendered[0].row.get("local_y", 0.0)),
                     },
                 )
+                _annotate_training_loss(
+                    diffopt, env, cond_args, pose, target, trainloss_init, trainloss_speed)
                 rendered.append(diffopt)
                 trace_rows.extend(trace)
+
+                if bool(script_args.trainloss_diffopt):
+                    trainloss_diffopt, trainloss_trace = _trainloss_diffopt_camera(
+                        env,
+                        cond_args,
+                        pose,
+                        target,
+                        trainloss_init,
+                        steps=trainloss_steps,
+                        lr=trainloss_lr,
+                        speed_mps=trainloss_speed,
+                        trace_prefix={
+                            "scene": scene,
+                            "slot": slot,
+                            "pose": pose.name,
+                            "local_x": float(rendered[0].row.get("local_x", 0.0)),
+                            "local_y": float(rendered[0].row.get("local_y", 0.0)),
+                        },
+                    )
+                    rendered.append(trainloss_diffopt)
+                    trace_rows.extend(trainloss_trace)
 
                 _add_reference_diffs([(r.row, r.maps) for r in rendered], cond_args.depth_min_valid)
                 detail_rows.extend(dict(r.row) for r in rendered)
@@ -537,6 +790,7 @@ def main():
     _write_csv(out_dir / "trajectory_camera_compare_detail.csv", detail_rows)
     _write_csv(out_dir / "trajectory_camera_compare_diffopt_trace.csv", trace_rows)
     _write_rankings(out_dir / "trajectory_camera_compare_rankings.csv", detail_rows)
+    _write_trainloss_rankings(out_dir / "trajectory_camera_compare_trainloss_rankings.csv", detail_rows)
     if script_args.write_candidates:
         _write_csv(out_dir / "trajectory_camera_compare_candidates.csv", candidate_rows)
     _write_report(out_dir / "report.md", detail_rows)

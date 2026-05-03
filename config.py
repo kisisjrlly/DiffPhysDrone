@@ -55,7 +55,8 @@ def build_parser():
     parser.add_argument('--simple_gate_half_y', type=float, default=0.20)
     parser.add_argument('--simple_gate_half_y_min', type=float, default=None)
     parser.add_argument('--simple_gate_half_y_max', type=float, default=None)
-    parser.add_argument('--simple_gate_half_z', type=float, default=0.26)
+    parser.add_argument('--simple_gate_half_z', type=float, default=0.26,
+                        help='Sensor-effect half height for the wall slit; not a physical collision gate height.')
     parser.add_argument('--simple_gate_z', type=float, default=1.50)
     parser.add_argument('--no_odom', default=False, action='store_true')
     parser.add_argument('--include_camera_state_in_obs', default=True, action=argparse.BooleanOptionalAction)
@@ -194,7 +195,7 @@ def validate_args(args):
     if args.simple_wall_x <= args.simple_start_x or args.simple_wall_x >= args.simple_goal_x:
         raise ValueError('--simple_wall_x must be between start and goal')
     if args.simple_gate_half_y <= 0 or args.simple_gate_half_z <= 0:
-        raise ValueError('--simple_gate_half_y/--simple_gate_half_z must be > 0')
+        raise ValueError('--simple_gate_half_y and --simple_gate_half_z must be > 0')
     if (args.simple_gate_half_y_min is None) != (args.simple_gate_half_y_max is None):
         raise ValueError('--simple_gate_half_y_min and --simple_gate_half_y_max must be set together')
     if args.simple_gate_half_y_min is None:
@@ -243,7 +244,7 @@ def print_runtime_mode(args):
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
     print(f"collision_clearance      : {args.collision_clearance} m")
     print(f"camera_control_mode       : {args.camera_control_mode}")
-    print(f"camera_output             : delta clipped by cam_delta_max={args.cam_delta_max}, return_rate={args.cam_return_rate}")
+    print('camera_output             : absolute target in [0,1], applied by EMA alpha=0.7')
     print('flight_head_input         : image_feature + flight_state(no camera_state) -> flight_gru')
     print('camera_head_input         : image_feature + camera_state + local_velocity/up -> camera_gru')
     print(
@@ -255,10 +256,10 @@ def print_runtime_mode(args):
     )
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print(
-        'environment               : single_wall_random_gate '
-        f'wall_x={args.simple_wall_x}, gate_half_y={args.simple_gate_half_y_min}'
+        'environment               : single_wall_slit '
+        f'wall_x={args.simple_wall_x}, slit_half_y={args.simple_gate_half_y_min}'
         f'..{args.simple_gate_half_y_max}, '
-        f'gate_half_z={args.simple_gate_half_z}'
+        f'sensor_effect_half_z={args.simple_gate_half_z}'
     )
     print('=' * 75)
 

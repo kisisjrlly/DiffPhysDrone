@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from utils import g_decay
 
 class Model(nn.Module):
-    def __init__(self, dim_obs=9, dim_action=4,
+    def __init__(self, dim_obs=9, dim_action=3,
                  include_camera_state_in_obs=False,
                  use_policy_intent=False, intent_dim=9,
                  depth_nn_width=16,
@@ -17,7 +17,7 @@ class Model(nn.Module):
         初始化无人机的策略网络模型 (Policy Network)。
         Args:
             dim_obs: 基础物理观测维度（通常是7维无里程计，或10维带里程计）。
-            dim_action: 飞行控制动作维度（默认6维：3维加速度 + 3维速度预测）。
+            dim_action: 飞行控制动作维度（当前主线为3维局部加速度）。
             include_camera_state_in_obs: 是否允许 camera head 使用当前相机状态。
                 flight head 始终不直接接收相机状态，避免 camera 参数成为动作捷径。
         """
@@ -250,7 +250,7 @@ class Model(nn.Module):
             cam_hx: camera GRU 的隐藏状态（只建模成像/运动状态历史）。
         Returns:
             flight_act: 飞行控制动作。
-            cam_params: 相机控制参数（增量或绝对值）。
+            cam_params: 相机控制参数（absolute target in [0, 1]）。
             hx/cam_hx: 更新后的 flight/camera GRU 隐藏状态。
         """
         # ==========================

@@ -24,6 +24,21 @@ def sensor_validity_map(env):
     return aux.get('valid_prob_map', None)
 
 
+def detach_sensor_train_aux(env):
+    """Detach cached differentiable sensor maps for sensor_grad_mode=detached."""
+    if env is None or not hasattr(env, 'get_last_diff_depth_train_aux'):
+        return
+    aux = env.get_last_diff_depth_train_aux()
+    if not aux:
+        return
+    detached = {
+        key: value.detach() if isinstance(value, torch.Tensor) else value
+        for key, value in aux.items()
+    }
+    if hasattr(env, '_store_last_diff_depth_train_aux'):
+        env._store_last_diff_depth_train_aux(detached)
+
+
 def compute_depth_fill_health(env, depth_obs, min_valid_depth: float = 0.3,
                               patch_rows: int = 6, patch_cols: int = 8,
                               cvar_frac: float = 0.25):
@@ -53,6 +68,7 @@ def render_sensors(env, ctl_dt, power, exposure, gain, differentiable=True):
     if not differentiable:
         depth_obs = depth_obs.detach()
         quality = quality.detach() if isinstance(quality, torch.Tensor) else quality
+        detach_sensor_train_aux(env)
     return depth_obs, quality
 
 
@@ -107,10 +123,8 @@ def compute_target_velocity(target_v_raw, env):
 def decode_action_direct(raw_act, R, env, B, max_acc_cmd):
     _ = env, B
     act_local = raw_act[..., :3].clamp(-float(max_acc_cmd), float(max_acc_cmd))
-    v_pred_local = raw_act[..., 3:6]
     act_world = torch.squeeze(act_local[:, None] @ R.transpose(1, 2), 1)
-    v_pred = torch.squeeze(v_pred_local[:, None] @ R.transpose(1, 2), 1)
-    return act_world, v_pred
+    return act_world
 
 
 def init_camera_params(env, B, device):
@@ -133,8 +147,8 @@ def init_camera_params(env, B, device):
     base = float(getattr(env, 'cam_power_baseline', 0.5))
     return (
         torch.full((B,), base, device=device),
-        torch.full((B,), 0.35, device=device),
-        torch.full((B,), 0.25, device=device),
+        torch.full((B,), 0.5, device=device),
+        torch.full((B,), 0.5, device=device),
     )
 
 

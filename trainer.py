@@ -262,7 +262,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         cam_params = cam_params.float()
 
         render_power, render_exposure, render_gain = power, exposure, gain
-        act, v_pred = decode_action_direct(act_raw, R, env, B, args.max_acc_cmd)
+        act = decode_action_direct(act_raw, R, env, B, args.max_acc_cmd)
         power, exposure, gain, cam_hist_entry = update_camera_params(cam_params, power, exposure, gain, env)
         act_buffer.append(act)
 

@@ -177,7 +177,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 camera_state=camera_state,
                 camera_motion_state=camera_motion_state,
             )
-        act_final, _v_pred = decode_action_direct(act_raw.float(), R, env, B, args.max_acc_cmd)
+        act_final = decode_action_direct(act_raw.float(), R, env, B, args.max_acc_cmd)
         render_power, render_exposure, render_gain = power, exposure, gain
         power, exposure, gain, _ = update_camera_params(cam_params.float(), power, exposure, gain, env)
         act_buffer.append(act_final)
@@ -322,7 +322,7 @@ def main():
     obs_dim = 7 if args.no_odom else 10
     model = Model(
         obs_dim,
-        6,
+        3,
         include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=False,
         depth_nn_width=args.depth_nn_width,
@@ -333,24 +333,7 @@ def main():
     ).to(device)
     print(f'[eval] loading checkpoint: {args.resume}')
     state_dict = torch.load(args.resume, map_location=device)
-    model_state = model.state_dict()
-    skipped_shape = []
-    filtered_state = {}
-    for key, value in state_dict.items():
-        if key in model_state and tuple(model_state[key].shape) != tuple(value.shape):
-            skipped_shape.append((key, tuple(value.shape), tuple(model_state[key].shape)))
-            continue
-        filtered_state[key] = value
-    state_dict = filtered_state
-    missing, unexpected = model.load_state_dict(state_dict, strict=False)
-    if skipped_shape:
-        print('[eval][warn] skipped shape-mismatched keys:')
-        for key, old_shape, new_shape in skipped_shape:
-            print(f'  {key}: checkpoint{old_shape} -> model{new_shape}')
-    if missing:
-        print('[eval][warn] missing keys:', missing)
-    if unexpected:
-        print('[eval][warn] unexpected keys:', unexpected)
+    model.load_state_dict(state_dict)
     model.eval()
 
     vis = RerunVis(
