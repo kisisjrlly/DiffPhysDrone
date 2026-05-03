@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generate a supervised camera-teacher dataset from a fixed flight policy.
+"""Generate a supervised camera-teacher dataset from a frozen flight policy.
 
 Stage usage:
 1. Train a fixed-camera flight policy.
-2. Run this script with that checkpoint.  The flight policy is used for actions,
-   while p/e/g labels are produced by local differentiable camera optimization.
+2. Run this script with that checkpoint.  The flight policy is used for actions
+   on the states it actually visits, while p/e/g labels are produced by local
+   differentiable camera optimization.
 3. Train only the camera head with tools/pretrain_camera_head.py.
 """
 
@@ -195,6 +196,16 @@ def _parse_script_args():
     parser.add_argument("--teacher_every", type=int, default=1)
     parser.add_argument("--teacher_camera_ema", default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument("--teacher_ema_alpha", type=float, default=0.7)
+    parser.add_argument(
+        "--rollout_camera_mode",
+        default="fixed",
+        choices=["fixed", "fixed_random_static"],
+        help=(
+            "Camera mode used while collecting closed-loop flight states.  Use "
+            "fixed_random_static with --no-teacher_camera_ema to collect states "
+            "from the randfix flight-policy distribution."
+        ),
+    )
     parser.add_argument("--coef_nominal_when_healthy", type=float, default=0.5)
     parser.add_argument("--nominal_fill_margin", type=float, default=0.12)
     parser.add_argument("--seed", type=int, default=42)
@@ -216,7 +227,7 @@ def main():
 
     device = torch.device(script_args.device)
     env_args = copy.deepcopy(args)
-    env_args.camera_control_mode = "fixed"
+    env_args.camera_control_mode = str(script_args.rollout_camera_mode)
     env = build_env(args.batch_size, env_args, device, eval_mode=False)
     model = _make_model(args, device)
     state = torch.load(script_args.checkpoint, map_location=device)
@@ -341,6 +352,7 @@ def main():
             "teacher_lr": float(script_args.teacher_lr),
             "teacher_camera_ema": bool(script_args.teacher_camera_ema),
             "teacher_ema_alpha": float(script_args.teacher_ema_alpha),
+            "rollout_camera_mode": str(script_args.rollout_camera_mode),
             "coef_nominal_when_healthy": float(script_args.coef_nominal_when_healthy),
             "nominal_fill_margin": float(script_args.nominal_fill_margin),
         },
