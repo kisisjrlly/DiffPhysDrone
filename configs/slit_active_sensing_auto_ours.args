@@ -20,7 +20,7 @@
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
---scenarios glare specular dark
+--scenarios specular
 --random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
