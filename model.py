@@ -295,7 +295,7 @@ class Model(nn.Module):
         cam_hx = self.cam_gru(cam_in, cam_hx)
         cam_hx = self.cam_hx_norm(cam_hx)
         cam_raw = self.fc_cam(self.act(cam_hx))
-        cam_params = torch.tanh(cam_raw)  # normalized camera delta in [-1, 1]
+        cam_params = torch.sigmoid(cam_raw)  # absolute camera target in [0, 1]
         if return_intent and self.use_policy_intent:
             intent_raw = self.fc_intent(self.act(hx))
             return act, cam_params, hx, intent_raw, cam_hx

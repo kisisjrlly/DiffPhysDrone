@@ -101,6 +101,13 @@ class Env:
         self.scene_name_to_id = {name: idx for idx, name in enumerate(self.supported_scenarios)}
         self.current_scene_name = self.scenarios[0]
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
+        self.current_scene_names = [self.current_scene_name] * self.batch_size
+        self.current_scene_ids = torch.full(
+            (self.batch_size,),
+            int(self.current_scene_id),
+            device=self.device,
+            dtype=torch.long,
+        )
         self.sun_glare_eval_slot = self._canonical_slot(sun_glare_eval_slot)
         self.random_rotation = bool(random_rotation)
         self.random_rotation_max_rad = max(float(random_rotation_max_deg), 0.0) * math.pi / 180.0
@@ -162,13 +169,26 @@ class Env:
             raise ValueError(f'unsupported slot {slot!r}')
         return name
 
+    def _canonical_scene_name(self, scene_name):
+        name = str(scene_name).strip().lower().replace('-', '_')
+        if name not in self.supported_scenarios:
+            raise ValueError(f'unsupported scene {scene_name!r}')
+        return name
+
     def _choose_scene_name(self, scene_name=None):
         if scene_name is not None:
-            name = str(scene_name).strip().lower().replace('-', '_')
-            if name not in self.supported_scenarios:
-                raise ValueError(f'unsupported scene {scene_name!r}')
-            return name
+            return self._canonical_scene_name(scene_name)
         return random.choice(self.scenarios)
+
+    def _choose_scene_names(self, B, scene_name=None):
+        if scene_name is not None:
+            name = self._canonical_scene_name(scene_name)
+            return [name] * int(B)
+        if self.eval_mode or len(self.scenarios) <= 1:
+            return [self._choose_scene_name(None)] * int(B)
+        names = [self.scenarios[i % len(self.scenarios)] for i in range(int(B))]
+        random.shuffle(names)
+        return names
 
     def _choose_slots(self, B):
         if self.eval_mode and self.sun_glare_eval_slot is not None:
@@ -290,10 +310,22 @@ class Env:
         self.current_scene_name = str(scene_name)
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
 
+    def _set_scene_names(self, scene_names):
+        names = [self._canonical_scene_name(name) for name in scene_names]
+        ids = [int(self.scene_name_to_id[name]) for name in names]
+        self.current_scene_names = names
+        self.current_scene_ids = torch.tensor(ids, device=self.device, dtype=torch.long)
+        if all(name == names[0] for name in names):
+            self.current_scene_name = names[0]
+            self.current_scene_id = ids[0]
+        else:
+            self.current_scene_name = 'mixed'
+            self.current_scene_id = -1
+
     def reset(self, scene_name=None):
         B, device = self.batch_size, self.device
-        scene_name = self._choose_scene_name(scene_name)
-        self._set_scene_name(scene_name)
+        scene_names = self._choose_scene_names(B, scene_name=scene_name)
+        self._set_scene_names(scene_names)
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
 
@@ -330,7 +362,7 @@ class Env:
         start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
         goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
         effects = self._merge_batch_effects([
-            self._scene_effects(scene_name, slots[i], float(gap_y[i]), float(gap_half_y[i]))
+            self._scene_effects(scene_names[i], slots[i], float(gap_y[i]), float(gap_half_y[i]))
             for i in range(B)
         ])
         local_hazard = effects['hazard_center'].to(device=device, dtype=torch.float32)
@@ -406,7 +438,13 @@ class Env:
 
     def export_last_diff_depth_debug(self, env_idx=0):
         debug = self.last_diff_depth_debug or {}
-        out = {'scene_name': str(debug.get('scene_name', self.current_scene_name)), 'images': {}, 'scalars': {}}
+        idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        scene_names = debug.get('scene_names', None)
+        if isinstance(scene_names, list) and len(scene_names) > idx:
+            scene_name = scene_names[idx]
+        else:
+            scene_name = debug.get('scene_name', self.current_scene_name)
+        out = {'scene_name': str(scene_name), 'images': {}, 'scalars': {}}
         for key in ('raw_depth_map', 'quality_map', 'valid_prob_map', 'hard_valid_map', 'invalid_mask', 'scene_effect_map', 'scene_mask'):
             value = debug.get(key, None)
             if torch.is_tensor(value) and value.ndim >= 3 and value.shape[0] > 0:
@@ -453,9 +491,22 @@ class Env:
         pos = self.p.detach().to(depth.device, depth.dtype)
         fov_x = torch.as_tensor(float(self._fov_x_half_tan), device=depth.device, dtype=depth.dtype)
         fov_y = fov_x * float(H) / float(max(W, 1))
-        region_kind = str(effects.get('hazard_region_kind', 'box'))
+        region_kind = effects.get('hazard_region_kind', 'box')
+        if isinstance(region_kind, list) and len(region_kind) == B:
+            vertical_selector = torch.tensor(
+                [str(kind) == 'vertical_edges' for kind in region_kind],
+                device=depth.device,
+                dtype=torch.bool,
+            )
+        else:
+            vertical_selector = torch.full(
+                (B,),
+                str(region_kind) == 'vertical_edges',
+                device=depth.device,
+                dtype=torch.bool,
+            )
 
-        if region_kind == 'vertical_edges':
+        def _vertical_edges_mask():
             gap_half_w = _batch_scalar(effects.get('geometry_gap_half_w'), self.simple_gate_half_y)
             edge_half_y = _batch_scalar(effects.get('hazard_edge_half_y'), 0.055)
             edge_half_z = half_z
@@ -480,22 +531,31 @@ class Env:
             mask_z = torch.sigmoid((sz - (zz_e - cz).abs()) / soft)
             return (mask_y * mask_z * front_gate).amax(dim=1).clamp(0.0, 1.0)
 
-        yy = yy.unsqueeze(0)
-        zz = zz.unsqueeze(0)
-        rel = center.detach() - pos
-        cam = torch.bmm(R_cam_world.transpose(1, 2), rel[:, :, None])[:, :, 0]
-        x = cam[:, 0]
-        x_safe = x.clamp_min(0.20)
+        def _opening_mask():
+            yy_o = yy.unsqueeze(0)
+            zz_o = zz.unsqueeze(0)
+            rel = center.detach() - pos
+            cam = torch.bmm(R_cam_world.transpose(1, 2), rel[:, :, None])[:, :, 0]
+            x = cam[:, 0]
+            x_safe = x.clamp_min(0.20)
 
-        cy = ((-cam[:, 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, None, None]
-        cz = ((-cam[:, 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, None, None]
-        sy = (half_y.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
-        sz = (half_z.to(depth.device, depth.dtype) / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
-        soft = (softness.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.025, 0.18)[:, None, None]
-        front_gate = torch.sigmoid((x - 0.08) / 0.04)[:, None, None]
-        mask_y = torch.sigmoid((sy - (yy - cy).abs()) / soft)
-        mask_z = torch.sigmoid((sz - (zz - cz).abs()) / soft)
-        return (mask_y * mask_z * front_gate).clamp(0.0, 1.0)
+            cy = ((-cam[:, 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, None, None]
+            cz = ((-cam[:, 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, None, None]
+            sy = (half_y.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
+            sz = (half_z.to(depth.device, depth.dtype) / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
+            soft = (softness.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.025, 0.18)[:, None, None]
+            front_gate = torch.sigmoid((x - 0.08) / 0.04)[:, None, None]
+            mask_y = torch.sigmoid((sy - (yy_o - cy).abs()) / soft)
+            mask_z = torch.sigmoid((sz - (zz_o - cz).abs()) / soft)
+            return (mask_y * mask_z * front_gate).clamp(0.0, 1.0)
+
+        if bool(vertical_selector.all().item()):
+            return _vertical_edges_mask()
+        if not bool(vertical_selector.any().item()):
+            return _opening_mask()
+        vertical_mask = _vertical_edges_mask()
+        opening_mask = _opening_mask()
+        return torch.where(vertical_selector[:, None, None], vertical_mask, opening_mask)
 
     def _sensor_reference(self, depth, power, exposure, gain, max_range=None):
         max_range = float(self.depth_max_range if max_range is None else max_range)
@@ -524,62 +584,91 @@ class Env:
         washout = ambient_ir * exposure_t / (active_signal + 0.20)
         noise_proxy = float(self.cam_sem.shot_noise_base) * (0.45 + 0.18 * gain_scale) / (signal + 0.08)
         snr = signal / (0.18 + 0.55 * ambient_ir + 0.38 * noise_proxy + 0.45 * motion * (0.20 + edge))
-        quality = torch.sigmoid(
+        quality_base = torch.sigmoid(
             2.15 * snr
             - 0.95 * washout
             - 0.85 * edge
             - 1.45 * torch.relu(dist - 0.92)
         )
-        effect = torch.zeros_like(raw)
 
-        if regime == 0.0:  # glare: projector power helps only before exposure saturation.
-            overexp = torch.sigmoid((e01 - 0.22) / 0.045)
-            gain_sat = torch.sigmoid((g01 - 0.28) / 0.055)
-            gain_exposure_sat = torch.sigmoid(((g01 + 0.85 * e01) - 0.52) / 0.070)
-            rescue = torch.sigmoid((p - 0.50) / 0.09)
-            rescue_window = torch.sigmoid((0.30 - e01) / 0.06)
-            joint_sat = torch.sigmoid((p - 0.65) / 0.08) * torch.sigmoid((e01 - 0.32) / 0.06)
-            under_power = torch.sigmoid((0.45 - p) / 0.08)
-            penalty = mask * (
-                0.88 * overexp
-                + 0.28 * joint_sat
-                + 0.42 * under_power * rescue_window
-                + 0.72 * gain_sat
-                + 0.44 * gain_exposure_sat
+        overexp = torch.sigmoid((e01 - 0.22) / 0.045)
+        gain_sat = torch.sigmoid((g01 - 0.28) / 0.055)
+        gain_exposure_sat = torch.sigmoid(((g01 + 0.85 * e01) - 0.52) / 0.070)
+        rescue = torch.sigmoid((p - 0.50) / 0.09)
+        rescue_window = torch.sigmoid((0.30 - e01) / 0.06)
+        joint_sat = torch.sigmoid((p - 0.65) / 0.08) * torch.sigmoid((e01 - 0.32) / 0.06)
+        under_power = torch.sigmoid((0.45 - p) / 0.08)
+        glare_penalty = mask * (
+            0.88 * overexp
+            + 0.28 * joint_sat
+            + 0.42 * under_power * rescue_window
+            + 0.72 * gain_sat
+            + 0.44 * gain_exposure_sat
+        )
+        low_gain_window = torch.sigmoid((0.26 - g01) / 0.06)
+        glare_bonus = mask * rescue * rescue_window * low_gain_window * 0.34
+        quality_glare = quality_base - glare_penalty + glare_bonus
+
+        # Specular edge material blooms under active IR.  Use unsaturated
+        # quadratic terms so high power keeps a clear negative gradient even
+        # when the binary valid map is already poor near the wall.
+        power_quad = p.square() * (0.78 + 0.22 * torch.sigmoid((e01 - 0.18) / 0.08))
+        power_knee = torch.sigmoid((p - 0.22) / 0.060) * (0.35 + 0.65 * p)
+        exposure_quad = e01.square() * (0.32 + 0.68 * torch.sigmoid((p - 0.18) / 0.08))
+        exposure_bloom = torch.sigmoid((e01 - 0.42) / 0.075) * (0.45 + 0.55 * torch.sigmoid((g01 - 0.42) / 0.08))
+        gain_quad = g01.square() * (0.30 + 0.70 * torch.sigmoid((e01 - 0.22) / 0.07))
+        gain_bloom = torch.sigmoid((g01 - 0.32) / 0.060) * (0.40 + 0.60 * torch.sigmoid((e01 - 0.24) / 0.07))
+        spec_safe = (
+            torch.sigmoid((0.34 - p) / 0.060)
+            * torch.sigmoid((0.42 - e01) / 0.08)
+            * torch.sigmoid((0.32 - g01) / 0.07)
+        )
+        spec_very_safe = (
+            torch.sigmoid((0.20 - p) / 0.050)
+            * torch.sigmoid((0.26 - e01) / 0.060)
+            * torch.sigmoid((0.18 - g01) / 0.060)
+        )
+        spec_penalty = mask * (
+            1.25 * power_quad
+            + 0.75 * power_knee
+            + 0.50 * exposure_quad
+            + 0.40 * exposure_bloom
+            + 0.50 * gain_quad
+            + 0.38 * gain_bloom
+        )
+        spec_bonus = mask * (0.42 * spec_safe + 0.22 * spec_very_safe)
+        quality_specular = quality_base - spec_penalty + spec_bonus
+
+        exposure_lift = torch.sigmoid((e01 - 0.62) / 0.070)
+        gain_lift = torch.sigmoid((g01 - 0.52) / 0.075)
+        projector_lift = torch.sigmoid((p - 0.45) / 0.10)
+        dark_rescue = (
+            exposure_lift * (
+                0.10
+                + 0.70 * gain_lift
+                + 0.20 * projector_lift * gain_lift
             )
-            low_gain_window = torch.sigmoid((0.26 - g01) / 0.06)
-            bonus = mask * rescue * rescue_window * low_gain_window * 0.34
-            quality = quality - penalty + bonus
-            effect = penalty
-        elif regime == 1.0:  # specular: high projector power washes out reflective gate material.
-            power_bloom = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
-            exposure_bloom = torch.sigmoid((e01 - 0.48) / 0.075) * (0.60 + 0.40 * torch.sigmoid((g01 - 0.50) / 0.08))
-            gain_bloom = torch.sigmoid((g01 - 0.36) / 0.060) * (0.55 + 0.45 * torch.sigmoid((e01 - 0.28) / 0.07))
-            safe = (
-                torch.sigmoid((0.42 - p) / 0.070)
-                * torch.sigmoid((0.52 - e01) / 0.08)
-                * torch.sigmoid((0.42 - g01) / 0.07)
-            )
-            very_safe = torch.sigmoid((0.24 - p) / 0.055) * torch.sigmoid((0.30 - e01) / 0.07)
-            penalty = mask * (1.06 * power_bloom + 0.58 * exposure_bloom + 0.74 * gain_bloom)
-            bonus = mask * (0.38 * safe + 0.18 * very_safe)
-            quality = quality - penalty + bonus
-            effect = penalty
-        else:  # dark: low-reflectance frame needs exposure plus gain; power alone should not rescue it.
-            exposure_lift = torch.sigmoid((e01 - 0.62) / 0.070)
-            gain_lift = torch.sigmoid((g01 - 0.52) / 0.075)
-            projector_lift = torch.sigmoid((p - 0.45) / 0.10)
-            rescue = (
-                exposure_lift * (
-                    0.10
-                    + 0.70 * gain_lift
-                    + 0.20 * projector_lift * gain_lift
-                )
-            ).clamp(max=1.0)
-            need = mask * 0.92
-            penalty = need * (1.0 - rescue)
-            quality = quality - penalty + mask * rescue * 0.24
-            effect = penalty
+        ).clamp(max=1.0)
+        dark_need = mask * 0.92
+        dark_penalty = dark_need * (1.0 - dark_rescue)
+        quality_dark = quality_base - dark_penalty + mask * dark_rescue * 0.24
+
+        scene_ids = getattr(self, 'current_scene_ids', None)
+        if scene_ids is None:
+            scene_ids = torch.full((raw.shape[0],), int(self.current_scene_id), device=raw.device, dtype=torch.long)
+        else:
+            scene_ids = scene_ids.to(device=raw.device, dtype=torch.long)
+        sid = scene_ids[:, None, None]
+        quality = torch.where(
+            sid == 0,
+            quality_glare,
+            torch.where(sid == 1, quality_specular, quality_dark),
+        )
+        effect = torch.where(
+            sid == 0,
+            glare_penalty,
+            torch.where(sid == 1, spec_penalty, dark_penalty),
+        )
 
         quality = quality.clamp(0.0, 1.0)
         quality_pre_valid = quality
@@ -625,14 +714,66 @@ class Env:
         min_valid = float(self.depth_min_valid)
         raw = depth.clamp(min_valid, max_range)
         mask = self._scene_mask(raw)
-        regime_id = int(self.current_scene_id)
         speed = self.v.norm(2, -1).detach().to(raw.dtype)
-        depth_obs, quality_obs, quality, valid_prob, hard_valid, effect = active_sensing_sensor(
-            raw, mask, power, exposure, gain, speed,
-            regime_id, min_valid, max_range,
-            self.cam_sem.exposure_t_min, self.cam_sem.exposure_t_span,
-            self.cam_sem.iso_gain_base, self.cam_sem.iso_gain_scale,
-            self.cam_sem.iso_gain_gamma, self.cam_sem.shot_noise_base)
+        scene_ids = getattr(self, 'current_scene_ids', None)
+        if scene_ids is None:
+            scene_ids = torch.full((raw.shape[0],), int(self.current_scene_id), device=raw.device, dtype=torch.long)
+        else:
+            scene_ids = scene_ids.to(device=raw.device, dtype=torch.long)
+
+        def _sensor_call(idx, regime_id):
+            return active_sensing_sensor(
+                raw[idx].contiguous(),
+                mask[idx].contiguous(),
+                power[idx].contiguous(),
+                exposure[idx].contiguous(),
+                gain[idx].contiguous(),
+                speed[idx].contiguous(),
+                int(regime_id),
+                min_valid,
+                max_range,
+                self.cam_sem.exposure_t_min,
+                self.cam_sem.exposure_t_span,
+                self.cam_sem.iso_gain_base,
+                self.cam_sem.iso_gain_scale,
+                self.cam_sem.iso_gain_gamma,
+                self.cam_sem.shot_noise_base,
+            )
+
+        unique_ids = torch.unique(scene_ids, sorted=True)
+        if int(unique_ids.numel()) == 1:
+            depth_obs, quality_obs, quality, valid_prob, hard_valid, effect = _sensor_call(
+                torch.arange(raw.shape[0], device=raw.device),
+                int(unique_ids[0].item()),
+            )
+        else:
+            depth_chunks = []
+            quality_obs_chunks = []
+            quality_chunks = []
+            valid_prob_chunks = []
+            hard_valid_chunks = []
+            effect_chunks = []
+            order_chunks = []
+            for regime_id_t in unique_ids:
+                idx = torch.nonzero(scene_ids == regime_id_t, as_tuple=False).flatten()
+                if idx.numel() == 0:
+                    continue
+                outs = _sensor_call(idx, int(regime_id_t.item()))
+                depth_chunks.append(outs[0])
+                quality_obs_chunks.append(outs[1])
+                quality_chunks.append(outs[2])
+                valid_prob_chunks.append(outs[3])
+                hard_valid_chunks.append(outs[4])
+                effect_chunks.append(outs[5])
+                order_chunks.append(idx)
+            order = torch.cat(order_chunks, dim=0)
+            sort_idx = torch.argsort(order)
+            depth_obs = torch.cat(depth_chunks, dim=0)[sort_idx]
+            quality_obs = torch.cat(quality_obs_chunks, dim=0)[sort_idx]
+            quality = torch.cat(quality_chunks, dim=0)[sort_idx]
+            valid_prob = torch.cat(valid_prob_chunks, dim=0)[sort_idx]
+            hard_valid = torch.cat(hard_valid_chunks, dim=0)[sort_idx]
+            effect = torch.cat(effect_chunks, dim=0)[sort_idx]
         valid_st = hard_valid.detach() - valid_prob.detach() + valid_prob
         invalid = (1.0 - valid_st).clamp(0.0, 1.0)
         mask_mass = mask.sum(dim=(-2, -1)).clamp_min(1e-6)
@@ -652,6 +793,7 @@ class Env:
         })
         self._store_last_diff_depth_debug({
             'scene_name': self.current_scene_name,
+            'scene_names': list(getattr(self, 'current_scene_names', [self.current_scene_name] * raw.shape[0])),
             'raw_depth_map': raw,
             'quality_pre_valid': quality,
             'quality_map': quality_obs,

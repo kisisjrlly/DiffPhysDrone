@@ -105,13 +105,13 @@ def _plot_xyz(seq, title, labels=('x', 'y', 'z'), extra=None, ylabel=None, subti
 def _episode_history_metadata(env, env_idx):
     if env is None:
         return '', {}
-    scene_name = str(getattr(env, 'current_scene_name', 'unknown'))
-    scene_id = float(getattr(env, 'current_scene_id', -1))
     fx = {}
     try:
         fx = env.get_scene_effects_for_env(env_idx)
     except Exception:
         fx = {}
+    scene_name = str(fx.get('sensor_regime_name', getattr(env, 'current_scene_name', 'unknown')))
+    scene_id = float(fx.get('sensor_regime_id', getattr(env, 'current_scene_id', -1)))
     slot = str(fx.get('decision_open_slot_name', 'unknown'))
     gate_y = fx.get('decision_open_slot_y', None)
     gate_half_y = fx.get('geometry_gap_half_w', None)
@@ -154,18 +154,16 @@ def _log_episode_history_plots(rollout, args, iter_idx, env=None):
     """
     p_hist = _stack_history_for_plot(rollout.get('p_history'))
     v_hist = _stack_history_for_plot(rollout.get('v_history'))
-    a_hist = _stack_history_for_plot(rollout.get('act_history'))
     power_hist = _stack_history_for_plot(rollout.get('power_history'))
     exposure_hist = _stack_history_for_plot(rollout.get('exposure_history'))
     gain_hist = _stack_history_for_plot(rollout.get('gain_history'))
-    if p_hist is None or v_hist is None or a_hist is None:
+    if p_hist is None or v_hist is None:
         return
 
     B = int(p_hist.shape[1])
     j = int(min(max(getattr(args, 'vis_env_idx', 0), 0), B - 1))
     ph = p_hist[:, j].detach().cpu()
     vh = v_hist[:, j].detach().cpu()
-    ah = a_hist[:, j].detach().cpu()
     local_ph = _to_local_position_history(ph, env, j)
     meta_title, meta_scalars = _episode_history_metadata(env, j)
 
@@ -183,15 +181,10 @@ def _log_episode_history_plots(rollout, args, iter_idx, env=None):
             figs.append(fig_p_local)
         fig_v = _plot_xyz(vh, 'episode velocity world xyz', extra=[('speed', speed)], ylabel='m/s', subtitle=meta_title)
         figs.append(fig_v)
-        acc_norm = ah.norm(2, -1)
-        fig_a = _plot_xyz(ah, 'episode acceleration command', extra=[('norm', acc_norm)], ylabel='m/s^2', subtitle=meta_title)
-        figs.append(fig_a)
 
         log_payload = {
             'episode_history/position_xyz': wandb.Image(fig_p, caption=meta_title),
-            'episode_history/position_xyz_world': wandb.Image(fig_p, caption=meta_title),
-            'episode_history/velocity_xyz': wandb.Image(fig_v, caption=meta_title),
-            'episode_history/a_history': wandb.Image(fig_a, caption=meta_title),
+            'episode_history/v_history': wandb.Image(fig_v, caption=meta_title),
         }
         if fig_p_local is not None:
             log_payload['episode_history/position_xyz_local'] = wandb.Image(fig_p_local, caption=meta_title)
@@ -376,6 +369,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         if should_vis:
             vis.begin_iter(i)
             j = int(min(max(args.vis_env_idx, 0), B - 1))
+            scene_effects = env_train.get_scene_effects_for_env(j)
             vis.log_environment(
                 phase='student',
                 balls=env_train.get_world_balls_for_env(j),
@@ -384,8 +378,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 cyl_h=env_train.get_world_cyl_h_for_env(j),
                 start=env_train.p[j].detach().cpu().numpy(),
                 target=env_train.p_target[j].detach().cpu().numpy(),
-                scene_name=getattr(env_train, 'current_scene_name', None),
-                scene_effects=env_train.get_scene_effects_for_env(j),
+                scene_name=scene_effects.get('sensor_regime_name', getattr(env_train, 'current_scene_name', None)),
+                scene_effects=scene_effects,
                 scene_yaw=env_train.get_scene_yaw_for_env(j),
             )
 

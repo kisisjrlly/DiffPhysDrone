@@ -42,6 +42,9 @@ def safe_cos(a: torch.Tensor, b: torch.Tensor, eps: float = 1e-8) -> float:
 
 
 def setup_import_paths(repo_root: str) -> None:
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
     src_path = os.path.join(repo_root, "src")
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
@@ -60,6 +63,8 @@ def run_one(
     depth_w: int,
     depth_h: int,
     loss_mode: str,
+    scene: str,
+    peg: Tuple[float, float, float],
 ) -> GradPack:
     seed_all(seed)
     setup_import_paths(repo_root)
@@ -75,14 +80,32 @@ def run_one(
         grad_decay=0.4,
         device=device,
         diff_sensor_impl={"diff_depth": impl},
+        scenarios=[scene],
+        sun_glare_eval_slot="left",
+        random_rotation=False,
     )
+    env.reset(scene_name=scene)
 
-    power = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
-    exposure = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
-    gain = torch.full((batch_size,), 0.5, device=device, requires_grad=True)
+    power = torch.full((batch_size,), float(peg[0]), device=device, requires_grad=True)
+    exposure = torch.full((batch_size,), float(peg[1]), device=device, requires_grad=True)
+    gain = torch.full((batch_size,), float(peg[2]), device=device, requires_grad=True)
 
-    depth, _ = env.render_diff_depth(power, exposure, gain)
-    loss = depth.mean()
+    depth, quality = env.render_diff_depth(power, exposure, gain)
+    aux = env.get_last_diff_depth_train_aux()
+    valid = aux.get("valid_prob_map", None)
+    quality_pre = aux.get("quality_pre_valid", None)
+    if loss_mode == "depth":
+        loss = depth.mean()
+    elif loss_mode == "quality_obs":
+        loss = quality.mean()
+    elif loss_mode == "quality_pre":
+        loss = quality_pre.mean()
+    elif loss_mode == "valid":
+        loss = valid.mean()
+    elif loss_mode == "combined":
+        loss = depth.mean() + quality.mean()
+    else:
+        raise ValueError(f"unsupported loss_mode {loss_mode!r}")
 
     loss.backward()
 
@@ -102,12 +125,20 @@ def main() -> None:
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--depth_width", type=int, default=64)
     parser.add_argument("--depth_height", type=int, default=48)
-    parser.add_argument("--loss_mode", type=str, default="depth", choices=["depth"],
-                        help="当前仅比较深度主输出的梯度一致性")
+    parser.add_argument("--loss_mode", type=str, default="combined",
+                        choices=["depth", "quality_obs", "quality_pre", "valid", "combined"])
+    parser.add_argument("--scene", type=str, default="specular",
+                        choices=["glare", "specular", "dark"])
+    parser.add_argument("--camera", type=str, default="0.50,0.35,0.25",
+                        help="Camera p,e,g triplet used for the comparison.")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
         raise RuntimeError("This script requires CUDA.")
+
+    peg = tuple(float(x.strip()) for x in args.camera.split(",") if x.strip())
+    if len(peg) != 3:
+        raise ValueError("--camera must be a p,e,g triplet")
 
     print("[info] running python reference...")
     py = run_one(
@@ -118,6 +149,8 @@ def main() -> None:
         depth_w=args.depth_width,
         depth_h=args.depth_height,
         loss_mode=args.loss_mode,
+        scene=args.scene,
+        peg=peg,
     )
 
     print("[info] running cuda implementation...")
@@ -129,10 +162,14 @@ def main() -> None:
         depth_w=args.depth_width,
         depth_h=args.depth_height,
         loss_mode=args.loss_mode,
+        scene=args.scene,
+        peg=peg,
     )
 
     print("\n=== diff_depth grad compare ===")
     print(f"loss_mode      : {args.loss_mode}")
+    print(f"scene          : {args.scene}")
+    print(f"camera p/e/g   : {peg[0]:.4f}/{peg[1]:.4f}/{peg[2]:.4f}")
     print(f"seed           : {args.seed}")
     print(f"loss_python    : {py.loss:.8f}")
     print(f"loss_cuda      : {cu.loss:.8f}")

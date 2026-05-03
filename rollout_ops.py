@@ -139,6 +139,9 @@ def init_camera_params(env, B, device):
 
 
 def update_camera_params(cam_params, power, exposure, gain, env):
+    if cam_params is None:
+        raise ValueError('diff_depth camera path requires cam_params')
+
     mode = getattr(env, 'camera_control_mode', 'learned')
     if mode == 'fixed':
         p = torch.full_like(power, float(env.fixed_camera_power))
@@ -149,20 +152,16 @@ def update_camera_params(cam_params, power, exposure, gain, env):
         hist = torch.stack([power.detach(), exposure.detach(), gain.detach()], -1)
         return power.detach(), exposure.detach(), gain.detach(), hist
 
-    step = float(getattr(env, 'cam_delta_max', 0.02))
-    ret = float(getattr(env, 'cam_return_rate', 0.05))
-    delta = cam_params.clamp(-1.0, 1.0) * step
-    p_delta, e_delta, g_delta = delta.unbind(-1)
-    p_center = torch.full_like(power, float(getattr(env, 'fixed_camera_power', 0.5)))
-    e_center = torch.full_like(exposure, float(getattr(env, 'fixed_camera_exposure', 0.5)))
-    g_center = torch.full_like(gain, float(getattr(env, 'fixed_camera_gain', 0.5)))
-    power = power + p_delta + ret * (p_center - power.detach())
-    exposure = exposure + e_delta + ret * (e_center - exposure.detach())
-    gain = gain + g_delta + ret * (g_center - gain.detach())
-    power = power.clamp(0.08, 0.95)
-    exposure = exposure.clamp(0.08, 0.95)
-    gain = gain.clamp(0.02, 0.95)
-    return power, exposure, gain, torch.stack([power, exposure, gain], -1)
+    alpha = 0.7
+    p_new, e_new, g_new = cam_params.unbind(-1)
+    p_new = p_new.clamp(0.0, 1.0)
+    e_new = e_new.clamp(0.0, 1.0)
+    g_new = g_new.clamp(0.0, 1.0)
+
+    power = alpha * power.detach() + (1.0 - alpha) * p_new
+    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_new
+    gain = alpha * gain.detach() + (1.0 - alpha) * g_new
+    return power, exposure, gain, cam_params
 
 
 def _stack_history_or_tensor(values):

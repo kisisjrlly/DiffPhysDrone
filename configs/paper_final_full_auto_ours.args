@@ -47,10 +47,10 @@
 
 --cam_power_baseline 0.5
 --coef_cam_smooth 0.2
---coef_diff_depth_power 1.0
---coef_diff_depth_blur 0.1
---coef_diff_depth_noise 0.005
---coef_diff_depth_fill 5.0
+--coef_diff_depth_power 0.02
+--coef_diff_depth_blur 0.01
+--coef_diff_depth_noise 0.01
+--coef_diff_depth_fill 1.0
 --diff_depth_min_fill_rate 0.65
 --diff_depth_health_patch_rows 6
 --diff_depth_health_patch_cols 8
