@@ -1,6 +1,6 @@
 # Minimal active-sensing simulation benchmark
 
---batch_size 96
+--batch_size 128
 --num_iters 3000
 --lr 8e-5
 --grad_decay 0.3
@@ -15,8 +15,8 @@
 --depth_height 72
 --depth_min_valid 0.05
 --depth_max_range 6
---depth_nn_width 96
---depth_nn_height 72
+--depth_nn_width 48
+--depth_nn_height 36
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
@@ -47,9 +47,9 @@
 
 --cam_power_baseline 0.5
 --coef_cam_smooth 0.0
---coef_diff_depth_power 10
---coef_diff_depth_blur 0.5
---coef_diff_depth_noise 0.5
+--coef_diff_depth_power 1000
+--coef_diff_depth_blur 10.0
+--coef_diff_depth_noise 50.0
 --coef_diff_depth_fill 40.0
 --diff_depth_min_fill_rate 0.9
 --diff_depth_health_patch_rows 6

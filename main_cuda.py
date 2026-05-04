@@ -94,7 +94,7 @@ def main():
     # ── 5. Create model ──────────────────────────────────────────────────
     obs_dim = 7 if args.no_odom else 10
     model = Model(
-        obs_dim, 3,
+        obs_dim, 4,
         include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=False,
         intent_dim=9,

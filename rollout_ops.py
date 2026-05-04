@@ -93,12 +93,15 @@ def build_state_vector(env, target_v, R, power, exposure, gain, no_odom, include
     st = [tv_local, env.R[:, 2], env.margin[:, None]]
     if not no_odom:
         st.insert(0, local_v)
-    state = torch.cat(st, -1)
 
     if include_camera_state:
         camera_state = torch.stack([power * 2.0 - 1.0, exposure * 2.0 - 1.0, gain * 2.0 - 1.0], -1)
     else:
         camera_state = torch.zeros_like(local_v)
+    state_parts = list(st)
+    if include_camera_state:
+        state_parts.append(camera_state)
+    state = torch.cat(state_parts, -1)
 
     speed_scale = getattr(env, 'max_speed', None)
     if speed_scale is None:

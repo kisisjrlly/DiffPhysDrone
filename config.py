@@ -245,8 +245,8 @@ def print_runtime_mode(args):
     print(f"collision_clearance      : {args.collision_clearance} m")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print('camera_output             : absolute target in [0,1], applied by EMA alpha=0.7')
-    print('flight_head_input         : image_feature + flight_state(no camera_state) -> flight_gru')
-    print('camera_head_input         : image_feature + camera_state + local_velocity/up -> camera_gru')
+    print('policy_input              : image_feature + state(+camera_state if enabled) -> shared_gru')
+    print('camera_head_input         : shared_gru hidden -> absolute camera target')
     print(
         'depth_fill_loss          : '
         f'patch_cvar rows={args.diff_depth_health_patch_rows}, '

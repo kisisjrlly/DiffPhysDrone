@@ -57,7 +57,7 @@ def _build_model(args, device):
     obs_dim = 7 if args.no_odom else 10
     return Model(
         obs_dim,
-        6,
+        4,
         include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=False,
         depth_nn_width=args.depth_nn_width,

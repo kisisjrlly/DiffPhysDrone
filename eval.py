@@ -130,7 +130,6 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         )
 
     h = None
-    cam_h = None
     act_buffer = [env.act] * 2
     power, exposure, gain = init_camera_params(env, B, device)
     min_clearance_hist, speed_hist, goal_dist_hist = [], [], []
@@ -163,19 +162,16 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         target_v_raw = env.p_target - env.p.detach()
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
-        state, local_v, camera_state, camera_motion_state = build_state_vector(
+        state, local_v, _camera_state, _camera_motion_state = build_state_vector(
             env, target_v, R, power, exposure, gain,
             args.no_odom, args.include_camera_state_in_obs,
         )
         _ = local_v
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h, cam_h = model(
+            act_raw, cam_params, h = model(
                 state, h,
                 depth_obs=policy_depth_obs,
                 add_noise=False,
-                cam_hx=cam_h,
-                camera_state=camera_state,
-                camera_motion_state=camera_motion_state,
             )
         act_final = decode_action_direct(act_raw.float(), R, env, B, args.max_acc_cmd)
         render_power, render_exposure, render_gain = power, exposure, gain
@@ -322,7 +318,7 @@ def main():
     obs_dim = 7 if args.no_odom else 10
     model = Model(
         obs_dim,
-        3,
+        4,
         include_camera_state_in_obs=args.include_camera_state_in_obs,
         use_policy_intent=False,
         depth_nn_width=args.depth_nn_width,
