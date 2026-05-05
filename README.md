@@ -60,7 +60,7 @@ bash eval.sh
 
 默认主配置：
 
-- [configs/paper_final_full.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/paper_final_full.args)
+- [configs/slit_active_sensing.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/slit_active_sensing.args)
 
 默认不再隐式叠加 `CAM_PROFILE`。如需叠加，请显式传入：
 

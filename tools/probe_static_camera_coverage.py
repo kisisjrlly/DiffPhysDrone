@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Probe whether one static camera setting can cover all shared-gate sensor regimes.
+Probe whether one static camera setting can cover all shared-slit sensor regimes.
 
-This is not a training script.  It renders fixed drone poses looking at the gate
-opening while sweeping a power/exposure/gain grid, then compares:
+This is not a training script.  It renders fixed drone poses looking at the wall
+slit while sweeping a power/exposure/gain grid, then compares:
 
 - best global static camera setting over all scenes/slots/poses
 - best per-scene static setting
@@ -119,7 +119,7 @@ def _render_score(env, args, pose: ProbePose, target: torch.Tensor, setting: Gri
     row = {
         "scene": env.current_scene_name,
         "sample": int(getattr(env, "_probe_sample_idx", 0)),
-        "slot": str((env.current_scene_effects or {}).get("decision_open_slot_name", "")),
+        "slot": str((env.current_scene_effects or {}).get("slit_slot_name", "")),
         "pose": pose.name,
         "x": pose.x,
         "y": pose.y,
@@ -129,7 +129,9 @@ def _render_score(env, args, pose: ProbePose, target: torch.Tensor, setting: Gri
         "gain": float(setting.gain),
         "setting": setting.name,
         "scene_effect_mean": _scalar(scalars.get("scene_effect_mean"), 0.0),
-        "hazard_mask_mean": _scalar(scalars.get("hazard_mask_mean"), 0.0),
+        "hazard_mask_mean": _scalar(scalars.get("hazard_mask_mean"), _scalar(scalars.get("scene_mask_mean"), 0.0)),
+        "slit_cue_mask_mean": _scalar(scalars.get("slit_cue_mask_mean"), 0.0),
+        "key_cue_artifact_mean": _scalar(scalars.get("key_cue_artifact_mean"), 0.0),
         "sun_mask_mean": _scalar(scalars.get("sun_mask_mean"), 0.0),
         "glare_invalid_rate": _scalar(scalars.get("glare_invalid_rate"), 0.0),
         "quality_mean": float(np.mean(quality_np)) if quality_np is not None else float("nan"),
@@ -315,7 +317,7 @@ def _summarize(detail_rows: list[dict], min_fill_rate: float) -> tuple[list[dict
 
 def _make_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/paper_final_full.args")
+    parser.add_argument("--config", default="configs/slit_active_sensing.args")
     parser.add_argument("--out_dir", default="paper/experiment/results/static_camera_coverage")
     parser.add_argument("--scenarios", nargs="*", default=list(SCENE_ORDER))
     parser.add_argument("--slots", nargs="*", default=list(SLOT_ORDER))

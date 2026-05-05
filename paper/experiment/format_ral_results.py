@@ -58,7 +58,7 @@ def _method_rank(method_key: str) -> int:
 
 def _condition_rank(row: dict) -> tuple[int, int, str]:
     scene = str(row.get("scene_name", "") or str(row.get("condition", "")).split("_", 1)[0])
-    slot = str(row.get("opening_slot", ""))
+    slot = str(row.get("slit_slot", ""))
     try:
         scene_idx = SENSOR_SCENE_ORDER.index(scene)
     except ValueError:
@@ -72,7 +72,7 @@ def _condition_rank(row: dict) -> tuple[int, int, str]:
 
 def _condition_label(row: dict) -> str:
     scene = str(row.get("scene_name", "") or str(row.get("condition", "")).split("_", 1)[0])
-    slot = str(row.get("opening_slot", ""))
+    slot = str(row.get("slit_slot", ""))
     return f"{scene}/{slot}" if slot else scene
 
 

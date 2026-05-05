@@ -34,7 +34,7 @@
 | `trainer.py` | `[x]` | 已恢复必要的 scene 统计与 opening pass 指标，但不再回退到旧随机世界统计。 |
 | `eval.py` | `[x]` | 已恢复按 `scenarios` 顺序轮转评测和 per-scene summary。 |
 | `rerun_vis.py` | `[x]` | 已改为固定小地图的 AABB 显示范围。 |
-| `configs/paper_final_full.args` | `[x]` | 已改为固定小地图 + 感知场景主配置。 |
+| `configs/slit_active_sensing.args` | `[x]` | 已改为固定小地图 + 感知场景主配置。 |
 | `configs/paper_ablate_diff_depth.args` | `[x]` | 已改为固定小地图 + 感知场景消融配置。 |
 | `tools/compare_diff_depth_gradients.py` | `[x]` | 已同步到新的 `Env` 构造接口。 |
 

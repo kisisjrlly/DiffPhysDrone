@@ -1,7 +1,7 @@
 # 逆光退化下四旋翼导航的可微主动深度感知
 
 > RAL 稿件草案。  
-> 范围：本文仅描述当前 `diff_depth` 分支，对应 `configs/paper_final_full.args`。  
+> 范围：本文仅描述当前 `diff_depth` 分支，对应 `configs/slit_active_sensing.args`。  
 > 本版本不包含：teacher-student learning、dMPC、policy intent output、TBPTT-enabled training、复杂多场景叙事，以及更宽泛的 Nature 风格场景故事。
 
 ## 摘要
@@ -1418,7 +1418,7 @@ $$
 
 ### 3.10 优化与运行配置
 
-当前 `paper_final_full.args` 分支使用：
+当前 `slit_active_sensing.args` 分支使用：
 
 | 类别 | 取值 |
 |---|---|
@@ -1448,7 +1448,7 @@ $$
 
 | 论文模块 | 实现文件 | 主要职责 |
 |---|---|---|
-| 运行参数与配置 | `config.py`, `configs/paper_final_full.args` | 定义 rollout 长度、深度分辨率、相机语义、传感模型参数、损失权重与启用场景 |
+| 运行参数与配置 | `config.py`, `configs/slit_active_sensing.args` | 定义 rollout 长度、深度分辨率、相机语义、传感模型参数、损失权重与启用场景 |
 | 环境构建 | `train_utils.py` | 基于所选场景 profile 创建训练与评估环境 |
 | 固定地图与场景效应 | `env_cuda.py` | 定义固定障碍布局、Sun Glare 场景效应、材质代理和场景局部掩码 |
 | CUDA 几何渲染 | `src/quadsim.cpp`, `src/quadsim_kernel.cu`, `env_cuda.py` | 计算理想深度和四旋翼仿真基础量 |
@@ -1869,7 +1869,7 @@ $$
 
 #### 4.6.1 训练协议
 
-主训练运行应使用 `configs/paper_final_full.args` 中激活配置。为保证论文比较干净，每个基线都应仅做必要最小改动并从头训练。推荐协议：
+主训练运行应使用 `configs/slit_active_sensing.args` 中激活配置。为保证论文比较干净，每个基线都应仅做必要最小改动并从头训练。推荐协议：
 
 1. 学习类方法使用同一组随机种子；
 2. 使用相同 rollout 长度 $T=80$、深度分辨率 $64\times48$、网络深度输入 $32\times24$；
@@ -2312,7 +2312,7 @@ $$
 | 项目 | 需要给出的细节 |
 |---|---|
 | 代码分支 | Commit hash 和分支名 |
-| 配置 | 完整 `paper_final_full.args` 快照 |
+| 配置 | 完整 `slit_active_sensing.args` 快照 |
 | 硬件 | GPU 型号、CUDA 版本、PyTorch 版本 |
 | 训练预算 | 迭代数、batch 大小、rollout 长度、墙钟时间 |
 | 随机种子 | 各报告 run 的种子 |

@@ -19,11 +19,10 @@ from utils import g_decay
 
 
 class Env:
-    """Minimal single-wall active-sensing environment.
+    """极简单墙细缝主动感知环境。
 
-    Geometry is deliberately small: one start, one goal, and one wall with a
-    narrow vertical slit at a random lateral position.  Scenarios only change the local
-    sensor degradation around the gate material.
+    几何结构刻意保持很小：一个起点、一个终点、一堵墙，以及墙上随机横向位置
+    的竖直细缝。不同 scene 只改变细缝/墙边附近的局部传感器退化方式。
     """
 
     supported_scenarios = ('glare', 'specular', 'dark')
@@ -50,11 +49,21 @@ class Env:
                  scenarios=None, sun_glare_eval_slot=None, diff_sensor_impl=None,
                  random_rotation=False, random_rotation_max_deg=45.0,
                  simple_start_x=-1.0, simple_goal_x=1.8, simple_wall_x=0.65,
-                 simple_gate_y_min=-0.55, simple_gate_y_max=0.55,
-                 simple_gate_half_y=0.20, simple_gate_half_y_min=None, simple_gate_half_y_max=None,
-                 simple_gate_half_z=0.26,
-                 simple_gate_z=1.50,
-                 **_ignored) -> None:
+                 simple_slit_center_y_min=-0.55, simple_slit_center_y_max=0.55,
+                 simple_slit_half_y=0.20, simple_slit_half_y_min=None, simple_slit_half_y_max=None,
+                 simple_slit_effect_half_z=0.26,
+                 simple_slit_center_z=1.50,
+                 simple_slit_side_effect_width_y=0.20,
+                 simple_slit_side_effect_half_z=1.00,
+                 simple_glare_halo_width_y=0.18,
+                 simple_glare_halo_extra_half_z=0.25,
+                 simple_glare_halo_strength=0.45,
+                 simple_back_wall_x_min=None,
+                 simple_back_wall_x_max=None,
+                 simple_slit_cue_halo_width_y=0.16,
+                 simple_slit_cue_extra_half_z=0.28,
+                 simple_key_cue_degrade_strength=0.90,
+                 simple_specular_false_depth_strength=0.55) -> None:
         self.device = device
         self.batch_size = int(batch_size)
         self.width = int(width)
@@ -118,15 +127,79 @@ class Env:
         self.simple_start_x = float(simple_start_x)
         self.simple_goal_x = float(simple_goal_x)
         self.simple_wall_x = float(simple_wall_x)
-        self.simple_gate_y_min = float(simple_gate_y_min)
-        self.simple_gate_y_max = float(simple_gate_y_max)
-        self.simple_gate_half_y = float(simple_gate_half_y)
-        self.simple_gate_half_y_min = self.simple_gate_half_y if simple_gate_half_y_min is None else float(simple_gate_half_y_min)
-        self.simple_gate_half_y_max = self.simple_gate_half_y if simple_gate_half_y_max is None else float(simple_gate_half_y_max)
-        if self.simple_gate_half_y_max < self.simple_gate_half_y_min:
-            self.simple_gate_half_y_min, self.simple_gate_half_y_max = self.simple_gate_half_y_max, self.simple_gate_half_y_min
-        self.simple_gate_half_z = float(simple_gate_half_z)
-        self.simple_gate_z = float(simple_gate_z)
+        # 墙和细缝几何都先定义在局部 scene 坐标系中，之后才应用可选随机 yaw 旋转。
+        #
+        # simple_wall_x:
+        #   带细缝前墙的局部 x 位置。
+        #
+        # simple_slit_center_y_min/max:
+        #   细缝中心 y 的训练采样范围。每次 reset 会在这个区间内采样
+        #   slit_center_y；eval 固定 slot 时则使用对应 slot 的 y。
+        #
+        # simple_slit_half_y:
+        #   物理细缝在局部 y 方向的半宽。若配置了 min/max，则 min/max 的采样
+        #   范围覆盖这个默认值。前墙由左右两块竖直墙体组成，中间空出
+        #   2 * slit_half_y 的横向细缝。
+        #
+        # simple_slit_center_z:
+        #   细缝中心高度，同时也是默认起点/终点飞行高度。
+        #
+        # simple_slit_effect_half_z:
+        #   只用于 glare/opening 传感器效应 mask 的竖直半高，不代表真实物理
+        #   碰撞边界。当前物理墙没有上/下门框，只有左右两侧竖直墙体。
+        #
+        # simple_slit_side_effect_width_y:
+        #   specular/dark 材质区域从细缝边缘向左右墙面内部延伸的宽度。
+        #   它不占用细缝空洞，只覆盖墙面 patch。
+        #
+        # simple_slit_side_effect_half_z:
+        #   specular/dark 墙面材质 patch 的竖直半高。
+        #
+        # simple_glare_halo_width_y / extra_half_z / strength:
+        #   glare 场景中，红外强光除了穿过细缝核心区域，还会在图像里污染
+        #   周围墙缝轮廓。这里用一个更大的 halo 区域表示泛光/串扰，strength
+        #   表示 halo 相对核心强光的强度。
+        #
+        # simple_back_wall_x_min/max:
+        #   细缝后方背墙的局部 x 采样范围。背墙距离随机化后，policy 不能
+        #   长期依赖一个固定的“透过细缝看到远墙”的深度模板。
+        #
+        # simple_slit_cue_halo_width_y / extra_half_z:
+        #   真实 D455 中，坏曝光/反光/红外眩光会影响左右目图像中的细缝
+        #   内部、边缘和后墙纹理。这里用一个覆盖细缝核心并稍微外扩的
+        #   cue mask 表示这类关键观测线索。
+        #
+        # simple_key_cue_degrade_strength:
+        #   scene effect 对关键 cue 的最大退化强度。
+        #
+        # simple_specular_false_depth_strength:
+        #   specular 高 active IR 下，局部镜面反射造成错误近深度/边缘漂移
+        #   的强度。
+        self.simple_slit_center_y_min = float(simple_slit_center_y_min)
+        self.simple_slit_center_y_max = float(simple_slit_center_y_max)
+        self.simple_slit_half_y = float(simple_slit_half_y)
+        self.simple_slit_half_y_min = self.simple_slit_half_y if simple_slit_half_y_min is None else float(simple_slit_half_y_min)
+        self.simple_slit_half_y_max = self.simple_slit_half_y if simple_slit_half_y_max is None else float(simple_slit_half_y_max)
+        if self.simple_slit_half_y_max < self.simple_slit_half_y_min:
+            self.simple_slit_half_y_min, self.simple_slit_half_y_max = self.simple_slit_half_y_max, self.simple_slit_half_y_min
+        self.simple_slit_effect_half_z = float(simple_slit_effect_half_z)
+        self.simple_slit_center_z = float(simple_slit_center_z)
+        self.simple_slit_side_effect_width_y = float(simple_slit_side_effect_width_y)
+        self.simple_slit_side_effect_half_z = float(simple_slit_side_effect_half_z)
+        self.simple_glare_halo_width_y = float(simple_glare_halo_width_y)
+        self.simple_glare_halo_extra_half_z = float(simple_glare_halo_extra_half_z)
+        self.simple_glare_halo_strength = float(simple_glare_halo_strength)
+        default_back_wall_x = float(self.simple_goal_x) + 0.75
+        self.simple_back_wall_x_min = default_back_wall_x if simple_back_wall_x_min is None else float(simple_back_wall_x_min)
+        self.simple_back_wall_x_max = self.simple_back_wall_x_min if simple_back_wall_x_max is None else float(simple_back_wall_x_max)
+        if self.simple_back_wall_x_max < self.simple_back_wall_x_min:
+            self.simple_back_wall_x_min, self.simple_back_wall_x_max = self.simple_back_wall_x_max, self.simple_back_wall_x_min
+        self.simple_slit_cue_halo_width_y = float(simple_slit_cue_halo_width_y)
+        self.simple_slit_cue_extra_half_z = float(simple_slit_cue_extra_half_z)
+        self.simple_key_cue_degrade_strength = float(simple_key_cue_degrade_strength)
+        self.simple_specular_false_depth_strength = float(simple_specular_false_depth_strength)
+        # 前墙左右墙体的物理半高。物理墙比材质 patch 更高，避免材质范围
+        # 和碰撞几何被误认为同一个参数。
         self.simple_wall_half_z = 1.0
 
         impl = {'diff_depth': 'cuda'}
@@ -136,7 +209,7 @@ class Env:
 
         self.fixed_max_speed = 1.15
         self.fixed_drone_radius = 0.12
-        self.fixed_margin = 0.05
+        self.fixed_margin = 0.00
         self.fixed_pitch_ctl_delay = 12.0
         self.fixed_yaw_ctl_delay = 6.0
         self.fixed_drag_linear = 0.35
@@ -200,50 +273,59 @@ class Env:
             return [slots[(start + i) % len(slots)] for i in range(B)]
         return [slots[i % len(slots)] for i in range(B)]
 
-    def _slot_name_from_gate_y(self, y):
+    def _slot_name_from_slit_y(self, y):
         vals = {name: abs(float(y) - float(v)) for name, v in self.slot_y.items()}
         return min(vals, key=vals.get)
 
-    def _choose_gate_centers(self, B):
+    def _choose_slit_centers(self, B):
         if self.eval_mode and self.sun_glare_eval_slot is not None:
             slots = self._choose_slots(B)
-            gate_y = torch.tensor([self.slot_y[s] for s in slots], device=self.device, dtype=torch.float32)
-            return gate_y, slots
-        lo = min(self.simple_gate_y_min, self.simple_gate_y_max)
-        hi = max(self.simple_gate_y_min, self.simple_gate_y_max)
-        gate_y = torch.empty((B,), device=self.device).uniform_(lo, hi)
-        slots = [self._slot_name_from_gate_y(float(y)) for y in gate_y.detach().cpu().tolist()]
-        return gate_y, slots
+            slit_center_y = torch.tensor([self.slot_y[s] for s in slots], device=self.device, dtype=torch.float32)
+            return slit_center_y, slots
+        lo = min(self.simple_slit_center_y_min, self.simple_slit_center_y_max)
+        hi = max(self.simple_slit_center_y_min, self.simple_slit_center_y_max)
+        slit_center_y = torch.empty((B,), device=self.device).uniform_(lo, hi)
+        slots = [self._slot_name_from_slit_y(float(y)) for y in slit_center_y.detach().cpu().tolist()]
+        return slit_center_y, slots
 
-    def _choose_gate_half_widths(self, B):
-        lo = min(self.simple_gate_half_y_min, self.simple_gate_half_y_max)
-        hi = max(self.simple_gate_half_y_min, self.simple_gate_half_y_max)
+    def _choose_slit_half_widths(self, B):
+        lo = min(self.simple_slit_half_y_min, self.simple_slit_half_y_max)
+        hi = max(self.simple_slit_half_y_min, self.simple_slit_half_y_max)
         if abs(hi - lo) < 1e-9:
             return torch.full((B,), float(lo), device=self.device, dtype=torch.float32)
         return torch.empty((B,), device=self.device, dtype=torch.float32).uniform_(lo, hi)
 
-    def _build_sun_glare_voxel_layout(self, gap_y_center, *, gate_x=None,
-                                      gap_half_w=None,
-                                      gate_z=None):
-        """Single wall with a narrow vertical slit.
+    def _choose_back_wall_xs(self, B):
+        lo = min(self.simple_back_wall_x_min, self.simple_back_wall_x_max)
+        hi = max(self.simple_back_wall_x_min, self.simple_back_wall_x_max)
+        if abs(hi - lo) < 1e-9:
+            return torch.full((B,), float(lo), device=self.device, dtype=torch.float32)
+        return torch.empty((B,), device=self.device, dtype=torch.float32).uniform_(lo, hi)
 
-        There is no top/bottom gate geometry.  The z extent configured by
-        simple_gate_half_z is only used by the sensor-effect mask.
+    def _build_wall_slit_voxel_layout(self, slit_center_y, *, wall_x=None,
+                                      slit_half_y=None,
+                                      slit_center_z=None,
+                                      back_wall_x=None):
+        """构造一堵带竖直细缝的墙。
+
+        这里没有物理上/下门框；z 方向的 effect 半高只属于传感器退化 mask。
         """
-        gate_x = self.simple_wall_x if gate_x is None else float(gate_x)
-        gate_z = self.simple_gate_z if gate_z is None else float(gate_z)
-        gap_half_w = self.simple_gate_half_y if gap_half_w is None else float(gap_half_w)
+        wall_x = self.simple_wall_x if wall_x is None else float(wall_x)
+        slit_center_z = self.simple_slit_center_z if slit_center_z is None else float(slit_center_z)
+        slit_half_y = self.simple_slit_half_y if slit_half_y is None else float(slit_half_y)
         wall_half_y = 1.0
         wall_half_z = self.simple_wall_half_z * 2
         wall_thickness = 0.10
-        back_wall_x = float(self.simple_goal_x) + 0.75
+        back_wall_x = self.simple_back_wall_x_min if back_wall_x is None else float(back_wall_x)
         back_wall_half_y = 3.0
-        gate_wall = self._build_voxels([
-            [float(gate_x), gap_y_center - float(gap_half_w) - wall_half_y, gate_z, wall_thickness, wall_half_y, wall_half_z],
-            [float(gate_x), gap_y_center + float(gap_half_w) + wall_half_y, gate_z, wall_thickness, wall_half_y, wall_half_z],
-            [back_wall_x, 0.0, gate_z, wall_thickness, back_wall_half_y, wall_half_z],
+        # 前墙由左右两块竖直墙体组成，中间空出的部分就是细缝。终点后方放一堵
+        # 背墙，让相机透过细缝时仍能获得深度返回，而不是整片无效深度。
+        wall_slit_voxels = self._build_voxels([
+            [float(wall_x), slit_center_y - float(slit_half_y) - wall_half_y, slit_center_z, wall_thickness, wall_half_y, wall_half_z],
+            [float(wall_x), slit_center_y + float(slit_half_y) + wall_half_y, slit_center_z, wall_thickness, wall_half_y, wall_half_z],
+            [back_wall_x, 0.0, slit_center_z, wall_thickness, back_wall_half_y, wall_half_z],
         ])
-        return gate_wall
+        return wall_slit_voxels
 
     def _rotation_z(self, yaw):
         c = torch.cos(yaw)
@@ -256,41 +338,57 @@ class Env:
             z,  z, o,
         ], -1).reshape(-1, 3, 3)
 
-    def _scene_effects(self, scene_name, slot_name, gap_y, gap_half_w):
+    def _scene_effects(self, scene_name, slot_name, slit_center_y, slit_half_y, back_wall_x):
         regime_id = float(self.scene_name_to_id[scene_name])
-        gap_half_w = float(gap_half_w)
-        region_kind = 'opening' if str(scene_name) == 'glare' else 'vertical_edges'
+        slit_half_y = float(slit_half_y)
+        region_kind = 'opening' if str(scene_name) == 'glare' else 'side_wall_patches'
         if region_kind == 'opening':
-            hazard_half_y = gap_half_w
-            hazard_half_z = float(self.simple_gate_half_z)
+            # glare 表示从细缝透进来的强背光，mask 中心在细缝内部，
+            # 竖直范围由 simple_slit_effect_half_z 控制；halo 会额外污染
+            # 细缝两侧墙面和更高/更低的局部图像区域。
+            hazard_half_y = float(slit_half_y + self.simple_glare_halo_width_y)
+            hazard_half_z = float(self.simple_slit_effect_half_z + self.simple_glare_halo_extra_half_z)
         else:
-            hazard_half_y = float(gap_half_w + 0.20)
-            hazard_half_z = float(self.simple_wall_half_z)
+            # specular/dark 是细缝两侧墙面 patch 的材质效应。patch 从
+            # 细缝边缘向墙体内部延伸，不覆盖细缝空洞本身。
+            hazard_half_y = float(slit_half_y + 0.5 * self.simple_slit_side_effect_width_y)
+            hazard_half_z = float(self.simple_slit_side_effect_half_z)
         return {
             'geometry_kind': 'single_wall_slit',
             'sensor_regime_name': scene_name,
             'sensor_regime_id': regime_id,
-            'decision_open_slot_name': slot_name,
-            'decision_open_slot_id': float(self.supported_slots.index(slot_name)),
-            'decision_open_slot_y': float(gap_y),
-            'hazard_center': [self.simple_wall_x, float(gap_y), self.simple_gate_z],
-            # Glare is a backlight seen through the aperture. Specular/dark are
-            # material effects on the gate frame edges.
+            'slit_slot_name': slot_name,
+            'slit_slot_id': float(self.supported_slots.index(slot_name)),
+            'slit_center_y': float(slit_center_y),
+            'hazard_center': [self.simple_wall_x, float(slit_center_y), self.simple_slit_center_z],
+            # glare 是穿过细缝的背光；specular/dark 是细缝墙边材质效应。
             'hazard_region_kind': region_kind,
             'hazard_half_y': hazard_half_y,
             'hazard_half_z': hazard_half_z,
-            'hazard_edge_half_y': 0.055,
+            'side_effect_width_y': float(self.simple_slit_side_effect_width_y),
+            'side_effect_half_y': float(0.5 * self.simple_slit_side_effect_width_y),
+            'side_effect_half_z': float(self.simple_slit_side_effect_half_z),
+            'glare_core_half_y': float(slit_half_y),
+            'glare_core_half_z': float(self.simple_slit_effect_half_z),
+            'glare_halo_width_y': float(self.simple_glare_halo_width_y),
+            'glare_halo_half_y': float(slit_half_y + self.simple_glare_halo_width_y),
+            'glare_halo_half_z': float(self.simple_slit_effect_half_z + self.simple_glare_halo_extra_half_z),
+            'glare_halo_strength': float(self.simple_glare_halo_strength),
             'hazard_softness': 0.045,
-            'geometry_gate_x': float(self.simple_wall_x),
             'geometry_wall_x': float(self.simple_wall_x),
-            'geometry_gap_half_w': gap_half_w,
-            'sensor_effect_half_z': float(self.simple_gate_half_z),
-            'geometry_gap_half_h': float(self.simple_wall_half_z),
-            'geometry_gate_z': float(self.simple_gate_z),
+            'slit_half_y': slit_half_y,
+            'slit_effect_half_z': float(self.simple_slit_effect_half_z),
+            'slit_center_z': float(self.simple_slit_center_z),
             'geometry_wall_half_z': float(self.simple_wall_half_z),
-            'geometry_back_wall_x': float(self.simple_goal_x + 0.75),
+            'geometry_back_wall_x': float(back_wall_x),
             'geometry_start_x': float(self.simple_start_x),
             'geometry_goal_x': float(self.simple_goal_x),
+            'slit_cue_halo_width_y': float(self.simple_slit_cue_halo_width_y),
+            'slit_cue_half_y': float(slit_half_y + self.simple_slit_cue_halo_width_y),
+            'slit_cue_half_z': float(self.simple_slit_effect_half_z + self.simple_slit_cue_extra_half_z),
+            'slit_cue_extra_half_z': float(self.simple_slit_cue_extra_half_z),
+            'key_cue_degrade_strength': float(self.simple_key_cue_degrade_strength),
+            'specular_false_depth_strength': float(self.simple_specular_false_depth_strength),
         }
 
     def _merge_batch_effects(self, effects_list):
@@ -348,23 +446,24 @@ class Env:
         self.R_scene = self._rotation_z(yaw)
         self.R_scene_T = self.R_scene.transpose(1, 2).contiguous()
 
-        gap_y, slots = self._choose_gate_centers(B)
-        gap_half_y = self._choose_gate_half_widths(B)
+        slit_center_y, slots = self._choose_slit_centers(B)
+        slit_half_y = self._choose_slit_half_widths(B)
+        back_wall_x = self._choose_back_wall_xs(B)
         voxels = torch.stack([
-            self._build_sun_glare_voxel_layout(float(y), gap_half_w=float(w))
-            for y, w in zip(gap_y, gap_half_y)
+            self._build_wall_slit_voxel_layout(float(y), slit_half_y=float(w), back_wall_x=float(bx))
+            for y, w, bx in zip(slit_center_y, slit_half_y, back_wall_x)
         ], dim=0)
         start_y = torch.zeros(B, device=device)
         start_local = torch.stack([
             torch.full((B,), float(self.simple_start_x), device=device),
             start_y,
-            torch.full((B,), float(self.simple_gate_z), device=device),
+            torch.full((B,), float(self.simple_slit_center_z), device=device),
         ], -1)
-        goal_local = torch.tensor([float(self.simple_goal_x), 0.0, float(self.simple_gate_z)], device=device).expand(B, 3).clone()
+        goal_local = torch.tensor([float(self.simple_goal_x), 0.0, float(self.simple_slit_center_z)], device=device).expand(B, 3).clone()
         start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
         goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
         effects = self._merge_batch_effects([
-            self._scene_effects(scene_names[i], slots[i], float(gap_y[i]), float(gap_half_y[i]))
+            self._scene_effects(scene_names[i], slots[i], float(slit_center_y[i]), float(slit_half_y[i]), float(back_wall_x[i]))
             for i in range(B)
         ])
         local_hazard = effects['hazard_center'].to(device=device, dtype=torch.float32)
@@ -447,7 +546,17 @@ class Env:
         else:
             scene_name = debug.get('scene_name', self.current_scene_name)
         out = {'scene_name': str(scene_name), 'images': {}, 'scalars': {}}
-        for key in ('raw_depth_map', 'quality_map', 'valid_prob_map', 'hard_valid_map', 'invalid_mask', 'scene_effect_map', 'scene_mask'):
+        for key in (
+            'raw_depth_map',
+            'quality_map',
+            'valid_prob_map',
+            'hard_valid_map',
+            'invalid_mask',
+            'scene_effect_map',
+            'scene_mask',
+            'slit_cue_mask',
+            'key_cue_artifact_map',
+        ):
             value = debug.get(key, None)
             if torch.is_tensor(value) and value.ndim >= 3 and value.shape[0] > 0:
                 idx = int(min(max(env_idx, 0), value.shape[0] - 1))
@@ -462,6 +571,196 @@ class Env:
             elif isinstance(value, (int, float)):
                 out['scalars'][key] = float(value)
         return out
+
+    def _batch_scalar_for_sensor(self, value, default, B, device, dtype):
+        if value is None:
+            value = default
+        if torch.is_tensor(value):
+            return value.to(device=device, dtype=dtype)
+        if isinstance(value, list) and len(value) == B:
+            return torch.tensor(value, device=device, dtype=dtype)
+        return torch.full((B,), float(value), device=device, dtype=dtype)
+
+    def _slit_cue_mask(self, depth):
+        """Project the slit opening/back-wall cue into the current image.
+
+        This mask is deliberately different from the material mask used for
+        specular/dark side-wall patches.  It covers the visual shortcut that a
+        depth camera gets by seeing the far back wall through the slit.
+        """
+        B, H, W = depth.shape
+        effects = self.current_scene_effects
+        center = effects['hazard_center'].to(depth.device, depth.dtype)
+        half_y = self._batch_scalar_for_sensor(
+            effects.get('slit_cue_half_y'),
+            self.simple_slit_half_y + self.simple_slit_cue_halo_width_y,
+            B,
+            depth.device,
+            depth.dtype,
+        )
+        half_z = self._batch_scalar_for_sensor(
+            effects.get('slit_cue_half_z'),
+            self.simple_slit_effect_half_z + self.simple_slit_cue_extra_half_z,
+            B,
+            depth.device,
+            depth.dtype,
+        )
+        softness = self._batch_scalar_for_sensor(
+            effects.get('hazard_softness'),
+            0.045,
+            B,
+            depth.device,
+            depth.dtype,
+        )
+
+        ys = torch.linspace(-1.0, 1.0, W, device=depth.device, dtype=depth.dtype)
+        zs = torch.linspace(-1.0, 1.0, H, device=depth.device, dtype=depth.dtype)
+        yy, zz = torch.meshgrid(ys, zs, indexing='xy')
+        yy = yy.unsqueeze(0)
+        zz = zz.unsqueeze(0)
+
+        R_cam_world = (self.R @ self.R_cam).detach().to(depth.device, depth.dtype)
+        pos = self.p.detach().to(depth.device, depth.dtype)
+        fov_x = torch.as_tensor(float(self._fov_x_half_tan), device=depth.device, dtype=depth.dtype)
+        fov_y = fov_x * float(H) / float(max(W, 1))
+
+        rel = center.detach() - pos
+        cam = torch.bmm(R_cam_world.transpose(1, 2), rel[:, :, None])[:, :, 0]
+        x = cam[:, 0]
+        x_safe = x.clamp_min(0.20)
+        cy = ((-cam[:, 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, None, None]
+        cz = ((-cam[:, 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, None, None]
+        sy = (half_y / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
+        sz = (half_z / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
+        soft = (softness * 1.35 / x_safe / fov_x).clamp(0.030, 0.24)[:, None, None]
+        in_front = torch.sigmoid((x - 0.08) / 0.04)[:, None, None]
+        mask_y = torch.sigmoid((sy - (yy - cy).abs()) / soft)
+        mask_z = torch.sigmoid((sz - (zz - cz).abs()) / soft)
+        return (mask_y * mask_z * in_front).clamp(0.0, 1.0)
+
+    def _key_cue_artifacts(self, raw, power, exposure, gain, quality, valid_prob, hard_valid, depth_obs):
+        """Apply scene-specific artifacts to the slit/back-wall depth cue.
+
+        The fused CUDA/Python sensor core models local quality.  This wrapper
+        adds the part that matters for the benchmark shortcut: whether the far
+        back-wall depth seen through the slit remains a clean template under
+        bad camera settings.
+        """
+        B = raw.shape[0]
+        cue_mask = self._slit_cue_mask(raw)
+        p = power.clamp(0, 1)[:, None, None]
+        e01 = exposure.clamp(0, 1)[:, None, None]
+        g01 = gain.clamp(0, 1)[:, None, None]
+        strength = self._batch_scalar_for_sensor(
+            self.current_scene_effects.get('key_cue_degrade_strength'),
+            self.simple_key_cue_degrade_strength,
+            B,
+            raw.device,
+            raw.dtype,
+        ).clamp(0.0, 1.0)[:, None, None]
+        spec_false_strength = self._batch_scalar_for_sensor(
+            self.current_scene_effects.get('specular_false_depth_strength'),
+            self.simple_specular_false_depth_strength,
+            B,
+            raw.device,
+            raw.dtype,
+        ).clamp(0.0, 1.0)[:, None, None]
+
+        # dark 场景不能只污染 slit 两侧墙面；低曝光/低增益/弱投光时，
+        # 透过 slit 看到的后墙深度 cue 也应该变成低 SNR / invalid。
+        # 这里用“缺少任一关键量就会变差”的加性 knee，避免 fixed_mid
+        # 仍然留下稳定的中间 valid 长条。
+        dark_cue_bad = (
+            0.50 * torch.sigmoid((0.68 - e01) / 0.075)
+            + 0.38 * torch.sigmoid((0.58 - g01) / 0.075)
+            + 0.22 * torch.sigmoid((0.54 - p) / 0.090)
+        ).clamp(0.0, 1.0)
+        glare_bad = (
+            0.72 * torch.sigmoid((e01 - 0.26) / 0.055)
+            + 0.50 * torch.sigmoid((g01 - 0.24) / 0.060)
+            + 0.30 * torch.sigmoid((0.42 - p) / 0.09)
+        ).clamp(0.0, 1.0)
+        # Specular should not collapse every reasonable camera setting into the
+        # same black invalid blob.  Low projector/exposure/gain should preserve
+        # most of the slit cue; high active IR or high exposure/gain should
+        # create local holes, false near depths, and edge drift.
+        spec_power_hot = torch.sigmoid((p - 0.56) / 0.085)
+        spec_exposure_hot = torch.sigmoid((e01 - 0.58) / 0.100)
+        spec_gain_hot = torch.sigmoid((g01 - 0.48) / 0.090)
+        spec_joint_hot = torch.maximum(spec_exposure_hot, spec_gain_hot)
+        spec_bloom = (
+            0.60 * spec_power_hot
+            + 0.30 * spec_power_hot * spec_joint_hot
+            + 0.20 * spec_exposure_hot * spec_gain_hot
+        ).clamp(0.0, 1.0)
+        spec_safe = (
+            torch.sigmoid((0.48 - p) / 0.080)
+            * torch.sigmoid((0.52 - e01) / 0.100)
+            * torch.sigmoid((0.42 - g01) / 0.090)
+        )
+
+        scene_ids = getattr(self, 'current_scene_ids', None)
+        if scene_ids is None:
+            scene_ids = torch.full((B,), int(self.current_scene_id), device=raw.device, dtype=torch.long)
+        else:
+            scene_ids = scene_ids.to(device=raw.device, dtype=torch.long)
+        sid = scene_ids[:, None, None]
+        cue_bad = torch.where(
+            sid == 0,
+            glare_bad,
+            torch.where(sid == 1, spec_bloom, dark_cue_bad),
+        )
+
+        raw4 = raw[:, None]
+        raw_far = F.max_pool2d(raw4, 3, stride=1, padding=1)[:, 0]
+        raw_near = -F.max_pool2d(-raw4, 3, stride=1, padding=1)[:, 0]
+        local_edge = ((raw_far - raw_near) / (raw + 0.18)).clamp(0.0, 1.0)
+        ys = torch.linspace(-1.0, 1.0, raw.shape[-1], device=raw.device, dtype=raw.dtype)
+        zs = torch.linspace(-1.0, 1.0, raw.shape[-2], device=raw.device, dtype=raw.dtype)
+        yy, zz = torch.meshgrid(ys, zs, indexing='xy')
+        texture = (0.5 + 0.5 * torch.sin((11.0 * yy + 7.0 * zz) * math.pi)).unsqueeze(0)
+        spec_hole_shape = (0.18 + 0.62 * local_edge + 0.20 * texture).clamp(0.0, 1.0)
+        spec_artifact = (cue_mask * spec_bloom * strength * spec_hole_shape).clamp(0.0, 1.0)
+        non_spec_artifact = (cue_mask * cue_bad * strength).clamp(0.0, 1.0)
+        artifact = torch.where(sid == 1, spec_artifact, non_spec_artifact)
+
+        cue_quality_other = quality - non_spec_artifact * (0.58 + 0.34 * cue_bad)
+        spec_recovery = cue_mask * spec_safe * (1.0 - 0.55 * spec_bloom) * 0.46
+        cue_quality_spec = quality + spec_recovery - spec_artifact * (0.28 + 0.46 * spec_bloom)
+        cue_quality = torch.where(sid == 1, cue_quality_spec, cue_quality_other).clamp(0.0, 1.0)
+        cue_valid_prob = torch.sigmoid((cue_quality - 0.42) / 0.055)
+        cue_hard_valid = (cue_valid_prob > 0.5).to(raw.dtype)
+        valid_st = cue_hard_valid.detach() - cue_valid_prob.detach() + cue_valid_prob
+
+        spec_wrong = (
+            cue_mask
+            * spec_bloom
+            * spec_false_strength
+            * (0.30 + 0.70 * local_edge)
+        ).clamp(0.0, 1.0)
+        left_depth = torch.roll(raw, shifts=1, dims=-1)
+        right_depth = torch.roll(raw, shifts=-1, dims=-1)
+        edge_drift_depth = torch.minimum(torch.minimum(left_depth, right_depth), raw * 0.70)
+        false_depth = torch.lerp(raw, edge_drift_depth, (0.62 * spec_wrong).clamp(0.0, 1.0))
+        false_depth = false_depth.clamp_min(float(self.depth_min_valid))
+        raw_with_false = torch.where((sid == 1) & (spec_wrong > 0.10), false_depth, raw)
+        cue_depth_obs = raw_with_false * valid_st
+        cue_quality_obs = cue_quality * valid_st
+
+        return {
+            'depth_obs': cue_depth_obs,
+            'quality_obs': cue_quality_obs,
+            'quality': cue_quality,
+            'valid_prob': cue_valid_prob,
+            'hard_valid': cue_hard_valid,
+            'valid_st': valid_st,
+            'invalid': (1.0 - valid_st).clamp(0.0, 1.0),
+            'cue_mask': cue_mask,
+            'artifact': artifact,
+            'spec_bloom': spec_bloom.expand_as(raw),
+            'spec_wrong': spec_wrong,
+            'artifact_effect': artifact + spec_wrong * 0.35,
+        }
 
     def _scene_mask(self, depth):
         B, H, W = depth.shape
@@ -485,53 +784,58 @@ class Env:
         zs = torch.linspace(-1.0, 1.0, H, device=depth.device, dtype=depth.dtype)
         yy, zz = torch.meshgrid(ys, zs, indexing='xy')
 
-        # Project the local sensor-degradation region into the current camera.
-        # This replaces the older slot_y -> image_x approximation.  The mask is
-        # deliberately detached from pose so the sensor model only exposes
-        # camera-parameter gradients; raw geometry remains non-differentiable.
+        # 将局部传感器退化区域投影到当前相机视野。mask 对位姿 detach，
+        # 这样传感器模型只暴露相机参数梯度，原始几何仍保持不可微。
         R_cam_world = (self.R @ self.R_cam).detach().to(depth.device, depth.dtype)
         pos = self.p.detach().to(depth.device, depth.dtype)
         fov_x = torch.as_tensor(float(self._fov_x_half_tan), device=depth.device, dtype=depth.dtype)
         fov_y = fov_x * float(H) / float(max(W, 1))
         region_kind = effects.get('hazard_region_kind', 'box')
         if isinstance(region_kind, list) and len(region_kind) == B:
-            vertical_selector = torch.tensor(
-                [str(kind) == 'vertical_edges' for kind in region_kind],
+            side_patch_selector = torch.tensor(
+                [str(kind) == 'side_wall_patches' for kind in region_kind],
                 device=depth.device,
                 dtype=torch.bool,
             )
         else:
-            vertical_selector = torch.full(
+            side_patch_selector = torch.full(
                 (B,),
-                str(region_kind) == 'vertical_edges',
+                str(region_kind) == 'side_wall_patches',
                 device=depth.device,
                 dtype=torch.bool,
             )
 
-        def _vertical_edges_mask():
-            gap_half_w = _batch_scalar(effects.get('geometry_gap_half_w'), self.simple_gate_half_y)
-            edge_half_y = _batch_scalar(effects.get('hazard_edge_half_y'), 0.055)
-            edge_half_z = half_z
+        def _side_wall_patch_mask():
+            slit_half_y = _batch_scalar(effects.get('slit_half_y'), self.simple_slit_half_y)
+            patch_half_y = _batch_scalar(
+                effects.get('side_effect_half_y'),
+                0.5 * self.simple_slit_side_effect_width_y,
+            )
+            patch_half_z = _batch_scalar(
+                effects.get('side_effect_half_z'),
+                self.simple_slit_side_effect_half_z,
+            )
             local_y_axis_world = self.R_scene[:, :, 1].detach().to(depth.device, depth.dtype)
-            edge_centers = torch.stack([
-                center - gap_half_w[:, None] * local_y_axis_world,
-                center + gap_half_w[:, None] * local_y_axis_world,
+            patch_offsets = slit_half_y + patch_half_y
+            patch_centers = torch.stack([
+                center - patch_offsets[:, None] * local_y_axis_world,
+                center + patch_offsets[:, None] * local_y_axis_world,
             ], dim=1)
-            rel = edge_centers.detach() - pos[:, None, :]
+            rel = patch_centers.detach() - pos[:, None, :]
             cam = torch.einsum('bij,bkj->bki', R_cam_world.transpose(1, 2), rel)
             x = cam[..., 0]
             x_safe = x.clamp_min(0.20)
             cy = ((-cam[..., 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, :, None, None]
             cz = ((-cam[..., 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, :, None, None]
-            sy = (edge_half_y[:, None] / x_safe / fov_x).clamp(0.025, 0.50)[:, :, None, None]
-            sz = (edge_half_z[:, None] / x_safe / fov_y).clamp(0.08, 1.25)[:, :, None, None]
+            sy = (patch_half_y[:, None] / x_safe / fov_x).clamp(0.025, 0.50)[:, :, None, None]
+            sz = (patch_half_z[:, None] / x_safe / fov_y).clamp(0.08, 1.25)[:, :, None, None]
             soft = (softness[:, None] / x_safe / fov_x).clamp(0.020, 0.18)[:, :, None, None]
             yy_e = yy[None, None]
             zz_e = zz[None, None]
-            front_gate = torch.sigmoid((x - 0.08) / 0.04)[:, :, None, None]
+            in_front = torch.sigmoid((x - 0.08) / 0.04)[:, :, None, None]
             mask_y = torch.sigmoid((sy - (yy_e - cy).abs()) / soft)
             mask_z = torch.sigmoid((sz - (zz_e - cz).abs()) / soft)
-            return (mask_y * mask_z * front_gate).amax(dim=1).clamp(0.0, 1.0)
+            return (mask_y * mask_z * in_front).amax(dim=1).clamp(0.0, 1.0)
 
         def _opening_mask():
             yy_o = yy.unsqueeze(0)
@@ -543,21 +847,34 @@ class Env:
 
             cy = ((-cam[:, 1] / x_safe) / fov_x).clamp(-1.5, 1.5)[:, None, None]
             cz = ((-cam[:, 2] / x_safe) / fov_y).clamp(-1.5, 1.5)[:, None, None]
-            sy = (half_y.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
-            sz = (half_z.to(depth.device, depth.dtype) / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
+            core_half_y = _batch_scalar(effects.get('glare_core_half_y'), self.simple_slit_half_y)
+            core_half_z = _batch_scalar(effects.get('glare_core_half_z'), self.simple_slit_effect_half_z)
+            sy = (core_half_y.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
+            sz = (core_half_z.to(depth.device, depth.dtype) / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
             soft = (softness.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.025, 0.18)[:, None, None]
-            front_gate = torch.sigmoid((x - 0.08) / 0.04)[:, None, None]
-            mask_y = torch.sigmoid((sy - (yy_o - cy).abs()) / soft)
-            mask_z = torch.sigmoid((sz - (zz_o - cz).abs()) / soft)
-            return (mask_y * mask_z * front_gate).clamp(0.0, 1.0)
+            in_front = torch.sigmoid((x - 0.08) / 0.04)[:, None, None]
+            core_mask_y = torch.sigmoid((sy - (yy_o - cy).abs()) / soft)
+            core_mask_z = torch.sigmoid((sz - (zz_o - cz).abs()) / soft)
+            core = (core_mask_y * core_mask_z * in_front).clamp(0.0, 1.0)
 
-        if bool(vertical_selector.all().item()):
-            return _vertical_edges_mask()
-        if not bool(vertical_selector.any().item()):
+            halo_half_y = _batch_scalar(effects.get('glare_halo_half_y'), self.simple_slit_half_y)
+            halo_half_z = _batch_scalar(effects.get('glare_halo_half_z'), self.simple_slit_effect_half_z)
+            halo_strength = _batch_scalar(effects.get('glare_halo_strength'), self.simple_glare_halo_strength).clamp(0.0, 1.0)
+            halo_sy = (halo_half_y.to(depth.device, depth.dtype) / x_safe / fov_x).clamp(0.04, 1.25)[:, None, None]
+            halo_sz = (halo_half_z.to(depth.device, depth.dtype) / x_safe / fov_y).clamp(0.06, 1.25)[:, None, None]
+            halo_soft = (softness.to(depth.device, depth.dtype) * 1.7 / x_safe / fov_x).clamp(0.035, 0.28)[:, None, None]
+            halo_mask_y = torch.sigmoid((halo_sy - (yy_o - cy).abs()) / halo_soft)
+            halo_mask_z = torch.sigmoid((halo_sz - (zz_o - cz).abs()) / halo_soft)
+            halo = (halo_mask_y * halo_mask_z * in_front * halo_strength[:, None, None]).clamp(0.0, 1.0)
+            return torch.maximum(core, halo).clamp(0.0, 1.0)
+
+        if bool(side_patch_selector.all().item()):
+            return _side_wall_patch_mask()
+        if not bool(side_patch_selector.any().item()):
             return _opening_mask()
-        vertical_mask = _vertical_edges_mask()
+        side_patch_mask = _side_wall_patch_mask()
         opening_mask = _opening_mask()
-        return torch.where(vertical_selector[:, None, None], vertical_mask, opening_mask)
+        return torch.where(side_patch_selector[:, None, None], side_patch_mask, opening_mask)
 
     def _sensor_reference(self, depth, power, exposure, gain, max_range=None):
         max_range = float(self.depth_max_range if max_range is None else max_range)
@@ -614,31 +931,31 @@ class Env:
         # Specular edge material blooms under active IR.  Use unsaturated
         # quadratic terms so high power keeps a clear negative gradient even
         # when the binary valid map is already poor near the wall.
-        power_quad = p.square() * (0.78 + 0.22 * torch.sigmoid((e01 - 0.18) / 0.08))
-        power_knee = torch.sigmoid((p - 0.22) / 0.060) * (0.35 + 0.65 * p)
-        exposure_quad = e01.square() * (0.32 + 0.68 * torch.sigmoid((p - 0.18) / 0.08))
-        exposure_bloom = torch.sigmoid((e01 - 0.42) / 0.075) * (0.45 + 0.55 * torch.sigmoid((g01 - 0.42) / 0.08))
-        gain_quad = g01.square() * (0.30 + 0.70 * torch.sigmoid((e01 - 0.22) / 0.07))
-        gain_bloom = torch.sigmoid((g01 - 0.32) / 0.060) * (0.40 + 0.60 * torch.sigmoid((e01 - 0.24) / 0.07))
+        power_quad = p.square() * (0.38 + 0.62 * torch.sigmoid((e01 - 0.50) / 0.10))
+        power_knee = torch.sigmoid((p - 0.56) / 0.085) * (0.25 + 0.75 * p)
+        exposure_quad = e01.square() * (0.20 + 0.80 * torch.sigmoid((p - 0.48) / 0.10))
+        exposure_bloom = torch.sigmoid((e01 - 0.58) / 0.100) * (0.35 + 0.65 * torch.sigmoid((g01 - 0.48) / 0.09))
+        gain_quad = g01.square() * (0.18 + 0.82 * torch.sigmoid((e01 - 0.48) / 0.10))
+        gain_bloom = torch.sigmoid((g01 - 0.48) / 0.090) * (0.35 + 0.65 * torch.sigmoid((e01 - 0.44) / 0.10))
         spec_safe = (
-            torch.sigmoid((0.34 - p) / 0.060)
-            * torch.sigmoid((0.42 - e01) / 0.08)
-            * torch.sigmoid((0.32 - g01) / 0.07)
+            torch.sigmoid((0.48 - p) / 0.080)
+            * torch.sigmoid((0.52 - e01) / 0.10)
+            * torch.sigmoid((0.42 - g01) / 0.09)
         )
         spec_very_safe = (
-            torch.sigmoid((0.20 - p) / 0.050)
-            * torch.sigmoid((0.26 - e01) / 0.060)
-            * torch.sigmoid((0.18 - g01) / 0.060)
+            torch.sigmoid((0.28 - p) / 0.060)
+            * torch.sigmoid((0.34 - e01) / 0.070)
+            * torch.sigmoid((0.24 - g01) / 0.070)
         )
         spec_penalty = mask * (
-            1.25 * power_quad
-            + 0.75 * power_knee
-            + 0.50 * exposure_quad
-            + 0.40 * exposure_bloom
-            + 0.50 * gain_quad
-            + 0.38 * gain_bloom
+            0.36 * power_quad
+            + 0.74 * power_knee
+            + 0.22 * exposure_quad
+            + 0.26 * exposure_bloom
+            + 0.22 * gain_quad
+            + 0.26 * gain_bloom
         )
-        spec_bonus = mask * (0.42 * spec_safe + 0.22 * spec_very_safe)
+        spec_bonus = mask * (0.34 * spec_safe + 0.18 * spec_very_safe)
         quality_specular = quality_base - spec_penalty + spec_bonus
 
         exposure_lift = torch.sigmoid((e01 - 0.62) / 0.070)
@@ -673,23 +990,36 @@ class Env:
         )
 
         quality = quality.clamp(0.0, 1.0)
-        quality_pre_valid = quality
-
         valid_prob = torch.sigmoid((quality - 0.42) / 0.055)
         hard_valid = (valid_prob > 0.5).to(raw.dtype)
         valid_st = hard_valid.detach() - valid_prob.detach() + valid_prob
         depth_obs = raw * valid_st
         quality_obs = quality * valid_st
 
+        artifact = self._key_cue_artifacts(
+            raw, power, exposure, gain, quality, valid_prob, hard_valid, depth_obs)
+        depth_obs = artifact['depth_obs']
+        quality_obs = artifact['quality_obs']
+        quality = artifact['quality']
+        valid_prob = artifact['valid_prob']
+        hard_valid = artifact['hard_valid']
+        valid_st = artifact['valid_st']
+        cue_mask = artifact['cue_mask']
+        combined_mask = torch.maximum(mask, cue_mask).clamp(0.0, 1.0)
+        effect = (effect + artifact['artifact_effect']).clamp(0.0, 1.0)
+        quality_pre_valid = quality
+
         invalid = (1.0 - valid_st).clamp(0.0, 1.0)
-        mask_mass = mask.sum(dim=(-2, -1)).clamp_min(1e-6)
+        mask_mass = combined_mask.sum(dim=(-2, -1)).clamp_min(1e-6)
         scalars = {
             'quality_mean': quality_obs.mean(dim=(-2, -1)),
             'invalid_rate': invalid.mean(dim=(-2, -1)),
             'scene_effect_mean': effect.mean(dim=(-2, -1)),
-            'scene_mask_mean': mask.mean(dim=(-2, -1)),
-            'glare_quality_mean': (quality_obs * mask).sum(dim=(-2, -1)) / mask_mass,
-            'glare_invalid_rate': (invalid * mask).sum(dim=(-2, -1)) / mask_mass,
+            'scene_mask_mean': combined_mask.mean(dim=(-2, -1)),
+            'slit_cue_mask_mean': cue_mask.mean(dim=(-2, -1)),
+            'key_cue_artifact_mean': artifact['artifact'].mean(dim=(-2, -1)),
+            'glare_quality_mean': (quality_obs * combined_mask).sum(dim=(-2, -1)) / mask_mass,
+            'glare_invalid_rate': (invalid * combined_mask).sum(dim=(-2, -1)) / mask_mass,
         }
         self._store_last_diff_depth_train_aux({
             'quality_pre_valid': quality_pre_valid,
@@ -706,7 +1036,9 @@ class Env:
             'hard_valid_map': hard_valid,
             'invalid_mask': invalid,
             'scene_effect_map': effect,
-            'scene_mask': mask,
+            'scene_mask': combined_mask,
+            'slit_cue_mask': cue_mask,
+            'key_cue_artifact_map': artifact['artifact'],
             'scalars': scalars,
         })
         return depth_obs, quality_obs
@@ -777,15 +1109,28 @@ class Env:
             hard_valid = torch.cat(hard_valid_chunks, dim=0)[sort_idx]
             effect = torch.cat(effect_chunks, dim=0)[sort_idx]
         valid_st = hard_valid.detach() - valid_prob.detach() + valid_prob
-        invalid = (1.0 - valid_st).clamp(0.0, 1.0)
-        mask_mass = mask.sum(dim=(-2, -1)).clamp_min(1e-6)
+        artifact = self._key_cue_artifacts(
+            raw, power, exposure, gain, quality, valid_prob, hard_valid, depth_obs)
+        depth_obs = artifact['depth_obs']
+        quality_obs = artifact['quality_obs']
+        quality = artifact['quality']
+        valid_prob = artifact['valid_prob']
+        hard_valid = artifact['hard_valid']
+        valid_st = artifact['valid_st']
+        cue_mask = artifact['cue_mask']
+        combined_mask = torch.maximum(mask, cue_mask).clamp(0.0, 1.0)
+        effect = (effect + artifact['artifact_effect']).clamp(0.0, 1.0)
+        invalid = artifact['invalid']
+        mask_mass = combined_mask.sum(dim=(-2, -1)).clamp_min(1e-6)
         scalars = {
             'quality_mean': quality_obs.mean(dim=(-2, -1)),
             'invalid_rate': invalid.mean(dim=(-2, -1)),
             'scene_effect_mean': effect.mean(dim=(-2, -1)),
-            'scene_mask_mean': mask.mean(dim=(-2, -1)),
-            'glare_quality_mean': (quality_obs * mask).sum(dim=(-2, -1)) / mask_mass,
-            'glare_invalid_rate': (invalid * mask).sum(dim=(-2, -1)) / mask_mass,
+            'scene_mask_mean': combined_mask.mean(dim=(-2, -1)),
+            'slit_cue_mask_mean': cue_mask.mean(dim=(-2, -1)),
+            'key_cue_artifact_mean': artifact['artifact'].mean(dim=(-2, -1)),
+            'glare_quality_mean': (quality_obs * combined_mask).sum(dim=(-2, -1)) / mask_mass,
+            'glare_invalid_rate': (invalid * combined_mask).sum(dim=(-2, -1)) / mask_mass,
         }
         self._store_last_diff_depth_train_aux({
             'quality_pre_valid': quality,
@@ -803,7 +1148,9 @@ class Env:
             'hard_valid_map': hard_valid,
             'invalid_mask': invalid,
             'scene_effect_map': effect,
-            'scene_mask': mask,
+            'scene_mask': combined_mask,
+            'slit_cue_mask': cue_mask,
+            'key_cue_artifact_map': artifact['artifact'],
             'scalars': scalars,
         })
         return depth_obs, quality_obs

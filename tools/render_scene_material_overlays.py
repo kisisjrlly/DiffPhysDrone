@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Render paper-friendly overlays for the local gate sensor/material region.
+Render paper-friendly overlays for the local slit sensor/material region.
 
-The shared-gate benchmark applies the specular/dark sensor effects through a
-projected mask centered at the gate opening.  This utility makes that mask
-visible on top of the rendered depth image and in a simple top-down geometry
-sketch, so the probed camera settings can be tied back to the gate/slit region.
+The shared-slit benchmark applies glare through the slit opening plus a local
+halo, while specular/dark are material patches on the wall beside the slit.
+This utility makes those masks visible on top of the rendered depth image and
+in a simple top-down geometry sketch, so probed camera settings can be tied
+back to the actual affected wall/slit region.
 """
 
 from __future__ import annotations
@@ -72,9 +73,9 @@ def _rgba_overlay(mask: np.ndarray, color: tuple[float, float, float]) -> np.nda
 def _plot_topdown(ax, fx: dict, row: dict, scene: str, color: tuple[float, float, float]):
     import matplotlib.patches as patches
 
-    gate_x = float(fx.get("geometry_gate_x", row.get("gate_x", 1.82)))
-    slot_y = float(fx.get("decision_open_slot_y", row.get("opening_y", 0.0)))
-    gap_half_w = float(fx.get("geometry_gap_half_w", 0.18))
+    wall_x = float(fx.get("geometry_wall_x", row.get("wall_x", 1.82)))
+    slit_y = float(fx.get("slit_center_y", row.get("slit_center_y", 0.0)))
+    slit_half_y = float(fx.get("slit_half_y", 0.18))
     occluder_x = float(fx.get("geometry_occluder_x", 0.88))
     occluder_half_y = float(fx.get("geometry_occluder_half_y", 0.48))
     divider_x = float(fx.get("geometry_divider_x", 1.58))
@@ -90,24 +91,49 @@ def _plot_topdown(ax, fx: dict, row: dict, scene: str, color: tuple[float, float
 
     y_min, y_max = -1.75, 1.75
     wall_half_x = 0.15
-    if slot_y - gap_half_w > y_min:
-        rect(gate_x, 0.5 * (y_min + slot_y - gap_half_w), wall_half_x,
-             0.5 * (slot_y - gap_half_w - y_min), facecolor="0.18", edgecolor="black", lw=1.0)
-    if y_max > slot_y + gap_half_w:
-        rect(gate_x, 0.5 * (slot_y + gap_half_w + y_max), wall_half_x,
-             0.5 * (y_max - slot_y - gap_half_w), facecolor="0.18", edgecolor="black", lw=1.0)
+    if slit_y - slit_half_y > y_min:
+        rect(wall_x, 0.5 * (y_min + slit_y - slit_half_y), wall_half_x,
+             0.5 * (slit_y - slit_half_y - y_min), facecolor="0.18", edgecolor="black", lw=1.0)
+    if y_max > slit_y + slit_half_y:
+        rect(wall_x, 0.5 * (slit_y + slit_half_y + y_max), wall_half_x,
+             0.5 * (y_max - slit_y - slit_half_y), facecolor="0.18", edgecolor="black", lw=1.0)
 
-    # This band is the world-space gate/slit neighborhood whose projection is
-    # used as the specular/dark local sensor mask.
-    rect(gate_x, slot_y, wall_half_x * 1.35, max(gap_half_w, 0.18),
-         facecolor=(*color, 0.42), edgecolor=color, lw=2.0)
+    region_kind = str(fx.get("hazard_region_kind", "opening"))
+    if region_kind == "side_wall_patches":
+        patch_half_y = float(fx.get("side_effect_half_y", 0.10))
+        patch_half_z = float(fx.get("side_effect_half_z", 1.00))
+        patch_centers_y = [
+            slit_y - slit_half_y - patch_half_y,
+            slit_y + slit_half_y + patch_half_y,
+        ]
+        for patch_y in patch_centers_y:
+            rect(wall_x, patch_y, wall_half_x * 1.35, patch_half_y,
+                 facecolor=(*color, 0.44), edgecolor=color, lw=2.0)
+        ax.text(
+            wall_x + 0.10,
+            max(patch_centers_y),
+            f"side patch z_half={patch_half_z:.2f}",
+            color=color,
+            fontsize=8,
+            va="bottom",
+        )
+    else:
+        core_half_y = float(fx.get("glare_core_half_y", slit_half_y))
+        halo_half_y = float(fx.get("glare_halo_half_y", core_half_y))
+        halo_strength = float(fx.get("glare_halo_strength", 0.0))
+        if halo_strength > 0.0 and halo_half_y > core_half_y:
+            rect(wall_x, slit_y, wall_half_x * 1.55, halo_half_y,
+                 facecolor=(*color, 0.16 + 0.20 * min(halo_strength, 1.0)),
+                 edgecolor=color, lw=1.2, alpha=0.75)
+        rect(wall_x, slit_y, wall_half_x * 1.35, core_half_y,
+             facecolor=(*color, 0.46), edgecolor=color, lw=2.0)
 
     ax.scatter([drone_x], [drone_y], c="white", edgecolors="black", s=42, zorder=4)
-    ax.plot([drone_x, gate_x], [drone_y, slot_y], color=color, lw=1.2, alpha=0.85)
-    ax.scatter([gate_x], [slot_y], marker="x", c=[color], s=50, zorder=5)
+    ax.plot([drone_x, wall_x], [drone_y, slit_y], color=color, lw=1.2, alpha=0.85)
+    ax.scatter([wall_x], [slit_y], marker="x", c=[color], s=50, zorder=5)
 
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlim(-0.05, gate_x + 0.45)
+    ax.set_xlim(-0.05, wall_x + 0.45)
     ax.set_ylim(-1.55, 1.55)
     ax.set_xlabel("x")
     ax.set_ylabel("y")
@@ -168,8 +194,8 @@ def _plot_overlay(path: Path, row: dict, maps: dict, fx: dict, args, scene: str)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/paper_final_full.args")
-    parser.add_argument("--out_dir", default="paper/experiment/results/gate_material_overlays")
+    parser.add_argument("--config", default="configs/slit_active_sensing.args")
+    parser.add_argument("--out_dir", default="paper/experiment/results/slit_material_overlays")
     parser.add_argument("--scenarios", nargs="*", default=["specular", "dark"])
     parser.add_argument("--slots", nargs="*", default=["right"])
     parser.add_argument("--xs", default="1.10,1.45")

@@ -2,5 +2,5 @@
 #
 # 当前分支已经切换为固定地图最小验证版，不再支持旧的 multi_agent 随机场景配置。
 # 请改用：
-# - configs/paper_final_full.args
+# - configs/slit_active_sensing.args
 # - configs/paper_ablate_diff_depth.args

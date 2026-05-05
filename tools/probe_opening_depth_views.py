@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Render depth observations while the drone explicitly looks at the gate opening.
+Render depth observations while the drone explicitly looks at the wall slit.
 
-This probe is meant for sanity-checking the simplified shared gate benchmark:
+This probe is meant for sanity-checking the simplified shared slit benchmark:
 
 - scenarios: glare / specular / dark
 - slots: far_left / left / right / far_right
@@ -10,7 +10,7 @@ This probe is meant for sanity-checking the simplified shared gate benchmark:
 - fixed camera settings at each identical pose
 
 For every condition and pose, the script forces the camera optical axis to look
-at the current opening center, then writes depth/quality/invalid/effect panels
+at the current slit center, then writes depth/quality/invalid/effect panels
 plus CSV summaries.  This isolates whether the simulated depth image changes in
 the expected way when camera parameters or sensor scenes change.
 """
@@ -165,27 +165,28 @@ def _opening_target(env) -> torch.Tensor:
         return center[0].detach().to(device=env.device, dtype=torch.float32)
     if center is not None:
         return torch.tensor(center, device=env.device, dtype=torch.float32).reshape(-1, 3)[0]
-    gate_x = float(fx.get("geometry_gate_x", 1.82))
-    slot_y = float(fx.get("decision_open_slot_y", 0.0))
-    return torch.tensor([gate_x, slot_y, 1.50], device=env.device, dtype=torch.float32)
+    wall_x = float(fx.get("geometry_wall_x", 1.82))
+    slit_y = float(fx.get("slit_center_y", 0.0))
+    slit_z = float(fx.get("slit_center_z", 1.50))
+    return torch.tensor([wall_x, slit_y, slit_z], device=env.device, dtype=torch.float32)
 
 
 def _make_poses(env, xs: list[float], y_mode: str) -> list[ProbePose]:
     fx = env.current_scene_effects or {}
     start_y = float(fx.get("geometry_start_y", 0.0))
-    slot_y = float(fx.get("decision_open_slot_y", 0.0))
-    gate_x = float(fx.get("geometry_gate_x", 1.82))
+    slit_y = float(fx.get("slit_center_y", 0.0))
+    wall_x = float(fx.get("geometry_wall_x", 1.82))
     x_min = min(xs)
-    denom = max(gate_x - x_min, 1e-6)
+    denom = max(wall_x - x_min, 1e-6)
     R_scene = getattr(env, "R_scene", None)
     R0 = None if R_scene is None else R_scene[0].detach()
     poses: list[ProbePose] = []
     for idx, x in enumerate(xs):
         if y_mode == "slot":
-            y = slot_y
+            y = slit_y
         elif y_mode == "blend":
             alpha = float(np.clip((float(x) - x_min) / denom, 0.0, 1.0))
-            y = (1.0 - alpha) * start_y + alpha * slot_y
+            y = (1.0 - alpha) * start_y + alpha * slit_y
         else:
             y = 0.0
         local = torch.tensor([float(x), float(y), 1.50], device=env.device, dtype=torch.float32)
@@ -314,6 +315,8 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
     invalid_np = images.get("invalid_mask")
     effect_np = images.get("scene_effect_map")
     scene_mask_np = images.get("scene_mask")
+    slit_cue_np = images.get("slit_cue_mask")
+    key_cue_artifact_np = images.get("key_cue_artifact_map")
     valid = depth_np > (float(args.depth_min_valid) + 1e-6)
     valid_depth = depth_np[valid]
     pos_world = torch.tensor([pose.x, pose.y, pose.z], device=device, dtype=torch.float32)
@@ -336,11 +339,11 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
     row = {
         "scene": env.current_scene_name,
         "scene_tag": getattr(env, "current_scene_tag", env.current_scene_name),
-        "slot": str((env.current_scene_effects or {}).get("decision_open_slot_name", "")),
+        "slot": str((env.current_scene_effects or {}).get("slit_slot_name", "")),
         "geometry_kind": str((env.current_scene_effects or {}).get("geometry_kind", "")),
-        "opening_y": float((env.current_scene_effects or {}).get("decision_open_slot_y", 0.0)),
-        "gate_x": float((env.current_scene_effects or {}).get("geometry_gate_x", 0.0)),
-        "wall_x": float((env.current_scene_effects or {}).get("geometry_wall_x", (env.current_scene_effects or {}).get("geometry_gate_x", 0.0))),
+        "slit_center_y": float((env.current_scene_effects or {}).get("slit_center_y", 0.0)),
+        "wall_x": float((env.current_scene_effects or {}).get("geometry_wall_x", 0.0)),
+        "back_wall_x": _to_float((env.current_scene_effects or {}).get("geometry_back_wall_x"), 0.0),
         "pose": pose.name,
         "x": pose.x,
         "y": pose.y,
@@ -358,8 +361,8 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "occluder_x": _to_float(fx.get("geometry_occluder_x"), 0.88),
         "occluder_half_y": _to_float(fx.get("geometry_occluder_half_y"), 0.48),
         "divider_x": _to_float(fx.get("geometry_divider_x"), 1.58),
-        "gap_half_w": _to_float(fx.get("geometry_gap_half_w"), 0.18),
-        "gap_half_h": _to_float(fx.get("geometry_gap_half_h"), 1.05),
+        "slit_half_y": _to_float(fx.get("slit_half_y"), 0.18),
+        "wall_half_z": _to_float(fx.get("geometry_wall_half_z"), 1.05),
         "geometry_goal_x": _to_float(fx.get("geometry_goal_x"), 3.0),
         "goal_local_x": goal_local_x,
         "goal_local_y": goal_local_y,
@@ -376,6 +379,8 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "scene_effect_mean": _to_float(scalars.get("scene_effect_mean"), 0.0),
         "sun_mask_mean": _to_float(scalars.get("sun_mask_mean"), 0.0),
         "hazard_mask_mean": _to_float(scalars.get("hazard_mask_mean"), _to_float(scalars.get("scene_mask_mean"), 0.0)),
+        "slit_cue_mask_mean": _to_float(scalars.get("slit_cue_mask_mean"), 0.0),
+        "key_cue_artifact_mean": _to_float(scalars.get("key_cue_artifact_mean"), 0.0),
         "sun_los_mean": _to_float(scalars.get("sun_los_mean"), 0.0),
         "hazard_los_mean": _to_float(scalars.get("hazard_los_mean"), 0.0),
         "glare_quality_mean": _to_float(scalars.get("glare_quality_mean"), 0.0),
@@ -396,6 +401,8 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "invalid": invalid_np,
         "scene_effect": effect_np,
         "scene_mask": scene_mask_np,
+        "slit_cue": slit_cue_np,
+        "key_cue_artifact": key_cue_artifact_np,
     }
     return row, maps
 
@@ -416,39 +423,42 @@ def _plot_topdown_overview(ax, row: dict, args):
         ))
 
     geometry_kind = str(row.get("geometry_kind", ""))
-    gate_x = float(row.get("gate_x", row.get("wall_x", 1.82)))
-    slot_y = float(row.get("opening_y", 0.0))
-    gap_half_w = float(row.get("gap_half_w", 0.18))
+    wall_x = float(row.get("wall_x", 1.82))
+    back_wall_x = float(row.get("back_wall_x", row.get("geometry_back_wall_x", wall_x + 1.8)))
+    slit_y = float(row.get("slit_center_y", 0.0))
+    slit_half_y = float(row.get("slit_half_y", 0.18))
     occluder_x = float(row.get("occluder_x", 0.88))
     occluder_half_y = float(row.get("occluder_half_y", 0.48))
     divider_x = float(row.get("divider_x", 1.58))
     drone_x = float(row.get("local_x", row.get("x", 0.0)))
     drone_y = float(row.get("local_y", row.get("y", 0.0)))
-    look_x = float(row.get("look_target_local_x", row.get("look_target_x", gate_x)))
-    look_y = float(row.get("look_target_local_y", row.get("look_target_y", slot_y)))
+    look_x = float(row.get("look_target_local_x", row.get("look_target_x", wall_x)))
+    look_y = float(row.get("look_target_local_y", row.get("look_target_y", slit_y)))
 
     # Static map, in the environment-local x/y plane.
     y_min, y_max = -1.35, 1.35
     wall_hx = 0.15
-    if geometry_kind != "single_wall_gate":
+    if geometry_kind != "single_wall_slit":
         rect(-1.65, -1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
         rect(-1.65, 1.48, 0.25, 0.25, facecolor="0.70", edgecolor="0.30")
         rect(occluder_x, 0.0, 0.10, occluder_half_y, facecolor="0.30", edgecolor="black", lw=1.0)
         for y in (-0.84, 0.0, 0.84):
             rect(divider_x, y, 0.22, 0.05, facecolor="0.42", edgecolor="black")
         y_min, y_max = -1.70, 1.70
-    if slot_y - gap_half_w > y_min:
-        cy = 0.5 * (y_min + slot_y - gap_half_w)
-        hy = 0.5 * (slot_y - gap_half_w - y_min)
-        rect(gate_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
-    if y_max > slot_y + gap_half_w:
-        cy = 0.5 * (slot_y + gap_half_w + y_max)
-        hy = 0.5 * (y_max - slot_y - gap_half_w)
-        rect(gate_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
-    rect(gate_x, slot_y, wall_hx * 1.15, gap_half_w, facecolor=(0.20, 0.70, 0.25, 0.22),
+    if slit_y - slit_half_y > y_min:
+        cy = 0.5 * (y_min + slit_y - slit_half_y)
+        hy = 0.5 * (slit_y - slit_half_y - y_min)
+        rect(wall_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
+    if y_max > slit_y + slit_half_y:
+        cy = 0.5 * (slit_y + slit_half_y + y_max)
+        hy = 0.5 * (y_max - slit_y - slit_half_y)
+        rect(wall_x, cy, wall_hx, hy, facecolor="0.18", edgecolor="black", lw=1.0)
+    rect(wall_x, slit_y, wall_hx * 1.15, slit_half_y, facecolor=(0.20, 0.70, 0.25, 0.22),
          edgecolor=(0.20, 0.70, 0.25), lw=1.5, alpha=1.0, zorder=3)
-    if geometry_kind != "single_wall_gate":
-        rect(gate_x + 1.83, 0.0, 0.10, 1.30, facecolor="0.55", edgecolor="0.25", lw=0.9, alpha=0.75)
+    if geometry_kind == "single_wall_slit":
+        rect(back_wall_x, 0.0, 0.10, 1.30, facecolor="0.55", edgecolor="0.25", lw=0.9, alpha=0.75)
+    else:
+        rect(wall_x + 1.83, 0.0, 0.10, 1.30, facecolor="0.55", edgecolor="0.25", lw=0.9, alpha=0.75)
 
     # Drone, camera optical axis, and approximate horizontal FOV.
     dx, dy = look_x - drone_x, look_y - drone_y
@@ -474,7 +484,7 @@ def _plot_topdown_overview(ax, row: dict, args):
     ax.scatter([goal_x], [goal_y], marker="*", s=70, c="#f2c94c", edgecolors="black", linewidths=0.6, zorder=4)
 
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlim(min(-1.25, drone_x - 0.45), max(goal_x + 0.35, gate_x + 0.55, drone_x + 0.65))
+    ax.set_xlim(min(-1.25, drone_x - 0.45), max(goal_x + 0.35, back_wall_x + 0.35, wall_x + 0.55, drone_x + 0.65))
     ax.set_ylim(y_min - 0.12, y_max + 0.12)
     ax.set_title("top-down map")
     ax.set_xlabel("local x")
@@ -539,7 +549,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         return
 
     n = len(rendered)
-    fig, axes = plt.subplots(n, 7, figsize=(23.5, max(2.25 * n, 3.0)), squeeze=False)
+    fig, axes = plt.subplots(n, 8, figsize=(26.5, max(2.25 * n, 3.0)), squeeze=False)
     depth_cmap = plt.cm.viridis.copy()
     depth_cmap.set_bad("black")
     first = rendered[0][0]
@@ -555,6 +565,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         invalid = maps["invalid"]
         effect = maps["scene_effect"]
         mask = maps["scene_mask"]
+        key_cue_artifact = maps.get("key_cue_artifact")
 
         axes[r, 0].imshow(np.zeros_like(depth) if raw_show is None else raw_show,
                           vmin=args.depth_min_valid, vmax=args.depth_max_range, cmap=depth_cmap)
@@ -567,10 +578,12 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         axes[r, 3].set_title(f"invalid {row['invalid_rate']:.2f}")
         axes[r, 4].imshow(np.zeros_like(depth) if effect is None else effect, vmin=0, vmax=1, cmap="inferno")
         axes[r, 4].set_title(f"effect {row['scene_effect_mean']:.2f}")
-        axes[r, 5].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
-        axes[r, 5].set_title(f"fill {row['local_fill']:.2f} edge {row.get('local_edge_fill', 0.0):.2f}")
-        _plot_topdown_overview(axes[r, 6], row, args)
-        for c in range(6):
+        axes[r, 5].imshow(np.zeros_like(depth) if key_cue_artifact is None else key_cue_artifact, vmin=0, vmax=1, cmap="plasma")
+        axes[r, 5].set_title(f"key cue {row.get('key_cue_artifact_mean', 0.0):.2f}")
+        axes[r, 6].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
+        axes[r, 6].set_title(f"fill {row['local_fill']:.2f} edge {row.get('local_edge_fill', 0.0):.2f}")
+        _plot_topdown_overview(axes[r, 7], row, args)
+        for c in range(7):
             axes[r, c].set_xticks([])
             axes[r, c].set_yticks([])
         axes[r, 0].set_ylabel(
@@ -700,12 +713,12 @@ def _write_report(path: Path, detail_rows: list[dict], expectation_rows: list[di
 
 def _make_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/paper_final_full.args")
+    parser.add_argument("--config", default="configs/slit_active_sensing.args")
     parser.add_argument("--out_dir", default="paper/experiment/results/opening_depth_probe")
     parser.add_argument("--scenarios", nargs="*", default=list(SCENE_ORDER))
     parser.add_argument("--slots", nargs="*", default=list(SLOT_ORDER))
     parser.add_argument("--xs", default="-0.90,-0.55,-0.20,0.15,0.45,0.62",
-                        help="Comma-separated x positions before the gate.")
+                        help="Comma-separated x positions before the slit wall.")
     parser.add_argument("--path_y_mode", default="slot", choices=["center", "blend", "slot"],
                         help="Position y coordinate; camera always looks at the opening center.")
     parser.add_argument("--camera_settings", default=None,

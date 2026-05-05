@@ -8,7 +8,7 @@ set -euo pipefail
 # 2. It does NOT train any method.
 # 3. Fair protocol: train each method first with `bash run.sh`, then run this script.
 
-CONFIG=${CONFIG:-configs/paper_final_full.args}
+CONFIG=${CONFIG:-configs/slit_active_sensing.args}
 OURS_CKPT=${OURS_CKPT:-/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-04-25-23-45-54/checkpoint0049.pth}
 FIXED_CKPT=${FIXED_CKPT:-/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-04-26-11-24-40/checkpoint0034.pth}
 FIXED_RANDOM_CKPT=${FIXED_RANDOM_CKPT:-}

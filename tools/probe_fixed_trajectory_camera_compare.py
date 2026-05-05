@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare camera settings on a fixed gate-approach trajectory.
+"""Compare camera settings on a fixed slit-approach trajectory.
 
 This script is intentionally independent of a trained policy checkpoint.  It is
 for validating the active-sensing environment itself:
@@ -7,7 +7,7 @@ for validating the active-sensing environment itself:
 - raw_depth geometry should match the top-down scene and should not depend on
   power/exposure/gain.
 - depth_obs / quality / invalid should depend on scene and camera parameters.
-- a differentiable camera-only optimizer should be able to improve gate-edge
+- a differentiable camera-only optimizer should be able to improve slit-edge
   visibility from the same initial camera state.
 
 Methods rendered per pose:
@@ -540,10 +540,10 @@ def _write_compare_panel(path: Path, rendered: list[MethodResult], cond_args):
         axes[r, 2].set_title("depth obs")
         axes[r, 3].imshow(np.zeros((8, 8)) if raw_crop is None else raw_crop,
                           vmin=cond_args.depth_min_valid, vmax=cond_args.depth_max_range, cmap=depth_cmap)
-        axes[r, 3].set_title("gate raw crop")
+        axes[r, 3].set_title("slit raw crop")
         axes[r, 4].imshow(np.zeros((8, 8)) if obs_crop is None else obs_crop,
                           vmin=cond_args.depth_min_valid, vmax=cond_args.depth_max_range, cmap=depth_cmap)
-        axes[r, 4].set_title("gate obs crop")
+        axes[r, 4].set_title("slit obs crop")
         axes[r, 5].imshow(np.zeros_like(depth) if quality is None else quality, vmin=0, vmax=1, cmap="magma")
         axes[r, 5].set_title(f"quality {float(row.get('local_quality_mean', 0.0)):.2f}")
         axes[r, 6].imshow(np.zeros_like(depth) if invalid is None else invalid, vmin=0, vmax=1, cmap="gray")
@@ -599,12 +599,12 @@ def _write_compare_panel(path: Path, rendered: list[MethodResult], cond_args):
 
 def _make_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/paper_final_full.args")
+    parser.add_argument("--config", default="configs/slit_active_sensing.args")
     parser.add_argument("--out_dir", default="paper/experiment/results/fixed_trajectory_camera_compare")
     parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"])
     parser.add_argument("--slots", nargs="*", default=["left", "right"])
     parser.add_argument("--xs", default="-0.85,-0.45,-0.05,0.30,0.58",
-                        help="Comma-separated local x positions along a reasonable gate-approach trajectory.")
+                        help="Comma-separated local x positions along a reasonable slit-approach trajectory.")
     parser.add_argument("--path_y_mode", default="slot", choices=["center", "blend", "slot"])
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--sensor_impl", default="cuda", choices=["cuda", "python"])

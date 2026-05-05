@@ -50,14 +50,36 @@ def build_parser():
     parser.add_argument('--simple_start_x', type=float, default=-1.0)
     parser.add_argument('--simple_goal_x', type=float, default=1.8)
     parser.add_argument('--simple_wall_x', type=float, default=0.65)
-    parser.add_argument('--simple_gate_y_min', type=float, default=-0.55)
-    parser.add_argument('--simple_gate_y_max', type=float, default=0.55)
-    parser.add_argument('--simple_gate_half_y', type=float, default=0.20)
-    parser.add_argument('--simple_gate_half_y_min', type=float, default=None)
-    parser.add_argument('--simple_gate_half_y_max', type=float, default=None)
-    parser.add_argument('--simple_gate_half_z', type=float, default=0.26,
-                        help='Sensor-effect half height for the wall slit; not a physical collision gate height.')
-    parser.add_argument('--simple_gate_z', type=float, default=1.50)
+    parser.add_argument('--simple_slit_center_y_min', type=float, default=-0.55)
+    parser.add_argument('--simple_slit_center_y_max', type=float, default=0.55)
+    parser.add_argument('--simple_slit_half_y', type=float, default=0.20)
+    parser.add_argument('--simple_slit_half_y_min', type=float, default=None)
+    parser.add_argument('--simple_slit_half_y_max', type=float, default=None)
+    parser.add_argument('--simple_slit_effect_half_z', type=float, default=0.26,
+                        help='细缝在传感器效应图中的竖直半高，不是物理碰撞高度。')
+    parser.add_argument('--simple_slit_center_z', type=float, default=1.50)
+    parser.add_argument('--simple_slit_side_effect_width_y', type=float, default=0.20,
+                        help='specular/dark 在细缝两侧墙面上从细缝边缘向外延伸的材质宽度。')
+    parser.add_argument('--simple_slit_side_effect_half_z', type=float, default=1.00,
+                        help='specular/dark 两侧墙面材质区域的竖直半高。')
+    parser.add_argument('--simple_glare_halo_width_y', type=float, default=0.18,
+                        help='glare 强光从细缝向两侧墙面扩散的横向宽度。')
+    parser.add_argument('--simple_glare_halo_extra_half_z', type=float, default=0.25,
+                        help='glare halo 相比核心开口区域额外增加的竖直半高。')
+    parser.add_argument('--simple_glare_halo_strength', type=float, default=0.45,
+                        help='glare halo 相对核心开口强光的强度系数。')
+    parser.add_argument('--simple_back_wall_x_min', type=float, default=None,
+                        help='细缝后方背墙局部 x 的采样下界；默认使用 goal_x + 0.75。')
+    parser.add_argument('--simple_back_wall_x_max', type=float, default=None,
+                        help='细缝后方背墙局部 x 的采样上界；默认等于 simple_back_wall_x_min。')
+    parser.add_argument('--simple_slit_cue_halo_width_y', type=float, default=0.16,
+                        help='关键观测 cue 在细缝横向边缘外额外受影响的宽度。')
+    parser.add_argument('--simple_slit_cue_extra_half_z', type=float, default=0.28,
+                        help='关键观测 cue 相比细缝核心 effect 区域额外增加的竖直半高。')
+    parser.add_argument('--simple_key_cue_degrade_strength', type=float, default=0.90,
+                        help='dark/specular/glare 对细缝内部和后墙 cue 的最大退化强度。')
+    parser.add_argument('--simple_specular_false_depth_strength', type=float, default=0.55,
+                        help='specular 高功率下把关键 cue 变成错误近深度的强度。')
     parser.add_argument('--no_odom', default=False, action='store_true')
     parser.add_argument('--include_camera_state_in_obs', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--max_acc_cmd', type=float, default=2.5)
@@ -194,17 +216,37 @@ def validate_args(args):
         raise ValueError('--simple_goal_x must be greater than --simple_start_x')
     if args.simple_wall_x <= args.simple_start_x or args.simple_wall_x >= args.simple_goal_x:
         raise ValueError('--simple_wall_x must be between start and goal')
-    if args.simple_gate_half_y <= 0 or args.simple_gate_half_z <= 0:
-        raise ValueError('--simple_gate_half_y and --simple_gate_half_z must be > 0')
-    if (args.simple_gate_half_y_min is None) != (args.simple_gate_half_y_max is None):
-        raise ValueError('--simple_gate_half_y_min and --simple_gate_half_y_max must be set together')
-    if args.simple_gate_half_y_min is None:
-        args.simple_gate_half_y_min = args.simple_gate_half_y
-        args.simple_gate_half_y_max = args.simple_gate_half_y
-    if args.simple_gate_half_y_min <= 0 or args.simple_gate_half_y_max <= 0:
-        raise ValueError('--simple_gate_half_y_min/max must be > 0')
-    if args.simple_gate_half_y_max < args.simple_gate_half_y_min:
-        raise ValueError('--simple_gate_half_y_max must be >= --simple_gate_half_y_min')
+    if args.simple_slit_half_y <= 0 or args.simple_slit_effect_half_z <= 0:
+        raise ValueError('--simple_slit_half_y and --simple_slit_effect_half_z must be > 0')
+    if (args.simple_slit_half_y_min is None) != (args.simple_slit_half_y_max is None):
+        raise ValueError('--simple_slit_half_y_min and --simple_slit_half_y_max must be set together')
+    if args.simple_slit_half_y_min is None:
+        args.simple_slit_half_y_min = args.simple_slit_half_y
+        args.simple_slit_half_y_max = args.simple_slit_half_y
+    if args.simple_slit_half_y_min <= 0 or args.simple_slit_half_y_max <= 0:
+        raise ValueError('--simple_slit_half_y_min/max must be > 0')
+    if args.simple_slit_half_y_max < args.simple_slit_half_y_min:
+        raise ValueError('--simple_slit_half_y_max must be >= --simple_slit_half_y_min')
+    if args.simple_slit_side_effect_width_y <= 0 or args.simple_slit_side_effect_half_z <= 0:
+        raise ValueError('--simple_slit_side_effect_width_y and --simple_slit_side_effect_half_z must be > 0')
+    if args.simple_glare_halo_width_y < 0 or args.simple_glare_halo_extra_half_z < 0:
+        raise ValueError('--simple_glare_halo_width_y and --simple_glare_halo_extra_half_z must be >= 0')
+    if not (0.0 <= args.simple_glare_halo_strength <= 1.0):
+        raise ValueError('--simple_glare_halo_strength must be in [0, 1]')
+    if args.simple_back_wall_x_min is None:
+        args.simple_back_wall_x_min = float(args.simple_goal_x) + 0.75
+    if args.simple_back_wall_x_max is None:
+        args.simple_back_wall_x_max = args.simple_back_wall_x_min
+    if args.simple_back_wall_x_min <= args.simple_wall_x or args.simple_back_wall_x_max <= args.simple_wall_x:
+        raise ValueError('--simple_back_wall_x_min/max must be greater than --simple_wall_x')
+    if args.simple_back_wall_x_max < args.simple_back_wall_x_min:
+        raise ValueError('--simple_back_wall_x_max must be >= --simple_back_wall_x_min')
+    if args.simple_slit_cue_halo_width_y < 0 or args.simple_slit_cue_extra_half_z < 0:
+        raise ValueError('--simple_slit_cue_halo_width_y and --simple_slit_cue_extra_half_z must be >= 0')
+    if not (0.0 <= args.simple_key_cue_degrade_strength <= 1.0):
+        raise ValueError('--simple_key_cue_degrade_strength must be in [0, 1]')
+    if not (0.0 <= args.simple_specular_false_depth_strength <= 1.0):
+        raise ValueError('--simple_specular_false_depth_strength must be in [0, 1]')
     if args.cam_delta_max < 0:
         raise ValueError('--cam_delta_max must be >= 0')
     if args.cam_return_rate < 0:
@@ -232,6 +274,20 @@ def validate_args(args):
         if not (0.0 <= val <= 1.0):
             raise ValueError(f'--{name} must be in [0, 1]')
 
+    # Fixed / randfix baselines should not carry any camera-training objective.
+    # The camera is not learned there, so these coefficients only add confusion
+    # in logs and config files.
+    if args.camera_control_mode in {'fixed', 'fixed_random_static'}:
+        for name in [
+            'coef_cam_smooth',
+            'coef_diff_depth_power',
+            'coef_diff_depth_blur',
+            'coef_diff_depth_noise',
+            'coef_diff_depth_fill',
+        ]:
+            setattr(args, name, 0.0)
+        args.diff_depth_min_fill_rate = 0.0
+
 
 def print_runtime_mode(args):
     print('=' * 30 + ' Runtime Mode ' + '=' * 30)
@@ -257,9 +313,23 @@ def print_runtime_mode(args):
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print(
         'environment               : single_wall_slit '
-        f'wall_x={args.simple_wall_x}, slit_half_y={args.simple_gate_half_y_min}'
-        f'..{args.simple_gate_half_y_max}, '
-        f'sensor_effect_half_z={args.simple_gate_half_z}'
+        f'wall_x={args.simple_wall_x}, slit_center_y={args.simple_slit_center_y_min}'
+        f'..{args.simple_slit_center_y_max}, '
+        f'slit_half_y={args.simple_slit_half_y_min}'
+        f'..{args.simple_slit_half_y_max}, '
+        f'slit_effect_half_z={args.simple_slit_effect_half_z}, '
+        f'slit_center_z={args.simple_slit_center_z}, '
+        f'side_effect_width_y={args.simple_slit_side_effect_width_y}, '
+        f'side_effect_half_z={args.simple_slit_side_effect_half_z}, '
+        f'glare_halo_width_y={args.simple_glare_halo_width_y}, '
+        f'glare_halo_extra_half_z={args.simple_glare_halo_extra_half_z}, '
+        f'glare_halo_strength={args.simple_glare_halo_strength}, '
+        f'back_wall_x={args.simple_back_wall_x_min}'
+        f'..{args.simple_back_wall_x_max}, '
+        f'slit_cue_halo_width_y={args.simple_slit_cue_halo_width_y}, '
+        f'slit_cue_extra_half_z={args.simple_slit_cue_extra_half_z}, '
+        f'key_cue_degrade_strength={args.simple_key_cue_degrade_strength}, '
+        f'specular_false_depth_strength={args.simple_specular_false_depth_strength}'
     )
     print('=' * 75)
 

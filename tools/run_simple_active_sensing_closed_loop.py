@@ -5,10 +5,10 @@ This is intentionally not a trained policy evaluation.  It uses one simple
 waypoint controller for every method and changes only the camera-parameter
 selection rule.
 
-The controller commits to the true opening lane only after the current depth
-observation has enough local gate-edge visibility.  If the camera setting makes
-the gate edge unreadable, the controller keeps flying the center route and tends
-to hit the occluder/gate.  This makes the experiment useful as a quick,
+The controller commits to the true slit lane only after the current depth
+observation has enough local slit-edge visibility.  If the camera setting makes
+the slit edge unreadable, the controller keeps flying the center route and tends
+to hit the wall.  This makes the experiment useful as a quick,
 checkpoint-free demonstration that perception quality changes closed-loop
 behavior.
 """
@@ -89,7 +89,7 @@ def _render_current(env, args, setting: CameraSetting) -> tuple[dict, torch.Tens
     valid_depth = depth_np[valid]
     row = {
         "scene": env.current_scene_name,
-        "slot": str((env.current_scene_effects or {}).get("decision_open_slot_name", "")),
+        "slot": str((env.current_scene_effects or {}).get("slit_slot_name", "")),
         "x": float(env.p[0, 0].detach().cpu()),
         "y": float(env.p[0, 1].detach().cpu()),
         "z": float(env.p[0, 2].detach().cpu()),
@@ -252,7 +252,7 @@ def run_episode(method: str, scene: str, slot: str, args, script_args, device, r
             committed = True
 
         fx = env.get_scene_effects_for_env(0)
-        slot_y = float(fx.get("decision_open_slot_y", 0.0))
+        slot_y = float(fx.get("slit_center_y", 0.0))
         local_pos = _local_from_world(env, env.p[0])
         if committed:
             if float(local_pos[0]) < 0.55:
@@ -318,7 +318,7 @@ def run_episode(method: str, scene: str, slot: str, args, script_args, device, r
 
 def _make_arg_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/paper_final_full.args")
+    parser.add_argument("--config", default="configs/slit_active_sensing.args")
     parser.add_argument("--out_dir", default="paper/experiment/results/simple_active_sensing_closed_loop")
     parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"])
     parser.add_argument("--slots", nargs="*", default=["left", "right"])

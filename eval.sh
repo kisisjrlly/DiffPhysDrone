@@ -4,12 +4,16 @@ set -euo pipefail
 # Minimal eval wrapper. Usage:
 #   CKPT=checkpoint/.../checkpointXXXX.pth bash eval.sh
 # Optional:
+#   MODE=randfix CKPT=checkpoint/.../checkpointXXXX.pth bash eval.sh
 #   EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_slot right" bash eval.sh
 
 export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 
-task=${TASK:-paper_final_full}
-ckpt_path=${CKPT:-checkpoint/2026-05-03-11-47-46/checkpoint0014.pth}
+base_task=${BASE_TASK:-slit_active_sensing}
+mode=${MODE:-fix}
+config_override=${CONFIG:-}
+task_override=${TASK:-}
+ckpt_path=${CKPT:-checkpoint/2026-05-05-19-27-53/checkpoint0014.pth}
 eval_episodes=${EVAL_EPISODES:-10}
 vis_episode_idx=${VIS_EPISODE_IDX:--1}
 eval_batch_size=${EVAL_BATCH_SIZE:-1}
@@ -18,6 +22,22 @@ eval_extra_args=${EVAL_EXTRA_ARGS:-}
 eval_trace_csv=${EVAL_TRACE_CSV:-}
 eval_episode_csv=${EVAL_EPISODE_CSV:-}
 log_to_file=${LOG_TO_FILE:-0}
+dry_run=${DRY_RUN:-0}
+
+case "$mode" in
+	ours|fixed|randfix|nondiff)
+		;;
+	fix)
+		mode="fixed"
+		;;
+	fixed_random|fixed_random_static)
+		mode="randfix"
+		;;
+	*)
+		echo "[error] unsupported MODE=$mode (expected ours|fixed|randfix|nondiff)" >&2
+		exit 1
+		;;
+esac
 
 if [ -z "$ckpt_path" ]; then
 	echo "[error] set CKPT=checkpoint/.../checkpointXXXX.pth"
@@ -40,9 +60,20 @@ else
 	py_bin="python3"
 fi
 
-cfg_file="configs/${task}.args"
+if [ -n "$config_override" ]; then
+	cfg_file="$config_override"
+	task=$(basename "${cfg_file%.args}")
+elif [ -n "$task_override" ]; then
+	task="$task_override"
+	cfg_file="configs/${task}.args"
+else
+	task="${base_task}_auto_${mode}"
+	cfg_file="configs/${task}.args"
+fi
+
 if [ ! -f "$cfg_file" ]; then
 	echo "[error] config file not found: $cfg_file"
+	echo "        generate it with: RUN_TRAIN=0 MODES=\"ours fixed randfix nondiff\" bash run_train_modes.sh"
 	exit 1
 fi
 
@@ -63,11 +94,17 @@ log_file="logs/eval-${task}-$(date +%Y-%m-%d-%H-%M-%S).log"
 cmd="$py_bin -u eval.py $cfg_args $eval_extra_args --resume $ckpt_path $vis_args --wandb_disabled --eval_episodes $eval_episodes --vis_episode_idx $vis_episode_idx --batch_size $eval_batch_size $csv_args"
 
 echo "using config     : $cfg_file"
+echo "mode             : $mode"
 echo "using checkpoint : $ckpt_path"
 echo "eval episodes    : $eval_episodes"
 echo "eval extra args  : ${eval_extra_args:-<none>}"
 
-if [ "$log_to_file" = "1" ]; then
+if [ "$dry_run" = "1" ]; then
+	echo "dry run command  : $cmd"
+elif [ "$dry_run" != "0" ]; then
+	echo "[error] invalid DRY_RUN=$dry_run"
+	exit 1
+elif [ "$log_to_file" = "1" ]; then
 	eval "$cmd" > "$log_file" 2>&1
 	echo "log file: $log_file"
 elif [ "$log_to_file" = "0" ]; then

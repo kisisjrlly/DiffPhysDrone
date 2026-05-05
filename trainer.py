@@ -111,28 +111,19 @@ def _episode_history_metadata(env, env_idx):
     except Exception:
         fx = {}
     scene_name = str(fx.get('sensor_regime_name', getattr(env, 'current_scene_name', 'unknown')))
-    scene_id = float(fx.get('sensor_regime_id', getattr(env, 'current_scene_id', -1)))
-    slot = str(fx.get('decision_open_slot_name', 'unknown'))
-    gate_y = fx.get('decision_open_slot_y', None)
-    gate_half_y = fx.get('geometry_gap_half_w', None)
+    slot = str(fx.get('slit_slot_name', 'unknown'))
+    slit_y = fx.get('slit_center_y', None)
     yaw = None
     try:
         yaw = float(env.get_scene_yaw_for_env(env_idx))
     except Exception:
         pass
     parts = [f'scene={scene_name}', f'slot={slot}', f'env={int(env_idx)}']
-    if gate_y is not None:
-        parts.append(f'gate_y={float(gate_y):+.3f}')
-    if gate_half_y is not None:
-        parts.append(f'gate_half_y={float(gate_half_y):.3f}')
+    if slit_y is not None:
+        parts.append(f'slit_y={float(slit_y):+.3f}')
     if yaw is not None:
         parts.append(f'yaw={yaw:+.2f}rad')
-    scalars = {'episode_history/scene_id': scene_id}
-    if gate_y is not None:
-        scalars['episode_history/gate_y'] = float(gate_y)
-    if gate_half_y is not None:
-        scalars['episode_history/gate_half_y'] = float(gate_half_y)
-    return ' | '.join(parts), scalars
+    return ' | '.join(parts), {}
 
 
 def _to_local_position_history(ph, env, env_idx):

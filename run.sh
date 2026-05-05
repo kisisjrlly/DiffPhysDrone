@@ -9,13 +9,13 @@ set -euo pipefail
 export all_proxy=http://127.0.0.1:7890
 
 # 设置要运行的任务名称 (Set the task to run)
-# 可通过环境变量覆盖，例如：TASK=paper_ablate_diff_depth bash run.sh
-task=${TASK:-paper_final_full}
+# 可通过环境变量覆盖，例如：TASK=slit_active_sensing_auto_ours bash run.sh
+task=${TASK:-slit_active_sensing}
 
 # 可选相机档位叠加配置：
 #   CAM_PROFILE=low|high|ultra
 # 示例：
-#   TASK=paper_final_full CAM_PROFILE=ultra bash run.sh
+#   TASK=slit_active_sensing CAM_PROFILE=ultra bash run.sh
 # diff_depth-only 分支默认不再隐式叠加相机 profile；
 # 若需要额外 profile，请显式传入 CAM_PROFILE=low|high|ultra。
 cam_profile=${CAM_PROFILE:-}

@@ -704,10 +704,10 @@ class RerunVis:
         regime = str(fx.get('sensor_regime_name', scene_name or '')).split('_', 1)[0]
         if regime in {'glare', 'specular', 'dark'}:
             if regime == 'specular':
-                label = "REFLECTIVE_GATE"
+                label = "REFLECTIVE_SLIT_EDGE"
                 color = [255, 180, 120, 150]
             elif regime == 'dark':
-                label = "LOW_ALBEDO_GATE"
+                label = "LOW_ALBEDO_SLIT_EDGE"
                 color = [30, 30, 30, 210]
             else:
                 label = "IR_GLARE"
@@ -732,24 +732,29 @@ class RerunVis:
             if 'hazard_center' in fx:
                 hazard = np.asarray(fx['hazard_center'], dtype=np.float32).reshape(3)
                 try:
-                    gate_x = float(fx.get('geometry_gate_x', fx.get('geometry_wall_x', hazard[0])))
-                    gate_y = float(fx.get('decision_open_slot_y', 0.0))
-                    gate_z = float(fx.get('geometry_gate_z', hazard[2]))
-                    gap_half_w = float(fx.get('geometry_gap_half_w', 0.18))
-                    gap_half_h = float(fx.get('geometry_gap_half_h', 0.26))
+                    wall_x = float(fx.get('geometry_wall_x', hazard[0]))
+                    slit_y = float(fx.get('slit_center_y', 0.0))
+                    slit_z = float(fx.get('slit_center_z', hazard[2]))
+                    slit_half_y = float(fx.get('slit_half_y', 0.18))
+                    wall_half_z = float(fx.get('geometry_wall_half_z', 0.26))
                     edge_local = np.asarray([
-                        [gate_x, gate_y - gap_half_w, gate_z],
-                        [gate_x, gate_y + gap_half_w, gate_z],
+                        [wall_x, slit_y - slit_half_y, slit_z],
+                        [wall_x, slit_y + slit_half_y, slit_z],
                     ], dtype=np.float32)
                     edge_world = _rot_points(edge_local)
-                    if str(fx.get('hazard_region_kind', 'box')) == 'vertical_edges':
-                        edge_half_y = float(fx.get('hazard_edge_half_y', 0.055))
-                        edge_half_z = float(fx.get('hazard_half_z', 1.00))
+                    if str(fx.get('hazard_region_kind', 'box')) == 'side_wall_patches':
+                        patch_half_y = float(fx.get('side_effect_half_y', 0.10))
+                        patch_half_z = float(fx.get('side_effect_half_z', 1.00))
+                        patch_local = np.asarray([
+                            [wall_x, slit_y - slit_half_y - patch_half_y, slit_z],
+                            [wall_x, slit_y + slit_half_y + patch_half_y, slit_z],
+                        ], dtype=np.float32)
+                        patch_world = _rot_points(patch_local)
                         rr.log(
                             f"{phase}/world/scene/local_sensor_region",
                             rr.Boxes3D(
-                                centers=edge_world.tolist(),
-                                half_sizes=[[0.035, edge_half_y, edge_half_z]] * 2,
+                                centers=patch_world.tolist(),
+                                half_sizes=[[0.035, patch_half_y, patch_half_z]] * 2,
                                 rotations=_box_rotations(2),
                                 colors=[color, color],
                                 radii=[0.004, 0.004],
@@ -758,11 +763,30 @@ class RerunVis:
                             ),
                         )
                     else:
+                        core_half_y = float(fx.get('glare_core_half_y', fx.get('slit_half_y', 0.18)))
+                        core_half_z = float(fx.get('glare_core_half_z', fx.get('slit_effect_half_z', 0.75)))
+                        halo_half_y = float(fx.get('glare_halo_half_y', fx.get('hazard_half_y', core_half_y)))
+                        halo_half_z = float(fx.get('glare_halo_half_z', fx.get('hazard_half_z', core_half_z)))
+                        halo_strength = float(fx.get('glare_halo_strength', 0.0))
+                        if halo_strength > 0.0 and (halo_half_y > core_half_y or halo_half_z > core_half_z):
+                            halo_color = [color[0], color[1], color[2], max(35, int(color[3] * min(halo_strength, 1.0)))]
+                            rr.log(
+                                f"{phase}/world/scene/glare_halo_region",
+                                rr.Boxes3D(
+                                    centers=[hazard.tolist()],
+                                    half_sizes=[[0.030, halo_half_y, halo_half_z]],
+                                    rotations=_box_rotations(1),
+                                    colors=[halo_color],
+                                    radii=[0.003],
+                                    labels=[f"{label}_HALO"],
+                                    show_labels=True,
+                                ),
+                            )
                         rr.log(
                             f"{phase}/world/scene/local_sensor_region",
                             rr.Boxes3D(
                                 centers=[hazard.tolist()],
-                                half_sizes=[[0.035, float(fx.get('hazard_half_y', 0.25)), float(fx.get('hazard_half_z', 1.20))]],
+                                half_sizes=[[0.035, core_half_y, core_half_z]],
                                 rotations=_box_rotations(1),
                                 colors=[color],
                                 radii=[0.004],
@@ -771,14 +795,14 @@ class RerunVis:
                             ),
                         )
                     rr.log(
-                        f"{phase}/world/scene/gate_vertical_edges",
+                        f"{phase}/world/scene/slit_vertical_edges",
                         rr.Boxes3D(
                             centers=edge_world.tolist(),
-                            half_sizes=[[0.045, 0.012, gap_half_h]] * 2,
+                            half_sizes=[[0.045, 0.012, wall_half_z]] * 2,
                             rotations=_box_rotations(2),
                             colors=[[255, 255, 255, 220], [255, 255, 255, 220]],
                             radii=[0.004, 0.004],
-                            labels=["GATE_EDGE", "GATE_EDGE"],
+                            labels=["SLIT_EDGE", "SLIT_EDGE"],
                             show_labels=True,
                         ),
                     )

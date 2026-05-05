@@ -1,7 +1,7 @@
 # RAL 实验规划与出图计划
 
 > 面向当前 `diff_depth` 分支。  
-> 对齐当前代码主配置：`configs/paper_final_full.args`。  
+> 对齐当前代码主配置：`configs/slit_active_sensing.args`。  
 > 对齐当前论文草稿：`paper/Paper_diff_depth_RAL.md`。  
 > 当前目标不是把所有想法一次做完，而是先完成一套“能支撑 RAL 论文主结论”的最小而完整实验。
 
@@ -316,7 +316,7 @@
 
 当前主配置已经给出一个可用起点：
 
-- `configs/paper_final_full.args`
+- `configs/slit_active_sensing.args`
 
 建议第一轮先以它为主配置模板。
 
@@ -548,7 +548,7 @@ Sun Glare 的关键不是全局均值，而是“进入逆光区域时发生了�
 
 推荐后续形成如下配置集合：
 
-- `paper_final_full.args` 作为主训练模板
+- `slit_active_sensing.args` 作为主训练模板
 - `exp_eval_base.args`
 - `exp_eval_sun_l1.args`
 - `exp_eval_sun_l2.args`

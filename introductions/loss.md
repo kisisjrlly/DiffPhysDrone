@@ -140,7 +140,7 @@ loss_diff_depth_fill = mean(fill_gap_t^2)
 
 ### 4.3 它在当前主配置里意味着什么
 
-在 [paper_final_full.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/paper_final_full.args) 里，你现在设的是：
+在 [slit_active_sensing.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/slit_active_sensing.args) 里，你现在设的是：
 
 - `--coef_diff_depth_fill 5.0`
 - `--diff_depth_min_fill_rate 0.25`

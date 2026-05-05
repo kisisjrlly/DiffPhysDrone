@@ -112,7 +112,7 @@ def _summaries(rows: list[dict]) -> list[dict]:
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--config', type=Path, default=Path('configs/paper_final_full.args'))
+    ap.add_argument('--config', type=Path, default=Path('configs/slit_active_sensing.args'))
     ap.add_argument('--ours_ckpt', type=Path, required=True)
     ap.add_argument('--fixed_ckpt', type=Path, required=True)
     ap.add_argument('--fixed_random_ckpt', type=Path, default=None)

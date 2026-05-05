@@ -5,7 +5,7 @@
 本文面向当前项目参数系统，主依据是：
 
 - `config.py::build_parser`（训练/主流程参数）
-- `configs/paper_final_full.args`（你当前使用的配置）
+- `configs/slit_active_sensing.args`（你当前使用的配置）
 - `eval.py::parse_eval_args`（评估额外参数）
 
 目标：
@@ -29,11 +29,11 @@
    - 有默认值（可能是 `True` 或 `False`）。
    - 可写 `--xxx` 或 `--no-xxx` 显式覆盖。
 
-如果 `paper_final_full.args` 未写某项，则采用 `config.py` 默认值。
+如果 `slit_active_sensing.args` 未写某项，则采用 `config.py` 默认值。
 
 ---
 
-## 当前配置总览（`paper_final_full.args`）
+## 当前配置总览（`slit_active_sensing.args`）
 
 当前配置画像：
 

@@ -86,17 +86,31 @@ def sensor_reference(depth, mask, power, exposure, gain, speed, regime_id, min_v
         quality = quality - penalty + bonus
         effect = penalty
     elif int(regime_id) == 1:
-        power_bloom = torch.sigmoid((p - 0.30) / 0.055) * (0.62 + 0.38 * torch.sigmoid((e01 - 0.22) / 0.07))
-        exposure_bloom = torch.sigmoid((e01 - 0.48) / 0.075) * (0.60 + 0.40 * torch.sigmoid((g01 - 0.50) / 0.08))
-        gain_bloom = torch.sigmoid((g01 - 0.36) / 0.060) * (0.55 + 0.45 * torch.sigmoid((e01 - 0.28) / 0.07))
+        power_quad = p.square() * (0.38 + 0.62 * torch.sigmoid((e01 - 0.50) / 0.10))
+        power_knee = torch.sigmoid((p - 0.56) / 0.085) * (0.25 + 0.75 * p)
+        exposure_quad = e01.square() * (0.20 + 0.80 * torch.sigmoid((p - 0.48) / 0.10))
+        exposure_bloom = torch.sigmoid((e01 - 0.58) / 0.100) * (0.35 + 0.65 * torch.sigmoid((g01 - 0.48) / 0.09))
+        gain_quad = g01.square() * (0.18 + 0.82 * torch.sigmoid((e01 - 0.48) / 0.10))
+        gain_bloom = torch.sigmoid((g01 - 0.48) / 0.090) * (0.35 + 0.65 * torch.sigmoid((e01 - 0.44) / 0.10))
         safe = (
-            torch.sigmoid((0.42 - p) / 0.070)
-            * torch.sigmoid((0.52 - e01) / 0.08)
-            * torch.sigmoid((0.42 - g01) / 0.07)
+            torch.sigmoid((0.48 - p) / 0.080)
+            * torch.sigmoid((0.52 - e01) / 0.10)
+            * torch.sigmoid((0.42 - g01) / 0.09)
         )
-        very_safe = torch.sigmoid((0.24 - p) / 0.055) * torch.sigmoid((0.30 - e01) / 0.07)
-        penalty = mask * (1.06 * power_bloom + 0.58 * exposure_bloom + 0.74 * gain_bloom)
-        bonus = mask * (0.38 * safe + 0.18 * very_safe)
+        very_safe = (
+            torch.sigmoid((0.28 - p) / 0.060)
+            * torch.sigmoid((0.34 - e01) / 0.070)
+            * torch.sigmoid((0.24 - g01) / 0.070)
+        )
+        penalty = mask * (
+            0.36 * power_quad
+            + 0.74 * power_knee
+            + 0.22 * exposure_quad
+            + 0.26 * exposure_bloom
+            + 0.22 * gain_quad
+            + 0.26 * gain_bloom
+        )
+        bonus = mask * (0.34 * safe + 0.18 * very_safe)
         quality = quality - penalty + bonus
         effect = penalty
     else:

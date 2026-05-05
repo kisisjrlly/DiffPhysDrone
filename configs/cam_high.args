@@ -1,7 +1,7 @@
 # ==========================================================
 # Camera Profile: HIGH (transition)
 # 目标：中后期过渡到更高真实感，但控制训练吞吐下降
-# 用法：TASK=paper_final_full CAM_PROFILE=high bash run.sh
+# 用法：TASK=slit_active_sensing CAM_PROFILE=high bash run.sh
 # ==========================================================
 
 --cam_realism_preset high
