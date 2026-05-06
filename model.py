@@ -155,6 +155,45 @@ class Model(nn.Module):
         # 全局使用的激活函数
         self.act = nn.LeakyReLU(0.05)
 
+    @staticmethod
+    def _is_camera_parameter(name: str) -> bool:
+        return name.startswith((
+            'cam_spatial_stem',
+            'cam_spatial_proj',
+            'cam_img_adapter',
+            'cam_img_norm',
+            'cam_state_proj',
+            'cam_state_norm',
+            'cam_motion_proj',
+            'cam_motion_norm',
+            'cam_pre',
+            'cam_gru',
+            'cam_hx_norm',
+            'fc_cam',
+        ))
+
+    @staticmethod
+    def _is_shared_visual_parameter(name: str) -> bool:
+        return name.startswith((
+            'stem',
+            'img_norm',
+        ))
+
+    def freeze_camera_for_flight_only(self):
+        """Freeze camera control and shared visual stem for flight-only fine-tuning.
+
+        The pretrained camera remains active in forward passes, but optimizer
+        updates only the flight state/recurrent/action layers.  Freezing the
+        shared visual stem avoids moving camera visual features while tuning
+        the flight controller.
+        """
+        frozen = []
+        for name, param in self.named_parameters():
+            if self._is_camera_parameter(name) or self._is_shared_visual_parameter(name):
+                param.requires_grad_(False)
+                frozen.append(name)
+        return frozen
+
     def reset(self):
         # 重置函数，当前为空。
         # 因为 GRU 的隐藏状态 hx 是在外部循环 (main_cuda.py) 中手动维护并传入的，而不是存在模型内部。
@@ -269,12 +308,12 @@ class Model(nn.Module):
         """
         # ==========================
         # A. 深度输入预处理
-        x = self.preprocess_depth_input(depth_obs=depth_obs, add_noise=add_noise)
+        x_depth = self.preprocess_depth_input(depth_obs=depth_obs, add_noise=add_noise)
 
         # ==========================
         # B. 视觉特征提取
         # ==========================
-        img_feat = self.stem(x)
+        img_feat = self.stem(x_depth)
         
         # ==========================
         # C. 多模态融合 + 时序建模
@@ -283,10 +322,10 @@ class Model(nn.Module):
         img_feat = self.img_norm(img_feat)
         v_feat = self.v_norm(self.v_proj(v))
         fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
-        x = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
+        fused_feat = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
         
         # GRU 累积时序上下文（POMDP 下尤为关键）
-        hx = self.gru(x, hx)
+        hx = self.gru(fused_feat, hx)
         hx = self.hx_norm(hx + 0.1 * self.gru_residual(hx))
         
         # 输出动作头原始值
@@ -301,7 +340,7 @@ class Model(nn.Module):
             camera_motion_state = torch.zeros(v.shape[0], 6, device=v.device, dtype=v.dtype)
         else:
             camera_motion_state = camera_motion_state.to(device=v.device, dtype=v.dtype)
-        cam_spatial = self.cam_spatial_proj(self.cam_spatial_stem(x).flatten(1))
+        cam_spatial = self.cam_spatial_proj(self.cam_spatial_stem(x_depth).flatten(1))
         cam_img_feat = self.cam_img_norm(
             img_feat
             + 0.25 * self.cam_img_adapter(img_feat)

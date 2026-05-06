@@ -58,6 +58,24 @@ def _write_csv_rows(path, rows):
         writer.writerows(rows)
 
 
+def _append_csv_rows(path, rows):
+    if not path or not rows:
+        return
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    path_exists = os.path.exists(path)
+    keys, seen = [], set()
+    for row in rows:
+        for key in row.keys():
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
+    with open(path, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        if not path_exists:
+            writer.writeheader()
+        writer.writerows(rows)
+
+
 def _min_clearance_from_vec(vec_now, env):
     """Return per-env physical clearance after subtracting drone radius in the CUDA kernel."""
     dist = torch.norm(vec_now, 2, -1)
@@ -347,12 +365,20 @@ def main():
             vis_episode_idx=int(args.vis_episode_idx),
         )
     episode_rows, trace_rows = [], []
+    if args.eval_episode_csv and os.path.exists(args.eval_episode_csv):
+        os.remove(args.eval_episode_csv)
+    if args.eval_trace_csv and os.path.exists(args.eval_trace_csv):
+        os.remove(args.eval_trace_csv)
     with torch.no_grad():
         for ep in range(args.eval_episodes):
             scene = args.scenarios[ep % len(args.scenarios)]
             row, trace = run_one_episode(ep, scene, args, model, env, vis, device, collect_trace=bool(args.eval_trace_csv))
             episode_rows.append(row)
             trace_rows.extend(trace)
+            if args.eval_episode_csv:
+                _append_csv_rows(args.eval_episode_csv, [row])
+            if args.eval_trace_csv and trace:
+                _append_csv_rows(args.eval_trace_csv, trace)
     _write_csv_rows(args.eval_episode_csv, episode_rows)
     _write_csv_rows(args.eval_trace_csv, trace_rows)
     if episode_rows:

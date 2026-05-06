@@ -5,6 +5,8 @@ set -euo pipefail
 #   CKPT=checkpoint/.../checkpointXXXX.pth bash eval.sh
 # Optional:
 #   MODE=randfix CKPT=checkpoint/.../checkpointXXXX.pth bash eval.sh
+#   MODE=flightonly CKPT=checkpoint/.../checkpointXXXX.pth bash eval.sh
+#   TRACE=1 CKPT=checkpoint/.../checkpointXXXX.pth bash eval.sh
 #   EVAL_EXTRA_ARGS="--scenarios glare --sun_glare_eval_slot right" bash eval.sh
 
 export all_proxy=${all_proxy:-http://127.0.0.1:7890}
@@ -25,7 +27,7 @@ log_to_file=${LOG_TO_FILE:-0}
 dry_run=${DRY_RUN:-0}
 
 case "$mode" in
-	ours|fixed|randfix|nondiff)
+	ours|fixed|randfix|nondiff|flightonly|learned_detached)
 		;;
 	fix)
 		mode="fixed"
@@ -33,11 +35,25 @@ case "$mode" in
 	fixed_random|fixed_random_static)
 		mode="randfix"
 		;;
+	flight_only|flight)
+		mode="flightonly"
+		;;
 	*)
-		echo "[error] unsupported MODE=$mode (expected ours|fixed|randfix|nondiff)" >&2
+		echo "[error] unsupported MODE=$mode (expected ours|fixed|randfix|nondiff|flightonly|learned_detached)" >&2
 		exit 1
 		;;
 esac
+
+default_task_for_mode() {
+	case "$1" in
+		learned_detached|flightonly)
+			echo "slit_active_sensing_auto_flightonly"
+			;;
+		*)
+			echo "${base_task}_auto_$1"
+			;;
+	esac
+}
 
 if [ -z "$ckpt_path" ]; then
 	echo "[error] set CKPT=checkpoint/.../checkpointXXXX.pth"
@@ -67,7 +83,7 @@ elif [ -n "$task_override" ]; then
 	task="$task_override"
 	cfg_file="configs/${task}.args"
 else
-	task="${base_task}_auto_${mode}"
+	task="$(default_task_for_mode "$mode")"
 	cfg_file="configs/${task}.args"
 fi
 
@@ -78,6 +94,28 @@ if [ ! -f "$cfg_file" ]; then
 fi
 
 cfg_args=$(sed -E 's/[[:space:]]*#.*$//' "$cfg_file" | grep -Ev '^[[:space:]]*$' | xargs)
+if [ -n "$cfg_args" ]; then
+	cfg_args=$(python3 - "$cfg_args" <<'PY'
+import shlex
+import sys
+
+tokens = shlex.split(sys.argv[1])
+out = []
+skip = False
+for tok in tokens:
+    if skip:
+        skip = False
+        continue
+    if tok == "--resume":
+        skip = True
+        continue
+    if tok.startswith("--resume="):
+        continue
+    out.append(tok)
+print(" ".join(shlex.quote(tok) for tok in out))
+PY
+)
+fi
 vis_args=""
 if [ "$vis_enable" = "1" ]; then
 	vis_args="--vis_enable"
@@ -86,6 +124,14 @@ elif [ "$vis_enable" != "0" ]; then
 	exit 1
 fi
 csv_args=""
+trace=${TRACE:-0}
+if [ "$trace" = "1" ]; then
+	[ -z "$eval_trace_csv" ] && eval_trace_csv="logs/eval-${task}-${mode}-trace.csv"
+	[ -z "$eval_episode_csv" ] && eval_episode_csv="logs/eval-${task}-${mode}-episodes.csv"
+elif [ "$trace" != "0" ]; then
+	echo "[error] invalid TRACE=$trace (expected 0 or 1)" >&2
+	exit 1
+fi
 [ -n "$eval_trace_csv" ] && csv_args="$csv_args --eval_trace_csv $eval_trace_csv"
 [ -n "$eval_episode_csv" ] && csv_args="$csv_args --eval_episode_csv $eval_episode_csv"
 

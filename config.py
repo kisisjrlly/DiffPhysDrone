@@ -87,6 +87,8 @@ def build_parser():
     parser.add_argument('--camera_control_mode', type=str, default='learned',
                         choices=['learned', 'fixed', 'fixed_random_static'])
     parser.add_argument('--sensor_grad_mode', type=str, default='full', choices=['full', 'detached'])
+    parser.add_argument('--train_flight_only', default=False, action=argparse.BooleanOptionalAction,
+                        help='Freeze the camera branch (and shared depth stem) and only train the flight policy.')
     parser.add_argument('--cam_delta_max', type=float, default=0.02)
     parser.add_argument('--cam_return_rate', type=float, default=0.05)
     parser.add_argument('--cam_power_baseline', type=float, default=0.5)
@@ -278,6 +280,17 @@ def validate_args(args):
     # The camera is not learned there, so these coefficients only add confusion
     # in logs and config files.
     if args.camera_control_mode in {'fixed', 'fixed_random_static'}:
+        args.sensor_grad_mode = 'detached'
+        for name in [
+            'coef_cam_smooth',
+            'coef_diff_depth_power',
+            'coef_diff_depth_blur',
+            'coef_diff_depth_noise',
+            'coef_diff_depth_fill',
+        ]:
+            setattr(args, name, 0.0)
+        args.diff_depth_min_fill_rate = 0.0
+    if args.train_flight_only:
         for name in [
             'coef_cam_smooth',
             'coef_diff_depth_power',
@@ -300,6 +313,7 @@ def print_runtime_mode(args):
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
     print(f"collision_clearance      : {args.collision_clearance} m")
     print(f"camera_control_mode       : {args.camera_control_mode}")
+    print(f"train_flight_only         : {args.train_flight_only}")
     print('camera_output             : absolute target in [0,1], applied by EMA alpha=0.7')
     print('policy_input              : image_feature + state(+camera_state if enabled) -> shared_gru')
     print('camera_head_input         : shared_gru hidden -> absolute camera target')

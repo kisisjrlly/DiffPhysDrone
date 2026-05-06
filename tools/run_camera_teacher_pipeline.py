@@ -202,6 +202,7 @@ def _write_markdown(summary: dict, path: Path) -> None:
         "# Camera Teacher Pipeline Summary",
         "",
         f"- dataset: `{summary.get('dataset_path', '')}`",
+        f"- teacher quality: `{summary.get('teacher_quality_report', '')}`",
         f"- pretrained checkpoint: `{summary.get('pretrain_checkpoint', '')}`",
         f"- best checkpoint: `{summary.get('best_checkpoint', '')}`",
         "",
@@ -466,6 +467,7 @@ def main() -> None:
                 "--rollout_camera_mode", str(args.rollout_camera_mode),
                 "--coef_nominal_when_healthy", str(args.coef_nominal_when_healthy),
                 "--nominal_fill_margin", str(args.nominal_fill_margin),
+                "--quality_out", str(work_dir / "teacher_dataset_quality.md"),
                 "--seed", str(args.seed),
             ]
             if not args.teacher_camera_ema:
@@ -551,6 +553,7 @@ def main() -> None:
         "flight_checkpoint": str(flight_checkpoint),
         "teacher_source": str(args.teacher_source),
         "dataset_path": str(dataset),
+        "teacher_quality_report": str(work_dir / "teacher_dataset_quality.md"),
         "pretrain_checkpoint": str(pretrain_out),
         "best_checkpoint": str(best_out),
         "teacher_dataset": _summarize_teacher_dataset(dataset) if dataset.exists() else {},

@@ -40,6 +40,7 @@ from rollout_ops import (  # noqa: E402
     select_policy_depth_obs,
 )
 from train_utils import build_env  # noqa: E402
+from tools.analyze_camera_teacher_dataset import analyze_dataset  # noqa: E402
 
 
 def _read_args_file(path: Path) -> list[str]:
@@ -120,13 +121,25 @@ def _camera_teacher_loss(
         health = ((fill - float(args.diff_depth_min_fill_rate)) / margin).clamp(0.0, 1.0).detach()
         loss_nominal = (peg - nominal).pow(2).mean(dim=-1)
         total = total + float(coef_nominal_when_healthy) * health * loss_nominal
+    else:
+        loss_nominal = torch.zeros_like(loss_fill)
+        health = torch.zeros_like(fill)
     terms = {
         "fill": fill.detach(),
         "loss_total_per_env": total.detach(),
+        "loss_smooth": loss_smooth.detach(),
         "loss_fill": loss_fill.detach(),
         "loss_power": loss_power.detach(),
         "loss_blur": loss_blur.detach(),
         "loss_noise": loss_noise.detach(),
+        "loss_nominal": loss_nominal.detach(),
+        "nominal_health": health.detach(),
+        "contrib_smooth": (float(args.coef_cam_smooth) * loss_smooth).detach(),
+        "contrib_fill": (float(args.coef_diff_depth_fill) * loss_fill).detach(),
+        "contrib_power": (float(args.coef_diff_depth_power) * loss_power).detach(),
+        "contrib_blur": (float(args.coef_diff_depth_blur) * loss_blur).detach(),
+        "contrib_noise": (float(args.coef_diff_depth_noise) * loss_noise).detach(),
+        "contrib_nominal": (float(coef_nominal_when_healthy) * health * loss_nominal).detach(),
     }
     return total.mean(), terms
 
@@ -210,6 +223,10 @@ def _parse_script_args():
     parser.add_argument("--nominal_fill_margin", type=float, default=0.12)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--sensor_impl", default=None, choices=["cuda", "python"])
+    parser.add_argument("--quality_out", default=None,
+                        help="Path for teacher dataset quality report. Default: dataset_dir/teacher_dataset_quality.md")
+    parser.add_argument("--no_quality_report", action="store_true",
+                        help="Skip automatic teacher dataset quality analysis after saving.")
     return parser.parse_known_args()
 
 
@@ -236,6 +253,21 @@ def main():
 
     all_depth, all_state, all_cam_state, all_cam_motion, all_teacher = [], [], [], [], []
     all_scene_id, all_local_x, all_fill, all_loss = [], [], [], []
+    all_loss_terms: dict[str, list[torch.Tensor]] = {
+        "loss_smooth": [],
+        "loss_fill": [],
+        "loss_power": [],
+        "loss_blur": [],
+        "loss_noise": [],
+        "loss_nominal": [],
+        "nominal_health": [],
+        "contrib_smooth": [],
+        "contrib_fill": [],
+        "contrib_power": [],
+        "contrib_blur": [],
+        "contrib_noise": [],
+        "contrib_nominal": [],
+    }
     scenes = list(args.scenarios)
     pbar = tqdm(total=len(scenes) * int(script_args.rollouts_per_scene), ncols=90)
     nominal = torch.tensor(
@@ -253,6 +285,7 @@ def main():
             cam_h = None
             seq_depth, seq_state, seq_cam_state, seq_cam_motion, seq_teacher = [], [], [], [], []
             seq_scene_id, seq_local_x, seq_fill, seq_loss = [], [], [], []
+            seq_loss_terms = {key: [] for key in all_loss_terms}
 
             for t in range(int(args.timesteps)):
                 base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
@@ -299,6 +332,8 @@ def main():
                         "fill": torch.zeros((args.batch_size,), device=device),
                         "loss_total_per_env": torch.zeros((args.batch_size,), device=device),
                     }
+                    for key in seq_loss_terms:
+                        terms[key] = torch.zeros((args.batch_size,), device=device)
 
                 seq_depth.append(policy_depth_obs.detach().to(torch.float16).cpu())
                 seq_state.append(state_vec.detach().to(torch.float32).cpu())
@@ -309,6 +344,8 @@ def main():
                 seq_local_x.append(_local_x(env).detach().to(torch.float32).cpu())
                 seq_fill.append(terms["fill"].detach().to(torch.float32).cpu())
                 seq_loss.append(terms["loss_total_per_env"].detach().to(torch.float32).cpu())
+                for key, seq in seq_loss_terms.items():
+                    seq.append(terms[key].detach().to(torch.float32).cpu())
 
                 if bool(script_args.teacher_camera_ema):
                     alpha = float(script_args.teacher_ema_alpha)
@@ -330,6 +367,8 @@ def main():
             all_local_x.append(pack(seq_local_x))
             all_fill.append(pack(seq_fill))
             all_loss.append(pack(seq_loss))
+            for key, seq in seq_loss_terms.items():
+                all_loss_terms[key].append(pack(seq))
             pbar.set_description(f"{scene} rollout {rollout_idx + 1}")
             pbar.update(1)
     pbar.close()
@@ -344,6 +383,10 @@ def main():
         "local_x": torch.cat(all_local_x, dim=0),
         "teacher_fill": torch.cat(all_fill, dim=0),
         "teacher_loss": torch.cat(all_loss, dim=0),
+        "teacher_loss_terms": {
+            key: torch.cat(values, dim=0)
+            for key, values in all_loss_terms.items()
+        },
         "meta": {
             "config": str(script_args.config),
             "checkpoint": str(script_args.checkpoint),
@@ -355,6 +398,7 @@ def main():
             "rollout_camera_mode": str(script_args.rollout_camera_mode),
             "coef_nominal_when_healthy": float(script_args.coef_nominal_when_healthy),
             "nominal_fill_margin": float(script_args.nominal_fill_margin),
+            "diff_depth_min_fill_rate": float(args.diff_depth_min_fill_rate),
         },
     }
     out = Path(script_args.out)
@@ -371,6 +415,22 @@ def main():
         f"{dataset['teacher_camera'][..., 1].mean():.3f}/"
         f"{dataset['teacher_camera'][..., 2].mean():.3f}"
     )
+    if not bool(script_args.no_quality_report):
+        quality_out = (
+            Path(script_args.quality_out)
+            if script_args.quality_out
+            else out.with_name("teacher_dataset_quality.md")
+        )
+        analyze_dataset(
+            out,
+            quality_out,
+            min_fill=float(args.diff_depth_min_fill_rate),
+            nominal_p_e_g=(
+                float(args.fixed_camera_power),
+                float(args.fixed_camera_exposure),
+                float(args.fixed_camera_gain),
+            ),
+        )
 
 
 if __name__ == "__main__":

@@ -251,6 +251,9 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             )
         act_raw = act_raw.float()
         cam_params = cam_params.float()
+        if getattr(args, 'train_flight_only', False):
+            cam_params = cam_params.detach()
+            cam_h = cam_h.detach()
 
         render_power, render_exposure, render_gain = power, exposure, gain
         act = decode_action_direct(act_raw, R, env, B, args.max_acc_cmd)

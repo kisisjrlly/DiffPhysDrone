@@ -33,17 +33,17 @@
 --simple_slit_half_y_max 0.15
 --simple_slit_effect_half_z 0.75
 --simple_slit_center_z 1.50
---simple_slit_side_effect_width_y 0.20
+--simple_slit_side_effect_width_y 0.24
 --simple_slit_side_effect_half_z 1.00
---simple_glare_halo_width_y 0.18
---simple_glare_halo_extra_half_z 0.25
---simple_glare_halo_strength 0.45
+--simple_glare_halo_width_y 0.22
+--simple_glare_halo_extra_half_z 0.30
+--simple_glare_halo_strength 0.50
 --simple_back_wall_x_min 2.00
 --simple_back_wall_x_max 2.85
 --simple_slit_cue_halo_width_y 0.18
 --simple_slit_cue_extra_half_z 0.30
 --simple_key_cue_degrade_strength 0.92
---simple_specular_false_depth_strength 0.75
+--simple_specular_false_depth_strength 0.85
 --include_camera_state_in_obs
 --cam_delta_max 0.05
 --cam_return_rate 0.05
@@ -57,12 +57,6 @@
 --coef_collide 6.0
 
 --cam_power_baseline 0.5
---coef_cam_smooth 0.0
---coef_diff_depth_power 100.0
---coef_diff_depth_blur 0.0
---coef_diff_depth_noise 0.0
---coef_diff_depth_fill 15.0
---diff_depth_min_fill_rate 0.9
 --diff_depth_health_patch_rows 6
 --diff_depth_health_patch_cols 8
 --diff_depth_health_cvar_frac 0.25
@@ -99,4 +93,10 @@
 # mode: fix
 --policy_depth_mode depth
 --camera_control_mode fixed
---sensor_grad_mode full
+--sensor_grad_mode detached
+--coef_cam_smooth 0.0
+--coef_diff_depth_power 0.0
+--coef_diff_depth_blur 0.0
+--coef_diff_depth_noise 0.0
+--coef_diff_depth_fill 0.0
+--diff_depth_min_fill_rate 0.0

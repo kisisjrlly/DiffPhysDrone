@@ -121,8 +121,19 @@ def main():
         state_dict = torch.load(args.resume, map_location=device)
         model.load_state_dict(state_dict, strict=True)
 
+    if args.train_flight_only:
+        frozen = model.freeze_camera_for_flight_only()
+        trainable = [p for p in model.parameters() if p.requires_grad]
+        print(
+            f"[info] train_flight_only: frozen_tensors={len(frozen)} "
+            f"trainable_params={sum(p.numel() for p in trainable)}"
+        )
+        print("[info] frozen_prefix_sample=" + ", ".join(frozen[:16]))
+        if not trainable:
+            raise RuntimeError("train_flight_only left no trainable parameters")
+
     # ── 8. Optimizer & scheduler ─────────────────────────────────────────
-    optim = AdamW(model.parameters(), args.lr)
+    optim = AdamW([p for p in model.parameters() if p.requires_grad], args.lr)
     sched = CosineAnnealingLR(optim, estimate_optimizer_steps(args), args.lr * 0.01)
 
     # ── 9. Train ─────────────────────────────────────────────────────────

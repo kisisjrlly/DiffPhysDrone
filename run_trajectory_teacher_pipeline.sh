@@ -24,9 +24,9 @@ fi
   --pretrain_dir "$PRETRAIN_DIR" \
   --scenarios glare specular dark \
   --slots left right \
-  --rollouts_per_scene 12 \
-  --rollout_camera_mode fixed_random_static \
-  --no-teacher_camera_ema \
+  --rollouts_per_scene 4 \
+  --rollout_camera_mode fixed \
+  --teacher_camera_ema \
   --trajectory_xs=-1.20,-0.90,-0.60,-0.35,-0.18,-0.05,0.10,0.35,0.70,1.05,1.35 \
   --trajectory_x_jitter 0.035 \
   --teacher_steps 120 \
@@ -38,7 +38,8 @@ fi
   --pretrain_lr 1e-3 \
   --pretrain_weight_decay 0.0 \
   --temporal_smooth 0.0 \
-  --eval_modes fixed randfix learned \
+  --eval_modes fixed learned \
   --eval_episodes 90 \
   --device "$DEVICE" \
+  --force_collect \
   "$@"
