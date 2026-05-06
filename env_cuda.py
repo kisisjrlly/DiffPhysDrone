@@ -21,8 +21,9 @@ from utils import g_decay
 class Env:
     """极简单墙细缝主动感知环境。
 
-    几何结构刻意保持很小：一个起点、一个终点、一堵墙，以及墙上随机横向位置
-    的竖直细缝。不同 scene 只改变细缝/墙边附近的局部传感器退化方式。
+    几何结构刻意保持很小：一个起点、一个终点、一堵或多堵墙，以及墙上
+    随机横向位置的竖直细缝。不同 scene 只改变细缝/墙边附近的局部传感器
+    退化方式，不改变物理碰撞几何。
     """
 
     supported_scenarios = ('glare', 'specular', 'dark')
@@ -47,6 +48,12 @@ class Env:
                  cam_iso_gain_base=1.0, cam_iso_gain_scale=0.8, cam_iso_gain_gamma=0.6,
                  cam_shot_noise_base=0.01, depth_min_valid=0.3, depth_max_range=6.0,
                  scenarios=None, sun_glare_eval_slot=None, diff_sensor_impl=None,
+                 scene_layout='single_wall',
+                 corridor_scene_sequence=None,
+                 corridor_wall_xs=None,
+                 corridor_wall_spacing=1.25,
+                 corridor_stage_release_margin=0.18,
+                 corridor_shuffle_scene_order=False,
                  random_rotation=False, random_rotation_max_deg=45.0,
                  simple_start_x=-1.0, simple_goal_x=1.8, simple_wall_x=0.65,
                  simple_slit_center_y_min=-0.55, simple_slit_center_y_max=0.55,
@@ -108,6 +115,22 @@ class Env:
 
         self.scenarios = self._normalize_scenarios(scenarios)
         self.scene_name_to_id = {name: idx for idx, name in enumerate(self.supported_scenarios)}
+        self.scene_layout = str(scene_layout).strip().lower()
+        if self.scene_layout not in {'single_wall', 'three_wall_corridor'}:
+            raise ValueError(f'unsupported scene_layout {scene_layout!r}')
+        seq_raw = corridor_scene_sequence if corridor_scene_sequence is not None else ['dark', 'specular', 'glare']
+        self.corridor_scene_sequence = self._normalize_scene_sequence(seq_raw)
+        self.corridor_wall_spacing = max(float(corridor_wall_spacing), 1e-3)
+        if corridor_wall_xs is None or len(corridor_wall_xs) == 0:
+            self.corridor_wall_xs = None
+        else:
+            self.corridor_wall_xs = [float(x) for x in corridor_wall_xs]
+        self.corridor_stage_release_margin = max(float(corridor_stage_release_margin), 0.0)
+        self.corridor_shuffle_scene_order = bool(corridor_shuffle_scene_order)
+        self._corridor_stage_effects = None
+        self._corridor_stage_scene_names = None
+        self._corridor_stage_slots = None
+        self._corridor_stage_idx = None
         self.current_scene_name = self.scenarios[0]
         self.current_scene_id = self.scene_name_to_id[self.current_scene_name]
         self.current_scene_names = [self.current_scene_name] * self.batch_size
@@ -232,6 +255,46 @@ class Env:
                 out.append(name)
         return out or list(self.supported_scenarios)
 
+    def _normalize_scene_sequence(self, items):
+        out = []
+        if items is None:
+            items = ['dark', 'specular', 'glare']
+        for raw in items:
+            for token in str(raw).split(','):
+                name = token.strip().lower().replace('-', '_')
+                if not name:
+                    continue
+                if name not in self.supported_scenarios:
+                    raise ValueError(f'unsupported corridor scene {raw!r}')
+                out.append(name)
+        return out or ['dark', 'specular', 'glare']
+
+    def _corridor_wall_positions(self):
+        if self.corridor_wall_xs is not None:
+            xs = [float(x) for x in self.corridor_wall_xs]
+        else:
+            xs = [
+                float(self.simple_wall_x) + i * float(self.corridor_wall_spacing)
+                for i in range(len(self.corridor_scene_sequence))
+            ]
+        if any(xs[i + 1] <= xs[i] for i in range(len(xs) - 1)):
+            raise ValueError('corridor wall positions must be strictly increasing')
+        return xs
+
+    def _choose_corridor_sequences(self, B, scene_name=None):
+        base = list(self.corridor_scene_sequence)
+        if scene_name is not None:
+            # eval 时传入 scene_name 仍然支持：用同一种 effect 填满整条 corridor，
+            # 方便做 ablation；正常三段 corridor eval 不需要传 scene_name。
+            base = [self._canonical_scene_name(scene_name)] * len(base)
+        seqs = []
+        for _ in range(int(B)):
+            seq = list(base)
+            if self.corridor_shuffle_scene_order and not self.eval_mode and len(seq) > 1:
+                random.shuffle(seq)
+            seqs.append(seq)
+        return seqs
+
     def _canonical_slot(self, slot):
         if slot is None:
             return None
@@ -305,7 +368,8 @@ class Env:
     def _build_wall_slit_voxel_layout(self, slit_center_y, *, wall_x=None,
                                       slit_half_y=None,
                                       slit_center_z=None,
-                                      back_wall_x=None):
+                                      back_wall_x=None,
+                                      include_back_wall=True):
         """构造一堵带竖直细缝的墙。
 
         这里没有物理上/下门框；z 方向的 effect 半高只属于传感器退化 mask。
@@ -318,14 +382,49 @@ class Env:
         wall_thickness = 0.10
         back_wall_x = self.simple_back_wall_x_min if back_wall_x is None else float(back_wall_x)
         back_wall_half_y = 3.0
-        # 前墙由左右两块竖直墙体组成，中间空出的部分就是细缝。终点后方放一堵
-        # 背墙，让相机透过细缝时仍能获得深度返回，而不是整片无效深度。
-        wall_slit_voxels = self._build_voxels([
+        # 前墙由左右两块竖直墙体组成，中间空出的部分就是细缝。单墙模式下
+        # 终点后方放一堵背墙；多墙 corridor 中，前两堵墙透过细缝看到的是
+        # 下一堵墙，只有最后再放一个背墙。
+        rows = [
             [float(wall_x), slit_center_y - float(slit_half_y) - wall_half_y, slit_center_z, wall_thickness, wall_half_y, wall_half_z],
             [float(wall_x), slit_center_y + float(slit_half_y) + wall_half_y, slit_center_z, wall_thickness, wall_half_y, wall_half_z],
-            [back_wall_x, 0.0, slit_center_z, wall_thickness, back_wall_half_y, wall_half_z],
-        ])
+        ]
+        if include_back_wall:
+            rows.append([back_wall_x, 0.0, slit_center_z, wall_thickness, back_wall_half_y, wall_half_z])
+        wall_slit_voxels = self._build_voxels(rows)
         return wall_slit_voxels
+
+    def _build_corridor_voxel_layout(self, slit_centers_y, slit_half_ys, wall_xs, back_wall_x):
+        rows = []
+        wall_half_y = 1.0
+        wall_half_z = self.simple_wall_half_z * 2
+        wall_thickness = 0.10
+        for wall_x, slit_y, slit_half_y in zip(wall_xs, slit_centers_y, slit_half_ys):
+            rows.append([
+                float(wall_x),
+                float(slit_y) - float(slit_half_y) - wall_half_y,
+                float(self.simple_slit_center_z),
+                wall_thickness,
+                wall_half_y,
+                wall_half_z,
+            ])
+            rows.append([
+                float(wall_x),
+                float(slit_y) + float(slit_half_y) + wall_half_y,
+                float(self.simple_slit_center_z),
+                wall_thickness,
+                wall_half_y,
+                wall_half_z,
+            ])
+        rows.append([
+            float(back_wall_x),
+            0.0,
+            float(self.simple_slit_center_z),
+            wall_thickness,
+            3.0,
+            wall_half_z,
+        ])
+        return self._build_voxels(rows)
 
     def _rotation_z(self, yaw):
         c = torch.cos(yaw)
@@ -338,8 +437,9 @@ class Env:
             z,  z, o,
         ], -1).reshape(-1, 3, 3)
 
-    def _scene_effects(self, scene_name, slot_name, slit_center_y, slit_half_y, back_wall_x):
+    def _scene_effects(self, scene_name, slot_name, slit_center_y, slit_half_y, back_wall_x, *, wall_x=None):
         regime_id = float(self.scene_name_to_id[scene_name])
+        wall_x = self.simple_wall_x if wall_x is None else float(wall_x)
         slit_half_y = float(slit_half_y)
         region_kind = 'opening' if str(scene_name) == 'glare' else 'side_wall_patches'
         if region_kind == 'opening':
@@ -360,7 +460,7 @@ class Env:
             'slit_slot_name': slot_name,
             'slit_slot_id': float(self.supported_slots.index(slot_name)),
             'slit_center_y': float(slit_center_y),
-            'hazard_center': [self.simple_wall_x, float(slit_center_y), self.simple_slit_center_z],
+            'hazard_center': [wall_x, float(slit_center_y), self.simple_slit_center_z],
             # glare 是穿过细缝的背光；specular/dark 是细缝墙边材质效应。
             'hazard_region_kind': region_kind,
             'hazard_half_y': hazard_half_y,
@@ -375,7 +475,7 @@ class Env:
             'glare_halo_half_z': float(self.simple_slit_effect_half_z + self.simple_glare_halo_extra_half_z),
             'glare_halo_strength': float(self.simple_glare_halo_strength),
             'hazard_softness': 0.045,
-            'geometry_wall_x': float(self.simple_wall_x),
+            'geometry_wall_x': float(wall_x),
             'slit_half_y': slit_half_y,
             'slit_effect_half_z': float(self.simple_slit_effect_half_z),
             'slit_center_z': float(self.simple_slit_center_z),
@@ -423,9 +523,18 @@ class Env:
             self.current_scene_id = -1
 
     def reset(self, scene_name=None):
+        if self.scene_layout == 'three_wall_corridor':
+            return self._reset_three_wall_corridor(scene_name=scene_name)
+        return self._reset_single_wall(scene_name=scene_name)
+
+    def _reset_single_wall(self, scene_name=None):
         B, device = self.batch_size, self.device
         scene_names = self._choose_scene_names(B, scene_name=scene_name)
         self._set_scene_names(scene_names)
+        self._corridor_stage_effects = None
+        self._corridor_stage_scene_names = None
+        self._corridor_stage_slots = None
+        self._corridor_stage_idx = None
         self.last_diff_depth_debug = None
         self.last_diff_depth_train_aux = None
 
@@ -463,7 +572,10 @@ class Env:
         start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
         goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
         effects = self._merge_batch_effects([
-            self._scene_effects(scene_names[i], slots[i], float(slit_center_y[i]), float(slit_half_y[i]), float(back_wall_x[i]))
+            self._scene_effects(
+                scene_names[i], slots[i], float(slit_center_y[i]), float(slit_half_y[i]), float(back_wall_x[i]),
+                wall_x=float(self.simple_wall_x),
+            )
             for i in range(B)
         ])
         local_hazard = effects['hazard_center'].to(device=device, dtype=torch.float32)
@@ -504,6 +616,194 @@ class Env:
         self.R = quadsim_cuda.update_state_vec(R0, self.act, v_dir, torch.zeros_like(self.yaw_ctl_delay), 5)
         self.R_old = self.R.clone()
         self.p_old = self.p.clone()
+
+    def _reset_three_wall_corridor(self, scene_name=None):
+        B, device = self.batch_size, self.device
+        self.last_diff_depth_debug = None
+        self.last_diff_depth_train_aux = None
+
+        stage_wall_xs = self._corridor_wall_positions()
+        K = len(stage_wall_xs)
+        corridor_sequences = self._choose_corridor_sequences(B, scene_name=scene_name)
+        if any(len(seq) != K for seq in corridor_sequences):
+            raise ValueError('corridor scene sequence length must match corridor wall count')
+
+        cam_angle = torch.full((B,), float(self.cam_angle) * math.pi / 180.0, device=device)
+        zeros = torch.zeros_like(cam_angle)
+        ones = torch.ones_like(cam_angle)
+        self.R_cam = torch.stack([
+            torch.cos(cam_angle), zeros, -torch.sin(cam_angle),
+            zeros, ones, zeros,
+            torch.sin(cam_angle), zeros, torch.cos(cam_angle),
+        ], -1).reshape(B, 3, 3)
+
+        if self.random_rotation and self.random_rotation_max_rad > 0:
+            yaw = (torch.rand(B, device=device) * 2.0 - 1.0) * self.random_rotation_max_rad
+        else:
+            yaw = torch.zeros(B, device=device)
+        self.scene_yaw = yaw
+        self.R_scene = self._rotation_z(yaw)
+        self.R_scene_T = self.R_scene.transpose(1, 2).contiguous()
+
+        slit_centers, slot_rows, slit_half_rows = [], [], []
+        for _ in range(K):
+            sy, slots = self._choose_slit_centers(B)
+            hw = self._choose_slit_half_widths(B)
+            slit_centers.append(sy)
+            slot_rows.append(slots)
+            slit_half_rows.append(hw)
+        slit_center_y = torch.stack(slit_centers, dim=1)
+        slit_half_y = torch.stack(slit_half_rows, dim=1)
+        back_wall_x = self._choose_back_wall_xs(B)
+
+        voxels = torch.stack([
+            self._build_corridor_voxel_layout(
+                [float(slit_center_y[i, k]) for k in range(K)],
+                [float(slit_half_y[i, k]) for k in range(K)],
+                stage_wall_xs,
+                float(back_wall_x[i]),
+            )
+            for i in range(B)
+        ], dim=0)
+
+        start_y = torch.zeros(B, device=device)
+        start_local = torch.stack([
+            torch.full((B,), float(self.simple_start_x), device=device),
+            start_y,
+            torch.full((B,), float(self.simple_slit_center_z), device=device),
+        ], -1)
+        goal_local = torch.tensor([float(self.simple_goal_x), 0.0, float(self.simple_slit_center_z)], device=device).expand(B, 3).clone()
+        start = torch.bmm(self.R_scene, start_local[:, :, None])[:, :, 0]
+        goal = torch.bmm(self.R_scene, goal_local[:, :, None])[:, :, 0]
+
+        stage_effects = []
+        stage_names = []
+        stage_slots = []
+        for k, wall_x in enumerate(stage_wall_xs):
+            scene_names_k = [corridor_sequences[i][k] for i in range(B)]
+            slots_k = [slot_rows[k][i] for i in range(B)]
+            effects_k = self._merge_batch_effects([
+                self._scene_effects(
+                    scene_names_k[i],
+                    slots_k[i],
+                    float(slit_center_y[i, k]),
+                    float(slit_half_y[i, k]),
+                    float(back_wall_x[i]),
+                    wall_x=float(wall_x),
+                )
+                for i in range(B)
+            ])
+            local_hazard = effects_k['hazard_center'].to(device=device, dtype=torch.float32)
+            effects_k['hazard_center_local'] = local_hazard.clone()
+            effects_k['hazard_center'] = torch.bmm(self.R_scene, local_hazard[:, :, None])[:, :, 0]
+            effects_k['scene_yaw'] = yaw
+            effects_k['geometry_start_local'] = start_local
+            effects_k['geometry_goal_local'] = goal_local
+            effects_k['geometry_start'] = start
+            effects_k['geometry_goal'] = goal
+            effects_k['geometry_kind'] = 'three_wall_corridor'
+            effects_k['corridor_stage_idx'] = torch.full((B,), float(k), device=device)
+            effects_k['corridor_num_stages'] = float(K)
+            effects_k['corridor_wall_xs'] = list(stage_wall_xs)
+            effects_k['corridor_scene_sequence'] = [list(seq) for seq in corridor_sequences]
+            stage_effects.append(effects_k)
+            stage_names.append(scene_names_k)
+            stage_slots.append(slots_k)
+
+        self._corridor_stage_effects = stage_effects
+        self._corridor_stage_scene_names = stage_names
+        self._corridor_stage_slots = stage_slots
+        self._corridor_stage_idx = torch.zeros((B,), dtype=torch.long, device=device)
+
+        self.n_drones_per_group = 1
+        self.drone_radius = self.fixed_drone_radius
+        self.max_speed = torch.full((B, 1), self.fixed_max_speed, device=device)
+        self.margin = torch.full((B,), self.fixed_margin, device=device)
+        self.pitch_ctl_delay = torch.full((B, 1), self.fixed_pitch_ctl_delay, device=device)
+        self.yaw_ctl_delay = torch.full((B, 1), self.fixed_yaw_ctl_delay, device=device)
+        self.drag_2 = torch.zeros((B, 2), device=device)
+        self.drag_2[:, 1] = self.fixed_drag_linear
+        self.z_drag_coef = torch.ones((B, 1), device=device)
+        self.thr_est_error = torch.ones((B,), device=device)
+
+        self.balls = torch.empty((B, 0, 4), device=device)
+        self.cyl = torch.empty((B, 0, 3), device=device)
+        self.cyl_h = torch.empty((B, 0, 3), device=device)
+        self.voxels = voxels
+        self.p = start
+        self.p_target = goal
+        self.v = torch.zeros((B, 3), device=device)
+        self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * self.fixed_wind_scale
+        self.act = torch.zeros((B, 3), device=device)
+        self.a = torch.zeros((B, 3), device=device)
+        self.dg = torch.randn((B, 3), device=device) * 0.03
+
+        R0 = torch.zeros((B, 3, 3), device=device)
+        v_dir = F.normalize(self.p_target - self.p, 2, -1)
+        self.R = quadsim_cuda.update_state_vec(R0, self.act, v_dir, torch.zeros_like(self.yaw_ctl_delay), 5)
+        self.R_old = self.R.clone()
+        self.p_old = self.p.clone()
+        self._update_corridor_active_stage(force=True)
+
+    def _select_batch_effects(self, stage_indices):
+        stage_indices = stage_indices.to(device=self.device, dtype=torch.long)
+        selected = {}
+        keys = self._corridor_stage_effects[0].keys()
+        for key in keys:
+            vals = [fx[key] for fx in self._corridor_stage_effects]
+            first = vals[0]
+            if torch.is_tensor(first):
+                pieces = []
+                for k, value in enumerate(vals):
+                    value = value.to(device=self.device)
+                    mask = stage_indices == int(k)
+                    if value.ndim >= 1 and value.shape[0] == self.batch_size:
+                        pieces.append(torch.where(mask.reshape((self.batch_size,) + (1,) * (value.ndim - 1)), value, torch.zeros_like(value)))
+                    else:
+                        expanded = value.reshape((1,) * max(value.ndim, 1)).expand((self.batch_size,) + tuple(value.shape))
+                        pieces.append(torch.where(mask.reshape((self.batch_size,) + (1,) * value.ndim), expanded, torch.zeros_like(expanded)))
+                selected[key] = torch.stack(pieces, dim=0).sum(dim=0)
+            elif key in {'corridor_wall_xs'}:
+                selected[key] = first
+            elif isinstance(first, list) and len(first) == self.batch_size:
+                out = []
+                for b in range(self.batch_size):
+                    out.append(vals[int(stage_indices[b].item())][b])
+                selected[key] = out
+            elif isinstance(first, list) and vals and all(isinstance(v, list) for v in vals):
+                out = []
+                for b in range(self.batch_size):
+                    out.append(vals[int(stage_indices[b].item())][b])
+                selected[key] = out
+            else:
+                out_vals = [vals[int(stage_indices[b].item())] for b in range(self.batch_size)]
+                if all(v == out_vals[0] for v in out_vals):
+                    selected[key] = out_vals[0]
+                else:
+                    selected[key] = out_vals
+        return selected
+
+    def _update_corridor_active_stage(self, force=False):
+        _ = force
+        if self.scene_layout != 'three_wall_corridor' or not self._corridor_stage_effects:
+            return
+        wall_xs = torch.tensor(self._corridor_wall_positions(), device=self.device, dtype=self.p.dtype)
+        p_local = torch.bmm(self.R_scene_T, self.p[:, :, None])[:, :, 0]
+        x_local = p_local[:, 0]
+        thresholds = wall_xs + float(self.corridor_stage_release_margin)
+        stage_idx = (x_local[:, None] > thresholds[None, :]).sum(dim=1).clamp(max=len(wall_xs) - 1).long()
+        self._corridor_stage_idx = stage_idx
+        effects = self._select_batch_effects(stage_idx)
+        effects['corridor_active_stage'] = stage_idx.float()
+        effects['corridor_local_x'] = x_local.detach()
+        effects['corridor_stage_wall_x'] = wall_xs[stage_idx].detach()
+        self.current_scene_effects = effects
+        names = []
+        for b in range(self.batch_size):
+            k = int(stage_idx[b].item())
+            name = self._corridor_stage_scene_names[k][b]
+            names.append(name)
+        self._set_scene_names(names)
 
     def get_scene_effects_for_env(self, env_idx=0):
         idx = int(min(max(env_idx, 0), self.batch_size - 1))
@@ -1157,6 +1457,7 @@ class Env:
 
     def render_diff_depth(self, power, exposure, gain, max_range=None):
         _ = max_range
+        self._update_corridor_active_stage()
         B = power.shape[0]
         R_cam_world = (self.R @ self.R_cam).contiguous()
         render_R = torch.bmm(self.R_scene_T, R_cam_world).contiguous()
@@ -1179,6 +1480,7 @@ class Env:
 
     def render(self, ctl_dt):
         _ = ctl_dt
+        self._update_corridor_active_stage()
         canvas = torch.empty((self.batch_size, self.height, self.width), device=self.device)
         render_R = torch.bmm(self.R_scene_T, self.R @ self.R_cam).contiguous()
         render_R_old = torch.bmm(self.R_scene_T, self.R_old @ self.R_cam).contiguous()
@@ -1213,6 +1515,8 @@ class Env:
 
     def get_world_voxels_for_env(self, env_idx=0):
         idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        # 历史接口名保留为 world，但 voxel box 本身是局部场景坐标；
+        # rerun_vis 会根据 scene_yaw 统一旋转到 world，避免双重旋转。
         return self.voxels[idx].detach().cpu().numpy()
 
     def get_world_balls_for_env(self, env_idx=0):

@@ -8,6 +8,7 @@ import torch
 
 SUPPORTED_SCENARIOS = ('glare', 'specular', 'dark')
 SUPPORTED_SLOTS = ('far_left', 'left', 'right', 'far_right')
+SUPPORTED_SCENE_LAYOUTS = ('single_wall', 'three_wall_corridor')
 
 
 def build_parser():
@@ -44,6 +45,19 @@ def build_parser():
     parser.add_argument('--diff_sensor_impl', nargs='*', default=['diff_depth=cuda'])
 
     parser.add_argument('--scenarios', nargs='*', default=list(SUPPORTED_SCENARIOS))
+    parser.add_argument('--scene_layout', type=str, default='single_wall',
+                        choices=list(SUPPORTED_SCENE_LAYOUTS),
+                        help='single_wall: 每条轨迹只有一个 effect；three_wall_corridor: 一条轨迹连续穿过多个不同 effect 的 slit wall。')
+    parser.add_argument('--corridor_scene_sequence', nargs='*', default=['dark', 'specular', 'glare'],
+                        help='three_wall_corridor 中各堵墙的 scene 顺序，默认 dark -> specular -> glare。')
+    parser.add_argument('--corridor_wall_xs', nargs='*', type=float, default=None,
+                        help='three_wall_corridor 中每堵 slit wall 的局部 x 坐标；数量必须等于 corridor_scene_sequence。')
+    parser.add_argument('--corridor_wall_spacing', type=float, default=1.25,
+                        help='没有显式设置 corridor_wall_xs 时，从 simple_wall_x 开始的墙间距。')
+    parser.add_argument('--corridor_stage_release_margin', type=float, default=0.18,
+                        help='无人机越过当前墙多少米后，sensor effect 切到下一堵墙。')
+    parser.add_argument('--corridor_shuffle_scene_order', default=False, action=argparse.BooleanOptionalAction,
+                        help='训练时是否随机打乱 corridor_scene_sequence。默认关闭，便于观察稳定的相机调参曲线。')
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None)
     parser.add_argument('--random_rotation', default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('--random_rotation_max_deg', type=float, default=45.0)
@@ -170,6 +184,21 @@ def parse_scenarios(items):
     return out or list(SUPPORTED_SCENARIOS)
 
 
+def parse_scene_sequence(items):
+    if items is None:
+        return ['dark', 'specular', 'glare']
+    out = []
+    for raw in items:
+        for token in str(raw).split(','):
+            name = token.strip().lower().replace('-', '_')
+            if not name:
+                continue
+            if name not in SUPPORTED_SCENARIOS:
+                raise ValueError(f"--corridor_scene_sequence unsupported {name!r}; choose {list(SUPPORTED_SCENARIOS)}")
+            out.append(name)
+    return out or ['dark', 'specular', 'glare']
+
+
 def canonicalize_sun_glare_slot(item):
     if item is None:
         return None
@@ -212,10 +241,35 @@ def validate_args(args):
         raise ValueError('--collision_clearance must be >= 0')
     if args.random_rotation_max_deg < 0:
         raise ValueError('--random_rotation_max_deg must be >= 0')
+    if args.scene_layout not in SUPPORTED_SCENE_LAYOUTS:
+        raise ValueError(f"--scene_layout must be one of {list(SUPPORTED_SCENE_LAYOUTS)}")
+    args.corridor_scene_sequence = parse_scene_sequence(args.corridor_scene_sequence)
+    if args.corridor_wall_spacing <= 0:
+        raise ValueError('--corridor_wall_spacing must be > 0')
+    if args.corridor_stage_release_margin < 0:
+        raise ValueError('--corridor_stage_release_margin must be >= 0')
+    if args.corridor_wall_xs is None or len(args.corridor_wall_xs) == 0:
+        args.corridor_wall_xs = [
+            float(args.simple_wall_x) + i * float(args.corridor_wall_spacing)
+            for i in range(len(args.corridor_scene_sequence))
+        ]
+    else:
+        args.corridor_wall_xs = [float(x) for x in args.corridor_wall_xs]
+    if len(args.corridor_wall_xs) != len(args.corridor_scene_sequence):
+        raise ValueError('--corridor_wall_xs length must match --corridor_scene_sequence length')
+    if any(args.corridor_wall_xs[i + 1] <= args.corridor_wall_xs[i] for i in range(len(args.corridor_wall_xs) - 1)):
+        raise ValueError('--corridor_wall_xs must be strictly increasing')
     if args.simple_goal_x <= args.simple_start_x:
         raise ValueError('--simple_goal_x must be greater than --simple_start_x')
-    if args.simple_wall_x <= args.simple_start_x or args.simple_wall_x >= args.simple_goal_x:
-        raise ValueError('--simple_wall_x must be between start and goal')
+    if args.scene_layout == 'single_wall':
+        if args.simple_wall_x <= args.simple_start_x or args.simple_wall_x >= args.simple_goal_x:
+            raise ValueError('--simple_wall_x must be between start and goal')
+        last_wall_x = float(args.simple_wall_x)
+    else:
+        first_wall_x = float(args.corridor_wall_xs[0])
+        last_wall_x = float(args.corridor_wall_xs[-1])
+        if first_wall_x <= args.simple_start_x or last_wall_x >= args.simple_goal_x:
+            raise ValueError('--corridor_wall_xs must lie between simple_start_x and simple_goal_x')
     if args.simple_slit_half_y <= 0 or args.simple_slit_effect_half_z <= 0:
         raise ValueError('--simple_slit_half_y and --simple_slit_effect_half_z must be > 0')
     if (args.simple_slit_half_y_min is None) != (args.simple_slit_half_y_max is None):
@@ -237,8 +291,8 @@ def validate_args(args):
         args.simple_back_wall_x_min = float(args.simple_goal_x) + 0.75
     if args.simple_back_wall_x_max is None:
         args.simple_back_wall_x_max = args.simple_back_wall_x_min
-    if args.simple_back_wall_x_min <= args.simple_wall_x or args.simple_back_wall_x_max <= args.simple_wall_x:
-        raise ValueError('--simple_back_wall_x_min/max must be greater than --simple_wall_x')
+    if args.simple_back_wall_x_min <= last_wall_x or args.simple_back_wall_x_max <= last_wall_x:
+        raise ValueError('--simple_back_wall_x_min/max must be greater than the last slit wall x')
     if args.simple_back_wall_x_max < args.simple_back_wall_x_min:
         raise ValueError('--simple_back_wall_x_max must be >= --simple_back_wall_x_min')
     if args.simple_slit_cue_halo_width_y < 0 or args.simple_slit_cue_extra_half_z < 0:
@@ -296,6 +350,10 @@ def print_runtime_mode(args):
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
     print(f"policy_depth_mode         : {args.policy_depth_mode}")
     print(f"scenarios                 : {args.scenarios}")
+    print(f"scene_layout              : {args.scene_layout}")
+    if args.scene_layout == 'three_wall_corridor':
+        print(f"corridor_scene_sequence   : {args.corridor_scene_sequence}")
+        print(f"corridor_wall_xs          : {args.corridor_wall_xs}")
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
     print(f"collision_clearance      : {args.collision_clearance} m")
@@ -312,7 +370,7 @@ def print_runtime_mode(args):
     )
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print(
-        'environment               : single_wall_slit '
+        f'environment               : {args.scene_layout} '
         f'wall_x={args.simple_wall_x}, slit_center_y={args.simple_slit_center_y_min}'
         f'..{args.simple_slit_center_y_max}, '
         f'slit_half_y={args.simple_slit_half_y_min}'
@@ -339,6 +397,7 @@ def parse_args():
     args = parser.parse_args()
     args.diff_sensor_impl = parse_diff_sensor_impl(args.diff_sensor_impl)
     args.scenarios = parse_scenarios(args.scenarios)
+    args.corridor_scene_sequence = parse_scene_sequence(args.corridor_scene_sequence)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
     return args

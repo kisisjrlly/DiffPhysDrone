@@ -309,6 +309,37 @@ class RerunVis:
             print(f"[rerun warn] failed to set time sequence: {e}")
             return
 
+        yaw = float(scene_yaw or 0.0)
+        cyaw = float(np.cos(yaw))
+        syaw = float(np.sin(yaw))
+        Rz = np.array([[cyaw, -syaw, 0.0], [syaw, cyaw, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+
+        def _rot_points(points):
+            p = np.asarray(points, dtype=np.float32)
+            return p @ Rz.T
+
+        def _box_rotations(n):
+            if n <= 0 or abs(yaw) < 1e-7:
+                return None
+            try:
+                return [rr.datatypes.RotationAxisAngle([0.0, 0.0, 1.0], radians=yaw) for _ in range(int(n))]
+            except Exception:
+                return None
+
+        def _local_box_aabb_world(vv):
+            """把局部坐标 box 旋转到 world 后再估计 AABB。"""
+            corners_all = []
+            signs = np.array([
+                [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+                [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
+            ], dtype=np.float32)
+            for row in np.asarray(vv, dtype=np.float32):
+                center = row[:3]
+                half = np.abs(row[3:6])
+                corners_all.append(center[None, :] + signs * half[None, :])
+            corners = _rot_points(np.concatenate(corners_all, axis=0))
+            return corners.min(0), corners.max(0)
+
         # 环境参数给出“理论范围”（仅作兜底），主AABB优先由当前实体数据决定。
         env_min, env_max = self._compute_scene_bounds(
             max_speed=max_speed,
@@ -345,8 +376,7 @@ class RerunVis:
                     valid &= (np.abs(center).max(axis=1) < 300.0)
                     vv = v[valid]
                     if vv.size > 0:
-                        lo = (vv[:, :3] - vv[:, 3:6]).min(0)
-                        hi = (vv[:, :3] + vv[:, 3:6]).max(0)
+                        lo, hi = _local_box_aabb_world(vv)
                         _expand_bounds(lo, hi)
             except Exception as e:
                 print(f"[rerun warn] failed to expand bounds from voxels: {e}")
@@ -422,23 +452,6 @@ class RerunVis:
             lo = float(q50 - 0.5 * span)
             hi = float(q50 + 0.5 * span)
             return lo, hi
-
-        yaw = float(scene_yaw or 0.0)
-        cyaw = float(np.cos(yaw))
-        syaw = float(np.sin(yaw))
-        Rz = np.array([[cyaw, -syaw, 0.0], [syaw, cyaw, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
-
-        def _rot_points(points):
-            p = np.asarray(points, dtype=np.float32)
-            return p @ Rz.T
-
-        def _box_rotations(n):
-            if n <= 0 or abs(yaw) < 1e-7:
-                return None
-            try:
-                return [rr.datatypes.RotationAxisAngle([0.0, 0.0, 1.0], radians=yaw) for _ in range(int(n))]
-            except Exception:
-                return None
 
         z_samples = []
         y_samples = []
@@ -539,6 +552,9 @@ class RerunVis:
         if voxels is not None:
             v = np.asarray(voxels, dtype=np.float32)
             if v.size > 0:
+                # env 传入的是局部坐标系下的 box；这里统一按 scene_yaw
+                # 旋转到 world 坐标再绘制，避免环境侧提前旋转后在可视化里
+                # 发生双重旋转。
                 v_centers = _rot_points(v[:, :3])
                 voxel_rots = _box_rotations(v.shape[0])
                 if hasattr(rr, "Mesh3D"):

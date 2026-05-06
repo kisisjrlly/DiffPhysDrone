@@ -109,6 +109,11 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
     B = env.batch_size
     use_amp = bool(args.amp and device.type == 'cuda')
     env.reset(scene_name=scene_name)
+    scene_label = (
+        'corridor:' + '>'.join(getattr(args, 'corridor_scene_sequence', []))
+        if scene_name is None and getattr(args, 'scene_layout', 'single_wall') == 'three_wall_corridor'
+        else str(scene_name)
+    )
     model.reset()
     log_vis = bool(vis.enabled and (args.vis_episode_idx < 0 or int(ep_idx) == int(args.vis_episode_idx)))
     vis_phase = f'episodes/ep_{int(ep_idx):03d}/student' if log_vis and args.vis_episode_idx < 0 and args.eval_episodes > 1 else 'student'
@@ -191,7 +196,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
             trace_rows.append({
                 'episode_idx': ep_idx,
                 'step': t,
-                'scene_name': scene_name,
+                'scene_name': scene_label,
                 'slit_slot': env.get_scene_effects_for_env(0).get('slit_slot_name'),
                 'x': float(env.p[0, 0].detach().cpu()),
                 'y': float(env.p[0, 1].detach().cpu()),
@@ -242,7 +247,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                     'episode_idx': ep_idx,
                     'step': t + 1,
                     'event': 'collision_after_run',
-                    'scene_name': scene_name,
+                    'scene_name': scene_label,
                     'slit_slot': env.get_scene_effects_for_env(0).get('slit_slot_name'),
                     'x': float(env.p[0, 0].detach().cpu()),
                     'y': float(env.p[0, 1].detach().cpu()),
@@ -280,7 +285,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
     success = reached & (~collided)
     cam_stats = compute_camera_param_stats(power_hist, exposure_hist, gain_hist)
     row = {
-        'scene_name': scene_name,
+        'scene_name': scene_label,
         'success_rate': float(success.float().mean().cpu()),
         'collision_rate': float(collided.float().mean().cpu()),
         'goal_reach_rate': float(reached.float().mean().cpu()),
@@ -295,7 +300,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         'stop_reason': stop_reason,
     }
     print(
-        f"[eval] episode={ep_idx + 1}/{args.eval_episodes} scene={scene_name} "
+        f"[eval] episode={ep_idx + 1}/{args.eval_episodes} scene={scene_label} "
         f"success_rate={row['success_rate']:.3f} collision_rate={row['collision_rate']:.3f} "
         f"final_goal_dist={row['final_goal_dist']:.3f}"
     )
@@ -345,7 +350,7 @@ def main():
     episode_rows, trace_rows = [], []
     with torch.no_grad():
         for ep in range(args.eval_episodes):
-            scene = args.scenarios[ep % len(args.scenarios)]
+            scene = None if getattr(args, 'scene_layout', 'single_wall') == 'three_wall_corridor' else args.scenarios[ep % len(args.scenarios)]
             row, trace = run_one_episode(ep, scene, args, model, env, vis, device, collect_trace=bool(args.eval_trace_csv))
             episode_rows.append(row)
             trace_rows.extend(trace)

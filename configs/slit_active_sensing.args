@@ -1,13 +1,13 @@
 # Minimal active-sensing simulation benchmark
 
---batch_size 96
---num_iters 3000
+--batch_size 48
+--num_iters 10000
 --lr 8e-5
 --grad_decay 0.3
 --seed 42
 --no-deterministic
 
---timesteps 80
+--timesteps 120
 --base_control_freq 15.0
 --fov_x_half_tan 0.82
 --cam_angle 5
@@ -15,16 +15,21 @@
 --depth_height 72
 --depth_min_valid 0.05
 --depth_max_range 6
---depth_nn_width 48
---depth_nn_height 36
+--depth_nn_width 64
+--depth_nn_height 48
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
 --scenarios glare specular dark
+--scene_layout three_wall_corridor
+--corridor_scene_sequence dark specular glare
+--corridor_wall_xs 0.0 2.0 4.0
+--corridor_stage_release_margin 0.18
+--no-corridor_shuffle_scene_order
 --random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
---simple_goal_x 1.5
+--simple_goal_x 4.8
 --simple_wall_x 0.0
 --simple_slit_center_y_min -0.75
 --simple_slit_center_y_max 0.75
@@ -38,8 +43,8 @@
 --simple_glare_halo_width_y 0.22
 --simple_glare_halo_extra_half_z 0.30
 --simple_glare_halo_strength 0.50
---simple_back_wall_x_min 2.00
---simple_back_wall_x_max 2.85
+--simple_back_wall_x_min 6.00
+--simple_back_wall_x_max 6.90
 --simple_slit_cue_halo_width_y 0.18
 --simple_slit_cue_extra_half_z 0.30
 --simple_key_cue_degrade_strength 0.92
@@ -47,7 +52,7 @@
 --include_camera_state_in_obs
 --cam_delta_max 0.05
 --cam_return_rate 0.05
---max_acc_cmd 2.2
+--max_acc_cmd 6.0
 
 --coef_v 10.5
 --loss_v_window 12
