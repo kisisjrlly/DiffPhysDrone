@@ -38,6 +38,7 @@ from rollout_ops import (  # noqa: E402
     init_camera_params,
     render_sensors,
     select_policy_depth_obs,
+    update_camera_params,
 )
 from train_utils import build_env  # noqa: E402
 from tools.analyze_camera_teacher_dataset import analyze_dataset  # noqa: E402
@@ -212,14 +213,16 @@ def _parse_script_args():
     parser.add_argument(
         "--rollout_camera_mode",
         default="fixed",
-        choices=["fixed", "fixed_random_static"],
+        choices=["fixed", "fixed_random_static", "learned"],
         help=(
             "Camera mode used while collecting closed-loop flight states.  Use "
             "fixed_random_static with --no-teacher_camera_ema to collect states "
-            "from the randfix flight-policy distribution."
+            "from the randfix flight-policy distribution.  Use learned with "
+            "--no-teacher_camera_ema to collect states from a pretrained camera "
+            "policy distribution for DAgger-style relabeling."
         ),
     )
-    parser.add_argument("--coef_nominal_when_healthy", type=float, default=0.5)
+    parser.add_argument("--coef_nominal_when_healthy", type=float, default=0.15)
     parser.add_argument("--nominal_fill_margin", type=float, default=0.12)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--sensor_impl", default=None, choices=["cuda", "python"])
@@ -348,10 +351,24 @@ def main():
                     seq.append(terms[key].detach().to(torch.float32).cpu())
 
                 if bool(script_args.teacher_camera_ema):
+                    if str(script_args.rollout_camera_mode) == "learned":
+                        raise ValueError(
+                            "learned rollout_camera_mode should be used with "
+                            "--no-teacher_camera_ema; otherwise the teacher, not "
+                            "the learned camera, controls the next observation."
+                        )
                     alpha = float(script_args.teacher_ema_alpha)
                     power = alpha * power.detach() + (1.0 - alpha) * teacher[:, 0]
                     exposure = alpha * exposure.detach() + (1.0 - alpha) * teacher[:, 1]
                     gain = alpha * gain.detach() + (1.0 - alpha) * teacher[:, 2]
+                elif str(script_args.rollout_camera_mode) == "learned":
+                    power, exposure, gain, _ = update_camera_params(
+                        _cam_params.float(),
+                        power,
+                        exposure,
+                        gain,
+                        env,
+                    )
 
                 env.run(act_buffer[t], ctl_dt, target_v_raw)
 

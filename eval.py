@@ -210,6 +210,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
 
         scene_debug = env.export_last_diff_depth_debug(0)
         if collect_trace:
+            p_local = torch.bmm(env.R_scene_T, env.p[:, :, None])[:, :, 0]
             trace_rows.append({
                 'episode_idx': ep_idx,
                 'step': t,
@@ -218,6 +219,9 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 'x': float(env.p[0, 0].detach().cpu()),
                 'y': float(env.p[0, 1].detach().cpu()),
                 'z': float(env.p[0, 2].detach().cpu()),
+                'local_x': float(p_local[0, 0].detach().cpu()),
+                'local_y': float(p_local[0, 1].detach().cpu()),
+                'local_z': float(p_local[0, 2].detach().cpu()),
                 'power': float(render_power[0].detach().cpu()),
                 'exposure': float(render_exposure[0].detach().cpu()),
                 'gain': float(render_gain[0].detach().cpu()),
@@ -260,6 +264,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
             min_clearance_hist.append(min_clearance_after.detach())
             goal_dist_hist.append(goal_dist_after.detach())
             if collect_trace:
+                p_local = torch.bmm(env.R_scene_T, env.p[:, :, None])[:, :, 0]
                 trace_rows.append({
                     'episode_idx': ep_idx,
                     'step': t + 1,
@@ -269,6 +274,9 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                     'x': float(env.p[0, 0].detach().cpu()),
                     'y': float(env.p[0, 1].detach().cpu()),
                     'z': float(env.p[0, 2].detach().cpu()),
+                    'local_x': float(p_local[0, 0].detach().cpu()),
+                    'local_y': float(p_local[0, 1].detach().cpu()),
+                    'local_z': float(p_local[0, 2].detach().cpu()),
                     'power': float(power[0].detach().cpu()),
                     'exposure': float(exposure[0].detach().cpu()),
                     'gain': float(gain[0].detach().cpu()),

@@ -346,12 +346,13 @@ def _parse_args():
     parser.add_argument("--teacher_ema_alpha", type=float, default=0.7)
     parser.add_argument(
         "--rollout_camera_mode",
-        choices=["fixed", "fixed_random_static"],
+        choices=["fixed", "fixed_random_static", "learned"],
         default="fixed_random_static",
         help=(
             "Camera mode for collecting closed-loop states.  For a randfix-trained "
             "flight checkpoint, fixed_random_static usually matches the policy's "
-            "training distribution best."
+            "training distribution best.  Use learned with --no-teacher_camera_ema "
+            "for DAgger-style relabeling on a pretrained camera policy distribution."
         ),
     )
     parser.add_argument("--coef_nominal_when_healthy", type=float, default=0.5)

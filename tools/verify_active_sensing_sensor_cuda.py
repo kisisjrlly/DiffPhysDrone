@@ -87,11 +87,11 @@ def sensor_reference(depth, mask, power, exposure, gain, speed, regime_id, min_v
         effect = penalty
     elif int(regime_id) == 1:
         power_quad = p.square() * (0.38 + 0.62 * torch.sigmoid((e01 - 0.50) / 0.10))
-        power_knee = torch.sigmoid((p - 0.56) / 0.085) * (0.25 + 0.75 * p)
+        power_knee = torch.sigmoid((p - 0.47) / 0.075) * (0.25 + 0.75 * p)
         exposure_quad = e01.square() * (0.20 + 0.80 * torch.sigmoid((p - 0.48) / 0.10))
         exposure_bloom = torch.sigmoid((e01 - 0.58) / 0.100) * (0.35 + 0.65 * torch.sigmoid((g01 - 0.48) / 0.09))
         gain_quad = g01.square() * (0.18 + 0.82 * torch.sigmoid((e01 - 0.48) / 0.10))
-        gain_bloom = torch.sigmoid((g01 - 0.48) / 0.090) * (0.35 + 0.65 * torch.sigmoid((e01 - 0.44) / 0.10))
+        gain_bloom = torch.sigmoid((g01 - 0.36) / 0.080) * (0.35 + 0.65 * torch.sigmoid((e01 - 0.44) / 0.10))
         safe = (
             torch.sigmoid((0.48 - p) / 0.080)
             * torch.sigmoid((0.52 - e01) / 0.10)
@@ -104,11 +104,11 @@ def sensor_reference(depth, mask, power, exposure, gain, speed, regime_id, min_v
         )
         penalty = mask * (
             0.36 * power_quad
-            + 0.74 * power_knee
+            + 0.92 * power_knee
             + 0.22 * exposure_quad
             + 0.26 * exposure_bloom
             + 0.22 * gain_quad
-            + 0.26 * gain_bloom
+            + 0.40 * gain_bloom
         )
         bonus = mask * (0.34 * safe + 0.18 * very_safe)
         quality = quality - penalty + bonus

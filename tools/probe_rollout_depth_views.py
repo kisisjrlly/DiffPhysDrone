@@ -108,6 +108,15 @@ def _parse_steps(text: str | None) -> set[int] | None:
     return out
 
 
+def _parse_float_targets(text: str | None) -> list[float] | None:
+    if text is None or not str(text).strip():
+        return None
+    vals = [float(x.strip()) for x in str(text).split(",") if x.strip()]
+    if not vals:
+        raise ValueError("--target_local_x did not contain any values")
+    return vals
+
+
 def _build_model(args, device):
     obs_dim = 7 if args.no_odom else 10
     return Model(
@@ -217,10 +226,20 @@ def _render_setting_at_capture(env, args, cap: RolloutCapture, setting: CameraSe
         "scene_mask_mean": _to_float(scalars.get("scene_mask_mean"), 0.0),
         "slit_cue_mask_mean": _to_float(scalars.get("slit_cue_mask_mean"), 0.0),
         "key_cue_artifact_mean": _to_float(scalars.get("key_cue_artifact_mean"), 0.0),
+        "front_wall_hit_mean": _to_float(scalars.get("front_wall_hit_mean"), 0.0),
+        "back_wall_hit_mean": _to_float(scalars.get("back_wall_hit_mean"), 0.0),
+        "scene_mask_on_back_wall_mean": _to_float(scalars.get("scene_mask_on_back_wall_mean"), 0.0),
         "glare_invalid_rate": _to_float(scalars.get("glare_invalid_rate"), 0.0),
         "glare_quality_mean": _to_float(scalars.get("glare_quality_mean"), 0.0),
     })
-    row.update(_local_mask_metrics(depth_np, quality_np, scene_mask_np, args.depth_min_valid, raw_np))
+    row.update(_local_mask_metrics(
+        depth_np,
+        quality_np,
+        scene_mask_np,
+        args.depth_min_valid,
+        raw_np,
+        images.get("slit_cue_mask"),
+    ))
     maps = {
         "depth": depth_np,
         "raw_depth": raw_np,
@@ -228,8 +247,11 @@ def _render_setting_at_capture(env, args, cap: RolloutCapture, setting: CameraSe
         "invalid": images.get("invalid_mask"),
         "scene_effect": images.get("scene_effect_map"),
         "scene_mask": scene_mask_np,
+        "front_wall_hit": images.get("front_wall_hit_mask"),
+        "back_wall_hit": images.get("back_wall_hit_mask"),
         "slit_cue": images.get("slit_cue_mask"),
         "key_cue_artifact": images.get("key_cue_artifact_map"),
+        "aperture_artifact": images.get("aperture_artifact_map"),
     }
     return row, maps
 
@@ -308,6 +330,31 @@ def _rollout_captures(env, args, model, scene: str, device, steps_filter: set[in
     return captures
 
 
+def _capture_local_x(env, cap: RolloutCapture) -> float:
+    p = cap.snapshot["p"][0]
+    local = torch.matmul(env.R_scene_T[0].to(p.device, p.dtype), p)
+    return float(local[0].detach().cpu().item())
+
+
+def _select_captures_by_local_x(env, captures: list[RolloutCapture], targets: list[float]) -> list[RolloutCapture]:
+    if not captures:
+        return []
+    xs = np.asarray([_capture_local_x(env, cap) for cap in captures], dtype=np.float32)
+    selected: list[RolloutCapture] = []
+    used: set[int] = set()
+    for target in targets:
+        order = np.argsort(np.abs(xs - float(target)))
+        idx = int(order[0])
+        for candidate in order:
+            if int(candidate) not in used:
+                idx = int(candidate)
+                break
+        used.add(idx)
+        selected.append(captures[idx])
+    selected.sort(key=lambda cap: _capture_local_x(env, cap))
+    return selected
+
+
 def _masked_depth(depth: np.ndarray, min_valid: float):
     out = depth.astype(np.float32).copy()
     out[out <= float(min_valid) + 1e-6] = np.nan
@@ -321,7 +368,13 @@ def _center_profile(depth: np.ndarray, min_valid: float | None = None):
     h = arr.shape[0]
     lo = max(0, h // 2 - 1)
     hi = min(h, h // 2 + 2)
-    return np.nanmean(arr[lo:hi], axis=0)
+    band = arr[lo:hi]
+    valid = np.isfinite(band)
+    sums = np.where(valid, band, 0.0).sum(axis=0)
+    counts = valid.sum(axis=0)
+    out = np.full((arr.shape[1],), np.nan, dtype=np.float32)
+    np.divide(sums, counts, out=out, where=counts > 0)
+    return out
 
 
 def _plot_capture_panel(path: Path, rendered: list[tuple[dict, dict]], args):
@@ -334,7 +387,7 @@ def _plot_capture_panel(path: Path, rendered: list[tuple[dict, dict]], args):
         return
 
     n = len(rendered)
-    fig, axes = plt.subplots(n, 8, figsize=(26.0, max(2.25 * n, 3.2)), squeeze=False)
+    fig, axes = plt.subplots(n, 9, figsize=(29.0, max(2.25 * n, 3.2)), squeeze=False)
     depth_cmap = plt.cm.viridis.copy()
     depth_cmap.set_bad("black")
     first = rendered[0][0]
@@ -347,6 +400,7 @@ def _plot_capture_panel(path: Path, rendered: list[tuple[dict, dict]], args):
         invalid = maps.get("invalid")
         effect = maps.get("scene_effect")
         key_cue = maps.get("key_cue_artifact")
+        aperture = maps.get("aperture_artifact")
         mask = maps.get("scene_mask")
 
         _plot_topdown_overview(axes[r, 0], row, args)
@@ -362,15 +416,20 @@ def _plot_capture_panel(path: Path, rendered: list[tuple[dict, dict]], args):
         axes[r, 5].imshow(np.zeros_like(depth) if effect is None else effect, vmin=0, vmax=1, cmap="inferno")
         axes[r, 5].set_title(f"effect {float(row.get('scene_effect_mean', 0.0)):.2f}")
         axes[r, 6].imshow(np.zeros_like(depth) if key_cue is None else key_cue, vmin=0, vmax=1, cmap="plasma")
-        axes[r, 6].set_title(f"key cue {float(row.get('key_cue_artifact_mean', 0.0)):.2f}")
+        axes[r, 6].set_title(
+            f"artifact {float(row.get('key_cue_artifact_mean', 0.0)):.2f}\n"
+            f"back leak {float(row.get('scene_mask_on_back_wall_mean', 0.0)):.3f}"
+        )
+        axes[r, 7].imshow(np.zeros_like(depth) if aperture is None else aperture, vmin=0, vmax=1, cmap="plasma")
+        axes[r, 7].set_title("aperture")
         if raw is not None:
-            axes[r, 7].plot(_center_profile(raw), label="raw", lw=1.6)
-        axes[r, 7].plot(_center_profile(depth, args.depth_min_valid), label="obs", lw=1.4)
-        axes[r, 7].set_ylim(args.depth_min_valid, args.depth_max_range)
-        axes[r, 7].grid(True, alpha=0.25)
-        axes[r, 7].legend(fontsize=7)
-        axes[r, 7].set_title("center profile")
-        for c in range(1, 7):
+            axes[r, 8].plot(_center_profile(raw), label="raw", lw=1.6)
+        axes[r, 8].plot(_center_profile(depth, args.depth_min_valid), label="obs", lw=1.4)
+        axes[r, 8].set_ylim(args.depth_min_valid, args.depth_max_range)
+        axes[r, 8].grid(True, alpha=0.25)
+        axes[r, 8].legend(fontsize=7)
+        axes[r, 8].set_title("center profile")
+        for c in range(1, 8):
             axes[r, c].set_xticks([])
             axes[r, c].set_yticks([])
         axes[r, 0].set_ylabel(
@@ -422,17 +481,42 @@ def _write_report(path: Path, rows: list[dict], captures_by_scene: dict[str, lis
             mean_invalid = sum(float(v["invalid_rate"]) for v in vals) / len(vals)
             lines.append(
                 f"- {scene} / {setting}: local_fill={mean_fill:.3f}, "
-                f"key_cue={mean_artifact:.3f}, invalid={mean_invalid:.3f}"
+                f"artifact={mean_artifact:.3f}, invalid={mean_invalid:.3f}"
             )
     lines.extend([
         "",
         "Files:",
         "",
         "- `rollout_depth_probe_detail.csv`: one row per sampled state and camera setting.",
+        "- `rollout_depth_probe_arrays.npz`: raw/depth/quality/invalid/effect/mask/cue arrays.",
         "- `panels/<scene>/step_XXX.png`: rendered panels from actual rollout pose/attitude.",
         "",
     ])
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _save_npz(path: Path, maps: dict[tuple[str, int, str], dict[str, np.ndarray | None]]) -> None:
+    arrays: dict[str, np.ndarray] = {}
+    for (scene, step, setting), rendered in maps.items():
+        prefix = f"{scene}_step{int(step):03d}_{setting}"
+        for name in [
+            "raw_depth",
+            "depth",
+            "quality",
+            "invalid",
+            "scene_effect",
+            "scene_mask",
+            "front_wall_hit",
+            "back_wall_hit",
+            "slit_cue",
+            "key_cue_artifact",
+            "aperture_artifact",
+        ]:
+            arr = rendered.get(name)
+            if arr is not None:
+                arrays[f"{prefix}_{name}"] = np.asarray(arr)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **arrays)
 
 
 def _make_arg_parser():
@@ -442,6 +526,8 @@ def _make_arg_parser():
     parser.add_argument("--out_dir", default="paper/experiment/results/rollout_depth_views")
     parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"])
     parser.add_argument("--steps", default=None, help="Comma-separated rollout steps to sample. Overrides --sample_every.")
+    parser.add_argument("--target_local_x", default=None,
+                        help="Comma-separated local x positions. If set, the script samples the full rollout and keeps the closest actual states.")
     parser.add_argument("--sample_every", type=int, default=8)
     parser.add_argument("--max_samples_per_scene", type=int, default=8)
     parser.add_argument("--camera_settings", default=None)
@@ -476,8 +562,10 @@ def main():
     scenes = _parse_scenes(script_args.scenarios)
     settings_base = _parse_camera_settings(script_args.camera_settings, project_args)
     steps_filter = _parse_steps(script_args.steps)
+    target_local_x = _parse_float_targets(script_args.target_local_x)
 
     detail_rows: list[dict] = []
+    detail_maps: dict[tuple[str, int, str], dict[str, np.ndarray | None]] = {}
     captures_by_scene: dict[str, list[RolloutCapture]] = {}
     panel_count = 0
 
@@ -493,14 +581,18 @@ def main():
                 scene,
                 device,
                 steps_filter,
-                int(script_args.sample_every),
-                int(script_args.max_samples_per_scene),
+                1 if target_local_x is not None else int(script_args.sample_every),
+                0 if target_local_x is not None else int(script_args.max_samples_per_scene),
             )
+            if target_local_x is not None:
+                caps = _select_captures_by_local_x(env, caps, target_local_x)
             captures_by_scene[scene] = caps
             for cap in caps:
                 settings = [CameraSetting("policy_actual", cap.power, cap.exposure, cap.gain)] + settings_base
                 rendered = [_render_setting_at_capture(env, cond_args, cap, setting) for setting in settings]
                 detail_rows.extend(row for row, _ in rendered)
+                for row, maps in rendered:
+                    detail_maps[(str(row["scene"]), int(row["step"]), str(row["setting"]))] = maps
                 if script_args.plots and (
                     int(script_args.max_panels) <= 0 or panel_count < int(script_args.max_panels)
                 ):
@@ -509,6 +601,7 @@ def main():
                     panel_count += 1
 
     _write_csv(out_dir / "rollout_depth_probe_detail.csv", detail_rows)
+    _save_npz(out_dir / "rollout_depth_probe_arrays.npz", detail_maps)
     _write_report(out_dir / "report.md", detail_rows, captures_by_scene)
     print(f"[rollout-probe] scenes={scenes}")
     print(f"[rollout-probe] sampled states={sum(len(v) for v in captures_by_scene.values())}")

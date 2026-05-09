@@ -110,6 +110,7 @@ fi
 # faulthandler 会尽量把各 Python 线程栈写进日志；core dump 便于 gdb 追 C++ 栈。
 export PYTHONFAULTHANDLER=${PYTHONFAULTHANDLER:-1}
 export TORCH_SHOW_CPP_STACKTRACES=${TORCH_SHOW_CPP_STACKTRACES:-1}
+export MPLBACKEND=${MPLBACKEND:-Agg}
 ulimit -c unlimited 2>/dev/null || true
 
 

@@ -12,7 +12,8 @@ and writes compact panels containing only:
 
 The default choices intentionally show the active-sensing contrast:
 glare needs low exposure/gain with high projector power, specular prefers a
-low-power safe setting, and dark needs high exposure/gain.
+low-power safe setting, and low-reflectance dark material benefits from a
+stronger return setting.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ class FigureSpec:
 DEFAULT_SPECS = (
     FigureSpec("glare", "left", 0.45, ("baseline", "glare_expected", "overexposed")),
     FigureSpec("specular", "left", 0.45, ("baseline", "specular_safe", "high_power")),
-    FigureSpec("dark", "left", -0.20, ("baseline", "dark_expected", "low_light_bad")),
+    FigureSpec("dark", "left", -0.20, ("baseline", "dark_expected", "low_return_bad")),
 )
 
 

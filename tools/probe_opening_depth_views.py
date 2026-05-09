@@ -132,13 +132,19 @@ def _parse_camera_settings(text: str | None, args) -> list[CameraSetting]:
     if not text:
         return [
             CameraSetting("baseline", float(args.cam_power_baseline), 0.45, 0.20),
+            CameraSetting(
+                "fixed_config",
+                float(getattr(args, "fixed_camera_power", 0.50)),
+                float(getattr(args, "fixed_camera_exposure", 0.50)),
+                float(getattr(args, "fixed_camera_gain", 0.50)),
+            ),
             CameraSetting("fixed_mid", 0.75, 0.45, 0.45),
             CameraSetting("glare_expected", 0.92, 0.20, 0.05),
             CameraSetting("overexposed", 0.55, 0.85, 0.70),
             CameraSetting("specular_safe", 0.35, 0.35, 0.20),
             CameraSetting("high_power", 0.95, 0.45, 0.30),
-            CameraSetting("dark_expected", 0.55, 0.78, 0.60),
-            CameraSetting("low_light_bad", 0.45, 0.18, 0.03),
+            CameraSetting("dark_expected", 0.60, 0.86, 0.72),
+            CameraSetting("low_return_bad", 0.45, 0.18, 0.03),
         ]
 
     settings: list[CameraSetting] = []
@@ -240,7 +246,8 @@ def _to_float(value, default: float = float("nan")) -> float:
 
 def _local_mask_metrics(depth_np: np.ndarray, quality_np: np.ndarray | None,
                         mask_np: np.ndarray | None, min_valid: float,
-                        raw_depth_np: np.ndarray | None = None) -> dict[str, float]:
+                        raw_depth_np: np.ndarray | None = None,
+                        slit_cue_np: np.ndarray | None = None) -> dict[str, float]:
     valid = depth_np > (float(min_valid) + 1e-6)
     if mask_np is not None and np.asarray(mask_np).size == depth_np.size:
         mask = np.asarray(mask_np, dtype=np.float32) > 0.05
@@ -268,6 +275,10 @@ def _local_mask_metrics(depth_np: np.ndarray, quality_np: np.ndarray | None,
 
     if raw_depth_np is not None and np.asarray(raw_depth_np).shape == depth_np.shape:
         raw = np.asarray(raw_depth_np, dtype=np.float32)
+        if slit_cue_np is not None and np.asarray(slit_cue_np).shape == depth_np.shape:
+            cue_mask = np.asarray(slit_cue_np, dtype=np.float32) > 0.05
+        else:
+            cue_mask = np.zeros_like(mask, dtype=bool)
         padded = np.pad(raw, ((1, 1), (1, 1)), mode="edge")
         windows = [
             padded[dy:dy + raw.shape[0], dx:dx + raw.shape[1]]
@@ -277,6 +288,199 @@ def _local_mask_metrics(depth_np: np.ndarray, quality_np: np.ndarray | None,
         local_min = np.minimum.reduce(windows)
         edge = np.clip((local_max - local_min) / np.maximum(raw + 0.18, 1e-6), 0.0, 1.0)
         edge_mask = mask & (edge > 0.08)
+        aperture_mask = mask | cue_mask
+        raw_local = raw[aperture_mask]
+        if raw_local.size and float(raw_local.max() - raw_local.min()) > 0.35:
+            # In the slit benchmark, the far raw return is the back wall seen
+            # through the slit; the near raw return is the front wall material
+            # immediately beside it.  A valid near-return band adjacent to the
+            # far slit cue is the exact visual artifact that can slip past
+            # global fill/leakage metrics.
+            near_threshold = float(raw_local.min() + 0.35 * (raw_local.max() - raw_local.min()))
+            far_threshold = float(raw_local.min() + 0.65 * (raw_local.max() - raw_local.min()))
+            near_front = mask & (raw <= near_threshold)
+            far_slit = cue_mask & (raw >= far_threshold)
+            if not np.any(far_slit):
+                far_slit = aperture_mask & (raw >= far_threshold)
+            padded_far = np.pad(far_slit, ((1, 1), (1, 1)), mode="constant", constant_values=False)
+            far_neighbor = np.zeros_like(far_slit, dtype=bool)
+            for dy in range(3):
+                for dx in range(3):
+                    if dy == 1 and dx == 1:
+                        continue
+                    far_neighbor |= padded_far[dy:dy + raw.shape[0], dx:dx + raw.shape[1]]
+            padded_front = np.pad(near_front, ((1, 1), (1, 1)), mode="constant", constant_values=False)
+            front_neighbor = np.zeros_like(near_front, dtype=bool)
+            for dy in range(3):
+                for dx in range(3):
+                    if dy == 1 and dx == 1:
+                        continue
+                    front_neighbor |= padded_front[dy:dy + raw.shape[0], dx:dx + raw.shape[1]]
+            slit_adjacent_front = near_front & far_neighbor
+            far_slit_edge = far_slit & front_neighbor
+            far_slit_center = far_slit & ~far_slit_edge
+            band_kernel = 5
+            padded_far_wide = np.pad(
+                far_slit,
+                ((band_kernel, band_kernel), (band_kernel, band_kernel)),
+                mode="constant",
+                constant_values=False,
+            )
+            far_neighbor_wide = np.zeros_like(far_slit, dtype=bool)
+            for dy in range(2 * band_kernel + 1):
+                for dx in range(2 * band_kernel + 1):
+                    if dy == band_kernel and dx == band_kernel:
+                        continue
+                    far_neighbor_wide |= padded_far_wide[
+                        dy:dy + raw.shape[0],
+                        dx:dx + raw.shape[1],
+                    ]
+            valid_depth_nonzero = valid & (depth_np > (float(min_valid) + 1e-6))
+            material_band = near_front & far_neighbor_wide
+            material_masked_band = material_band & (np.asarray(mask, dtype=bool))
+            material_unmasked_band = material_band & ~np.asarray(mask, dtype=bool)
+            if np.any(near_front):
+                out["local_front_fill"] = float((valid & near_front).sum() / max(near_front.sum(), 1))
+                out["local_front_area"] = float(near_front.mean())
+            else:
+                out["local_front_fill"] = 0.0
+                out["local_front_area"] = 0.0
+            if np.any(material_band):
+                out["slit_neighbor_front_band_fill"] = float(
+                    (valid_depth_nonzero & material_band).sum() / max(material_band.sum(), 1)
+                )
+                out["slit_neighbor_front_band_area"] = float(material_band.mean())
+                out["slit_neighbor_front_masked_fill"] = float(
+                    (valid_depth_nonzero & material_masked_band).sum() / max(material_masked_band.sum(), 1)
+                ) if np.any(material_masked_band) else 0.0
+                out["slit_neighbor_front_unmasked_fill"] = float(
+                    (valid_depth_nonzero & material_unmasked_band).sum() / max(material_unmasked_band.sum(), 1)
+                ) if np.any(material_unmasked_band) else 0.0
+            else:
+                out["slit_neighbor_front_band_fill"] = 0.0
+                out["slit_neighbor_front_band_area"] = 0.0
+                out["slit_neighbor_front_masked_fill"] = 0.0
+                out["slit_neighbor_front_unmasked_fill"] = 0.0
+            if np.any(far_slit):
+                far_depth = raw[far_slit]
+                far_ref = float(np.median(far_depth)) if far_depth.size else float("nan")
+                if np.isfinite(far_ref):
+                    far_clean_depth = valid & (np.abs(depth_np - far_ref) <= 0.18)
+                else:
+                    far_clean_depth = valid
+                out["far_slit_fill"] = float((valid & far_slit).sum() / max(far_slit.sum(), 1))
+                out["far_slit_clean_depth_fill"] = float(
+                    (far_clean_depth & far_slit).sum() / max(far_slit.sum(), 1)
+                )
+                out["far_slit_area"] = float(far_slit.mean())
+                if np.any(far_slit_center):
+                    out["far_slit_center_fill"] = float(
+                        (valid & far_slit_center).sum() / max(far_slit_center.sum(), 1)
+                    )
+                    out["far_slit_center_clean_depth_fill"] = float(
+                        (far_clean_depth & far_slit_center).sum() / max(far_slit_center.sum(), 1)
+                    )
+                    out["far_slit_center_area"] = float(far_slit_center.mean())
+                else:
+                    out["far_slit_center_fill"] = out["far_slit_fill"]
+                    out["far_slit_center_clean_depth_fill"] = out["far_slit_clean_depth_fill"]
+                    out["far_slit_center_area"] = 0.0
+            else:
+                out["far_slit_fill"] = 0.0
+                out["far_slit_clean_depth_fill"] = 0.0
+                out["far_slit_area"] = 0.0
+                out["far_slit_center_fill"] = 0.0
+                out["far_slit_center_clean_depth_fill"] = 0.0
+                out["far_slit_center_area"] = 0.0
+            if np.any(far_slit_edge):
+                if np.any(far_slit):
+                    far_depth = raw[far_slit]
+                    far_ref = float(np.median(far_depth)) if far_depth.size else float("nan")
+                    if np.isfinite(far_ref):
+                        far_clean_depth = valid & (np.abs(depth_np - far_ref) <= 0.18)
+                    else:
+                        far_clean_depth = valid
+                else:
+                    far_clean_depth = valid
+                far_edge_fill = float((valid & far_slit_edge).sum() / max(far_slit_edge.sum(), 1))
+                far_edge_clean_fill = float(
+                    (far_clean_depth & far_slit_edge).sum() / max(far_slit_edge.sum(), 1)
+                )
+                out["far_slit_edge_fill"] = far_edge_fill
+                out["far_slit_edge_clean_depth_fill"] = far_edge_clean_fill
+                out["far_slit_edge_area"] = float(far_slit_edge.mean())
+            else:
+                far_edge_fill = 0.0
+                far_edge_clean_fill = 0.0
+                out["far_slit_edge_fill"] = 0.0
+                out["far_slit_edge_clean_depth_fill"] = 0.0
+                out["far_slit_edge_area"] = 0.0
+            if np.any(slit_adjacent_front):
+                out["slit_adjacent_front_fill"] = float(
+                    (valid & slit_adjacent_front).sum() / max(slit_adjacent_front.sum(), 1)
+                )
+                out["slit_adjacent_front_area"] = float(slit_adjacent_front.mean())
+                out["slit_adjacent_front_quality_mean"] = (
+                    float(np.asarray(quality_np)[slit_adjacent_front].mean())
+                    if quality_np is not None else float("nan")
+                )
+            else:
+                out["slit_adjacent_front_fill"] = 0.0
+                out["slit_adjacent_front_area"] = 0.0
+                out["slit_adjacent_front_quality_mean"] = float("nan")
+            out["clean_slit_shortcut"] = float(
+                out["far_slit_clean_depth_fill"] * (1.0 - out["local_front_fill"])
+            )
+            out["visible_slit_body_shortcut"] = float(
+                out["far_slit_fill"] * (1.0 - out["local_front_fill"])
+            )
+            # Only call this a whole-slit blackout when the aperture occupies a
+            # nontrivial image area.  If the slit projects to only a few pixels,
+            # a D455-like matcher can legitimately lose the return at some
+            # settings; that case is handled by visual inspection rather than
+            # this hard failure.
+            out["whole_slit_black_flag"] = float(
+                out["far_slit_area"] > 0.010 and out["far_slit_center_fill"] < 0.20
+            )
+            out["clean_slit_edge_shortcut"] = float(
+                far_edge_clean_fill * (1.0 - out["local_front_fill"])
+            )
+            # A bad camera can still reveal the aperture as a shortcut even
+            # when the depth value inside the slit is wrong: if the far slit
+            # edge remains valid while the immediately adjacent front-wall
+            # material is invalid, the policy sees a stable negative-space
+            # boundary template.  This metric is deliberately depth-agnostic.
+            out["visible_slit_edge_shortcut"] = float(
+                far_edge_fill * (1.0 - out["slit_adjacent_front_fill"])
+            )
+            out["valid_separator_band_shortcut"] = float(
+                out["slit_neighbor_front_band_fill"] * out["far_slit_fill"]
+            )
+        else:
+            out["local_front_fill"] = 0.0
+            out["local_front_area"] = 0.0
+            out["slit_neighbor_front_band_fill"] = 0.0
+            out["slit_neighbor_front_band_area"] = 0.0
+            out["slit_neighbor_front_masked_fill"] = 0.0
+            out["slit_neighbor_front_unmasked_fill"] = 0.0
+            out["far_slit_fill"] = 0.0
+            out["far_slit_clean_depth_fill"] = 0.0
+            out["far_slit_area"] = 0.0
+            out["far_slit_center_fill"] = 0.0
+            out["far_slit_center_clean_depth_fill"] = 0.0
+            out["far_slit_center_area"] = 0.0
+            out["far_slit_edge_fill"] = 0.0
+            out["far_slit_edge_clean_depth_fill"] = 0.0
+            out["far_slit_edge_area"] = 0.0
+            out["slit_adjacent_front_fill"] = 0.0
+            out["slit_adjacent_front_area"] = 0.0
+            out["slit_adjacent_front_quality_mean"] = float("nan")
+            out["clean_slit_shortcut"] = 0.0
+            out["visible_slit_body_shortcut"] = 0.0
+            out["whole_slit_black_flag"] = 0.0
+            out["clean_slit_edge_shortcut"] = 0.0
+            out["visible_slit_edge_shortcut"] = 0.0
+            out["valid_separator_band_shortcut"] = 0.0
         if np.any(edge_mask):
             out["local_edge_area"] = float(edge_mask.mean())
             out["local_edge_fill"] = float((valid & edge_mask).sum() / max(edge_mask.sum(), 1))
@@ -291,6 +495,30 @@ def _local_mask_metrics(depth_np: np.ndarray, quality_np: np.ndarray | None,
         out["local_edge_area"] = 0.0
         out["local_edge_fill"] = 0.0
         out["local_edge_quality_mean"] = float("nan")
+        out["local_front_fill"] = 0.0
+        out["local_front_area"] = 0.0
+        out["slit_neighbor_front_band_fill"] = 0.0
+        out["slit_neighbor_front_band_area"] = 0.0
+        out["slit_neighbor_front_masked_fill"] = 0.0
+        out["slit_neighbor_front_unmasked_fill"] = 0.0
+        out["far_slit_fill"] = 0.0
+        out["far_slit_clean_depth_fill"] = 0.0
+        out["far_slit_area"] = 0.0
+        out["far_slit_center_fill"] = 0.0
+        out["far_slit_center_clean_depth_fill"] = 0.0
+        out["far_slit_center_area"] = 0.0
+        out["far_slit_edge_fill"] = 0.0
+        out["far_slit_edge_clean_depth_fill"] = 0.0
+        out["far_slit_edge_area"] = 0.0
+        out["slit_adjacent_front_fill"] = 0.0
+        out["slit_adjacent_front_area"] = 0.0
+        out["slit_adjacent_front_quality_mean"] = float("nan")
+        out["clean_slit_shortcut"] = 0.0
+        out["visible_slit_body_shortcut"] = 0.0
+        out["whole_slit_black_flag"] = 0.0
+        out["clean_slit_edge_shortcut"] = 0.0
+        out["visible_slit_edge_shortcut"] = 0.0
+        out["valid_separator_band_shortcut"] = 0.0
     return out
 
 
@@ -315,8 +543,13 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
     invalid_np = images.get("invalid_mask")
     effect_np = images.get("scene_effect_map")
     scene_mask_np = images.get("scene_mask")
+    front_hit_np = images.get("front_wall_hit_mask")
+    back_hit_np = images.get("back_wall_hit_mask")
     slit_cue_np = images.get("slit_cue_mask")
     key_cue_artifact_np = images.get("key_cue_artifact_map")
+    aperture_artifact_np = images.get("aperture_artifact_map")
+    valid_prob_np = images.get("valid_prob_map")
+    hard_valid_np = images.get("hard_valid_map")
     valid = depth_np > (float(args.depth_min_valid) + 1e-6)
     valid_depth = depth_np[valid]
     pos_world = torch.tensor([pose.x, pose.y, pose.z], device=device, dtype=torch.float32)
@@ -381,6 +614,9 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "hazard_mask_mean": _to_float(scalars.get("hazard_mask_mean"), _to_float(scalars.get("scene_mask_mean"), 0.0)),
         "slit_cue_mask_mean": _to_float(scalars.get("slit_cue_mask_mean"), 0.0),
         "key_cue_artifact_mean": _to_float(scalars.get("key_cue_artifact_mean"), 0.0),
+        "front_wall_hit_mean": _to_float(scalars.get("front_wall_hit_mean"), 0.0),
+        "back_wall_hit_mean": _to_float(scalars.get("back_wall_hit_mean"), 0.0),
+        "scene_mask_on_back_wall_mean": _to_float(scalars.get("scene_mask_on_back_wall_mean"), 0.0),
         "sun_los_mean": _to_float(scalars.get("sun_los_mean"), 0.0),
         "hazard_los_mean": _to_float(scalars.get("hazard_los_mean"), 0.0),
         "glare_quality_mean": _to_float(scalars.get("glare_quality_mean"), 0.0),
@@ -392,7 +628,14 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "spec_bloom_mean": _to_float(scalars.get("spec_bloom_mean"), 0.0),
         "sensor_regime_id": _to_float(scalars.get("sensor_regime_id"), -1.0),
     }
-    row.update(_local_mask_metrics(depth_np, quality_np, scene_mask_np, args.depth_min_valid, raw_depth_np))
+    row.update(_local_mask_metrics(
+        depth_np,
+        quality_np,
+        scene_mask_np,
+        args.depth_min_valid,
+        raw_depth_np,
+        slit_cue_np,
+    ))
 
     maps = {
         "depth": depth_np,
@@ -401,8 +644,13 @@ def _render_condition(env, args, pose: ProbePose, target: torch.Tensor,
         "invalid": invalid_np,
         "scene_effect": effect_np,
         "scene_mask": scene_mask_np,
+        "front_wall_hit": front_hit_np,
+        "back_wall_hit": back_hit_np,
         "slit_cue": slit_cue_np,
         "key_cue_artifact": key_cue_artifact_np,
+        "aperture_artifact": aperture_artifact_np,
+        "valid_prob": valid_prob_np,
+        "hard_valid": hard_valid_np,
     }
     return row, maps
 
@@ -539,6 +787,32 @@ def _write_csv(path: Path, rows: list[dict]):
         writer.writerows(rows)
 
 
+def _save_npz(path: Path, maps: dict[tuple[str, str, str, str], dict[str, np.ndarray | None]]) -> None:
+    arrays: dict[str, np.ndarray] = {}
+    for (scene, slot, pose, setting), rendered in maps.items():
+        prefix = f"{scene}_{slot}_{pose}_{setting}"
+        for name in [
+            "raw_depth",
+            "depth",
+            "quality",
+            "invalid",
+            "scene_effect",
+            "scene_mask",
+            "front_wall_hit",
+            "back_wall_hit",
+            "slit_cue",
+            "key_cue_artifact",
+            "aperture_artifact",
+            "valid_prob",
+            "hard_valid",
+        ]:
+            arr = rendered.get(name)
+            if arr is not None:
+                arrays[f"{prefix}_{name}"] = np.asarray(arr)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **arrays)
+
+
 def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | None]]], args):
     try:
         import matplotlib
@@ -549,7 +823,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         return
 
     n = len(rendered)
-    fig, axes = plt.subplots(n, 8, figsize=(26.5, max(2.25 * n, 3.0)), squeeze=False)
+    fig, axes = plt.subplots(n, 9, figsize=(29.5, max(2.25 * n, 3.0)), squeeze=False)
     depth_cmap = plt.cm.viridis.copy()
     depth_cmap.set_bad("black")
     first = rendered[0][0]
@@ -566,6 +840,7 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         effect = maps["scene_effect"]
         mask = maps["scene_mask"]
         key_cue_artifact = maps.get("key_cue_artifact")
+        aperture_artifact = maps.get("aperture_artifact")
 
         axes[r, 0].imshow(np.zeros_like(depth) if raw_show is None else raw_show,
                           vmin=args.depth_min_valid, vmax=args.depth_max_range, cmap=depth_cmap)
@@ -579,11 +854,16 @@ def _plot_panel(path: Path, rendered: list[tuple[dict, dict[str, np.ndarray | No
         axes[r, 4].imshow(np.zeros_like(depth) if effect is None else effect, vmin=0, vmax=1, cmap="inferno")
         axes[r, 4].set_title(f"effect {row['scene_effect_mean']:.2f}")
         axes[r, 5].imshow(np.zeros_like(depth) if key_cue_artifact is None else key_cue_artifact, vmin=0, vmax=1, cmap="plasma")
-        axes[r, 5].set_title(f"key cue {row.get('key_cue_artifact_mean', 0.0):.2f}")
-        axes[r, 6].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
-        axes[r, 6].set_title(f"fill {row['local_fill']:.2f} edge {row.get('local_edge_fill', 0.0):.2f}")
-        _plot_topdown_overview(axes[r, 7], row, args)
-        for c in range(7):
+        axes[r, 5].set_title(
+            f"artifact {row.get('key_cue_artifact_mean', 0.0):.2f}\n"
+            f"back leak {row.get('scene_mask_on_back_wall_mean', 0.0):.3f}"
+        )
+        axes[r, 6].imshow(np.zeros_like(depth) if aperture_artifact is None else aperture_artifact, vmin=0, vmax=1, cmap="plasma")
+        axes[r, 6].set_title("aperture")
+        axes[r, 7].imshow(np.zeros_like(depth) if mask is None else mask, vmin=0, vmax=1, cmap="cividis")
+        axes[r, 7].set_title(f"fill {row['local_fill']:.2f} edge {row.get('local_edge_fill', 0.0):.2f}")
+        _plot_topdown_overview(axes[r, 8], row, args)
+        for c in range(8):
             axes[r, c].set_xticks([])
             axes[r, c].set_yticks([])
         axes[r, 0].set_ylabel(
@@ -646,29 +926,56 @@ def _expectation_rows(rows: list[dict]) -> list[dict]:
         elif scene == "specular" and "specular_safe" in by_name and "high_power" in by_name:
             good = by_name["specular_safe"]
             bad = by_name["high_power"]
+            fill_delta = float(good["local_fill"]) - float(bad["local_fill"])
+            quality_delta = float(good["local_quality_mean"]) - float(bad["local_quality_mean"])
+            visual_delta = max(
+                fill_delta,
+                float(bad["local_valid_xor_vs_ref"]),
+                float(bad["local_depth_mae_vs_ref"]),
+            )
             delta = (
-                float(good["local_fill"]) - float(bad["local_fill"])
-                + float(good["local_quality_mean"]) - float(bad["local_quality_mean"])
-                + float(bad["local_valid_xor_vs_ref"]) * 0.0
+                fill_delta
+                + quality_delta
+                + 0.50 * visual_delta
             )
             record.update({
                 "checked": 1.0,
-                "passed": 1.0 if delta > 0.01 else 0.0,
+                "passed": 1.0 if (
+                    delta > 0.10
+                    and visual_delta > 0.12
+                    and float(bad.get("slit_adjacent_front_fill", 0.0)) < 0.35
+                ) else 0.0,
                 "expectation": "specular_safe should avoid high-power washout",
                 "metric_delta": float(delta),
+                "visual_depth_delta": float(visual_delta),
+                "bad_slit_adjacent_front_fill": float(bad.get("slit_adjacent_front_fill", 0.0)),
             })
-        elif scene == "dark" and "dark_expected" in by_name and "low_light_bad" in by_name:
+        elif scene == "dark" and "dark_expected" in by_name and "low_return_bad" in by_name:
             good = by_name["dark_expected"]
-            bad = by_name["low_light_bad"]
+            bad = by_name["low_return_bad"]
+            fill_delta = float(good["local_fill"]) - float(bad["local_fill"])
+            quality_delta = float(good["local_quality_mean"]) - float(bad["local_quality_mean"])
+            visual_delta = max(
+                fill_delta,
+                float(bad["local_valid_xor_vs_ref"]),
+                float(bad["local_depth_mae_vs_ref"]),
+            )
             delta = (
-                float(good["local_fill"]) - float(bad["local_fill"])
-                + float(good["local_quality_mean"]) - float(bad["local_quality_mean"])
+                fill_delta
+                + quality_delta
+                + 0.50 * visual_delta
             )
             record.update({
                 "checked": 1.0,
-                "passed": 1.0 if delta > 0.01 else 0.0,
-                "expectation": "dark_expected should beat low exposure/gain",
+                "passed": 1.0 if (
+                    delta > 0.10
+                    and visual_delta > 0.12
+                    and float(bad.get("slit_adjacent_front_fill", 0.0)) < 0.35
+                ) else 0.0,
+                "expectation": "dark_expected should beat weak-return camera settings",
                 "metric_delta": float(delta),
+                "visual_depth_delta": float(visual_delta),
+                "bad_slit_adjacent_front_fill": float(bad.get("slit_adjacent_front_fill", 0.0)),
             })
         out.append(record)
     return out
@@ -698,7 +1005,7 @@ def _write_report(path: Path, detail_rows: list[dict], expectation_rows: list[di
         "",
         "- `glare`: `glare_expected` should generally show better local quality/fill than `overexposed` when the glare/hazard region is visible.",
         "- `specular`: `specular_safe` should avoid the local high-power washout induced by `high_power`.",
-        "- `dark`: `dark_expected` should improve local edge visibility over `low_light_bad`.",
+        "- `dark`: `dark_expected` should improve low-reflectance material visibility over `low_return_bad`.",
         "- If the panels look almost identical and local fill/quality ranges are near zero, the current depth model is not giving the policy a useful camera-control cue at that pose.",
         "",
         "Files:",
@@ -763,6 +1070,7 @@ def main():
     settings = _parse_camera_settings(script_args.camera_settings, project_args)
 
     detail_rows: list[dict] = []
+    detail_maps: dict[tuple[str, str, str, str], dict[str, np.ndarray | None]] = {}
     panel_count = 0
 
     with torch.no_grad():
@@ -781,6 +1089,8 @@ def main():
                                 for setting in settings]
                     _add_reference_diffs(rendered, cond_args.depth_min_valid)
                     detail_rows.extend(row for row, _ in rendered)
+                    for row, maps in rendered:
+                        detail_maps[(str(row["scene"]), str(row["slot"]), str(row["pose"]), str(row["setting"]))] = maps
                     if script_args.plots and (
                         int(script_args.max_panels) <= 0 or panel_count < int(script_args.max_panels)
                     ):
@@ -791,6 +1101,7 @@ def main():
     expectation_rows = _expectation_rows(detail_rows)
     _write_csv(out_dir / "opening_depth_probe_detail.csv", detail_rows)
     _write_csv(out_dir / "opening_depth_probe_expectations.csv", expectation_rows)
+    _save_npz(out_dir / "opening_depth_probe_arrays.npz", detail_maps)
     _write_report(out_dir / "report.md", detail_rows, expectation_rows)
 
     checked = [r for r in expectation_rows if float(r.get("checked", 0.0)) > 0.5]
