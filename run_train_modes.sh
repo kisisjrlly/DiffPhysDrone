@@ -8,7 +8,7 @@ export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 # Optional zero-depth counterfactual can be evaluated from the ours checkpoint.
 
 BASE_CONFIG=${BASE_CONFIG:-configs/slit_active_sensing.args}
-MODES=${MODES:-"ours fixed randfix nondiff zero"}
+MODES=${MODES:-"ours"}
 # MODES=${MODES:-"ours"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 RUN_TRAIN=${RUN_TRAIN:-1}
@@ -78,7 +78,7 @@ EOF
 --diff_depth_min_fill_rate 0.0
 EOF
 			;;
-		zero|nocamera|blind)
+		zero|nocamera)
 			cat <<'EOF'
 --policy_depth_mode zero
 --camera_control_mode fixed

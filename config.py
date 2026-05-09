@@ -58,9 +58,9 @@ def build_parser():
     parser.add_argument('--simple_slit_effect_half_z', type=float, default=0.26,
                         help='细缝在传感器效应图中的竖直半高，不是物理碰撞高度。')
     parser.add_argument('--simple_slit_center_z', type=float, default=1.50)
-    parser.add_argument('--simple_slit_side_effect_width_y', type=float, default=0.50,
+    parser.add_argument('--simple_slit_side_effect_width_y', type=float, default=0.20,
                         help='specular/dark 在细缝两侧墙面上从细缝边缘向外延伸的材质宽度。')
-    parser.add_argument('--simple_slit_side_effect_half_z', type=float, default=1.10,
+    parser.add_argument('--simple_slit_side_effect_half_z', type=float, default=1.00,
                         help='specular/dark 两侧墙面材质区域的竖直半高。')
     parser.add_argument('--simple_glare_halo_width_y', type=float, default=0.18,
                         help='glare 强光从细缝向两侧墙面扩散的横向宽度。')
@@ -77,9 +77,9 @@ def build_parser():
     parser.add_argument('--simple_slit_cue_extra_half_z', type=float, default=0.28,
                         help='关键观测 cue 相比细缝核心 effect 区域额外增加的竖直半高。')
     parser.add_argument('--simple_key_cue_degrade_strength', type=float, default=0.90,
-                        help='glare 对细缝内部/后墙 cue 的最大退化强度；dark/specular 仅作为两侧墙面材质退化。')
+                        help='dark/specular/glare 对细缝内部和后墙 cue 的最大退化强度。')
     parser.add_argument('--simple_specular_false_depth_strength', type=float, default=0.55,
-                        help='specular 高功率下在两侧反光墙面 patch 上产生错误近深度的强度。')
+                        help='specular 高功率下把关键 cue 变成错误近深度的强度。')
     parser.add_argument('--no_odom', default=False, action='store_true')
     parser.add_argument('--include_camera_state_in_obs', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--max_acc_cmd', type=float, default=2.5)

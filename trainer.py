@@ -9,8 +9,6 @@ from tqdm import tqdm
 import wandb
 
 try:
-    import matplotlib
-    matplotlib.use('Agg', force=True)
     from matplotlib import pyplot as plt
     MATPLOTLIB_AVAILABLE = True
 except ModuleNotFoundError:

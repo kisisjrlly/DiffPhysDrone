@@ -1221,7 +1221,7 @@ __device__ __forceinline__ void d455_quality_effect_core(
     } else if (regime_id == 1) {
         const scalar_t power_quad = p * p *
             (scalar_t(0.38) + scalar_t(0.62) * sigmoid_d((e01 - scalar_t(0.50)) / scalar_t(0.10)));
-        const scalar_t power_knee = sigmoid_d((p - scalar_t(0.47)) / scalar_t(0.075)) *
+        const scalar_t power_knee = sigmoid_d((p - scalar_t(0.56)) / scalar_t(0.085)) *
             (scalar_t(0.25) + scalar_t(0.75) * p);
         const scalar_t exposure_quad = e01 * e01 *
             (scalar_t(0.20) + scalar_t(0.80) * sigmoid_d((p - scalar_t(0.48)) / scalar_t(0.10)));
@@ -1229,7 +1229,7 @@ __device__ __forceinline__ void d455_quality_effect_core(
             (scalar_t(0.35) + scalar_t(0.65) * sigmoid_d((g01 - scalar_t(0.48)) / scalar_t(0.09)));
         const scalar_t gain_quad = g01 * g01 *
             (scalar_t(0.18) + scalar_t(0.82) * sigmoid_d((e01 - scalar_t(0.48)) / scalar_t(0.10)));
-        const scalar_t gain_bloom = sigmoid_d((g01 - scalar_t(0.36)) / scalar_t(0.080)) *
+        const scalar_t gain_bloom = sigmoid_d((g01 - scalar_t(0.48)) / scalar_t(0.090)) *
             (scalar_t(0.35) + scalar_t(0.65) * sigmoid_d((e01 - scalar_t(0.44)) / scalar_t(0.10)));
         const scalar_t safe = sigmoid_d((scalar_t(0.48) - p) / scalar_t(0.080)) *
                               sigmoid_d((scalar_t(0.52) - e01) / scalar_t(0.10)) *
@@ -1239,11 +1239,11 @@ __device__ __forceinline__ void d455_quality_effect_core(
                                    sigmoid_d((scalar_t(0.24) - g01) / scalar_t(0.070));
         const scalar_t penalty = mask * (
             scalar_t(0.36) * power_quad
-            + scalar_t(0.92) * power_knee
+            + scalar_t(0.74) * power_knee
             + scalar_t(0.22) * exposure_quad
             + scalar_t(0.26) * exposure_bloom
             + scalar_t(0.22) * gain_quad
-            + scalar_t(0.40) * gain_bloom);
+            + scalar_t(0.26) * gain_bloom);
         const scalar_t bonus = mask * (scalar_t(0.34) * safe + scalar_t(0.18) * very_safe);
         quality = quality - penalty + bonus;
         effect = penalty;

@@ -20,7 +20,7 @@
 --depth_use_pipeline
 --diff_sensor_impl diff_depth=cuda
 
---scenarios dark
+--scenarios glare specular dark
 --random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
@@ -33,8 +33,8 @@
 --simple_slit_half_y_max 0.15
 --simple_slit_effect_half_z 0.75
 --simple_slit_center_z 1.50
---simple_slit_side_effect_width_y 0.50
---simple_slit_side_effect_half_z 1.10
+--simple_slit_side_effect_width_y 0.24
+--simple_slit_side_effect_half_z 1.00
 --simple_glare_halo_width_y 0.22
 --simple_glare_halo_extra_half_z 0.30
 --simple_glare_halo_strength 0.50

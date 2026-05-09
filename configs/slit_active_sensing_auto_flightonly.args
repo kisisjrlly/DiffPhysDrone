@@ -33,8 +33,8 @@
 --simple_slit_half_y_max 0.15
 --simple_slit_effect_half_z 0.75
 --simple_slit_center_z 1.50
---simple_slit_side_effect_width_y 0.50
---simple_slit_side_effect_half_z 1.10
+--simple_slit_side_effect_width_y 0.24
+--simple_slit_side_effect_half_z 1.00
 --simple_glare_halo_width_y 0.22
 --simple_glare_halo_extra_half_z 0.30
 --simple_glare_halo_strength 0.50
@@ -101,4 +101,4 @@
 --coef_diff_depth_noise 0.0
 --coef_diff_depth_fill 0.0
 --diff_depth_min_fill_rate 0.0
---resume checkpoint/closed_loop_teacher_camera_policy_semantics_v3_dagger/camera_head_pretrained_best.pth
+--resume checkpoint/closed_loop_teacher_camera_policy/camera_head_pretrained_best.pth
