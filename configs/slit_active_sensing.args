@@ -92,5 +92,5 @@
 --vis_every_steps 2
 --vis_student
 # --vis_enable
---wandb_disabled
+# --wandb_disabled
 # --no-amp

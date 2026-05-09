@@ -751,10 +751,14 @@ class Env:
         ).clamp(0.0, 1.0)
 
         glare_artifact = (cue_mask * glare_bad * strength).clamp(0.0, 1.0)
-        dark_material_bad = (dark_cue_bad * (1.0 - 0.45 * dark_recovery)).clamp(0.0, 1.0)
+        # Good dark-scene camera settings should recover the low-reflectance
+        # side-wall/aperture cue instead of leaving a permanent striped hole.
+        # Keep poor fixed settings strongly degraded, but let high exposure +
+        # high gain suppress the residual artifact much more aggressively.
+        dark_material_bad = (dark_cue_bad * (1.0 - 0.82 * dark_recovery)).clamp(0.0, 1.0)
         spec_material_bad = (
-            spec_bloom * (1.0 - 0.35 * spec_safe)
-            + 0.20 * (1.0 - spec_safe) * torch.sigmoid((p - 0.42) / 0.080)
+            spec_bloom * (1.0 - 0.70 * spec_safe)
+            + 0.10 * (1.0 - spec_safe) * torch.sigmoid((p - 0.48) / 0.080)
         ).clamp(0.0, 1.0)
         dark_material_artifact = (side_mask * dark_material_bad * strength * material_shape).clamp(0.0, 1.0)
         spec_material_artifact = (side_mask * spec_material_bad * strength * material_shape).clamp(0.0, 1.0)
@@ -790,10 +794,11 @@ class Env:
             spec_material_bad,
             torch.where(sid == 2, dark_material_bad, torch.zeros_like(raw)),
         )
-        body_dropout_field = (aperture_body * material_body_bad * strength).clamp(0.0, 1.0)
+        material_failure_gate = torch.sigmoid((material_body_bad - 0.14) / 0.040)
+        body_dropout_field = (aperture_body * material_body_bad * strength * material_failure_gate).clamp(0.0, 1.0)
         body_dropout_prob = (
             aperture_body
-            * torch.sigmoid((body_dropout_field - 0.050) / 0.030)
+            * torch.sigmoid((body_dropout_field - 0.075) / 0.030)
             * torch.sigmoid((texture - 0.32) / 0.040)
             * (1.0 - 0.95 * tiny_cue)
         ).clamp(0.0, 1.0)
@@ -822,6 +827,7 @@ class Env:
             aperture_body
             * material_body_bad
             * strength
+            * material_failure_gate
             * (0.55 + 0.45 * (1.0 - texture))
         ).clamp(0.0, 1.0)
         wide_mixed_depth = torch.minimum(edge_drift_depth, raw_near_wide).clamp_min(float(self.depth_min_valid))

@@ -2,7 +2,10 @@
 
 # ===================== 你只需要改这一行 =====================
 # path="checkpoint/2026-04-25-16-19-31/checkpoint0049.pth"
-path="checkpoint/2026-05-03-15-28-53/checkpoint0014.pth"
+# path="checkpoint/2026-05-09-15-45-20/checkpoint0014.pth"
+# path="checkpoint/2026-05-09-16-39-17/checkpoint0014.pth" # ranfix
+# path="checkpoint/2026-05-09-15-45-46/checkpoint0014.pth" # nondiff
+path="checkpoint/2026-05-09-16-48-43/checkpoint0014.pth" # zeros
 # path="checkpoint/2026-04-26-11-24-40/checkpoint0034.pth"
 # ============================================================
 

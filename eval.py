@@ -324,11 +324,11 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         'steps': int(min_clearance.shape[0]),
         'stop_reason': stop_reason,
     }
-    print(
-        f"[eval] episode={ep_idx + 1}/{args.eval_episodes} scene={scene_name} "
-        f"success_rate={row['success_rate']:.3f} collision_rate={row['collision_rate']:.3f} "
-        f"final_goal_dist={row['final_goal_dist']:.3f}"
-    )
+    # print(
+    #     f"[eval] episode={ep_idx + 1}/{args.eval_episodes} scene={scene_name} "
+    #     f"success_rate={row['success_rate']:.3f} collision_rate={row['collision_rate']:.3f} "
+    #     f"final_goal_dist={row['final_goal_dist']:.3f}"
+    # )
     return row, (trace_rows or [])
 
 
