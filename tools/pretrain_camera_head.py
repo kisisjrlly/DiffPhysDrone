@@ -60,6 +60,7 @@ def _set_trainable_camera_only(model: Model, *, train_shared_visual_encoder: boo
     for param in model.parameters():
         param.requires_grad_(False)
     trainable_prefixes = (
+        "cam_stem",
         "cam_spatial_stem",
         "cam_spatial_proj",
         "cam_img_adapter",
@@ -75,10 +76,7 @@ def _set_trainable_camera_only(model: Model, *, train_shared_visual_encoder: boo
     )
     if train_shared_visual_encoder:
         trainable_prefixes = trainable_prefixes + (
-            "spatial_stem",
-            "spatial_proj",
-            "spatial_attn",
-            "attn_proj",
+            "stem",
             "img_norm",
         )
     for name, param in model.named_parameters():

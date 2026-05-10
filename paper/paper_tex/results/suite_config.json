@@ -1,0 +1,75 @@
+{
+  "config": "configs/slit_active_sensing.args",
+  "episodes_per_scene": 300,
+  "scenarios": [
+    "glare",
+    "specular",
+    "dark"
+  ],
+  "seed": 42,
+  "methods": [
+    {
+      "key": "pretrained",
+      "label": "Pretrained camera head",
+      "checkpoint": "checkpoint/closed_loop_teacher_camera_policy_light_v3d_t60_20260510_splitstem/camera_head_pretrained_best.pth",
+      "camera_control_mode": "learned",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "depth",
+      "train_flight_only": false
+    },
+    {
+      "key": "dagger",
+      "label": "DAgger-relabel pretrained camera",
+      "checkpoint": "checkpoint/closed_loop_teacher_camera_policy_light_v3d_t60_20260510_splitstem_dagger/camera_head_pretrained_best.pth",
+      "camera_control_mode": "learned",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "depth",
+      "train_flight_only": false
+    },
+    {
+      "key": "flightonly",
+      "label": "Flight-only learned camera",
+      "checkpoint": "checkpoint/2026-05-10-02-45-09/checkpoint0014.pth",
+      "camera_control_mode": "learned",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "depth",
+      "train_flight_only": true
+    },
+    {
+      "key": "fixed",
+      "label": "Fixed camera",
+      "checkpoint": "checkpoint/2026-05-09-22-32-06/checkpoint0014.pth",
+      "camera_control_mode": "fixed",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "depth",
+      "train_flight_only": false
+    },
+    {
+      "key": "randfix",
+      "label": "Random static camera",
+      "checkpoint": "checkpoint/2026-05-09-22-35-26/checkpoint0014.pth",
+      "camera_control_mode": "fixed_random_static",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "depth",
+      "train_flight_only": false
+    },
+    {
+      "key": "nondiff",
+      "label": "Non-diff learned camera",
+      "checkpoint": "checkpoint/2026-05-09-22-34-42/checkpoint0014.pth",
+      "camera_control_mode": "learned",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "depth",
+      "train_flight_only": false
+    },
+    {
+      "key": "zero",
+      "label": "Blind zero-depth",
+      "checkpoint": "checkpoint/2026-05-09-16-48-43/checkpoint0014.pth",
+      "camera_control_mode": "fixed",
+      "sensor_grad_mode": "detached",
+      "policy_depth_mode": "zero",
+      "train_flight_only": false
+    }
+  ]
+}

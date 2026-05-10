@@ -8,7 +8,7 @@ export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 # Optional zero-depth counterfactual can be evaluated from the ours checkpoint.
 
 BASE_CONFIG=${BASE_CONFIG:-configs/slit_active_sensing.args}
-MODES=${MODES:-"ours"}
+MODES=${MODES:-"fixed"}
 # MODES=${MODES:-"ours"}
 PREFIX=${PREFIX:-$(basename "${BASE_CONFIG%.args}")_auto}
 RUN_TRAIN=${RUN_TRAIN:-1}

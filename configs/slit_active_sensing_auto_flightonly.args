@@ -101,4 +101,4 @@
 --coef_diff_depth_noise 0.0
 --coef_diff_depth_fill 0.0
 --diff_depth_min_fill_rate 0.0
---resume checkpoint/closed_loop_teacher_camera_policy_light_v3d_t60_20260509_dagger/camera_head_pretrained_best.pth
+--resume checkpoint/closed_loop_teacher_camera_policy_light_v3d_t60_20260510_splitstem_dagger/camera_head_pretrained_best.pth

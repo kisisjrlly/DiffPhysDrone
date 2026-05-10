@@ -88,7 +88,7 @@ def build_parser():
                         choices=['learned', 'fixed', 'fixed_random_static'])
     parser.add_argument('--sensor_grad_mode', type=str, default='full', choices=['full', 'detached'])
     parser.add_argument('--train_flight_only', default=False, action=argparse.BooleanOptionalAction,
-                        help='Freeze the camera branch (and shared depth stem) and only train the flight policy.')
+                        help='Freeze the camera branch (including its frozen stem copy) and only train the flight policy.')
     parser.add_argument('--cam_delta_max', type=float, default=0.02)
     parser.add_argument('--cam_return_rate', type=float, default=0.05)
     parser.add_argument('--cam_power_baseline', type=float, default=0.5)

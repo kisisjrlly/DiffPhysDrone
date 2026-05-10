@@ -7,7 +7,7 @@
 --seed 42
 --no-deterministic
 
---timesteps 80
+--timesteps 60
 --base_control_freq 15.0
 --fov_x_half_tan 0.82
 --cam_angle 5
@@ -93,7 +93,7 @@
 # mode: fixed
 --policy_depth_mode depth
 --camera_control_mode fixed
---sensor_grad_mode full
+--sensor_grad_mode detached
 --coef_cam_smooth 0.0
 --coef_diff_depth_power 0.0
 --coef_diff_depth_blur 0.0

@@ -58,14 +58,20 @@ class Model(nn.Module):
         # 如果启用了相机状态观测，flight branch 的物理观测维度需要增加 3 维
         actual_obs_dim = dim_obs + (3 if self.include_camera_state_in_obs else 0)
 
-        # diff_depth-only：双通道深度分支编码器。
-        # channel 0: inverse depth / near obstacle cue
-        # channel 1: metric range / far opening cue
+        # Flight branch uses the trainable visual stem.
+        # Camera branch uses a separate copy so later flight-only fine-tuning
+        # cannot silently move the camera semantics.
         self.stem = make_stem(
             2,
             192,
             small_input_friendly=True,
         )
+        self.cam_stem = make_stem(
+            2,
+            192,
+            small_input_friendly=True,
+        )
+        self.cam_stem.load_state_dict(self.stem.state_dict())
 
         # 状态向量投影层：将无人机的物理状态（速度、姿态、目标距离等）映射到 192 维
         self.v_proj = nn.Linear(actual_obs_dim, 192)
@@ -173,26 +179,36 @@ class Model(nn.Module):
         ))
 
     @staticmethod
-    def _is_shared_visual_parameter(name: str) -> bool:
+    def _is_camera_visual_parameter(name: str) -> bool:
         return name.startswith((
-            'stem',
-            'img_norm',
+            'cam_stem',
         ))
 
     def freeze_camera_for_flight_only(self):
-        """Freeze camera control and shared visual stem for flight-only fine-tuning.
+        """Freeze camera control and the frozen camera stem for flight-only fine-tuning.
 
         The pretrained camera remains active in forward passes, but optimizer
-        updates only the flight state/recurrent/action layers.  Freezing the
-        shared visual stem avoids moving camera visual features while tuning
-        the flight controller.
+        updates only the flight state/recurrent/action layers and the trainable
+        flight visual stem.
         """
         frozen = []
         for name, param in self.named_parameters():
-            if self._is_camera_parameter(name) or self._is_shared_visual_parameter(name):
+            if self._is_camera_parameter(name) or self._is_camera_visual_parameter(name):
                 param.requires_grad_(False)
                 frozen.append(name)
         return frozen
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Load checkpoints across the old shared-stem and new split-stem layouts."""
+        if 'cam_stem.0.0.weight' not in state_dict:
+            for key in list(state_dict.keys()):
+                if not key.startswith('stem.'):
+                    continue
+                cam_key = 'cam_stem.' + key[len('stem.'):]
+                if cam_key not in state_dict:
+                    value = state_dict[key]
+                    state_dict[cam_key] = value.clone() if torch.is_tensor(value) else value
+        return super().load_state_dict(state_dict, strict=strict)
 
     def reset(self):
         # 重置函数，当前为空。
@@ -313,13 +329,13 @@ class Model(nn.Module):
         # ==========================
         # B. 视觉特征提取
         # ==========================
-        img_feat = self.stem(x_depth)
+        flight_img_feat = self.stem(x_depth)
         
         # ==========================
         # C. 多模态融合 + 时序建模
         # ==========================
         # 门控融合：平衡视觉特征与状态向量，降低单模态长期压制风险
-        img_feat = self.img_norm(img_feat)
+        img_feat = self.img_norm(flight_img_feat)
         v_feat = self.v_norm(self.v_proj(v))
         fuse_gate = self.fuse_gate(torch.cat([img_feat, v_feat], dim=1))
         fused_feat = self.act(fuse_gate * img_feat + (1.0 - fuse_gate) * v_feat)
@@ -340,10 +356,11 @@ class Model(nn.Module):
             camera_motion_state = torch.zeros(v.shape[0], 6, device=v.device, dtype=v.dtype)
         else:
             camera_motion_state = camera_motion_state.to(device=v.device, dtype=v.dtype)
+        cam_img_raw = self.cam_stem(x_depth)
         cam_spatial = self.cam_spatial_proj(self.cam_spatial_stem(x_depth).flatten(1))
         cam_img_feat = self.cam_img_norm(
-            img_feat
-            + 0.25 * self.cam_img_adapter(img_feat)
+            cam_img_raw
+            + 0.25 * self.cam_img_adapter(cam_img_raw)
             + 0.35 * cam_spatial
         )
         cam_feat = self.cam_state_norm(self.cam_state_proj(cam_state))
