@@ -14,3 +14,4 @@ configs/paper_final_full_auto*
 configs/paper_final_full_auto_*
 configs/slit_active_sensing_auto_*
 .waylog/*
+paper/paper_tex.zip
