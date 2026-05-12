@@ -506,7 +506,6 @@ def write_report(path: Path, rows: list[dict], scenes: list[str], slot: str) -> 
         "Outputs:",
         "",
         "- `figures/fig5_depth_observation_sequence_<scene>.pdf`: matched-pose raw/depth comparison.",
-        "- `figures/extended_data_fig3_method_depth_sequences_<scene>.pdf`: method-own rollout depth sequence.",
         "- `qualitative_depth/depth_sequence_rows.csv`: per-panel camera parameters and local metrics.",
         "- `qualitative_depth/depth_sequence_arrays.npz`: raw depth, observed depth, quality, invalid and effect arrays.",
         "",
@@ -516,8 +515,7 @@ def write_report(path: Path, rows: list[dict], scenes: list[str], slot: str) -> 
         "the sensor observation at those exact poses with camera settings taken from fixed, random-fixed,",
         "and active-camera policies.",
         "The first pose row overlays the complete final-policy local trajectory from start through the slit toward the goal.",
-        "This isolates the camera-parameter effect on depth observations. The method-own figure shows what each",
-        "policy actually observes along its own rollout.",
+        "This isolates the camera-parameter effect on depth observations.",
         "",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -605,16 +603,6 @@ def main() -> None:
             float(ref_args.depth_max_range),
             trajectory_by_method.get("flightonly"),
         )
-        draw_own_pose_figure(
-            fig_dir / f"extended_data_fig3_method_depth_sequences_{scene}",
-            scene,
-            slot,
-            own_rows,
-            own_maps,
-            float(ref_args.depth_min_valid),
-            float(ref_args.depth_max_range),
-        )
-
     write_csv(q_dir / "depth_sequence_rows.csv", all_rows)
     save_npz(q_dir / "depth_sequence_arrays.npz", all_maps)
     write_report(q_dir / "README.md", all_rows, list(cli.scenarios), slot)

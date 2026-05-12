@@ -144,6 +144,80 @@ def draw_round_box(ax: plt.Axes, xy: tuple[float, float], wh: tuple[float, float
     ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=5.4, linespacing=1.08)
 
 
+def draw_fig1_task_schematic(ax_task: plt.Axes) -> None:
+    ax_task.set_aspect("equal")
+    ax_task.set_xlim(-1.65, 1.65)
+    ax_task.set_ylim(-0.92, 0.92)
+    ax_task.axis("off")
+    wall_color = "#4A4A4A"
+    ax_task.add_patch(patches.Rectangle((-0.035, -0.92), 0.07, 0.66, facecolor=wall_color, linewidth=0))
+    ax_task.add_patch(patches.Rectangle((-0.035, 0.26), 0.07, 0.66, facecolor=wall_color, linewidth=0))
+    ax_task.add_patch(patches.Rectangle((-0.052, -0.16), 0.104, 0.32, facecolor="white", edgecolor="#222222", linewidth=0.55))
+    ax_task.annotate("", xy=(1.38, 0.0), xytext=(-1.35, 0.0), arrowprops=dict(arrowstyle="-|>", lw=0.8, color="#111111"))
+    ax_task.scatter([-1.38], [0], s=18, color=METHOD_COLOR["flightonly"], zorder=4)
+    ax_task.scatter([1.45], [0], s=44, marker="*", color="#009E73", zorder=4)
+    for yy, scene in [(0.55, "glare"), (0.0, "specular"), (-0.55, "dark")]:
+        ax_task.add_patch(
+            patches.Ellipse(
+                (0.0, yy),
+                0.68,
+                0.21,
+                facecolor=SCENE_COLOR[scene],
+                edgecolor=SCENE_COLOR[scene],
+                alpha=0.16,
+                linewidth=0.55,
+            )
+        )
+        ax_task.text(0.41, yy, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=5.5, va="center")
+    ax_task.text(-1.55, 0.84, "Slit task", fontsize=6.1, fontweight="bold", va="top")
+    ax_task.text(-1.39, -0.15, "start", ha="center", fontsize=5.2)
+    ax_task.text(1.45, -0.15, "goal", ha="center", fontsize=5.2)
+    ax_task.text(0.09, -0.19, "slit", ha="left", fontsize=5.0)
+
+
+def draw_fig1_active_loop(ax_loop: plt.Axes) -> None:
+    ax_loop.axis("off")
+    ax_loop.set_xlim(0, 1)
+    ax_loop.set_ylim(0, 1)
+    boxes = [
+        ((0.06, 0.62), (0.32, 0.17), "camera\n$p,e,g$", "#E8F1FA"),
+        ((0.50, 0.62), (0.38, 0.17), "differentiable\nactive depth", "#FFF1D6"),
+        ((0.50, 0.24), (0.38, 0.17), "policy GRU\nflight + camera", "#E8F5ED"),
+        ((0.06, 0.24), (0.32, 0.17), "depth +\nstate", "#F2F2F2"),
+    ]
+    for xy, wh, text, fc in boxes:
+        draw_round_box(ax_loop, xy, wh, text, fc)
+    arrow = dict(arrowstyle="-|>", lw=0.65, color="#333333", shrinkA=1, shrinkB=1)
+    ax_loop.annotate("", xy=(0.50, 0.705), xytext=(0.38, 0.705), arrowprops=arrow)
+    ax_loop.annotate("", xy=(0.69, 0.41), xytext=(0.69, 0.62), arrowprops=arrow)
+    ax_loop.annotate("", xy=(0.38, 0.325), xytext=(0.50, 0.325), arrowprops=dict(arrowstyle="<|-", lw=0.65, color="#333333"))
+    ax_loop.annotate("", xy=(0.22, 0.62), xytext=(0.22, 0.41), arrowprops=dict(arrowstyle="<|-", lw=0.65, color="#333333"))
+    ax_loop.text(0.04, 0.91, "Active-depth loop", fontsize=6.1, fontweight="bold", va="top")
+    ax_loop.text(0.04, 0.09, "policy acts on vehicle state and sensor state", fontsize=5.1, color="#4A4A4A")
+
+
+def draw_fig1_protocol(ax_train: plt.Axes) -> None:
+    ax_train.axis("off")
+    ax_train.set_xlim(0, 1)
+    ax_train.set_ylim(0, 1)
+    arrow = dict(arrowstyle="-|>", lw=0.65, color="#333333", shrinkA=1, shrinkB=1)
+    stages = [
+        (0.03, "online\nrollout", "#E8F1FA"),
+        (0.27, "teacher\nrelabel", "#FFF1D6"),
+        (0.51, "camera\npretrain", "#E8F5ED"),
+        (0.75, "flight-only\nadapt", "#F3E8F2"),
+    ]
+    for x, text, fc in stages:
+        draw_round_box(ax_train, (x, 0.57), (0.18, 0.20), text, fc)
+    for x in [0.21, 0.45, 0.69]:
+        ax_train.annotate("", xy=(x + 0.045, 0.67), xytext=(x + 0.01, 0.67), arrowprops=arrow)
+    ax_train.add_patch(patches.Rectangle((0.15, 0.20), 0.68, 0.17, facecolor="#F7F7F7", edgecolor="#333333", linewidth=0.5))
+    ax_train.text(0.49, 0.285, "closed-loop evaluation\n7 methods x 3 scenes\n300 episodes per scene", ha="center", va="center", fontsize=4.65, linespacing=1.0)
+    ax_train.annotate("", xy=(0.48, 0.37), xytext=(0.84, 0.57), arrowprops=arrow)
+    ax_train.text(0.02, 0.91, "Relabel and adapt", fontsize=6.1, fontweight="bold", va="top")
+    ax_train.text(0.02, 0.09, "final adaptation freezes the camera branch", fontsize=5.1, color="#4A4A4A")
+
+
 def bootstrap_delta_ci(
     episodes: pd.DataFrame,
     method: str,
@@ -227,124 +301,63 @@ def read_training_curves(eval_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def fig1_system_protocol(out_dir: Path) -> None:
-    fig = plt.figure(figsize=(DOUBLE_COL, 2.75))
-    gs = GridSpec(1, 3, figure=fig, width_ratios=[1.06, 1.18, 1.52], wspace=0.34)
-    ax_task = fig.add_subplot(gs[0, 0])
-    ax_loop = fig.add_subplot(gs[0, 1])
-    ax_train = fig.add_subplot(gs[0, 2])
+def fig1_panel_exports(out_dir: Path) -> None:
+    panel_dir = out_dir / "panels"
+    fig = plt.figure(figsize=(SINGLE_COL, 2.15))
+    ax = fig.add_subplot(111)
+    draw_fig1_task_schematic(ax)
+    save_all(fig, panel_dir / "fig1a_task_schematic")
 
-    # a. Task schematic.
-    ax_task.set_aspect("equal")
-    ax_task.set_xlim(-1.65, 1.65)
-    ax_task.set_ylim(-0.92, 0.92)
-    ax_task.axis("off")
-    wall_color = "#4A4A4A"
-    ax_task.add_patch(patches.Rectangle((-0.035, -0.92), 0.07, 0.66, facecolor=wall_color, linewidth=0))
-    ax_task.add_patch(patches.Rectangle((-0.035, 0.26), 0.07, 0.66, facecolor=wall_color, linewidth=0))
-    ax_task.add_patch(patches.Rectangle((-0.052, -0.16), 0.104, 0.32, facecolor="white", edgecolor="#222222", linewidth=0.55))
-    ax_task.annotate("", xy=(1.38, 0.0), xytext=(-1.35, 0.0), arrowprops=dict(arrowstyle="-|>", lw=0.8, color="#111111"))
-    ax_task.scatter([-1.38], [0], s=18, color=METHOD_COLOR["flightonly"], zorder=4)
-    ax_task.scatter([1.45], [0], s=44, marker="*", color="#009E73", zorder=4)
-    for yy, scene in [(0.55, "glare"), (0.0, "specular"), (-0.55, "dark")]:
-        ax_task.add_patch(
-            patches.Ellipse(
-                (0.0, yy),
-                0.68,
-                0.21,
-                facecolor=SCENE_COLOR[scene],
-                edgecolor=SCENE_COLOR[scene],
-                alpha=0.16,
-                linewidth=0.55,
-            )
+    fig = plt.figure(figsize=(SINGLE_COL, 2.15))
+    ax = fig.add_subplot(111)
+    draw_fig1_active_loop(ax)
+    save_all(fig, panel_dir / "fig1b_active_depth_loop")
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.15))
+    ax = fig.add_subplot(111)
+    draw_fig1_protocol(ax)
+    save_all(fig, panel_dir / "fig1c_relabeled_training_protocol")
+
+
+def draw_training_metric(ax: plt.Axes, training: pd.DataFrame, metric: str, ylabel: str, scale: str) -> None:
+    sub_metric = training[training["metric"] == metric]
+    for method in TRAINING_METHOD_ORDER:
+        sub = sub_metric[sub_metric["method"] == method].sort_values("step")
+        if sub.empty:
+            continue
+        y = sub["value"].astype(float).rolling(window=3, min_periods=1, center=True).mean()
+        ax.plot(
+            sub["step"],
+            y,
+            color=METHOD_COLOR[method],
+            label=METHOD_LABEL_J[method],
+            linewidth=1.15,
         )
-        ax_task.text(0.41, yy, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=5.5, va="center")
-    ax_task.text(-1.55, 0.84, "Slit task", fontsize=6.1, fontweight="bold", va="top")
-    ax_task.text(-1.39, -0.15, "start", ha="center", fontsize=5.2)
-    ax_task.text(1.45, -0.15, "goal", ha="center", fontsize=5.2)
-    ax_task.text(0.09, -0.19, "slit", ha="left", fontsize=5.0)
-    label_panel(ax_task, "a", -0.06, 1.02)
-
-    # b. Closed-loop differentiable sensing graph.
-    ax_loop.axis("off")
-    ax_loop.set_xlim(0, 1)
-    ax_loop.set_ylim(0, 1)
-    boxes = [
-        ((0.06, 0.62), (0.32, 0.17), "camera\n$p,e,g$", "#E8F1FA"),
-        ((0.50, 0.62), (0.38, 0.17), "differentiable\nactive depth", "#FFF1D6"),
-        ((0.50, 0.24), (0.38, 0.17), "policy GRU\nflight + camera", "#E8F5ED"),
-        ((0.06, 0.24), (0.32, 0.17), "depth +\nstate", "#F2F2F2"),
-    ]
-    for xy, wh, text, fc in boxes:
-        draw_round_box(ax_loop, xy, wh, text, fc)
-    arrow = dict(arrowstyle="-|>", lw=0.65, color="#333333", shrinkA=1, shrinkB=1)
-    ax_loop.annotate("", xy=(0.50, 0.705), xytext=(0.38, 0.705), arrowprops=arrow)
-    ax_loop.annotate("", xy=(0.69, 0.41), xytext=(0.69, 0.62), arrowprops=arrow)
-    ax_loop.annotate("", xy=(0.38, 0.325), xytext=(0.50, 0.325), arrowprops=dict(arrowstyle="<|-", lw=0.65, color="#333333"))
-    ax_loop.annotate("", xy=(0.22, 0.62), xytext=(0.22, 0.41), arrowprops=dict(arrowstyle="<|-", lw=0.65, color="#333333"))
-    ax_loop.text(0.04, 0.91, "Active-depth loop", fontsize=6.1, fontweight="bold", va="top")
-    ax_loop.text(0.04, 0.09, "policy acts on vehicle state and sensor state", fontsize=5.1, color="#4A4A4A")
-    label_panel(ax_loop, "b", -0.07, 1.02)
-
-    # c. Protocol as evidence-generating chain.
-    ax_train.axis("off")
-    ax_train.set_xlim(0, 1)
-    ax_train.set_ylim(0, 1)
-    stages = [
-        (0.03, "online\nrollout", "#E8F1FA"),
-        (0.27, "teacher\nrelabel", "#FFF1D6"),
-        (0.51, "camera\npretrain", "#E8F5ED"),
-        (0.75, "flight-only\nadapt", "#F3E8F2"),
-    ]
-    for x, text, fc in stages:
-        draw_round_box(ax_train, (x, 0.57), (0.18, 0.20), text, fc)
-    for x in [0.21, 0.45, 0.69]:
-        ax_train.annotate("", xy=(x + 0.045, 0.67), xytext=(x + 0.01, 0.67), arrowprops=arrow)
-    ax_train.add_patch(patches.Rectangle((0.15, 0.20), 0.68, 0.17, facecolor="#F7F7F7", edgecolor="#333333", linewidth=0.5))
-    ax_train.text(0.49, 0.285, "closed-loop evaluation\n7 methods x 3 scenes\n100 episodes per scene", ha="center", va="center", fontsize=4.65, linespacing=1.0)
-    ax_train.annotate("", xy=(0.48, 0.37), xytext=(0.84, 0.57), arrowprops=arrow)
-    ax_train.text(0.02, 0.91, "Relabel and adapt", fontsize=6.1, fontweight="bold", va="top")
-    ax_train.text(0.02, 0.09, "final adaptation freezes the camera branch", fontsize=5.1, color="#4A4A4A")
-    label_panel(ax_train, "c", -0.06, 1.02)
-    save_all(fig, out_dir / "fig1_system_protocol")
+    ax.set_xlabel("training step")
+    ax.set_ylabel(ylabel)
+    clean_axis(ax, "y")
+    if scale == "log":
+        ax.set_yscale("log")
+    else:
+        ax.set_ylim(-0.03, 1.03)
 
 
-def fig2_training_convergence(training: pd.DataFrame, out_dir: Path) -> None:
+def fig2_training_convergence_panels(training: pd.DataFrame, out_dir: Path) -> None:
     if training.empty:
         return
-
-    fig = plt.figure(figsize=(DOUBLE_COL, 2.55))
-    gs = GridSpec(1, 3, figure=fig, wspace=0.34)
-    axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
+    panel_dir = out_dir / "panels"
     specs = [
-        ("loss", "training loss", "log"),
-        ("success_rate", "training success", "linear"),
-        ("collision_rate", "training collision", "linear"),
+        ("fig2a_training_loss", "loss", "training loss", "log"),
+        ("fig2b_training_success", "success_rate", "training success", "linear"),
+        ("fig2c_training_collision", "collision_rate", "training collision", "linear"),
     ]
-    for ax, (metric, ylabel, scale) in zip(axes, specs):
-        sub_metric = training[training["metric"] == metric]
-        for method in TRAINING_METHOD_ORDER:
-            sub = sub_metric[sub_metric["method"] == method].sort_values("step")
-            if sub.empty:
-                continue
-            y = sub["value"].astype(float).rolling(window=3, min_periods=1, center=True).mean()
-            ax.plot(
-                sub["step"],
-                y,
-                color=METHOD_COLOR[method],
-                label=METHOD_LABEL_J[method],
-                linewidth=1.05,
-            )
-        ax.set_xlabel("training step")
-        ax.set_ylabel(ylabel)
-        clean_axis(ax, "y")
-        if scale == "log":
-            ax.set_yscale("log")
-        else:
-            ax.set_ylim(-0.03, 1.03)
-        label_panel(ax, chr(ord("a") + axes.index(ax)))
-    axes[0].legend(frameon=False, loc="upper right")
-    save_all(fig, out_dir / "fig2_training_convergence")
+    for name, metric, ylabel, scale in specs:
+        fig = plt.figure(figsize=(SINGLE_COL, 2.25))
+        ax = fig.add_subplot(111)
+        draw_training_metric(ax, training, metric, ylabel, scale)
+        if metric == "loss":
+            ax.legend(frameon=False, loc="upper right")
+        save_all(fig, panel_dir / name)
 
 
 def draw_overall_forest(ax: plt.Axes, episodes: pd.DataFrame) -> None:
@@ -463,30 +476,32 @@ def draw_terminal_ecdf(ax: plt.Axes, episodes: pd.DataFrame) -> None:
     ax.set_title("Terminal distance distribution", pad=5)
 
 
-def fig2_navigation(episodes: pd.DataFrame, out_dir: Path) -> None:
-    fig = plt.figure(figsize=(DOUBLE_COL, 4.05))
-    gs = GridSpec(2, 2, figure=fig, width_ratios=[1.0, 1.0], height_ratios=[1.0, 1.0], wspace=0.42, hspace=0.52)
-    ax0 = fig.add_subplot(gs[0, 0])
-    ax1 = fig.add_subplot(gs[0, 1])
-    ax2 = fig.add_subplot(gs[1, 0])
-    ax3 = fig.add_subplot(gs[1, 1])
+def fig3_navigation_panels(episodes: pd.DataFrame, out_dir: Path) -> None:
+    panel_dir = out_dir / "panels"
 
-    draw_metric_forest(ax0, episodes, "success_rate", "success rate", (0.0, 1.0), show_ylabels=True)
-    ax0.set_title("Navigation success", pad=5)
-    label_panel(ax0, "a", -0.12, 1.02)
+    fig = plt.figure(figsize=(SINGLE_COL, 2.30))
+    ax = fig.add_subplot(111)
+    draw_metric_forest(ax, episodes, "success_rate", "success rate", (0.0, 1.0), show_ylabels=True)
+    ax.set_title("Navigation success", pad=5)
+    save_all(fig, panel_dir / "fig3a_navigation_success")
 
-    draw_metric_forest(ax1, episodes, "fill_rate", "depth fill rate", (0.65, 1.0), show_ylabels=False)
-    ax1.set_title("Observation quality", pad=5)
-    label_panel(ax1, "b", -0.12, 1.02)
+    fig = plt.figure(figsize=(SINGLE_COL, 2.30))
+    ax = fig.add_subplot(111)
+    draw_metric_forest(ax, episodes, "fill_rate", "depth fill rate", (0.65, 1.0), show_ylabels=True)
+    ax.set_title("Observation quality", pad=5)
+    save_all(fig, panel_dir / "fig3b_depth_fill")
 
-    im = draw_scene_delta_heatmap(ax2, episodes)
-    cbar = fig.colorbar(im, ax=ax2, fraction=0.035, pad=0.025)
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    im = draw_scene_delta_heatmap(ax, episodes)
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
     cbar.set_label(r"$\Delta$ success")
-    label_panel(ax2, "c", -0.12, 1.05)
+    save_all(fig, panel_dir / "fig3c_scene_success_gain")
 
-    draw_terminal_ecdf(ax3, episodes)
-    label_panel(ax3, "d", -0.12, 1.05)
-    save_all(fig, out_dir / "fig3_navigation_performance")
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    draw_terminal_ecdf(ax, episodes)
+    save_all(fig, panel_dir / "fig3d_terminal_distance_ecdf")
 
 
 def draw_camera_heatmap(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
@@ -578,24 +593,7 @@ def draw_trajectory_envelope(ax: plt.Axes, episodes: pd.DataFrame, traces: pd.Da
     ax.set_title("Successful trajectory envelopes", pad=5)
 
 
-def fig3_camera_mechanism(episodes: pd.DataFrame, traces: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -> None:
-    fig = plt.figure(figsize=(DOUBLE_COL, 4.75))
-    gs = GridSpec(2, 3, figure=fig, width_ratios=[0.92, 1.05, 1.22], height_ratios=[1.0, 1.0], wspace=0.42, hspace=0.48)
-    ax0 = fig.add_subplot(gs[0, 0])
-    ax1 = fig.add_subplot(gs[0, 1])
-    ax2 = fig.add_subplot(gs[0, 2])
-    sub = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[1, :2], hspace=0.12)
-    ax3a = fig.add_subplot(sub[0, 0])
-    ax3b = fig.add_subplot(sub[1, 0], sharex=ax3a)
-    ax4 = fig.add_subplot(gs[1, 2])
-
-    draw_camera_heatmap(ax0, phase_ep)
-    label_panel(ax0, "a", -0.22, 1.06)
-
-    draw_exposure_gain_plane(ax1, phase_ep)
-    label_panel(ax1, "b", -0.16, 1.06)
-
-    # Scene effect confirms panels focus on degraded near-wall observations.
+def draw_near_slit_degradation(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
     phase_rows = []
     for scene in SCENES:
         vals = phase_ep[
@@ -608,8 +606,8 @@ def fig3_camera_mechanism(episodes: pd.DataFrame, traces: pd.DataFrame, phase_ep
     means = [r[0] for r in phase_rows]
     lows = [r[1] for r in phase_rows]
     highs = [r[2] for r in phase_rows]
-    ax2.barh(y, means, color=[SCENE_COLOR[s] for s in SCENES], edgecolor="#222222", linewidth=0.45)
-    ax2.errorbar(
+    ax.barh(y, means, color=[SCENE_COLOR[s] for s in SCENES], edgecolor="#222222", linewidth=0.45)
+    ax.errorbar(
         means,
         y,
         xerr=[np.array(means) - np.array(lows), np.array(highs) - np.array(means)],
@@ -618,20 +616,45 @@ def fig3_camera_mechanism(episodes: pd.DataFrame, traces: pd.DataFrame, phase_ep
         elinewidth=0.55,
         capsize=1.4,
     )
-    ax2.set_yticks(y)
-    ax2.set_yticklabels([SCENE_LABEL[s] for s in SCENES])
-    ax2.set_xlabel("near-slit degradation proxy")
-    ax2.set_xlim(0, max(0.20, max(means) * 1.18))
-    clean_axis(ax2, "x")
-    ax2.set_title("Near-slit degradation encountered", pad=5)
-    label_panel(ax2, "c", -0.18, 1.06)
+    ax.set_yticks(y)
+    ax.set_yticklabels([SCENE_LABEL[s] for s in SCENES])
+    ax.set_xlabel("near-slit degradation proxy")
+    ax.set_xlim(0, max(0.20, max(means) * 1.18))
+    clean_axis(ax, "x")
+    ax.set_title("Near-slit degradation encountered", pad=5)
 
-    draw_profile_pair(ax3a, ax3b, traces)
-    label_panel(ax3a, "d", -0.08, 1.08)
 
-    draw_trajectory_envelope(ax4, episodes, traces)
-    label_panel(ax4, "e", -0.17, 1.06)
-    save_all(fig, out_dir / "fig4_active_camera_mechanism")
+def fig4_camera_mechanism_panels(
+    episodes: pd.DataFrame, traces: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path
+) -> None:
+    panel_dir = out_dir / "panels"
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    draw_camera_heatmap(ax, phase_ep)
+    save_all(fig, panel_dir / "fig4a_camera_fingerprint")
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    draw_exposure_gain_plane(ax, phase_ep)
+    save_all(fig, panel_dir / "fig4b_exposure_gain_plane")
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.20))
+    ax = fig.add_subplot(111)
+    draw_near_slit_degradation(ax, phase_ep)
+    save_all(fig, panel_dir / "fig4c_near_slit_degradation")
+
+    fig = plt.figure(figsize=(DOUBLE_COL * 0.62, 2.65))
+    sub = GridSpec(2, 1, figure=fig, hspace=0.12)
+    ax_top = fig.add_subplot(sub[0, 0])
+    ax_bottom = fig.add_subplot(sub[1, 0], sharex=ax_top)
+    draw_profile_pair(ax_top, ax_bottom, traces)
+    save_all(fig, panel_dir / "fig4d_exposure_gain_profiles")
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    draw_trajectory_envelope(ax, episodes, traces)
+    save_all(fig, panel_dir / "fig4e_trajectory_envelopes")
 
 
 def offline_dagger_sep(diagnosis: pd.DataFrame) -> float:
@@ -665,13 +688,7 @@ def delta_dark_minus_glare_ci(phase_ep: pd.DataFrame, method: str, param: str, n
     return mean, min(lo, mean), max(hi, mean)
 
 
-def fig6_dagger_diagnosis(episodes: pd.DataFrame, phase_ep: pd.DataFrame, diagnosis: pd.DataFrame, out_dir: Path) -> None:
-    fig = plt.figure(figsize=(DOUBLE_COL, 3.55))
-    gs = GridSpec(1, 3, figure=fig, width_ratios=[1.05, 1.10, 1.15], wspace=0.43)
-    ax0 = fig.add_subplot(gs[0, 0])
-    ax1 = fig.add_subplot(gs[0, 1])
-    ax2 = fig.add_subplot(gs[0, 2])
-
+def draw_dagger_semantics_progress(ax: plt.Axes, phase_ep: pd.DataFrame, diagnosis: pd.DataFrame) -> None:
     stages = ["offline\nteacher", "online\npretrain", "online\nDAgger", "final\npolicy"]
     vals = [offline_dagger_sep(diagnosis)]
     los = [np.nan]
@@ -682,21 +699,23 @@ def fig6_dagger_diagnosis(episodes: pd.DataFrame, phase_ep: pd.DataFrame, diagno
         los.append(lo)
         his.append(hi)
     x = np.arange(len(stages))
-    ax0.plot(x, vals, color="#4A4A4A", lw=0.8, zorder=1)
+    ax.plot(x, vals, color="#4A4A4A", lw=0.8, zorder=1)
     colors = ["#9E9E9E", METHOD_COLOR["pretrained"], METHOD_COLOR["dagger"], METHOD_COLOR["flightonly"]]
     for xi, mean, lo, hi, color in zip(x, vals, los, his, colors):
         if np.isfinite(lo):
-            ax0.errorbar([xi], [mean], yerr=[[mean - lo], [hi - mean]], fmt="none", ecolor="#222222", elinewidth=0.55, capsize=1.5)
-        ax0.scatter([xi], [mean], s=29, color=color, edgecolor="#222222", linewidth=0.42, zorder=3)
-        ax0.text(xi, mean + 0.025, f"{mean:.2f}", ha="center", fontsize=5.1)
-    ax0.set_xticks(x)
-    ax0.set_xticklabels(stages, rotation=28, ha="right")
-    ax0.set_ylabel("glare-dark camera L1")
-    ax0.set_ylim(0, 0.42)
-    clean_axis(ax0, "y")
-    ax0.set_title("Online camera semantics", pad=5)
-    label_panel(ax0, "a", -0.18, 1.06)
+            ax.errorbar([xi], [mean], yerr=[[mean - lo], [hi - mean]], fmt="none", ecolor="#222222", elinewidth=0.55, capsize=1.5)
+        ax.scatter([xi], [mean], s=29, color=color, edgecolor="#222222", linewidth=0.42, zorder=3)
+        ax.text(xi, mean + 0.025, f"{mean:.2f}", ha="center", fontsize=5.1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(stages, rotation=28, ha="right")
+    ax.set_ylabel("glare-dark camera L1")
+    finite_vals = [float(v) for v in vals if np.isfinite(v)]
+    ax.set_ylim(0, max(0.42, max(finite_vals) * 1.20))
+    clean_axis(ax, "y")
+    ax.set_title("Online camera semantics", pad=5)
 
+
+def draw_dark_glare_param_deltas(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
     params = ["power", "exposure", "gain"]
     methods = ["pretrained", "dagger", "flightonly"]
     x = np.arange(len(methods))
@@ -709,101 +728,65 @@ def fig6_dagger_diagnosis(episodes: pd.DataFrame, phase_ep: pd.DataFrame, diagno
             lows.append(lo)
             highs.append(hi)
         xpos = x + (k - 1) * width
-        ax1.bar(xpos, means, width=width, color=PARAM_COLOR[param], edgecolor="#222222", linewidth=0.42, label=param)
-        ax1.errorbar(xpos, means, yerr=[np.array(means) - np.array(lows), np.array(highs) - np.array(means)], fmt="none", ecolor="#222222", elinewidth=0.5, capsize=1.4)
-    ax1.axhline(0, color="#222222", lw=0.55)
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(["Pretrain", "DAgger", "Ours"])
-    ax1.set_ylabel("dark - glare near parameter")
-    ax1.set_ylim(-0.12, 0.72)
-    ax1.legend(frameon=False, ncol=3, loc="upper left", handlelength=1.2, columnspacing=0.9)
-    clean_axis(ax1, "y")
-    ax1.set_title("Recovered camera semantics", pad=5)
-    label_panel(ax1, "b", -0.16, 1.06)
+        ax.bar(xpos, means, width=width, color=PARAM_COLOR[param], edgecolor="#222222", linewidth=0.42, label=param)
+        ax.errorbar(xpos, means, yerr=[np.array(means) - np.array(lows), np.array(highs) - np.array(means)], fmt="none", ecolor="#222222", elinewidth=0.5, capsize=1.4)
+    ax.axhline(0, color="#222222", lw=0.55)
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Pretrain", "DAgger", "Ours"])
+    ax.set_ylabel("dark - glare near parameter")
+    ax.set_ylim(-0.12, 0.72)
+    ax.legend(frameon=False, ncol=3, loc="upper left", handlelength=1.2, columnspacing=0.9)
+    clean_axis(ax, "y")
+    ax.set_title("Recovered camera semantics", pad=5)
 
+
+def draw_separation_success(ax: plt.Axes, episodes: pd.DataFrame, phase_ep: pd.DataFrame) -> None:
     scatter_methods = ["fixed", "nondiff", "pretrained", "dagger", "flightonly"]
     coords: dict[str, tuple[float, float]] = {}
     for method in scatter_methods:
         sep = l1_scene_separation_ci(phase_ep, method)[0]
         succ = metric_ci(episodes, method, "success_rate")[0]
         coords[method] = (sep, succ)
-        ax2.scatter([sep], [succ], s=34, color=METHOD_COLOR[method], edgecolor="#222222", linewidth=0.48, zorder=3)
+        ax.scatter([sep], [succ], s=34, color=METHOD_COLOR[method], edgecolor="#222222", linewidth=0.48, zorder=3)
     label_offsets = {
         "fixed": (0.010, -0.040),
         "nondiff": (0.010, 0.018),
-        "pretrained": (0.010, -0.030),
-        "dagger": (0.010, -0.020),
+        "pretrained": (-0.090, -0.032),
+        "dagger": (-0.090, 0.022),
         "flightonly": (0.010, 0.018),
     }
     for method in scatter_methods:
         dx, dy = label_offsets[method]
-        ax2.text(coords[method][0] + dx, coords[method][1] + dy, METHOD_LABEL_J[method], fontsize=5.2)
-    for a, b in [("pretrained", "dagger"), ("dagger", "flightonly")]:
-        ax2.annotate("", xy=coords[b], xytext=coords[a], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=5, shrinkB=5))
-    ax2.set_xlabel("camera separation")
-    ax2.set_ylabel("success rate")
-    ax2.set_xlim(-0.02, 0.40)
-    ax2.set_ylim(0.0, 0.84)
-    clean_axis(ax2, "both")
-    ax2.set_title("Separation must be paired with flight adaptation", pad=5)
-    label_panel(ax2, "c", -0.14, 1.06)
-    save_all(fig, out_dir / "fig6_dagger_relabel_diagnosis")
+        ax.text(coords[method][0] + dx, coords[method][1] + dy, METHOD_LABEL_J[method], fontsize=5.0)
+    ax.annotate("", xy=coords["dagger"], xytext=coords["pretrained"], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=4, shrinkB=4))
+    ax.annotate("", xy=coords["flightonly"], xytext=coords["dagger"], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=4, shrinkB=4))
+    ax.set_xlabel("camera separation")
+    ax.set_ylabel("success rate")
+    ax.set_xlim(-0.02, 0.48)
+    ax.set_ylim(0.0, 0.84)
+    clean_axis(ax, "both")
+    ax.set_title("Separation must be paired with flight adaptation", pad=5)
 
 
-def figS1_full_matrix(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -> None:
-    fig = plt.figure(figsize=(DOUBLE_COL, 4.8))
-    gs = GridSpec(2, 2, figure=fig, wspace=0.36, hspace=0.47)
-    axes = [fig.add_subplot(gs[i, j]) for i in range(2) for j in range(2)]
-    methods = ["flightonly", "fixed", "randfix", "nondiff", "pretrained", "dagger", "zero"]
-    metrics = [
-        ("success_rate", "success", "viridis", 0.0, 1.0),
-        ("fill_rate", "depth fill", "magma", 0.55, 1.0),
-        ("collision_rate", "collision", "inferno", 0.0, 1.0),
-    ]
-    for ax, (metric, title, cmap, vmin, vmax), label in zip(axes[:3], metrics, ["a", "b", "c"]):
-        data = np.array([[metric_ci(episodes, m, metric, s)[0] for s in SCENES] for m in methods])
-        im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
-        ax.set_xticks(np.arange(len(SCENES)))
-        ax.set_xticklabels([SCENE_LABEL[s] for s in SCENES])
-        ax.set_yticks(np.arange(len(methods)))
-        ax.set_yticklabels([METHOD_LABEL_J[m] for m in methods])
-        for i in range(data.shape[0]):
-            for j in range(data.shape[1]):
-                color = "white" if data[i, j] < vmin + 0.33 * (vmax - vmin) else "#111111"
-                ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center", fontsize=5.0, color=color)
-        ax.set_title(title, pad=4)
-        cb = fig.colorbar(im, ax=ax, fraction=0.036, pad=0.025)
-        cb.set_label(title)
-        label_panel(ax, label, -0.12, 1.05)
-    ax = axes[3]
-    vals = np.array([l1_scene_separation_ci(phase_ep, m)[0] for m in methods])
-    ax.bar(np.arange(len(methods)), vals, color=[METHOD_COLOR[m] for m in methods], edgecolor="#222222", linewidth=0.42)
-    ax.set_xticks(np.arange(len(methods)))
-    ax.set_xticklabels([METHOD_LABEL_J[m] for m in methods], rotation=35, ha="right")
-    ax.set_ylabel("glare-dark near L1")
-    ax.set_ylim(0, 0.42)
-    clean_axis(ax, "y")
-    ax.set_title("camera separation", pad=4)
-    label_panel(ax, "d", -0.12, 1.05)
-    save_all(fig, out_dir / "extended_data_fig1_full_matrix")
+def fig6_dagger_diagnosis_panels(
+    episodes: pd.DataFrame, phase_ep: pd.DataFrame, diagnosis: pd.DataFrame, out_dir: Path
+) -> None:
+    panel_dir = out_dir / "panels"
 
-
-def figS2_terminal_distance(episodes: pd.DataFrame, out_dir: Path) -> None:
-    fig = plt.figure(figsize=(SINGLE_COL, 2.65))
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
     ax = fig.add_subplot(111)
-    box_data = [episodes[episodes["method"] == m]["final_goal_dist"].astype(float).to_numpy() for m in METHOD_ORDER_MAIN]
-    bp = ax.boxplot(box_data, patch_artist=True, showfliers=False, widths=0.58, medianprops=dict(color="#111111", lw=0.7))
-    for patch, method in zip(bp["boxes"], METHOD_ORDER_MAIN):
-        patch.set_facecolor(METHOD_COLOR[method])
-        patch.set_alpha(0.62)
-        patch.set_edgecolor("#222222")
-    for item in bp["whiskers"] + bp["caps"]:
-        item.set_linewidth(0.5)
-    ax.set_xticks(np.arange(1, len(METHOD_ORDER_MAIN) + 1))
-    ax.set_xticklabels([METHOD_LABEL_J[m] for m in METHOD_ORDER_MAIN], rotation=35, ha="right")
-    ax.set_ylabel("terminal distance (m)")
-    clean_axis(ax, "y")
-    save_all(fig, out_dir / "extended_data_fig2_terminal_distance")
+    draw_dagger_semantics_progress(ax, phase_ep, diagnosis)
+    save_all(fig, panel_dir / "fig6a_camera_semantics_progress")
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    draw_dark_glare_param_deltas(ax, phase_ep)
+    save_all(fig, panel_dir / "fig6b_dark_glare_parameter_delta")
+
+    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    ax = fig.add_subplot(111)
+    draw_separation_success(ax, episodes, phase_ep)
+    save_all(fig, panel_dir / "fig6c_separation_success")
 
 
 def write_text(path: Path, text: str) -> None:
@@ -815,6 +798,10 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     table_dir = out_dir / "tables"
     fixed_success = metric_ci(episodes, "fixed", "success_rate")[0]
     fixed_fill = metric_ci(episodes, "fixed", "fill_rate")[0]
+    main_counts = episodes[episodes["method"].isin(METHOD_ORDER_MAIN)].groupby("method").size()
+    episodes_per_method = int(main_counts.min()) if len(main_counts) else 0
+    scene_counts = episodes[episodes["method"].isin(METHOD_ORDER_MAIN)].groupby(["method", "scene_name"]).size()
+    episodes_per_scene = int(scene_counts.min()) if len(scene_counts) else 0
     rows = [
         r"\begin{table}[t]",
         r"\centering",
@@ -846,7 +833,7 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     rows += [
         r"\bottomrule",
         r"\end{tabular}",
-        r"\caption{Primary closed-loop navigation results over 300 episodes per method. Brackets denote 95\% confidence intervals: Wilson intervals for binary outcomes and bootstrap intervals over episodes for fill. Deltas are relative to the fixed-camera baseline.}",
+        rf"\caption{{Primary closed-loop navigation results over {episodes_per_method} episodes per method. Brackets denote 95\% confidence intervals: Wilson intervals for binary outcomes and bootstrap intervals over episodes for fill. Deltas are relative to the fixed-camera baseline.}}",
         r"\label{tab:journal_main_navigation}",
         r"\end{table}",
         "",
@@ -875,7 +862,7 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     rows += [
         r"\bottomrule",
         r"\end{tabular}",
-        r"\caption{Scene-level success/fill rates. Each scene contains 100 closed-loop episodes per method.}",
+        rf"\caption{{Scene-level success/fill rates. Each scene contains {episodes_per_scene} closed-loop episodes per method.}}",
         r"\label{tab:journal_scene_breakdown}",
         r"\end{table}",
         "",
@@ -969,7 +956,8 @@ trajectory provides the reference poses. At each pose, raw geometric depth is
 shown together with observed depth re-rendered using camera parameters from
 fixed, random-fixed, and final active-camera policies. The comparison isolates
 the sensor-parameter effect on the depth image at identical vehicle poses.
-Separate glare, dark, and specular panels are provided.
+The manuscript uses the glare, dark, and specular composites as a compact
+three-subfigure layout.
 
 ## Figure 6 | Camera relabeling and flight adaptation are complementary.
 
@@ -979,15 +967,6 @@ final policies. **b,** The separation is mainly carried by exposure and gain:
 low-reflectance dark-material scenes require higher values than glare. **c,**
 Camera semantics alone is insufficient for flight; final performance requires
 combining DAgger camera relabeling with flight-only adaptation.
-
-## Extended Data Figure 1 | Complete method-by-scene evaluation matrix.
-
-Full success, fill, collision, and glare-dark camera-separation matrices for all
-main and diagnostic checkpoints.
-
-## Extended Data Figure 2 | Terminal distance distributions.
-
-Terminal goal-distance distributions for the main comparison methods.
 """
     write_text(out_dir / "caption_drafts.md", text)
 
@@ -1004,24 +983,35 @@ The older `paper_assets` directory is diagnostic only and should not be used in 
 paper submission. This `journal_assets` directory is the current recommended
 figure/table set.
 
-## Main figures
+## Composite figures
 
-- `figures/fig1_system_protocol.pdf`
-- `figures/fig2_training_convergence.pdf`
-- `figures/fig3_navigation_performance.pdf`
-- `figures/fig4_active_camera_mechanism.pdf`
 - `figures/fig5_depth_observation_sequence_glare.pdf`
 - `figures/fig5_depth_observation_sequence_dark.pdf`
 - `figures/fig5_depth_observation_sequence_specular.pdf`
-- `figures/fig6_dagger_relabel_diagnosis.pdf`
 
-## Extended data
+## Panel figures
 
-- `figures/extended_data_fig1_full_matrix.pdf`
-- `figures/extended_data_fig2_terminal_distance.pdf`
-- `figures/extended_data_fig3_method_depth_sequences_glare.pdf`
-- `figures/extended_data_fig3_method_depth_sequences_dark.pdf`
-- `figures/extended_data_fig3_method_depth_sequences_specular.pdf`
+The `figures/panels/` directory contains the standalone subfigure assets used by
+the manuscript for Figures 1, 2, 3, 4, and 6.
+
+- `figures/panels/fig2a_training_loss.pdf`
+- `figures/panels/fig2b_training_success.pdf`
+- `figures/panels/fig2c_training_collision.pdf`
+- `figures/panels/fig1a_task_schematic.pdf`
+- `figures/panels/fig1b_active_depth_loop.pdf`
+- `figures/panels/fig1c_relabeled_training_protocol.pdf`
+- `figures/panels/fig3a_navigation_success.pdf`
+- `figures/panels/fig3b_depth_fill.pdf`
+- `figures/panels/fig3c_scene_success_gain.pdf`
+- `figures/panels/fig3d_terminal_distance_ecdf.pdf`
+- `figures/panels/fig4a_camera_fingerprint.pdf`
+- `figures/panels/fig4b_exposure_gain_plane.pdf`
+- `figures/panels/fig4c_near_slit_degradation.pdf`
+- `figures/panels/fig4d_exposure_gain_profiles.pdf`
+- `figures/panels/fig4e_trajectory_envelopes.pdf`
+- `figures/panels/fig6a_camera_semantics_progress.pdf`
+- `figures/panels/fig6b_dark_glare_parameter_delta.pdf`
+- `figures/panels/fig6c_separation_success.pdf`
 
 ## Tables
 
@@ -1060,13 +1050,11 @@ def main() -> None:
     diagnosis = read_diagnosis(eval_dir)
     training = read_training_curves(eval_dir)
 
-    fig1_system_protocol(fig_dir)
-    fig2_training_convergence(training, fig_dir)
-    fig2_navigation(episodes, fig_dir)
-    fig3_camera_mechanism(episodes, traces, phase_ep, fig_dir)
-    fig6_dagger_diagnosis(episodes, phase_ep, diagnosis, fig_dir)
-    figS1_full_matrix(episodes, phase_ep, fig_dir)
-    figS2_terminal_distance(episodes, fig_dir)
+    fig1_panel_exports(fig_dir)
+    fig2_training_convergence_panels(training, fig_dir)
+    fig3_navigation_panels(episodes, fig_dir)
+    fig4_camera_mechanism_panels(episodes, traces, phase_ep, fig_dir)
+    fig6_dagger_diagnosis_panels(episodes, phase_ep, diagnosis, fig_dir)
     make_tables(episodes, phase_ep, out_dir)
     write_captions(out_dir)
     write_readme(out_dir, eval_dir)

@@ -55,7 +55,8 @@ trajectory provides the reference poses. At each pose, raw geometric depth is
 shown together with observed depth re-rendered using camera parameters from
 fixed, random-fixed, and final active-camera policies. The comparison isolates
 the sensor-parameter effect on the depth image at identical vehicle poses.
-Separate glare, dark, and specular panels are provided.
+The manuscript uses the glare, dark, and specular composites as a compact
+three-subfigure layout.
 
 ## Figure 6 | Camera relabeling and flight adaptation are complementary.
 
@@ -65,12 +66,3 @@ final policies. **b,** The separation is mainly carried by exposure and gain:
 low-reflectance dark-material scenes require higher values than glare. **c,**
 Camera semantics alone is insufficient for flight; final performance requires
 combining DAgger camera relabeling with flight-only adaptation.
-
-## Extended Data Figure 1 | Complete method-by-scene evaluation matrix.
-
-Full success, fill, collision, and glare-dark camera-separation matrices for all
-main and diagnostic checkpoints.
-
-## Extended Data Figure 2 | Terminal distance distributions.
-
-Terminal goal-distance distributions for the main comparison methods.

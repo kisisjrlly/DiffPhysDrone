@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="228.660435pt" height="156.092pt" viewBox="0 0 228.660435 156.092" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-05-11T23:13:49.770746</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.9.4, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 156.092 
+L 228.660435 156.092 
+L 228.660435 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 30.62075 142.385 
+L 226.140435 142.385 
+L 226.140435 12.101 
+L 30.62075 12.101 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g clip-path="url(#p6e4ddef018)">
+    <image xlink:href="data:image/png;base64,
+iVBORw0KGgoAAAANSUhEUgAAAUYAAADaCAYAAADaBOt8AAAC80lEQVR4nO3WsU0DURQFUdZAQAfEUA4ZJdIFIY6pww2YwCCtTD7Zjx5I51Rwo9HdXt6P1xv+lceHfXoCCy77Nj2BRYfpAQB/jTAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDAChDACxPb0+nadHsGa7etnegIr7m+nF7DIYwQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQQIYQSIu8PpPL2BRZ8fz9MTWHDZv6cnsMhjBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBAhhBIhfG0USE3nji0gAAAAASUVORK5CYII=" id="image42524a44ca" transform="scale(1 -1) translate(0 -130.8)" x="30.62075" y="-11.585" width="195.6" height="130.8"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <defs>
+       <path id="m4b9f7b57ab" d="M 0 0 
+L 0 2.5 
+" style="stroke: #000000; stroke-width: 0.5"/>
+      </defs>
+      <g>
+       <use xlink:href="#m4b9f7b57ab" x="63.207364" y="142.385" style="stroke: #000000; stroke-width: 0.5"/>
+      </g>
+     </g>
+     <g id="text_1">
+      <text style="font: 5.6px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="63.207364" y="152.393375" transform="rotate(-0 63.207364 152.393375)">power</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2">
+      <g>
+       <use xlink:href="#m4b9f7b57ab" x="128.380593" y="142.385" style="stroke: #000000; stroke-width: 0.5"/>
+      </g>
+     </g>
+     <g id="text_2">
+      <text style="font: 5.6px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="128.380593" y="152.393375" transform="rotate(-0 128.380593 152.393375)">exposure</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3">
+      <g>
+       <use xlink:href="#m4b9f7b57ab" x="193.553821" y="142.385" style="stroke: #000000; stroke-width: 0.5"/>
+      </g>
+     </g>
+     <g id="text_3">
+      <text style="font: 5.6px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="193.553821" y="152.393375" transform="rotate(-0 193.553821 152.393375)">gain</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_4">
+      <defs>
+       <path id="mc3928ef105" d="M 0 0 
+L -2.5 0 
+" style="stroke: #000000; stroke-width: 0.5"/>
+      </defs>
+      <g>
+       <use xlink:href="#mc3928ef105" x="30.62075" y="33.815" style="stroke: #000000; stroke-width: 0.5"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="font: 5.6px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: end" x="24.62075" y="35.819187" transform="rotate(-0 24.62075 35.819187)">Glare</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_5">
+      <g>
+       <use xlink:href="#mc3928ef105" x="30.62075" y="77.243" style="stroke: #000000; stroke-width: 0.5"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="font: 5.6px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: end" x="24.62075" y="79.247187" transform="rotate(-0 24.62075 79.247187)">Dark</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_6">
+      <g>
+       <use xlink:href="#mc3928ef105" x="30.62075" y="120.671" style="stroke: #000000; stroke-width: 0.5"/>
+      </g>
+     </g>
+     <g id="text_6">
+      <text style="font: 5.6px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: end" x="24.62075" y="122.709313" transform="rotate(-0 24.62075 122.709313)">Specular</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 30.62075 142.385 
+L 30.62075 12.101 
+" style="fill: none; stroke: #000000; stroke-width: 0.55; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 30.62075 142.385 
+L 226.140435 142.385 
+" style="fill: none; stroke: #000000; stroke-width: 0.55; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_7">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="63.207364" y="35.185133" transform="rotate(-0 63.207364 35.185133)">0.73</text>
+   </g>
+   <g id="text_8">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="128.380593" y="35.185133" transform="rotate(-0 128.380593 35.185133)">0.09</text>
+   </g>
+   <g id="text_9">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="193.553821" y="35.185133" transform="rotate(-0 193.553821 35.185133)">0.12</text>
+   </g>
+   <g id="text_10">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="63.207364" y="78.613133" transform="rotate(-0 63.207364 78.613133)">0.67</text>
+   </g>
+   <g id="text_11">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="128.380593" y="78.613133" transform="rotate(-0 128.380593 78.613133)">0.69</text>
+   </g>
+   <g id="text_12">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="193.553821" y="78.613133" transform="rotate(-0 193.553821 78.613133)">0.68</text>
+   </g>
+   <g id="text_13">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="63.207364" y="122.041133" transform="rotate(-0 63.207364 122.041133)">0.41</text>
+   </g>
+   <g id="text_14">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="128.380593" y="122.041133" transform="rotate(-0 128.380593 122.041133)">0.37</text>
+   </g>
+   <g id="text_15">
+    <text style="fill: #111111; font: 5.3px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="193.553821" y="122.041133" transform="rotate(-0 193.553821 122.041133)">0.38</text>
+   </g>
+   <g id="text_16">
+    <text style="font: 6.4px 'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', sans-serif; text-anchor: middle" x="128.380593" y="7.101" transform="rotate(-0 128.380593 7.101)">Near-slit camera settings</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p6e4ddef018">
+   <rect x="30.62075" y="12.101" width="195.519685" height="130.284"/>
+  </clipPath>
+ </defs>
+</svg>

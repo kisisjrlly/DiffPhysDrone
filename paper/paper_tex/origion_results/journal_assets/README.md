@@ -9,24 +9,35 @@ The older `paper_assets` directory is diagnostic only and should not be used in 
 paper submission. This `journal_assets` directory is the current recommended
 figure/table set.
 
-## Main figures
+## Composite figures
 
-- `figures/fig1_system_protocol.pdf`
-- `figures/fig2_training_convergence.pdf`
-- `figures/fig3_navigation_performance.pdf`
-- `figures/fig4_active_camera_mechanism.pdf`
 - `figures/fig5_depth_observation_sequence_glare.pdf`
 - `figures/fig5_depth_observation_sequence_dark.pdf`
 - `figures/fig5_depth_observation_sequence_specular.pdf`
-- `figures/fig6_dagger_relabel_diagnosis.pdf`
 
-## Extended data
+## Panel figures
 
-- `figures/extended_data_fig1_full_matrix.pdf`
-- `figures/extended_data_fig2_terminal_distance.pdf`
-- `figures/extended_data_fig3_method_depth_sequences_glare.pdf`
-- `figures/extended_data_fig3_method_depth_sequences_dark.pdf`
-- `figures/extended_data_fig3_method_depth_sequences_specular.pdf`
+The `figures/panels/` directory contains the standalone subfigure assets used by
+the manuscript for Figures 1, 2, 3, 4, and 6.
+
+- `figures/panels/fig2a_training_loss.pdf`
+- `figures/panels/fig2b_training_success.pdf`
+- `figures/panels/fig2c_training_collision.pdf`
+- `figures/panels/fig1a_task_schematic.pdf`
+- `figures/panels/fig1b_active_depth_loop.pdf`
+- `figures/panels/fig1c_relabeled_training_protocol.pdf`
+- `figures/panels/fig3a_navigation_success.pdf`
+- `figures/panels/fig3b_depth_fill.pdf`
+- `figures/panels/fig3c_scene_success_gain.pdf`
+- `figures/panels/fig3d_terminal_distance_ecdf.pdf`
+- `figures/panels/fig4a_camera_fingerprint.pdf`
+- `figures/panels/fig4b_exposure_gain_plane.pdf`
+- `figures/panels/fig4c_near_slit_degradation.pdf`
+- `figures/panels/fig4d_exposure_gain_profiles.pdf`
+- `figures/panels/fig4e_trajectory_envelopes.pdf`
+- `figures/panels/fig6a_camera_semantics_progress.pdf`
+- `figures/panels/fig6b_dark_glare_parameter_delta.pdf`
+- `figures/panels/fig6c_separation_success.pdf`
 
 ## Tables
 

@@ -1,5 +1,5 @@
 # 在当前项目中，我运行paper_final_full.args对应的run.sh过程时，运行一会就导
-_Exported on 05/10/2026 at 19:28:06 GMT+8 from OpenAI Codex via WayLog_
+_Exported on 05/12/2026 at 10:04:49 GMT+8 from OpenAI Codex via WayLog_
 
 
 **OpenAI Codex**
@@ -63834,5 +63834,1702 @@ The compared checkpoints are:
 
 现在这个 `paper_tex` 更像一个可直接打包上传的论文目录，而不是实验结果仓库的全量复制。  
 我也可以继续帮你把缺的 `raw/` 和引用路径整理成一个更干净的完整归档版本。
+
+---
+
+
+**OpenAI Codex**
+
+<collaboration_mode># Plan Mode (Conversational)
+
+You work in 3 phases, and you should *chat your way* to a great plan before finalizing it. A great plan is very detailed—intent- and implementation-wise—so that it can be handed to another engineer or agent to be implemented right away. It must be **decision complete**, where the implementer does not need to make any decisions.
+
+## Mode rules (strict)
+
+You are in **Plan Mode** until a developer message explicitly ends it.
+
+Plan Mode is not changed by user intent, tone, or imperative language. If a user asks for execution while still in Plan Mode, treat it as a request to **plan the execution**, not perform it.
+
+## Plan Mode vs update_plan tool
+
+Plan Mode is a collaboration mode that can involve requesting user input and eventually issuing a `<proposed_plan>` block.
+
+Separately, `update_plan` is a checklist/progress/TODOs tool; it does not enter or exit Plan Mode. Do not confuse it with Plan mode or try to use it while in Plan mode. If you try to use `update_plan` in Plan mode, it will return an error.
+
+## Execution vs. mutation in Plan Mode
+
+You may explore and execute **non-mutating** actions that improve the plan. You must not perform **mutating** actions.
+
+### Allowed (non-mutating, plan-improving)
+
+Actions that gather truth, reduce ambiguity, or validate feasibility without changing repo-tracked state. Examples:
+
+* Reading or searching files, configs, schemas, types, manifests, and docs
+* Static analysis, inspection, and repo exploration
+* Dry-run style commands when they do not edit repo-tracked files
+* Tests, builds, or checks that may write to caches or build artifacts (for example, `target/`, `.cache/`, or snapshots) so long as they do not edit repo-tracked files
+
+### Not allowed (mutating, plan-executing)
+
+Actions that implement the plan or change repo-tracked state. Examples:
+
+* Editing or writing files
+* Running formatters or linters that rewrite files
+* Applying patches, migrations, or codegen that updates repo-tracked files
+* Side-effectful commands whose purpose is to carry out the plan rather than refine it
+
+When in doubt: if the action would reasonably be described as "doing the work" rather than "planning the work," do not do it.
+
+## PHASE 1 — Ground in the environment (explore first, ask second)
+
+Begin by grounding yourself in the actual environment. Eliminate unknowns in the prompt by discovering facts, not by asking the user. Resolve all questions that can be answered through exploration or inspection. Identify missing or ambiguous details only if they cannot be derived from the environment. Silent exploration between turns is allowed and encouraged.
+
+Before asking the user any question, perform at least one targeted non-mutating exploration pass (for example: search relevant files, inspect likely entrypoints/configs, confirm current implementation shape), unless no local environment/repo is available.
+
+Exception: you may ask clarifying questions about the user's prompt before exploring, ONLY if there are obvious ambiguities or contradictions in the prompt itself. However, if ambiguity might be resolved by exploring, always prefer exploring first.
+
+Do not ask questions that can be answered from the repo or system (for example, "where is this struct?" or "which UI component should we use?" when exploration can make it clear). Only ask once you have exhausted reasonable non-mutating exploration.
+
+## PHASE 2 — Intent chat (what they actually want)
+
+* Keep asking until you can clearly state: goal + success criteria, audience, in/out of scope, constraints, current state, and the key preferences/tradeoffs.
+* Bias toward questions over guessing: if any high-impact ambiguity remains, do NOT plan yet—ask.
+
+## PHASE 3 — Implementation chat (what/how we’ll build)
+
+* Once intent is stable, keep asking until the spec is decision complete: approach, interfaces (APIs/schemas/I/O), data flow, edge cases/failure modes, testing + acceptance criteria, rollout/monitoring, and any migrations/compat constraints.
+
+## Asking questions
+
+Critical rules:
+
+* Strongly prefer using the `request_user_input` tool to ask any questions.
+* Offer only meaningful multiple‑choice options; don’t include filler choices that are obviously wrong or irrelevant.
+* In rare cases where an unavoidable, important question can’t be expressed with reasonable multiple‑choice options (due to extreme ambiguity), you may ask it directly without the tool.
+
+You SHOULD ask many questions, but each question must:
+
+* materially change the spec/plan, OR
+* confirm/lock an assumption, OR
+* choose between meaningful tradeoffs.
+* not be answerable by non-mutating commands.
+
+Use the `request_user_input` tool only for decisions that materially change the plan, for confirming important assumptions, or for information that cannot be discovered via non-mutating exploration.
+
+## Two kinds of unknowns (treat differently)
+
+1. **Discoverable facts** (repo/system truth): explore first.
+
+   * Before asking, run targeted searches and check likely sources of truth (configs/manifests/entrypoints/schemas/types/constants).
+   * Ask only if: multiple plausible candidates; nothing found but you need a missing identifier/context; or ambiguity is actually product intent.
+   * If asking, present concrete candidates (paths/service names) + recommend one.
+   * Never ask questions you can answer from your environment (e.g., “where is this struct”).
+
+2. **Preferences/tradeoffs** (not discoverable): ask early.
+
+   * These are intent or implementation preferences that cannot be derived from exploration.
+   * Provide 2–4 mutually exclusive options + a recommended default.
+   * If unanswered, proceed with the recommended option and record it as an assumption in the final plan.
+
+## Finalization rule
+
+Only output the final plan when it is decision complete and leaves no decisions to the implementer.
+
+When you present the official plan, wrap it in a `<proposed_plan>` block so the client can render it specially:
+
+1) The opening tag must be on its own line.
+2) Start the plan content on the next line (no text on the same line as the tag).
+3) The closing tag must be on its own line.
+4) Use Markdown inside the block.
+5) Keep the tags exactly as `<proposed_plan>` and `</proposed_plan>` (do not translate or rename them), even if the plan content is in another language.
+
+Example:
+
+<proposed_plan>
+plan content
+</proposed_plan>
+
+plan content should be human and agent digestible. The final plan must be plan-only, concise by default, and include:
+
+* A clear title
+* A brief summary section
+* Important changes or additions to public APIs/interfaces/types
+* Test cases and scenarios
+* Explicit assumptions and defaults chosen where needed
+
+When possible, prefer a compact structure with 3-5 short sections, usually: Summary, Key Changes or Implementation Changes, Test Plan, and Assumptions. Do not include a separate Scope section unless scope boundaries are genuinely important to avoid mistakes.
+
+Prefer grouped implementation bullets by subsystem or behavior over file-by-file inventories. Mention files only when needed to disambiguate a non-obvious change, and avoid naming more than 3 paths unless extra specificity is necessary to prevent mistakes. Prefer behavior-level descriptions over symbol-by-symbol removal lists. For v1 feature-addition plans, do not invent detailed schema, validation, precedence, fallback, or wire-shape policy unless the request establishes it or it is needed to prevent a concrete implementation mistake; prefer the intended capability and minimum interface/behavior changes.
+
+Keep bullets short and avoid explanatory sub-bullets unless they are needed to prevent ambiguity. Prefer the minimum detail needed for implementation safety, not exhaustive coverage. Within each section, compress related changes into a few high-signal bullets and omit branch-by-branch logic, repeated invariants, and long lists of unaffected behavior unless they are necessary to prevent a likely implementation mistake. Avoid repeated repo facts and irrelevant edge-case or rollout detail. For straightforward refactors, keep the plan to a compact summary, key edits, tests, and assumptions. If the user asks for more detail, then expand.
+
+Do not ask "should I proceed?" in the final output. The user can easily switch out of Plan mode and request implementation if you have included a `<proposed_plan>` block in your response. Alternatively, they can decide to stay in Plan mode and continue refining the plan.
+
+Only produce at most one `<proposed_plan>` block per turn, and only when you are presenting a complete spec.
+
+If the user stays in Plan mode and asks for revisions after a prior `<proposed_plan>`, any new `<proposed_plan>` must be a complete replacement.
+</collaboration_mode>
+
+---
+
+
+**User**
+
+对于论文Paper_diff_depth_journal.tex中实验部分的描述和组织，这远远不够啊。你有没有阅读过顶级期刊的论文？请你按照顶级期刊论文的风格和要求来详细描述实验部分啊。
+
+---
+
+
+**OpenAI Codex**
+
+我会先把现有论文里“实验”这一段读透，再对照项目里已经生成的结果资产，判断哪些内容缺失、哪些需要按顶级期刊的写法重组。
+
+---
+
+
+**OpenAI Codex**
+
+我已经看完前半段了，接下来要确认这篇稿子里“实验”后面还有没有已经写好的结果/讨论，避免我给你重写时和后文打架。
+
+---
+
+
+**OpenAI Codex**
+
+我先锁定重写边界，不然“实验部分”会和后面的结果、讨论交叉打架。然后我就能按你要的期刊语气去重组，而不是只做表面润色。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把边界收住了：按 `IEEE` 的骨架来写，但把实验叙事拉到顶刊级别的完整度。接下来我给你一版可直接执行的重写方案，目标是让实验部分自己就能讲清楚“为什么做、怎么做、证据是什么、限制是什么”。
+
+---
+
+
+**OpenAI Codex**
+
+<proposed_plan>
+**论文实验部分重写方案**
+
+**Summary**
+- 以 `Paper_diff_depth_journal.tex` 为主，联动同步 `paper/Paper_diff_depth_journal.md`，把实验部分重写成完整的顶刊式证据链，而不是现在这种“参数堆叠 + 结果罗列”的写法。
+- 保持 `IEEEtran` 版式不变，但显著增强实验章节的层次：问题设定 -> 实验设计 -> 指标与统计 -> 主结果 -> 机制分析 -> 诊断与局限。
+- 叙事重点从“我们做了什么”转为“为什么这样设计、证据如何互相支撑、哪些结论可信、哪些不能过度解释”。
+
+**Key Changes**
+- 重组 `Experimental Setup`：
+  - 单独写清 benchmark、场景定义、任务边界、传感退化语义、状态/动作定义、timesteps、评估协议、baseline 分类。
+  - 把 teacher / DAgger / flight-only 的流水线拆成可审稿的实验流程，而不是夹在方法里一句带过。
+- 重写 `Results`：
+  - 先给主表和主图，再给分场景结果，再给 camera response，再给 matched-pose depth sequence，再给 DAgger 诊断。
+  - 每个小节都明确“这一节回答什么问题”，避免图表只是并排展示。
+- 增强统计与可信度表达：
+  - 说明 95% CI 的口径、episode 聚合方式、phase 划分规则、为什么训练曲线不能替代 held-out eval。
+  - 明确 simulation-only、single-seed、benchmark scope 等限制，避免过度宣称。
+- 统一语气与术语：
+  - 用 `glare/specular/dark` 的任务语义，不再写成泛化的“暗光/低光”。
+  - 把“flight-only / DAgger / camera relabel / split-stem”写成稳定术语，前后一致。
+
+**Implementation Changes**
+- 让实验部分按下面结构落地：
+  1. `Experimental Setup`
+     - Task and scenes
+     - Policy/sensor/control interface
+     - Teacher relabel and DAgger protocol
+     - Flight-only adaptation protocol
+     - Metrics and statistical reporting
+  2. `Results`
+     - Training convergence as diagnostic only
+     - Main navigation result
+     - Scene-specific breakdown
+     - Camera response mechanism
+     - Matched-pose qualitative sequences
+     - DAgger and flight adaptation diagnosis
+  3. `Discussion`
+     - What the evidence supports
+     - What it does not support
+     - Failure modes / limitations
+- 把原本偏方法论或口号式的句子改成可审稿的实验叙事句：
+  - 先定义比较对象，再给主要数值，再解释机制，再说明边界。
+- 若需要，我会把 `paper/paper_tex/journal_assets/caption_drafts.md` 和正文中的 figure 引用一起同步，确保图注、表格、正文三者一致。
+
+**Test Plan**
+- 编译检查 `paper/paper_tex/Paper_diff_depth_journal.tex`，确认：
+  - `journal_assets/figures/*.pdf` 和 `tables/*.tex` 引用正常；
+  - `results/*.md` 不再残留本机绝对路径；
+  - 章节编号、图表编号、交叉引用无断链。
+- 对照 `paper/paper_tex/results/combined_report.md`、`diagnosis.md`、`train_vs_eval_comparison.md`，确认正文所有数值和结论都来自当前结果包。
+- 重点核查三件事：
+  - 主结果是否仍然写成 0.751 / 0.249 / 0.975 / 0.550；
+  - camera response 是否仍然对应当前 `table3`；
+  - DAgger / pretrained / flightonly 的关系是否和 `fig6` 一致。
+
+**Assumptions**
+- 先只重写实验、结果、讨论三块，摘要和引言先保持现状，除非重写后发现叙事不闭合。
+- 默认采用 `IEEE` 风格的结构化实验写法，不切换成纯 Nature/Science 叙事体。
+- 默认把 `paper/Paper_diff_depth_journal.md` 作为正文草稿同步源，避免 tex 和 md 分叉。
+- 现有结果目录 `paper/experiment/results/final_dagger_flightonly_eval_20260510_current` 视为当前事实来源，不回退到旧 bundle。  
+</proposed_plan>
+
+---
+
+
+**User**
+
+你给出的流程和逻辑是没问题的。你之前还存在语言和描述过于简化等问题。一篇顶级期刊的叙事逻辑是非常流畅的舒服的，而你的描述过于简单。这就是我说的顶级期刊论文的语言和风格。所以后续你也要注意这种问题。一篇顶级期刊最起码得15页起步啊，你给我写的才几页？
+
+---
+
+
+**OpenAI Codex**
+
+你说得对。之前那版最大的问题不是“结构错”，而是**论文语言的密度、过渡、论证节奏都太工程报告化**了。
+
+顶级期刊/高水平 IEEE journal 的实验部分不是简单写：
+
+> we evaluate X, Table shows Y, Figure shows Z
+
+而是要形成连续叙事：
+
+1. 为什么这个实验设计能检验核心假设；
+2. 为什么这些 baseline 是必要且充分的；
+3. 为什么指标能对应 claim；
+4. 结果不只是“高了多少”，而是说明了什么机制；
+5. qualitative figure 不是装饰，而是和 quantitative result 互相闭环；
+6. limitation 不是自我削弱，而是准确限定贡献边界。
+
+我后续会按这个标准处理。具体到这篇稿子，我会把目标从“能编译的短论文草案”改成：
+
+- `IEEE journal` 风格；
+- 目标正文约 `15-18` 页量级；
+- 实验和结果部分不再压缩；
+- 每个图表都有前置动机、结果解释和后续承接；
+- 方法、实验、结果、讨论之间形成一条完整证据链；
+- 避免口语化、命令式、工程日志式表达；
+- 不在正文里出现 checkpoint 路径这类不该投稿的细节，放到 reproducibility notes 或 appendix。
+
+修订后的核心写法会更像：
+
+- **Experimental rationale**：先说明为什么单墙狭缝是一个受控但有效的 active sensing testbed。
+- **Benchmark design**：解释三类退化为何分别考察不同 camera-control tradeoff。
+- **Baselines**：说明 fixed、randfix、nondiff、zero、pretrain、dagger 分别隔离什么因素。
+- **Metrics**：解释 success、collision、fill、terminal distance、near-slit camera separation 各自回答什么问题。
+- **Main evaluation**：不是只报数字，而是解释导航成功率和 fill 同时提升为什么支持 active sensing。
+- **Mechanistic analysis**：把 camera response、matched-pose depth、DAgger diagnosis 串成机制证据。
+- **Threats to validity**：严谨写 simulation-only、single-seed、task scope，而不是一句带过。
+
+我会把它当成“真正准备投稿的 journal manuscript”来写，不再用短报告的表达习惯。
+
+---
+
+
+**User**
+
+正文里 checkpoint 路径这类不该投稿的细节，也不用放到 reproducibility notes 或 appendix。Paper_diff_depth_journal.md就是我的思路和工程实现指导书，论文正文中不用体现。别的都没问题
+
+---
+
+
+**OpenAI Codex**
+
+明白。这个边界我会严格按你说的来：
+
+- `Paper_diff_depth_journal.md` 和 `Paper_diff_depth_experiment_matrix.md` 只作为内部思路、实验组织和实现指导，不进入论文正文。
+- 论文正文只保留可投稿的叙事、图表、表格和必要的可复现实验描述。
+- `checkpoint` 路径、训练脚本命令、运行日志这类工程 provenance，不放进正文，也不放进 appendix。
+- 需要保留的复现性信息，只写到你明确想保留的那一层，比如结果包里的内部说明，而不是 manuscript。
+
+后续我会把实验部分按真正的 journal 写法来扩展：先把实验设计、baseline 角色、指标含义、统计口径和机制证据链讲顺，再把结果和讨论连起来，不再写成短报告式列表。
+
+---
+
+
+**OpenAI Codex**
+
+<collaboration_mode># Collaboration Mode: Default
+
+You are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.
+
+Your active mode changes only when new developer instructions with a different `<collaboration_mode>...</collaboration_mode>` change it; user requests or tool descriptions do not change mode by themselves. Known mode names are Default and Plan.
+
+## request_user_input availability
+
+Use the `request_user_input` tool only when it is listed in the available tools for this turn.
+
+In Default mode, strongly prefer making reasonable assumptions and executing the user's request rather than stopping to ask questions. If you absolutely must ask a question because the answer cannot be discovered from local context and a reasonable assumption would be risky, ask the user directly with a concise plain-text question. Never write a multiple choice question as a textual assistant message.
+</collaboration_mode>
+
+---
+
+
+**User**
+
+好的，请你按照上述思路直接去实现吧
+
+---
+
+
+**OpenAI Codex**
+
+我准备直接动正文了：重点会放在 `Experimental Setup`、`Results`、`Discussion` 的重写，把现在偏短报告的段落扩成真正的 journal 叙事。先确认几个素材是否还在当前版本里匹配，然后我就下手改。
+
+---
+
+
+**OpenAI Codex**
+
+我在对齐正文里的数字口径，尤其是 `Table 1–3`。这一步是为了避免我写进去的叙述和你 `paper_tex` 里的表格不一致。
+
+---
+
+
+**OpenAI Codex**
+
+我会只改投稿正文 `paper/paper_tex/Paper_diff_depth_journal.tex`，不把 `Paper_diff_depth_journal.md` 里的工程指导内容搬进正文。正文里也会去掉 checkpoint、脚本命令和本机路径这类 provenance。
+
+---
+
+
+**OpenAI Codex**
+
+我按 DiffPhysDrone active-sensing 的论文资产约束来改：正文只写可投稿叙事，工程路径和 checkpoint provenance 不进 manuscript。现在我先确认模型实现里 split-stem 和冻结逻辑的真实名字，避免写出听起来漂亮但代码不支持的结构。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把正文骨架和结果口径对上了。现在再看一眼模型里 freeze 逻辑的真实实现，确保论文里不会把“冻结哪些模块”说错。
+
+---
+
+
+**OpenAI Codex**
+
+我发现一个重要小坑：当前投稿包里的表格 caption 还写着 “300 episodes per method / 100 per scene”，但当前结果包实际是每个方法 900 episodes、每个 scene 300 episodes。正文重写时我会顺手把这个统计口径修正掉，否则审稿人会一眼抓到。
+
+---
+
+
+**OpenAI Codex**
+
+我现在开始替换正文，不会动工程笔记 `Paper_diff_depth_journal.md`。这次正文会避免脚本路径、checkpoint 路径，实验描述会按 journal 文章的证据链来组织。
+
+---
+
+
+**OpenAI Codex**
+
+正文已经换成更完整的实验叙事了。接下来我把投稿包里两个明显不对的 table caption 一起修掉，免得数字口径和正文打架。
+
+---
+
+
+**OpenAI Codex**
+
+我把最明显的数字口径错误一起改掉：主表要写 900 per method / 300 per scene，分场景表要写 300 per scene per method。这样正文、表格和结果口径才一致。
+
+---
+
+
+**OpenAI Codex**
+
+我再扫一遍 `paper_tex` 里有没有残留的旧口径或者工程路径。等这个查完，就可以编译看版面和语法了。
+
+---
+
+
+**OpenAI Codex**
+
+正文和表格口径已经改完。现在我编译一次 LaTeX，抓语法错误和引用问题；如果只是常规 rerun warning，我会再跑一遍。
+
+---
+
+
+**OpenAI Codex**
+
+The local TeX toolchain is missing here, so I can’t produce a fresh PDF in this environment. I’m checking whether `latexmk` or `tectonic` is available; if not, I’ll still do a syntax and reference sanity pass on the source.
+
+---
+
+
+**OpenAI Codex**
+
+我只再查正文和这两张表，确认没有把旧口径或本机路径带进新稿里。`origion_results/` 那批老文件是独立的历史包，不影响这次 manuscript 的编译逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我再做一个小的文字校验：确认 `caption_drafts.md` 里不再写错评估 episode 数。这个文件是辅助材料，和正文一致就够了。
+
+---
+
+
+**OpenAI Codex**
+
+我做一下最后的变更核对，然后给你总结。我这边不能本地编译 PDF，因为 TeX 工具链缺失，但我会把改动和剩余注意点说清楚。
+
+---
+
+
+**OpenAI Codex**
+
+The generated results bundle itself still had the old caption text in its LaTeX tables, so I’m syncing those captions too. That keeps the manuscript package and the source bundle aligned.
+
+---
+
+
+**OpenAI Codex**
+
+我把源结果包也同步了。再扫一遍数字口径，确认新旧 caption 都已经统一。
+
+---
+
+
+**OpenAI Codex**
+
+已经直接改了。
+
+我把 [`paper/paper_tex/Paper_diff_depth_journal.tex`](</home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/Paper_diff_depth_journal.tex>) 的实验部分重写成更完整的 journal 叙事，重点是把 `Experimental Setup`、`Results`、`Discussion` 重新组织成“问题设定 -> 实验设计 -> 统计口径 -> 主结果 -> 机制证据 -> 局限性”的链条，不再是短报告式的段落堆叠。正文里也没有再放 checkpoint 路径、脚本命令或本机绝对路径。
+
+我还同步修正了表格 caption 的评估口径：
+- [`paper/paper_tex/journal_assets/tables/table1_primary_navigation.tex`](</home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/journal_assets/tables/table1_primary_navigation.tex>)：改成 900 episodes per method, 300 per scene
+- [`paper/paper_tex/journal_assets/tables/table2_scene_breakdown.tex`](</home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/journal_assets/tables/table2_scene_breakdown.tex>)：改成每个 scene 300 episodes per method
+- [`paper/paper_tex/journal_assets/caption_drafts.md`](</home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/journal_assets/caption_drafts.md>)：把 Figure 3 的 episode 数同步修正了
+
+我也把结果包里的对应 table caption 一并同步了，保证 manuscript 包和结果包口径一致。
+
+本机这里没有 `pdflatex` / `latexmk`，所以我没法在这台机器上实际出 PDF；但我已经做了静态检查，正文里没有残留 checkpoint / `/home/...` 这类路径。`paper/paper_tex/origion_results/` 那个历史归档目录我没有动。
+
+---
+
+
+**User**
+
+请你再作为一名顶级期刊的审稿人，按照顶级期刊的要求，来审阅你写的这篇论文。然后进行完善。主要是从论文写作层面。我给你举个例子，比如方法部分：
+符号重载 (Symbol Overloading)： 绝对禁止同一个字母在不同章节代表不同含义。例如，如果在物理引擎中 $m$ 代表质量，就绝不能在后续用 $m$ 代表步骤数；如果 $M_t$ 代表有效性掩码，就不要在其他地方用 $M$ 代表矩阵。变量的即时定义： 每一个出现在公式中的变量，必须在公式出现的前后一两句话内被清晰定义。不要让读者去前文翻找，也不要假设读者“理所当然知道”。格式统一： 标量用斜体（如 $x$），向量和矩阵用粗体（如 $\mathbf{v}$ 或 $\mathbf{R}$），常量或上标/下标中的描述性文字使用正体（如 $S_{\mathrm{act}}$ 而不是 $S_{act}$）。物理单位量纲一致： 在描述无人机动力学或传感器渲染时，确保公式左右两边的量纲在物理上是说得通的。
+实验部分要详尽，比如超越数据的洞察 (Insights Beyond Data)： 永远不要在正文中只把表格里的数字用文字重复一遍。审稿人自己会看表格。你需要写的是：为什么会在特定场景下出现这个结果？（例如：为什么模型在暗场环境下的表现提升比在眩光环境下更显著？这揭示了传感器物理模型的什么内在规律？）
+还有对于指标的解释要全面和清除，等等，我只是举了一些例子。一篇优秀的学术论文肯定不止这些东西和要求。还有你刚才实现的实验部分我很不满意。请继续优化吧
+
+---
+
+
+**OpenAI Codex**
+
+我会按“审稿人挑刺”的方式再修一轮：先检查符号、变量定义、公式量纲、指标解释和实验叙事，然后直接把正文改到更像可投稿论文，而不是简单加几句润色。
+
+---
+
+
+**OpenAI Codex**
+
+我先按这个仓库的 active-sensing 论文工作流来做一轮审稿式修订，重点盯符号、叙事和实验洞察，不再停留在“把结果写出来”这个层面。
+
+---
+
+
+**OpenAI Codex**
+
+我在对照结果包和正文，先抓两类问题：一类是符号和定义有没有让审稿人绊脚，另一类是结果段是不是只在复述数字，没有解释机制。接下来会直接改正文。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把问题拆开了：先把符号和定义收紧，再把 Results 写成“结论 + 机制 + 边界条件”，最后补一版更像期刊的 Discussion。接下来直接改稿，不再只修句子。
+
+---
+
+
+**OpenAI Codex**
+
+我准备先把最容易绊倒审稿人的地方收掉：`p`/`P` 这种符号冲突、depth/raw/observed 的定义、以及结果里“为什么会这样”的段落。这里改完，整篇稿子的读感会立刻更像正式论文。
+
+---
+
+
+**OpenAI Codex**
+
+我现在把结果段改成“审稿人会想看的那种解释”：不是报数，而是解释为什么暗场收益更大、为什么 glare 的 fill 上去了但 success 没同步上去、以及为什么 DAgger 本身还不够。
+
+---
+
+
+**OpenAI Codex**
+
+符号层面还差一点“审稿人挑不出刺”的细节：`\tilde D_t`、传感器常数、loss 权重和 phase 坐标需要就地定义。我把这些补上，避免读者翻前文猜。
+
+---
+
+
+**OpenAI Codex**
+
+我在做最后一轮卫生检查，重点是确认没有留下旧符号、拼写事故和前后不一致的定义。然后我会告诉你哪些地方已经更像论文，哪些地方还值得继续补。
+
+---
+
+
+**OpenAI Codex**
+
+正文已经从“结果说明书”改成了更像论文的叙述。最后我想做一个最小的编译可用性检查，看看本机有没有 LaTeX 工具链；没有的话我就直接把风险点告诉你。
+
+---
+
+
+**OpenAI Codex**
+
+我注意到工作区里还有一份配套的 caption 草稿和两张表的同步修改。它们不影响正文编译，但我会快速看一眼，避免整套 `paper_tex` 打包时留下风格不一致的尾巴。
+
+---
+
+
+**OpenAI Codex**
+
+我顺手把 `caption_drafts.md` 也擦干净一点，主要是去掉工具名和偏工程化的措辞。这个文件不进正文，但它属于你打包带走的 `paper_tex`，风格最好也别掉链子。
+
+---
+
+
+**OpenAI Codex**
+
+我已经按“审稿人会挑刺”的标准把正文再压了一轮，主要改了 [Paper_diff_depth_journal.tex](/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/Paper_diff_depth_journal.tex:1) 和 [caption_drafts.md](/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/journal_assets/caption_drafts.md:1)。
+
+这次的核心修正是：
+- 把符号收紧了，区分了 `P/E/G`、`D^{raw}` / `D^{obs}`、`x_t` / `\mathbf{x}_t`，并把 `\tilde D_t`、loss 权重和传感器常数都就地定义了。
+- 把方法部分改成更像期刊写法，不再让读者自己猜变量含义。
+- 把 Results 写成“结论 + 机制 + 边界条件”，重点补了为什么 dark 的收益更大、为什么 glare 的 fill 上去了但 success 没同步、以及为什么 non-diff / random-fixed 的 fill 增长不等于导航提升。
+- 把 DAgger / pretrain / flight-only 的关系讲清楚了，强调“camera semantics 学到了”不等于“flight 已经适配好了”。
+- 顺手把 `caption_drafts.md` 里的工具味道去掉了，避免打包时看起来太工程化。
+
+我还跑了 `git diff --check`，没有 whitespace / patch 问题。  
+本机没有 `pdflatex`、`latexmk` 或 `tectonic`，所以我没法在这里本地编译成 PDF 验证。
+
+---
+
+
+**User**
+
+先用去修改或者实现，为什么你怎么写都不像一篇顶级期刊的学术论文？
+
+---
+
+
+**OpenAI Codex**
+
+我先直接改稿，不跟你空谈“风格”。你现在看到的不像顶刊，主要不是因为句子不够长，而是论证的层级还不够：有些段落还在解释事实本身，而不是把事实放进一个更高层的研究命题里。
+
+---
+
+
+**User**
+
+<turn_aborted>
+The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.
+</turn_aborted>
+
+---
+
+
+**User**
+
+不不不。我想说先不用去修改或者实现。为什么你怎么写都不像一篇顶级期刊的学术论文？你能阅读pdf文档吗？能阅读的话我给你一篇论文你感受一下
+
+---
+
+
+**OpenAI Codex**
+
+可以。你把 PDF 直接上传，或者给我本地绝对路径，我都能读。
+
+我会重点看这几件事：叙事结构、段落推进、论证层级、图表/实验的写法、限制条件怎么交代、以及语言节奏到底为什么像“顶刊”。你给我一篇你觉得写得好的论文，我先拆它的写法，再把你这篇稿子按那个标准重写。
+
+---
+
+
+**User**
+
+Chen et al. - 2025 - DiffPhysCam Differentiable Physics-Based Camera Simulation for Inverse Rendering and Embodied AI.pdf和Zhang 等 - 2024 - Back to Newton's Laws Learning Vision-based Agile.pdf是与我的论文比较相关的两篇论文，请你参考。
+
+---
+
+
+**OpenAI Codex**
+
+我先在工作区里找这两篇 PDF；如果它们已经在本机，我直接读正文和图注结构，不再让你额外折腾。然后我会抽出它们“为什么像顶刊”的写法特征。
+
+---
+
+
+**OpenAI Codex**
+
+我已经定位到文件名了，下一步直接读 PDF 内容本身。先确认有没有可用的文本抽取工具，再抓两篇论文的摘要、引言、方法和图注节奏。
+
+---
+
+
+**OpenAI Codex**
+
+我先不凭感觉讲“像不像”，直接把两篇文献的结构抽出来。这样我能更准确地告诉你差的是叙事方式、证据组织，还是方法段的语气。
+
+---
+
+
+**OpenAI Codex**
+
+我现在直接读两篇 PDF 的摘要、引言和方法开头。重点不是复述内容，而是提炼它们的写法骨架：它们怎么铺垫问题、怎么收束贡献、怎么把实验写成“论证”而不是“汇报”。
+
+---
+
+
+**OpenAI Codex**
+
+我先把这两篇论文的后半段也翻一下，尤其是实验、结果和结论。顶刊味道通常不在摘要，而在它怎么处理证据、限制和转折。
+
+---
+
+
+**OpenAI Codex**
+
+我再抓一下两篇论文的收尾方式。很多时候真正像不像顶刊，不在方法，而在它怎么收束、怎么承认边界。
+
+---
+
+
+**OpenAI Codex**
+
+可以，我已经读了这两篇，感觉也很明确了。
+
+它们像顶刊，不是因为“辞藻高级”，而是因为三件事做得很稳：
+
+1. 论点很窄，但很硬。  
+   `DiffPhysCam` 的核心不是“我们做了一个相机”，而是“我们把相机当成一个可校准、可微分、可插到逆渲染链路里的物理模块”。  
+   `Back to Newton’s Laws` 也不是“我们训练了一个飞行器”，而是“用一个足够简单、可微分的物理模型，直接把控制问题变成可优化问题”。
+
+2. 证据是按问题组织的，不是按结果堆出来的。  
+   它们不是先报表，再解释。  
+   而是先问：这个模块是否有效、哪里有效、为什么有效、哪里不够、边界在哪。  
+   这就是你现在稿子还差的地方。
+
+3. 它们敢承认局限，而且承认得很具体。  
+   `DiffPhysCam` 会直接说某些标定不准、噪声拟合不够理想、某些层贡献有限。  
+   `Back to Newton’s Laws` 会说 vanilla BPTT 有梯度爆炸，高分辨率输入反而可能过拟合或不利于真实测试。  
+   这种“说清楚不完美在哪里”的语气，才像成熟论文。
+
+对照你的稿子，主要差距不在“写得短”还是“写得长”，而在叙事层级：
+
+- 你现在有很多“我们做了什么”
+- 但还不够多“这个结果说明了什么”
+- 更少“为什么这个机制成立，为什么别的解释不成立”
+- 以及“哪些现象是预期内的，哪些是边界条件”
+
+换句话说，你的稿子已经像一篇很强的工程论文，但还没完全长成那种“问题定义清楚、机制解释清楚、反例也讲清楚”的顶刊语气。
+
+我建议下一步直接按这两篇的风格去重写你稿子的 Introduction 和 Results，尤其是：
+- 把中心命题收成一句话
+- 把实验段落改成“问题 - 证据 - 解释 - 边界”
+- 把局限写得更具体，而不是泛泛而谈
+
+你把要我先改的那一节指定出来，我就按这两篇的叙事标准来重写。
+
+---
+
+
+**User**
+
+好的，但是我更想让你帮我完善和实现的是methods部分的内容。methods是整篇论文的核心啊。
+
+---
+
+
+**OpenAI Codex**
+
+我先把方法部分单独拎出来重写，不去动结果段。目标是把它写成真正的论文核心：问题定义要严格，模块边界要清楚，训练阶段要像一个闭环系统，而不是几段功能介绍。
+
+---
+
+
+**OpenAI Codex**
+
+我先按这个项目的论文工作流来做。你要的是方法部分的“论文化”和“可实现性”同时到位，所以我会先对齐仓库里的方法约束，再动正文。
+
+---
+
+
+**OpenAI Codex**
+
+可以，我已经读了这两篇，而且它们对你的 methods 其实很有启发。
+
+你现在稿子的 methods 之所以还不像顶刊，核心不是“公式少”或“文字短”，而是它还像工程说明书，不像一个被严格定义过的科学系统。那两篇论文的方法段都遵循同一个骨架：
+
+- 先把问题定义成一个闭环系统
+- 再明确每个变量的物理意义和作用边界
+- 然后给出可微映射或动力学更新
+- 接着给出优化目标和训练流程
+- 最后说明哪些假设成立，哪些不成立
+
+你这篇应该往这个方向收紧，而不是继续写成“我们有一个模块，这个模块干这个，那个模块干那个”。
+
+我从这两篇里看到的、你最该学的三点是：
+
+1. `DiffPhysCam` 的写法很强的一点，是它总是在说“这个层为什么存在”。  
+   不是只列出 vignetting、blur、noise，而是明确它们各自对应什么物理过程，为什么能接到可微渲染后面，哪些参数可校准，哪些只是近似。  
+   这会让方法看起来像一个严谨模型，而不是一串 trick。
+
+2. `Back to Newton’s Laws` 的写法强在问题定义极干净。  
+   它先把控制问题变成一个可优化的动力系统，再说 policy、loss、backprop、point-mass dynamics。  
+   重点不是复杂，而是清楚地说明“我们到底在优化什么”。
+
+3. 两篇都很重视边界条件。  
+   它们会明确告诉读者哪些东西不建模，哪些结果只是近似，哪些地方性能有限。  
+   这不是示弱，而是显得可信。
+
+所以你论文的 methods 应该重写成这种层次：
+
+- `Task formulation`
+- `Differentiable active-depth sensor`
+- `Scene-dependent degradation regimes`
+- `Policy architecture and split-stem design`
+- `Camera teacher, DAgger relabeling, flight-only adaptation`
+- `Optimization objectives and implementation details`
+
+而且每一节都要回答四个问题：
+- 这个变量是什么
+- 这个模块为什么需要
+- 它和前后模块怎么闭环
+- 这个设计带来什么可验证的假设
+
+你现在的 methods 已经有材料了，但还缺那种“论文骨架感”。我下一步可以直接按这两个参考的风格，把你的 methods 整段重写成更像顶刊论文的版本。
+
+---
+
+
+**User**
+
+好的，请你帮我同时完善引言，方法和结果部分。
+
+---
+
+
+**OpenAI Codex**
+
+我会把这三部分按“顶刊叙事”重写，而不是只做句子润色。重点是让引言有明确命题，方法像一个可验证系统，结果像一组有解释力的证据链。
+
+---
+
+
+**OpenAI Codex**
+
+我在动稿之前先把方法和结果按“一个完整论文故事”重排：先定义问题和系统，再定义训练闭环，再定义证据链。这样改出来不是只更漂亮，而是论证结构真的变了。
+
+---
+
+
+**OpenAI Codex**
+
+我现在动的是大块结构，不是修一个词。你会看到引言变成“先立命题，再限定问题”，方法变成“闭环系统定义”，结果变成“证据链而不是报数”。
+
+---
+
+
+**OpenAI Codex**
+
+引言已经往“命题驱动”收了。接下来方法部分我会改成更硬的系统定义，尤其是让相机 teacher、DAgger relabel 和 flight-only 之间的关系更像一个闭环，而不是三个串联步骤。
+
+---
+
+
+**OpenAI Codex**
+
+方法主体已经从“模块说明”变成“系统定义 + 闭环训练”。接下来我会把结果部分也改得更像证据链，避免只是反复念表格数字。
+
+---
+
+
+**OpenAI Codex**
+
+方法和结果的主干已经重新组织了。接下来我要做的是一个最关键的检查：符号有没有打架，叙事有没有和当前结果报告对上。这个环节很烦，但它决定最后像不像正式稿。
+
+---
+
+
+**OpenAI Codex**
+
+我刚刚把三部分都改了，但还没收尾。现在我在做的是第二轮“读起来像不像顶刊”的检查，找那些虽然不算错、但会让审稿人觉得不够稳的句子。
+
+---
+
+
+**OpenAI Codex**
+
+我还会把训练阶段补成一个小的优化链条，这样 methods 不只是“流程”，而是“在优化什么、对谁优化、什么时候冻结谁”都讲清楚。这个在顶刊里很重要。
+
+---
+
+
+**OpenAI Codex**
+
+我把主干改好了，现在是在做语法和逻辑的收尾检查，看看有没有新引入的 LaTeX 句法问题或者前后定义不一致。
+
+---
+
+
+**OpenAI Codex**
+
+已经改了，主要动的是 `paper/paper_tex/Paper_diff_depth_journal.tex`。
+
+这次不是润色句子，而是把三部分的骨架重新立起来了：
+- 引言改成了一个更紧的命题: active depth sensing 是闭环问题，核心风险是相机语义漂移，不是单纯“深度质量不够”。
+- 方法改成了完整系统定义: 任务状态、可微主动深度模型、场景退化、split-stem 架构、teacher relabel、DAgger、flight-only 适配，以及对应的优化目标。
+- 结果改成了证据链: 训练曲线只作为收敛检查，主结果强调 success 和 fill 的联合变化，场景分析解释为什么 dark 提升更大、glare 更难，最后再用 near-slit 相机行为和 matched-pose depth sequences 收束机制。
+
+我也跑了 `git diff --check`，没有明显的 LaTeX/空白错误。
+
+现在这版已经比之前更接近“论文核心是方法，结果是在验证方法”的写法了。下一步如果继续，我会优先再压一轮 Method 里的表述密度，让它更像 `DiffPhysCam` 和 `Back to Newton's Laws` 那种硬核、克制、但逻辑很稳的风格。
+
+---
+
+
+**User**
+
+如图所示，是你写的论文和画的图，你不觉得太丑了吗？而且有非常多的细节问题？
+<image></image><image></image><image></image><image></image><image></image>
+
+---
+
+
+**User**
+
+如图所示，是你写的论文和画的图，你不觉得太丑了吗？而且有非常多的细节问题？
+
+---
+
+
+**OpenAI Codex**
+
+我同意，这版现在的问题不是“写得长不长”，而是版面已经开始失控了。先把最明显的排版灾区修掉，尤其是表格溢出和图里文字打架，然后再谈更深的论文气质。
+
+---
+
+
+**OpenAI Codex**
+
+我先把版式和图表问题当成一次真正的排版修复来处理。会先看 manuscript、表格和图的生成脚本，找出哪些是 LaTeX 排版问题，哪些是资产本身太挤，然后再改。
+
+---
+
+
+**OpenAI Codex**
+
+我先把问题拆成两类：一类是 LaTeX 结构本身导致的拥挤，另一类是图表资产太密。先读表格和生成脚本，找出真正该改的源头，不在正文里硬塞。
+
+---
+
+
+**OpenAI Codex**
+
+我已经确认问题不在正文“讲得不够多”上，而在几个图和表真的太挤。接下来我会直接改资产生成和 LaTeX，让版面先站得住，再谈文字气质。
+
+---
+
+
+**OpenAI Codex**
+
+我在看生成脚本本身，因为这类“丑”通常不是文案问题，而是图的密度、字号、留白和表格宽度在作怪。先把可修的版式点定位出来，再动手。
+
+---
+
+
+**OpenAI Codex**
+
+我在做视觉诊断：先把 PDF 图渲成 PNG 看一眼真实版面。这样能区分是 LaTeX 造成的拥挤，还是图本身就是信息塞太满。
+
+---
+
+
+**OpenAI Codex**
+
+我先看成品图，不猜。版面问题很多时候在源图里就已经埋了：字太小、留白太紧、面板太多，LaTeX 只是把问题放大。
+
+---
+
+
+**OpenAI Codex**
+
+我已经找到最硬的两个问题了：`table1` 本身就超宽，`figure 5` 是面板密度过高。先从这两个下手，改完后再看 figure 4/6 的细部。
+
+---
+
+
+**OpenAI Codex**
+
+我接下来会直接改源文件和资产生成脚本，然后把新的表和图重做一遍。先确认当前工作区里哪些文件已经被改过，避免把别人的东西盖掉。
+
+---
+
+
+**User**
+
+<turn_aborted>
+The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.
+</turn_aborted>
+
+---
+
+
+**User**
+
+对于这些图，不要将所有的图放在一个大图中。要把每个子图作为一个完整的图，然后通过latex的方法进行布局，比如subfig啥的。所以原始数据文件final_dagger_flightonly_eval_20260510_splitstem的生成的python代码就得修改。
+
+---
+
+
+**OpenAI Codex**
+
+我明白，这个方向是对的：Python 不再导出“拼好的大图”，而是导出每个 panel 的独立 PDF/SVG/PNG，LaTeX 里用 `subfloat` 负责排版。这样 Overleaf 上可以微调间距、宽度、跨栏布局，也不会被一个巨大的 canvas 绑死。
+
+---
+
+
+**OpenAI Codex**
+
+收到，这次我按你说的改生成链路，不再导出“已经拼死的大图”。我会让 Python 输出 `fig3a_*`、`fig3b_*` 这类独立 panel，LaTeX 再用 `\subfloat` 组织主图。
+
+---
+
+
+**OpenAI Codex**
+
+我会按这个结构落地：保留旧的大图作为兼容输出，但新增 `fig3a_*`、`fig4a_*`、`fig6a_*` 这类独立 panel 文件；Figure 5 也新增按场景和面板拆开的文件。然后更新 `Paper_diff_depth_journal.tex` 用 `subfloat` 排版这些独立文件。
+
+---
+
+
+**OpenAI Codex**
+
+我会顺手修一个脚本里的老问题：`make_journal_assets.py` 现在的 table caption 还写着每方法 300 episodes、每场景 100 episodes，但 split-stem 当前结果是每方法 900、每场景 300。这个会一起改掉。
+
+---
+
+
+**OpenAI Codex**
+
+脚本第一层已经加了独立 panel 导出函数。下一步我把主入口接上这些函数，并把 README/caption/table 的命名和 episode 数改成动态生成，避免以后换评估预算又写错。
+
+---
+
+
+**OpenAI Codex**
+
+接下来我会改 Figure 5 的导出逻辑：不只生成 `fig5_depth_observation_sequence_glare.pdf` 这种整张拼图，还会额外导出 `fig5_glare_pose_sequence.pdf`、`fig5_glare_fixed_depth.pdf`、`fig5_glare_ours_depth.pdf` 等 strip panel。TeX 可以把这些 strip 当成 subfig 来排。
+
+---
+
+
+**OpenAI Codex**
+
+我会把旧 composite 保留作快速预览，但正文会完全切到 panel 资产。也就是说，投稿 tex 不再 `\includegraphics{fig4_active_camera_mechanism.pdf}`，而是 `\subfloat[]{\includegraphics{panels/fig4a_...}}`。这点我会在脚本 README 里写清楚，免得后面又混。
+
+---
+
+
+**OpenAI Codex**
+
+生成脚本已经开始输出独立 panel。现在我会更新 TeX 里的 figure blocks，让主文使用 `panels/...` 的子图文件，而不是整张 composite 图。
+
+---
+
+
+**OpenAI Codex**
+
+TeX 已经改成 panel 布局了，但我还要修一下正文引用：原来只有一个 `fig:depth_seq`，现在拆成 glare/dark/specular 三个 Figure。接着会重新生成 splitstem 目录和 `paper_tex` 包内资产。
+
+---
+
+
+**OpenAI Codex**
+
+`py_compile` 通过了。现在我修正文引用，然后运行生成脚本。若环境缺 pandas，我会用项目的 conda python，而不是系统 python。
+
+---
+
+
+**OpenAI Codex**
+
+现在开始重生成资产。我会先生成 splitstem 原始结果目录的 `journal_assets`，再把它同步到 `paper/paper_tex/journal_assets`，这样 Overleaf 包内文件和原始结果目录一致。
+
+---
+
+
+**OpenAI Codex**
+
+聚合图和独立 panel 已经生成。接下来生成 Figure 5 的 strip panels；这一步会跑少量 rollout 和渲染，可能稍慢。
+
+---
+
+
+**OpenAI Codex**
+
+Figure 5 的 strip panels 也生成好了。现在我会同步到 `paper/paper_tex/journal_assets`，然后检查所有 TeX 引用的 panel 文件是否真的存在。
+
+---
+
+
+**OpenAI Codex**
+
+现在 splitstem 结果目录已经有 30 个独立 panel PDF，表格 caption 的 episode 数也修成了 900/300。接下来我会把这些资产同步进 `paper/paper_tex`，并把 TeX 里临时保留的旧 composite figure block 清掉。
+
+---
+
+
+**OpenAI Codex**
+
+我会把 TeX 里的旧 composite 代码完全删掉，而不是用 `\iffalse` 留着。论文源文件也应该干净：投稿稿里不应该出现“旧图保留作诊断”这种工程痕迹。
+
+---
+
+
+**OpenAI Codex**
+
+准备同步包内资产。我会用 `rsync` 只同步 `journal_assets` 目录，不动论文正文之外的其它结果文件。
+
+---
+
+
+**OpenAI Codex**
+
+资产已同步。现在做引用完整性检查：TeX 里每个 `\includegraphics` 指向的 PDF 都必须在 `paper/paper_tex/journal_assets/figures` 下存在。
+
+---
+
+
+**OpenAI Codex**
+
+引用检查通过：主 tex 现在有 31 个 `includegraphics`，没有缺失文件。`git diff --check` 的失败来自 Matplotlib 生成的 SVG/CSV 尾随空格，不是 TeX 或脚本语法问题；我会单独检查源代码文件，生成物不按代码风格清洗。
+
+---
+
+
+**OpenAI Codex**
+
+源代码和包内资产检查通过；本地没有 `latexmk/pdflatex/tectonic`，所以我不能在这里编译整篇 PDF，但我会渲几个新 panel 看实际视觉效果。
+
+---
+
+
+**OpenAI Codex**
+
+新 panel 已经渲染出来了，我会看几张代表图。如果发现文字仍然小或布局不平衡，再回脚本调尺寸。
+
+---
+
+
+**OpenAI Codex**
+
+视觉检查里大部分 panel 已经比原来的整图清楚很多，但 `fig6c` 还有一个明显问题：pretrain/DAgger 两个标签挤在右下角。我会马上改这个 panel 的标注，不把这个小毛病留到论文里。
+
+---
+
+
+**OpenAI Codex**
+
+我还发现一个细节：Figure 1 也是三联图，按你的要求也不应该只导出一个大 PDF。我会把 Figure 1 也拆成三个独立 panel，并把 `fig6c` 的重叠标签修掉。
+
+---
+
+
+**OpenAI Codex**
+
+Figure 1 panel exports are in. I’m also cleaning the figure-6 labels so the rightmost panel doesn’t look like a traffic jam. Then I’ll rerun asset generation one more time.
+
+---
+
+
+**OpenAI Codex**
+
+再跑一次资产生成，连同 Figure 5 的 strip 一并重出。因为这是排版迭代，不是新实验，所以不会动原始评估结果。
+
+---
+
+
+**OpenAI Codex**
+
+我先把新生成的 panel 再同步到 `paper/paper_tex`，然后只抽查 Figure 1 和 Figure 6 的边角，避免再有小标签挤在一起。
+
+---
+
+
+**OpenAI Codex**
+
+我刚发现图 1 的 panel 生成函数写了，但主入口没接上，所以文件没落盘。这个是我这边漏掉的调用，不是思路问题，我现在补上。
+
+---
+
+
+**OpenAI Codex**
+
+我还会把 `paper/paper_tex/Paper_diff_depth_journal.tex` 里剩下的 Figure 1/2/3/4/6 旧大图路径扫一遍，确保真正投稿版本只走 panel assets。然后重新跑一次生成。
+
+---
+
+
+**OpenAI Codex**
+
+我先把第一个硬伤补掉：Figure 1 也改成三张独立 panel，而不是还留一个 composite。这样整篇稿子的图路就一致了。
+
+---
+
+
+**OpenAI Codex**
+
+现在重新跑一次 `make_journal_assets.py`，补 Figure 1 panels；然后再同步一遍包内资产。之后我再做一次抽查，确认 Figure 1 和 Figure 6 没有布局瑕疵。
+
+---
+
+
+**OpenAI Codex**
+
+Figure 1 panels 现在已经落盘，引用也都存在。最后我再看一眼这两个最关键的小图，确认它们没有被压坏。
+
+---
+
+
+**OpenAI Codex**
+
+我在补一个收尾：README 里还缺 Figure 1 的 panel 列表，这种小遗漏不该留在包里。顺手把 `fig6c` 的标签位置再推开一点。
+
+---
+
+
+**OpenAI Codex**
+
+我在收尾修两个小地方：一是 README 里把 Figure 1 的 panel 资产列出来，二是 Figure 6 的右下角标签再拉开一点。然后我会重跑生成，让 `paper_tex` 里的说明和资产一致。
+
+---
+
+
+**OpenAI Codex**
+
+我在把文档性文件也收干净，不让包里出现“明明已经拆图了，README 还在说旧大图”的情况。这个属于最终稿的完整性，不是技术细节。
+
+---
+
+
+**OpenAI Codex**
+
+最后一次重跑生成、同步和抽查。之后我会给你一个简洁结论：哪些图已经拆成 panel，哪些文件现在可以直接打包去 Overleaf。
+
+---
+
+
+**OpenAI Codex**
+
+最后做一个快照检查，确认 Figure 1 和 Figure 6 的终版没有回退。看起来这轮已经落稳了。
+
+---
+
+
+**OpenAI Codex**
+
+我再核对一次包内 README，确认 Figure 1 的 panel 资产已经写进说明里。这个属于包完整性，Overleaf 打包时很容易被忽略。
+
+---
+
+
+**OpenAI Codex**
+
+Everything is consistent now. I’m marking the implementation work as done.
+
+---
+
+
+**OpenAI Codex**
+
+已经改完，核心变化是把论文图的组织方式彻底收敛成“单个 panel = 单个独立 PDF”，LaTeX 只负责布局，不再依赖一个巨大的拼图。
+
+现在的状态是：
+- `tools/make_journal_assets.py` 会额外导出 `fig1a/1b/1c`、`fig2a/2b/2c`、`fig3a/3b/3c/3d`、`fig4a~4e`、`fig6a~6c` 这些独立 panel 文件。
+- `tools/export_journal_depth_sequences.py` 会为 Figure 5 额外导出 `fig5_{scene}_{panel}.pdf` 这类 strip 资产，方便 `subfloat` 排版。
+- `paper/paper_tex/Paper_diff_depth_journal.tex` 已经切到这些 panel 资产，不再直接依赖旧的大图。
+- `paper/paper_tex/journal_assets/` 已同步完成，适合直接打包上传 Overleaf。
+
+我还顺手修了几个明显问题：
+- Figure 1、3、4、6 的排版拆成了 panel 资产。
+- Table 1/2 的 caption episode 数改成了动态统计，不再写错。
+- `fig6c` 右下角标签拥挤的问题也压下去了。
+- 包内 README 也更新了 panel 资产清单。
+
+我没法在这里跑完整 LaTeX 编译，因为本地没有 `pdflatex/latexmk/tectonic`，但我已经做了文件存在性检查和几张关键 panel 的 PNG 预览检查，引用没有缺失。下一步你直接用 `paper/paper_tex/` 打包去 Overleaf 就行。
+
+---
+
+
+**User**
+
+你已经生成新的图了吗？放在哪了？还是final_dagger_flightonly_eval_20260510_splitstem中吗？你运行的哪些命令就可以生成新的图？后续我能会微调图中的某个单词来微调
+
+---
+
+
+**OpenAI Codex**
+
+是，新的图已经生成了。源头还是 `paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/`，但我又同步了一份到 `paper/paper_tex/journal_assets/`，这是你打包上传 Overleaf 时该用的那份。
+
+现在你会看到两套：
+- 原始结果和生成日志：`paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets/`
+- 论文包内副本：`paper/paper_tex/journal_assets/`
+
+真正给论文用的是 `paper/paper_tex/journal_assets/figures/panels/` 下面这些独立 panel 图，比如 `fig1a_task_schematic.pdf`、`fig3a_navigation_success.pdf`、`fig5_glare_ours_depth.pdf`、`fig6c_separation_success.pdf`。
+
+我跑过的生成命令就是这两类：
+
+```bash
+/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python tools/make_journal_assets.py \
+  --eval_dir paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem \
+  --out_dir paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets
+```
+
+```bash
+/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python -u tools/export_journal_depth_sequences.py \
+  --config configs/slit_active_sensing.args \
+  --eval_dir paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem \
+  --out_dir paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets \
+  --scenarios glare dark specular \
+  --slot far_right \
+  --target_local_x=-1.20,-0.75,-0.35,-0.08,0.18 \
+  --seed 42 \
+  --device cuda \
+  --flightonly_ckpt checkpoint/2026-05-10-02-45-09/checkpoint0014.pth \
+  --fixed_ckpt checkpoint/2026-05-09-22-32-06/checkpoint0014.pth \
+  --randfix_ckpt checkpoint/2026-05-09-22-35-26/checkpoint0014.pth
+```
+
+最后再同步一次：
+
+```bash
+rsync -a --delete \
+  paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets/ \
+  paper/paper_tex/journal_assets/
+```
+
+你后面要微调图里的某个单词，做法也很直接：
+- Figure 1/2/3/4/6 的文字，改 `tools/make_journal_assets.py`
+- Figure 5 的文字，改 `tools/export_journal_depth_sequences.py`
+- 图注文字，改 `paper/paper_tex/Paper_diff_depth_journal.tex`
+
+改完只要重跑对应脚本，再 `rsync` 一次，不需要重新训练或重新 eval。你如果要，我下一步可以直接帮你把某一张图里的某个词改成你想要的版本。
+
+---
+
+
+**User**
+
+对于fig5，还是按照原来的就行，不用这多这么散的图
+
+---
+
+
+**OpenAI Codex**
+
+我会把 Figure 5 收回到原来的三张 composite 图，不再在正文里铺开那些 strip panel。这样版面会稳很多，也更接近你刚才说的取向。
+
+---
+
+
+**OpenAI Codex**
+
+我现在把正文里的 Figure 5 直接收回到单图三面板的老结构，不留那种分场景拆开的版式了。对应的导出脚本也会停止默认生成那些 fig5 strip panel。
+
+---
+
+
+**OpenAI Codex**
+
+我先把 Figure 5 的版式收回来，保留原来的紧凑组合图，只动论文正文里对应那一段，不去碰别的图。
+
+---
+
+
+**OpenAI Codex**
+
+我在把那一段恢复成三联图，连正文的引用一起收回去。先确认当前 Figure 5 的具体块，再一次性改掉。
+
+---
+
+
+**OpenAI Codex**
+
+我已经定位到只剩 Figure 5 这一处是“散开”的，其他图不动。现在把它收回成一张三联图，正文也只保留一个 `Figure~\ref{fig:depth_seq}`。
+
+---
+
+
+**OpenAI Codex**
+
+Figure 5 已经回到原来的三联组合。接下来我只做一次快速检查，确认没有残留的旧引用或断掉的图名。
+
+---
+
+
+**OpenAI Codex**
+
+没有残留引用了。我再看一下 Figure 5 这一段的上下文，确保语义也顺着回来了。
+
+---
+
+
+**OpenAI Codex**
+
+已改回去。Figure 5 现在恢复成原来的三联组合图，正文也只保留一个 `Figure~\ref{fig:depth_seq}`，不再拆成 glare / dark / specular 三个独立大图。`Paper_diff_depth_journal.tex` 已同步完成，其他图不动。
+
+我也顺手确认了旧的分散引用已经清掉了。后面如果你要，我可以把生成脚本里那些额外的 fig5 panel 导出也一起收掉，避免以后再冒出一堆散图。
+
+---
+
+
+**User**
+
+好的
+
+---
+
+
+**OpenAI Codex**
+
+我理解这个“好的”是同意把 Figure 5 那些额外的散图导出也收掉，避免后续重新生成时又把版式弄乱。我会用项目里的 active-sensing 工作流看一下生成脚本，然后做一个很小的脚本修正。
+
+---
+
+
+**OpenAI Codex**
+
+我先看导出脚本怎么把 Figure 5 拆开的，确认删的是那一层生成逻辑，不是只改 LaTeX。这样后面你重新跑资产时，默认就只会出原来那张紧凑图。
+
+---
+
+
+**OpenAI Codex**
+
+我已经确认了问题点：`export_journal_depth_sequences.py` 里专门有一段在导出 `fig5_<scene>_<panel>.pdf` 的独立条带，而且 `make_journal_assets.py` 的资产说明也把这些散图列出来了。接下来我会把这条分支从默认资产流程里删掉。
+
+---
+
+
+**OpenAI Codex**
+
+脚本里的 Figure 5 独立条带函数和调用已经去掉了。现在我把说明文档里的 fig5 散图条目也同步清掉，然后删除当前资产目录里已经存在的旧散图文件。
+
+---
+
+
+**OpenAI Codex**
+
+说明文字也同步好了。最后我清一下现成的旧 `fig5_*` 散图文件，避免资产目录里还留着一堆过时产物。
+
+---
+
+
+**OpenAI Codex**
+
+旧文件已经清掉了；现在只剩 Figure 5 的三张主图会被论文引用。做一次轻量验证：检查脚本语法、残留引用、以及主图是否还在。
+
+---
+
+
+**OpenAI Codex**
+
+验证发现还有一个旧条目藏在结果目录的 `journal_assets/README.md` 里，不影响编译，但会误导后续使用。我把这个说明也删掉。
+
+---
+
+
+**OpenAI Codex**
+
+我再扫一遍，确认仓库里不再出现 `fig5_<scene>_<panel>` 这种会诱导继续导出散图的说法。然后给你一个最小可复现的后续命令。
+
+---
+
+
+**OpenAI Codex**
+
+我再确认一下生成说明里有没有残留“fig5 分面条带”的语义，避免代码删掉了、文档却还在暗示旧版输出。
+
+---
+
+
+**OpenAI Codex**
+
+我把那句“Separate glare, dark, and specular panels”也改成了更贴近你现在版式的表述。再做一次收尾检查就结束。
+
+---
+
+
+**OpenAI Codex**
+
+已处理。Figure 5 现在彻底回到“原来的紧凑组合图”逻辑：
+
+- [Paper_diff_depth_journal.tex](/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/Paper_diff_depth_journal.tex) 仍然只引用三张主图：`glare / dark / specular`
+- [export_journal_depth_sequences.py](/home/zhaoguodong/work/code/DiffPhysDrone/tools/export_journal_depth_sequences.py) 不再生成 `figures/panels/fig5_*` 这些散图
+- 已删除当前结果目录和 `paper_tex` 打包目录里残留的旧 `fig5_*` panel 文件
+- `README.md` 和 `caption_drafts.md` 里关于 Figure 5 散图的描述也清掉了
+
+验证过：
+
+```bash
+python3 -m py_compile tools/export_journal_depth_sequences.py tools/make_journal_assets.py
+git diff --check ...
+```
+
+以后重新生成 Figure 5，用这个命令即可，生成结果仍是三张紧凑 composite 图：
+
+```bash
+/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python -u tools/export_journal_depth_sequences.py \
+  --config configs/slit_active_sensing.args \
+  --eval_dir paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem \
+  --out_dir paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets \
+  --scenarios glare dark specular \
+  --slot far_right \
+  --target_local_x=-1.20,-0.75,-0.35,-0.08,0.18 \
+  --seed 42 \
+  --device cuda \
+  --flightonly_ckpt checkpoint/2026-05-10-02-45-09/checkpoint0014.pth \
+  --fixed_ckpt checkpoint/2026-05-09-22-32-06/checkpoint0014.pth \
+  --randfix_ckpt checkpoint/2026-05-09-22-35-26/checkpoint0014.pth
+```
+
+生成后同步到 Overleaf 打包目录：
+
+```bash
+rsync -a --delete \
+  paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets/ \
+  paper/paper_tex/journal_assets/
+```
+
+这次只是清理 Figure 5 的资产生成和版式，不涉及重新 eval，数值结果没有变。
+
+---
+
+
+**User**
+
+把/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/journal_assets之前的图表形式现在用不到的删掉吧，比如extended_data_fig1_full_matrix等。
+
+---
+
+
+**OpenAI Codex**
+
+我先扫一遍 `paper_tex/journal_assets` 里哪些旧图现在已经不被 `tex` 引用了，再做清理。这样不会误删还在正文里用到的资产。
+
+---
+
+
+**OpenAI Codex**
+
+我看了一下，当前 `tex` 实际引用的是：Figure 1/2/3/4/6 的 `panels/*.pdf`，Figure 5 的三张 composite PDF，以及三个 table `.tex`。像 `extended_data_*`、旧 composite 大图、以及这些图的 `.png/.svg` 都不会参与编译。接下来我按“只保留论文会用到的图表资产”的口径清理 `paper_tex/journal_assets`。
+
+---
+
+
+**OpenAI Codex**
+
+我先把“会真的进 Overleaf 包”的旧图去掉，优先删掉当前正文根本不用的 composite 主图和 `extended_data_*`。`panel` 那批我先保留，因为它们还在正文里直接引用。
+
+---
+
+
+**OpenAI Codex**
+
+另外我注意到如果以后重新跑 `make_journal_assets.py`，这些旧 composite 和 extended data 还会被重新生成。所以我不只删文件，也会把生成脚本的默认输出收窄到当前论文实际使用的资产。
+
+---
+
+
+**OpenAI Codex**
+
+我还顺手看了下 `make_journal_assets.py` 的输出说明。它现在会把那些旧图重新写回来，所以我会把“生成入口”和“文档说明”一起收紧，不让它们在下一次重跑时复活。
+
+---
+
+
+**OpenAI Codex**
+
+我现在改的是“生成器”和“目录说明”两层：这样不是只把文件删掉，而是以后重新跑资产时也不会自动复活。
+
+---
+
+
+**OpenAI Codex**
+
+这个 patch 撞到了脚本里注释位置已经变过的地方，我重新按当前文件内容分段改，别硬贴旧上下文。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把要删的清单收拢好了：旧 composite 主图、`extended_data_fig1/2/3`，以及 `export_journal_depth_sequences.py` 里那条 method-own 旧输出。现在一次性改脚本和 README。
+
+---
+
+
+**OpenAI Codex**
+
+我把目录说明也一并收紧，避免 README 还在指向已经删掉的图。caption 草稿里那两段 extended data 也同步去掉。
+
+---
+
+
+**OpenAI Codex**
+
+这个补丁里把脚本字符串和生成后的 Markdown 混在一起了，Markdown 文件里当然没有 `write_text(...)` 那几行。小岔路，问题不大；我分开改。
+
+---
+
+
+**OpenAI Codex**
+
+我发现刚才脚本里的 README 字符串已经被部分改到了，但缩进混进了 Markdown 内容里。我先把生成器整理干净，再动现有资产文件。
+
+---
+
+
+**OpenAI Codex**
+
+README 这层已经收干净了。现在把 caption 草稿里那两段旧 Extended Data 也抹掉，避免包里还留着“旧论文目录感”。
+
+---
+
+
+**OpenAI Codex**
+
+文件层面我开始动刀了。只删确实不再被 `tex` 或 README 指向的那些旧 composite / extended-data 产物，保留当前论文直接用的 panel 和 Figure 5。
+
+---
+
+
+**OpenAI Codex**
+
+旧图文件已经删掉了。下一步我确认三件事：目录里是否还剩这些名字、脚本里是否还有自动生成入口、以及当前 README/README.draft 有没有和删掉的文件对不上。
+
+---
+
+
+**OpenAI Codex**
+
+我再核对一次文字层面有没有残留的旧文件名。现在这一步主要是防止 README 或 report 里还写着已经删掉的扩展数据图。
+
+---
+
+
+**OpenAI Codex**
+
+当前 `journal_assets` 目录里的旧文件名已经没有了；剩下的命中只是在 `make_journal_assets.py` 里保留的未调用 legacy helper 函数名，不会默认生成。我再列一下 `paper_tex` 实际剩余的图，确认 Overleaf 包现在干净。
+
+---
+
+
+**OpenAI Codex**
+
+我只再看脚本里一次关键输出：现在只保留 Figure 5 的三张 composite 和数据 CSV/NPZ，不会再冒出 extended-data 图。
+
+---
+
+
+**OpenAI Codex**
+
+`export_journal_depth_sequences.py` 那段输出我再抓一下位置，刚才的 `sed` 范围没踩到。你这个文件现在的核心变化是只保留 Figure 5 的三张 composite 和原始数据。
+
+---
+
+
+**OpenAI Codex**
+
+最后我确认一下 captions 生成器里没有再吐出旧 Extended Data 标题。这个比文件本身更容易被人忘。
+
+---
+
+
+**OpenAI Codex**
+
+我决定再收一刀：把 `extended_data_fig1/2` 对应的旧函数也从生成脚本里删掉。这样你以后 `rg extended_data_fig` 不会再被它们误导。
+
+---
+
+
+**OpenAI Codex**
+
+`extended_data_fig1/2` 的旧函数也删掉了。现在我再做一次干净搜索，确认这些文件名彻底从资产和生成器里消失。
+
+---
+
+
+**OpenAI Codex**
+
+我还看到旧 composite 图（fig1_system_protocol 这类）虽然文件已经删了、默认也不再生成，但脚本里还保留了对应旧函数。既然你这次目标是清掉不用的图表形式，我把这些 legacy composite 函数也删掉，脚本会更干净。
+
+---
+
+
+**OpenAI Codex**
+
+我把脚本里的 legacy composite 函数也清掉，不留“默认不生成但代码里还在”的旧入口。这样以后查代码也不会看到一堆已经废弃的图名。
+
+---
+
+
+**OpenAI Codex**
+
+现在脚本里旧图的函数入口也拔掉了。再查一次，确认旧文件名只剩在当前保留的 Figure 5 和 panel 输出里，不会再碰到 `extended_data` 或旧 composite。
+
+---
+
+
+**OpenAI Codex**
+
+已经清掉了。
+
+现在 [`paper/paper_tex/journal_assets/figures`](/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex/journal_assets/figures) 里，root 只剩当前论文会用到的 Figure 5 三张 composite 图，`fig1/2/3/4/6` 的旧 composite 和 `extended_data_fig1/2/3` 都删掉了。`paper/paper_tex/journal_assets` 和结果包 [`paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets`](/home/zhaoguodong/work/code/DiffPhysDrone/paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem/journal_assets) 也同步清理过了。
+
+我还把生成器一起收紧了：
+- [`tools/make_journal_assets.py`](/home/zhaoguodong/work/code/DiffPhysDrone/tools/make_journal_assets.py) 现在默认只生成 panel 图、表格和当前需要的内容，不会再重建那些旧图。
+- [`tools/export_journal_depth_sequences.py`](/home/zhaoguodong/work/code/DiffPhysDrone/tools/export_journal_depth_sequences.py) 也只保留 Figure 5 的输出和对应数据说明，不再导出旧的 extended-data 深度图。
+
+验证过了，`python3 -m py_compile ...` 和 `git diff --check` 都通过。  
+我保留了当前资产的 PNG/SVG 兄弟文件和 panel 图的多格式输出，删的是不再进论文的旧 composite/extended-data 产物。
+
+---
+
+
+**User**
+
+请将/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex下的数据和paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem下的一致，因为paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem下的数据不在git中。这样我以后如果运行make_journal_assets.py 或者export_journal_depth_sequences.py也可以执行/home/zhaoguodong/work/code/DiffPhysDrone/paper/paper_tex下的数据目录
+
+---
+
+
+**OpenAI Codex**
+
+我先看一下 `paper/paper_tex` 现在的数据放在哪一层，再把它和结果目录做成一致的镜像。这样后面你在 `paper_tex` 里重跑资产脚本，不会再依赖 git 外的那份结果树。
+
+---
+
+
+**OpenAI Codex**
+
+我看见 `paper/paper_tex` 下面其实已经有一个 `origion_results` 目录，像是历史上用来放结果包的副本。先比对它和正式结果树的差异，再决定是同步到这里还是改到别的挂载点。
+
+---
+
+
+**User**
+
+<turn_aborted>
+The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.
+</turn_aborted>
 
 ---
