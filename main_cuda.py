@@ -113,6 +113,7 @@ def main():
         enabled=(args.vis_enable and args.vis_backend == 'rerun'),
         app_id='DiffPhysDrone-Train',
         spawn=args.vis_spawn,
+        show_aabb=args.vis_show_aabb,
     )
 
     # ── 7. Resume checkpoint ─────────────────────────────────────────────

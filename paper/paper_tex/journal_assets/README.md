@@ -26,18 +26,12 @@ the manuscript for Figures 1, 2, 3, 4, and 6.
 - `figures/panels/fig1a_task_schematic.pdf`
 - `figures/panels/fig1b_active_depth_loop.pdf`
 - `figures/panels/fig1c_relabeled_training_protocol.pdf`
-- `figures/panels/fig3a_navigation_success.pdf`
-- `figures/panels/fig3b_depth_fill.pdf`
 - `figures/panels/fig3c_scene_success_gain.pdf`
 - `figures/panels/fig3d_terminal_distance_ecdf.pdf`
-- `figures/panels/fig4a_camera_fingerprint.pdf`
 - `figures/panels/fig4b_exposure_gain_plane.pdf`
-- `figures/panels/fig4c_near_slit_degradation.pdf`
 - `figures/panels/fig4d_exposure_gain_profiles.pdf`
 - `figures/panels/fig4e_trajectory_envelopes.pdf`
 - `figures/panels/fig6a_camera_semantics_progress.pdf`
-- `figures/panels/fig6b_dark_glare_parameter_delta.pdf`
-- `figures/panels/fig6c_separation_success.pdf`
 
 ## Tables
 

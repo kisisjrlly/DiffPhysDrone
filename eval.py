@@ -366,6 +366,7 @@ def main():
         enabled=(args.vis_enable and args.vis_backend == 'rerun'),
         app_id='DiffPhysDrone-Eval',
         spawn=args.vis_spawn,
+        show_aabb=args.vis_show_aabb,
     )
     if vis.enabled:
         vis.send_eval_episode_blueprint(

@@ -12,7 +12,7 @@ set -euo pipefail
 export all_proxy=${all_proxy:-http://127.0.0.1:7890}
 
 base_task=${BASE_TASK:-slit_active_sensing}
-mode=${MODE:-fix}
+mode=${MODE:-ours}
 config_override=${CONFIG:-}
 task_override=${TASK:-}
 ckpt_path=${CKPT:-}

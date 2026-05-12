@@ -21,7 +21,7 @@
 --diff_sensor_impl diff_depth=cuda
 
 --scenarios glare specular dark
---random_rotation
+# --random_rotation
 --random_rotation_max_deg 360
 --simple_start_x -1.5
 --simple_goal_x 1.5

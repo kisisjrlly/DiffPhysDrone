@@ -40,7 +40,6 @@ from paper_asset_utils import (  # noqa: E402
     SCENE_LABEL,
     SCENES,
     SINGLE_COL,
-    bootstrap_mean_ci,
     binned_param,
     ci_cell,
     episode_phase_means,
@@ -493,18 +492,6 @@ def fig3_navigation_panels(episodes: pd.DataFrame, out_dir: Path) -> None:
 
     fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
-    draw_metric_forest(ax, episodes, "success_rate", "success rate", (0.0, 1.0), show_ylabels=True)
-    ax.set_title("Navigation success", pad=5)
-    save_all(fig, panel_dir / "fig3a_navigation_success")
-
-    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
-    ax = fig.add_subplot(111)
-    draw_metric_forest(ax, episodes, "fill_rate", "depth fill rate", (0.65, 1.0), show_ylabels=True)
-    ax.set_title("Observation quality", pad=5)
-    save_all(fig, panel_dir / "fig3b_depth_fill")
-
-    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
-    ax = fig.add_subplot(111)
     im = draw_scene_delta_heatmap(ax, episodes)
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
     cbar.set_label(r"$\Delta$ success")
@@ -514,21 +501,6 @@ def fig3_navigation_panels(episodes: pd.DataFrame, out_dir: Path) -> None:
     ax = fig.add_subplot(111)
     draw_terminal_ecdf(ax, episodes)
     save_all(fig, panel_dir / "fig3d_terminal_distance_ecdf")
-
-
-def draw_camera_heatmap(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
-    params = ["power", "exposure", "gain"]
-    data = np.array([[scene_param_ci(phase_ep, "flightonly", scene, "near", p)[0] for p in params] for scene in SCENES])
-    im = ax.imshow(data, cmap="YlGnBu", vmin=0.0, vmax=0.85, aspect="auto")
-    ax.set_xticks(np.arange(len(params)))
-    ax.set_xticklabels(["power", "exposure", "gain"])
-    ax.set_yticks(np.arange(len(SCENES)))
-    ax.set_yticklabels([SCENE_LABEL[s] for s in SCENES])
-    for i in range(data.shape[0]):
-        for j in range(data.shape[1]):
-            ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center", fontsize=7.0, color="#111111")
-    ax.set_title("Near-slit camera settings", pad=5)
-    return im
 
 
 def draw_exposure_gain_plane(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
@@ -605,37 +577,6 @@ def draw_trajectory_envelope(ax: plt.Axes, episodes: pd.DataFrame, traces: pd.Da
     ax.set_title("Successful trajectory envelopes", pad=5)
 
 
-def draw_near_slit_degradation(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
-    phase_rows = []
-    for scene in SCENES:
-        vals = phase_ep[
-            (phase_ep["method"] == "flightonly")
-            & (phase_ep["scene_name"] == scene)
-            & (phase_ep["phase"] == "near")
-        ]["scene_effect_mean"].to_numpy(float)
-        phase_rows.append(bootstrap_mean_ci(vals))
-    y = np.arange(len(SCENES))
-    means = [r[0] for r in phase_rows]
-    lows = [r[1] for r in phase_rows]
-    highs = [r[2] for r in phase_rows]
-    ax.barh(y, means, color=[SCENE_COLOR[s] for s in SCENES], edgecolor="#222222", linewidth=0.45)
-    ax.errorbar(
-        means,
-        y,
-        xerr=[np.array(means) - np.array(lows), np.array(highs) - np.array(means)],
-        fmt="none",
-        ecolor="#222222",
-        elinewidth=0.55,
-        capsize=1.4,
-    )
-    ax.set_yticks(y)
-    ax.set_yticklabels([SCENE_LABEL[s] for s in SCENES])
-    ax.set_xlabel("near-slit degradation proxy")
-    ax.set_xlim(0, max(0.20, max(means) * 1.18))
-    clean_axis(ax, "x")
-    ax.set_title("Near-slit degradation encountered", pad=5)
-
-
 def fig4_camera_mechanism_panels(
     episodes: pd.DataFrame, traces: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path
 ) -> None:
@@ -643,18 +584,8 @@ def fig4_camera_mechanism_panels(
 
     fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
     ax = fig.add_subplot(111)
-    draw_camera_heatmap(ax, phase_ep)
-    save_all(fig, panel_dir / "fig4a_camera_fingerprint")
-
-    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
-    ax = fig.add_subplot(111)
     draw_exposure_gain_plane(ax, phase_ep)
     save_all(fig, panel_dir / "fig4b_exposure_gain_plane")
-
-    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
-    ax = fig.add_subplot(111)
-    draw_near_slit_degradation(ax, phase_ep)
-    save_all(fig, panel_dir / "fig4c_near_slit_degradation")
 
     fig = plt.figure(figsize=(WIDE_PANEL_W, WIDE_PANEL_H))
     sub = GridSpec(2, 1, figure=fig, hspace=0.12)
@@ -680,24 +611,6 @@ def offline_dagger_sep(diagnosis: pd.DataFrame) -> float:
     glare = sub[sub["scene"] == "glare"][["power", "exposure", "gain"]].mean().to_numpy(float)
     dark = sub[sub["scene"] == "dark"][["power", "exposure", "gain"]].mean().to_numpy(float)
     return float(np.abs(glare - dark).mean())
-
-
-def delta_dark_minus_glare_ci(phase_ep: pd.DataFrame, method: str, param: str, n_boot: int = 3000) -> tuple[float, float, float]:
-    d = phase_ep[
-        (phase_ep["method"] == method) & (phase_ep["scene_name"] == "dark") & (phase_ep["phase"] == "near")
-    ][param].to_numpy(float)
-    g = phase_ep[
-        (phase_ep["method"] == method) & (phase_ep["scene_name"] == "glare") & (phase_ep["phase"] == "near")
-    ][param].to_numpy(float)
-    mean = float(d.mean() - g.mean())
-    rng = np.random.default_rng(8800 + len(method) + len(param))
-    vals = [
-        float(d[rng.integers(0, len(d), len(d))].mean() - g[rng.integers(0, len(g), len(g))].mean())
-        for _ in range(n_boot)
-    ]
-    lo = float(np.percentile(vals, 2.5))
-    hi = float(np.percentile(vals, 97.5))
-    return mean, min(lo, mean), max(hi, mean)
 
 
 def draw_dagger_semantics_progress(ax: plt.Axes, phase_ep: pd.DataFrame, diagnosis: pd.DataFrame) -> None:
@@ -727,59 +640,6 @@ def draw_dagger_semantics_progress(ax: plt.Axes, phase_ep: pd.DataFrame, diagnos
     ax.set_title("Online camera semantics", pad=5)
 
 
-def draw_dark_glare_param_deltas(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
-    params = ["power", "exposure", "gain"]
-    methods = ["pretrained", "dagger", "flightonly"]
-    x = np.arange(len(methods))
-    width = 0.23
-    for k, param in enumerate(params):
-        means, lows, highs = [], [], []
-        for method in methods:
-            m, lo, hi = delta_dark_minus_glare_ci(phase_ep, method, param)
-            means.append(m)
-            lows.append(lo)
-            highs.append(hi)
-        xpos = x + (k - 1) * width
-        ax.bar(xpos, means, width=width, color=PARAM_COLOR[param], edgecolor="#222222", linewidth=0.42, label=param)
-        ax.errorbar(xpos, means, yerr=[np.array(means) - np.array(lows), np.array(highs) - np.array(means)], fmt="none", ecolor="#222222", elinewidth=0.5, capsize=1.4)
-    ax.axhline(0, color="#222222", lw=0.55)
-    ax.set_xticks(x)
-    ax.set_xticklabels(["Pretrain", "DAgger", "Ours"])
-    ax.set_ylabel("dark - glare near parameter")
-    ax.set_ylim(-0.12, 0.72)
-    ax.legend(frameon=False, ncol=3, loc="upper left", handlelength=1.2, columnspacing=0.9)
-    clean_axis(ax, "y")
-    ax.set_title("Recovered camera semantics", pad=5)
-
-
-def draw_separation_success(ax: plt.Axes, episodes: pd.DataFrame, phase_ep: pd.DataFrame) -> None:
-    scatter_methods = ["fixed", "nondiff", "pretrained", "dagger", "flightonly"]
-    coords: dict[str, tuple[float, float]] = {}
-    for method in scatter_methods:
-        sep = l1_scene_separation_ci(phase_ep, method)[0]
-        succ = metric_ci(episodes, method, "success_rate")[0]
-        coords[method] = (sep, succ)
-        ax.scatter([sep], [succ], s=34, color=METHOD_COLOR[method], edgecolor="#222222", linewidth=0.48, zorder=3)
-    label_offsets = {
-        "fixed": (0.010, -0.040),
-        "nondiff": (0.010, 0.018),
-        "pretrained": (-0.090, -0.032),
-        "dagger": (-0.090, 0.022),
-        "flightonly": (0.010, 0.018),
-    }
-    for method in scatter_methods:
-        dx, dy = label_offsets[method]
-        ax.text(coords[method][0] + dx, coords[method][1] + dy, METHOD_LABEL_J[method], fontsize=7.0)
-    ax.annotate("", xy=coords["dagger"], xytext=coords["pretrained"], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=4, shrinkB=4))
-    ax.annotate("", xy=coords["flightonly"], xytext=coords["dagger"], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=4, shrinkB=4))
-    ax.set_xlabel("camera separation")
-    ax.set_ylabel("success rate")
-    ax.set_xlim(-0.02, 0.48)
-    ax.set_ylim(0.0, 0.84)
-    clean_axis(ax, "both")
-    ax.set_title("Separation must be paired with flight adaptation", pad=5)
-
-
 def fig6_dagger_diagnosis_panels(
     episodes: pd.DataFrame, phase_ep: pd.DataFrame, diagnosis: pd.DataFrame, out_dir: Path
 ) -> None:
@@ -789,16 +649,6 @@ def fig6_dagger_diagnosis_panels(
     ax = fig.add_subplot(111)
     draw_dagger_semantics_progress(ax, phase_ep, diagnosis)
     save_all(fig, panel_dir / "fig6a_camera_semantics_progress")
-
-    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
-    ax = fig.add_subplot(111)
-    draw_dark_glare_param_deltas(ax, phase_ep)
-    save_all(fig, panel_dir / "fig6b_dark_glare_parameter_delta")
-
-    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
-    ax = fig.add_subplot(111)
-    draw_separation_success(ax, episodes, phase_ep)
-    save_all(fig, panel_dir / "fig6c_separation_success")
 
 
 def write_text(path: Path, text: str) -> None:
@@ -942,25 +792,22 @@ training collision rate. The curves are convergence diagnostics; all navigation
 claims use the held-out closed-loop evaluations summarized in Figure 3 and
 Tables 1--2.
 
-## Figure 3 | Active camera control improves navigation while increasing valid depth.
+## Figure 3 | Navigation gains are scene-dependent.
 
 All methods are evaluated for 300 episodes, with 100 episodes in each scene.
-**a,b,** Overall success and depth-fill estimates with 95% confidence intervals.
-**c,** Per-scene success change relative to fixed camera. **d,** Empirical
+**a,** Per-scene success change relative to fixed camera. **b,** Empirical
 distribution of terminal goal distance. The proposed policy improves navigation
-success while substantially increasing valid depth over fixed, random-fixed, and
-non-differentiable camera baselines.
+success while reducing the fraction of episodes that terminate far from the
+goal.
 
 ## Figure 4 | The learned camera policy implements scene-specific near-slit sensing.
 
-**a,** Near-slit camera-parameter fingerprint for the final policy. **b,**
-Exposure-gain response plane, where marker area scales with power and the grey
-cross denotes the nominal camera setting. **c,** Near-slit degradation proxy
-encountered by the final policy. **d,** Exposure and gain profiles as a function
-of local distance to the wall; grey shading denotes the near-slit window. **e,**
-Median successful trajectories with 10--90% episode envelopes. Low-reflectance
-dark-material scenes keep exposure/gain high near the wall, whereas glare
-suppresses both parameters.
+**a,** Exposure-gain response plane, where marker area scales with power and
+the grey cross denotes the nominal camera setting. **b,** Exposure and gain
+profiles as a function of local distance to the wall; grey shading denotes the
+near-slit window. **c,** Median successful trajectories with 10--90% episode
+envelopes. Low-reflectance dark-material scenes keep exposure/gain high near
+the wall, whereas glare suppresses both parameters.
 
 ## Figure 5 | Camera control changes what the policy observes near the slit.
 
@@ -977,12 +824,9 @@ three-subfigure layout.
 
 ## Figure 6 | Camera relabeling and flight adaptation are complementary.
 
-**a,** Glare-dark camera separation is measured in the relabeled teacher data
-and in online closed-loop rollouts for the pretrained, DAgger-relabelled and
-final policies. **b,** The separation is mainly carried by exposure and gain:
-low-reflectance dark-material scenes require higher values than glare. **c,**
-Camera semantics alone is insufficient for flight; final performance requires
-combining DAgger camera relabeling with flight-only adaptation.
+Glare-dark camera separation is measured in the relabeled teacher data and in
+online closed-loop rollouts for the pretrained, DAgger-relabelled and final
+policies.
 """
     write_text(out_dir / "caption_drafts.md", text)
 
@@ -1016,18 +860,12 @@ the manuscript for Figures 1, 2, 3, 4, and 6.
 - `figures/panels/fig1a_task_schematic.pdf`
 - `figures/panels/fig1b_active_depth_loop.pdf`
 - `figures/panels/fig1c_relabeled_training_protocol.pdf`
-- `figures/panels/fig3a_navigation_success.pdf`
-- `figures/panels/fig3b_depth_fill.pdf`
 - `figures/panels/fig3c_scene_success_gain.pdf`
 - `figures/panels/fig3d_terminal_distance_ecdf.pdf`
-- `figures/panels/fig4a_camera_fingerprint.pdf`
 - `figures/panels/fig4b_exposure_gain_plane.pdf`
-- `figures/panels/fig4c_near_slit_degradation.pdf`
 - `figures/panels/fig4d_exposure_gain_profiles.pdf`
 - `figures/panels/fig4e_trajectory_envelopes.pdf`
 - `figures/panels/fig6a_camera_semantics_progress.pdf`
-- `figures/panels/fig6b_dark_glare_parameter_delta.pdf`
-- `figures/panels/fig6c_separation_success.pdf`
 
 ## Tables
 

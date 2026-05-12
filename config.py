@@ -135,6 +135,7 @@ def build_parser():
     parser.add_argument('--vis_every_steps', type=int, default=10)
     parser.add_argument('--vis_student', default=True, action=argparse.BooleanOptionalAction)
     parser.add_argument('--vis_spawn', default=True, action=argparse.BooleanOptionalAction)
+    parser.add_argument('--vis_show_aabb', default=False, action=argparse.BooleanOptionalAction)
     return parser
 
 

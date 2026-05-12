@@ -681,17 +681,12 @@ baseline.
 
 \begin{figure*}[!t]
 \centering
-\subfloat[Success rate]{\includegraphics[width=0.48\textwidth]{panels/fig3a_navigation_success.pdf}}
-\hfil
-\subfloat[Depth fill]{\includegraphics[width=0.48\textwidth]{panels/fig3b_depth_fill.pdf}}
-\par\medskip
 \subfloat[Scene-wise success gain]{\includegraphics[width=0.48\textwidth]{panels/fig3c_scene_success_gain.pdf}}
 \hfil
 \subfloat[Terminal distance]{\includegraphics[width=0.48\textwidth]{panels/fig3d_terminal_distance_ecdf.pdf}}
-\caption{Closed-loop navigation performance. The proposed split-stem active
-camera policy improves success while maintaining substantially higher valid
-depth fill than fixed, random-fixed, non-differentiable learned-camera, and
-blind baselines.}
+\caption{Closed-loop navigation breakdown. Scene-wise gains are measured
+relative to the fixed-camera baseline, and terminal-distance distributions show
+how closely each method approaches the goal over the held-out evaluation set.}
 \label{fig:navigation}
 \end{figure*}
 
@@ -756,20 +751,17 @@ near-slit camera commands, with 95\% bootstrap confidence intervals.
 
 \begin{figure*}[!t]
 \centering
-\subfloat[Near-slit camera fingerprint]{\includegraphics[width=0.31\textwidth]{panels/fig4a_camera_fingerprint.pdf}}
-\hfil
 \subfloat[Exposure--gain response]{\includegraphics[width=0.31\textwidth]{panels/fig4b_exposure_gain_plane.pdf}}
 \hfil
-\subfloat[Local degradation]{\includegraphics[width=0.31\textwidth]{panels/fig4c_near_slit_degradation.pdf}}
-\par\medskip
-\subfloat[Profiles across the wall frame]{\includegraphics[width=0.62\textwidth]{panels/fig4d_exposure_gain_profiles.pdf}}
+\subfloat[Profiles across the wall frame]{\includegraphics[width=0.42\textwidth]{panels/fig4d_exposure_gain_profiles.pdf}}
 \hfil
-\subfloat[Successful trajectory envelopes]{\includegraphics[width=0.34\textwidth]{panels/fig4e_trajectory_envelopes.pdf}}
+\subfloat[Successful trajectory envelopes]{\includegraphics[width=0.24\textwidth]{panels/fig4e_trajectory_envelopes.pdf}}
 \caption{Near-slit active-camera mechanism. The final policy produces
 scene-specific camera settings near the wall: glare suppresses exposure and
 gain, dark material increases them, and specular material uses a distinct
-lower-power regime. The same figure relates these camera settings to local
-degradation strength and successful trajectory envelopes.}
+lower-power regime. The response plane and wall-frame profiles show how these
+settings evolve around the aperture, while the trajectory envelope links the
+sensor behavior to successful slit traversal.}
 \label{fig:camera_mechanism}
 \end{figure*}
 
@@ -846,15 +838,10 @@ become operationally useful for closed-loop flight.
 
 \begin{figure*}[!t]
 \centering
-\subfloat[Camera-semantics recovery]{\includegraphics[width=0.32\textwidth]{panels/fig6a_camera_semantics_progress.pdf}}
-\hfil
-\subfloat[Dark--glare parameter changes]{\includegraphics[width=0.32\textwidth]{panels/fig6b_dark_glare_parameter_delta.pdf}}
-\hfil
-\subfloat[Separation versus success]{\includegraphics[width=0.32\textwidth]{panels/fig6c_separation_success.pdf}}
-\caption{Camera relabeling and flight adaptation are complementary. Relabeling
-restores scene-specific camera semantics, but competitive navigation requires
-an additional flight-only adaptation stage under the learned-camera observation
-distribution.}
+\includegraphics[width=0.48\textwidth]{panels/fig6a_camera_semantics_progress.pdf}
+\caption{Camera relabeling restores scene-specific camera semantics. The
+glare--dark camera separation appears in the relabeled teacher data and is
+preserved through the final split-stem policy.}
 \label{fig:dagger_diag}
 \end{figure*}
 

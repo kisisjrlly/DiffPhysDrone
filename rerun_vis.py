@@ -9,9 +9,10 @@ class RerunVis:
     - Keeps overhead low by accepting already-sampled tensors from caller.
     """
 
-    def __init__(self, enabled=False, app_id="DiffPhysDrone", spawn=True):
+    def __init__(self, enabled=False, app_id="DiffPhysDrone", spawn=True, show_aabb=False):
         self.enabled = enabled
         self.app_id = app_id
+        self.show_aabb = bool(show_aabb)
         self._rr = None
         self._paths = {"teacher": [], "student": []}
 
@@ -488,53 +489,53 @@ class RerunVis:
             ),
         )
 
-        # World AABB overlay for map extent awareness.
-        center = ((scene_min + scene_max) * 0.5).astype(np.float32)
-        half = ((scene_max - scene_min) * 0.5).astype(np.float32)
-        rr.log(
-            f"{phase}/world/aabb",
-            rr.Boxes3D(
-                centers=[center.tolist()],
-                half_sizes=[half.tolist()],
-                # 降低填充透明度，主要依赖高对比线框强调边界。
-                colors=[[255, 240, 120, 24]],
-                radii=[box_r],
-                show_labels=False,
-            ),
-        )
+        if self.show_aabb:
+            # Optional debug overlay for checking the inferred scene extent.
+            center = ((scene_min + scene_max) * 0.5).astype(np.float32)
+            half = ((scene_max - scene_min) * 0.5).astype(np.float32)
+            rr.log(
+                f"{phase}/world/aabb",
+                rr.Boxes3D(
+                    centers=[center.tolist()],
+                    half_sizes=[half.tolist()],
+                    colors=[[255, 240, 120, 24]],
+                    radii=[box_r],
+                    show_labels=False,
+                ),
+            )
 
-        cx, cy, cz = center.tolist()
-        hx, hy, hz = half.tolist()
-        corners = np.array([
-            [cx - hx, cy - hy, cz - hz],
-            [cx + hx, cy - hy, cz - hz],
-            [cx + hx, cy + hy, cz - hz],
-            [cx - hx, cy + hy, cz - hz],
-            [cx - hx, cy - hy, cz + hz],
-            [cx + hx, cy - hy, cz + hz],
-            [cx + hx, cy + hy, cz + hz],
-            [cx - hx, cy + hy, cz + hz],
-        ], dtype=np.float32)
-        edge_idx = [(0, 1), (1, 2), (2, 3), (3, 0),
-                    (4, 5), (5, 6), (6, 7), (7, 4),
-                    (0, 4), (1, 5), (2, 6), (3, 7)]
-        aabb_edges = [[corners[a].tolist(), corners[b].tolist()] for a, b in edge_idx]
-        rr.log(
-            f"{phase}/world/aabb_edges",
-            rr.LineStrips3D(
-                aabb_edges,
-                colors=[[255, 245, 120, 255]] * len(aabb_edges),
-                radii=[aabb_edge_r] * len(aabb_edges),
-            ),
-        )
-        rr.log(
-            f"{phase}/world/aabb_corners",
-            rr.Points3D(
-                corners,
-                colors=[[255, 245, 120]] * corners.shape[0],
-                radii=[aabb_edge_r * 1.15] * corners.shape[0],
-            ),
-        )
+            cx, cy, cz = center.tolist()
+            hx, hy, hz = half.tolist()
+            corners = np.array([
+                [cx - hx, cy - hy, cz - hz],
+                [cx + hx, cy - hy, cz - hz],
+                [cx + hx, cy + hy, cz - hz],
+                [cx - hx, cy + hy, cz - hz],
+                [cx - hx, cy - hy, cz + hz],
+                [cx + hx, cy - hy, cz + hz],
+                [cx + hx, cy + hy, cz + hz],
+                [cx - hx, cy + hy, cz + hz],
+            ], dtype=np.float32)
+            edge_idx = [(0, 1), (1, 2), (2, 3), (3, 0),
+                        (4, 5), (5, 6), (6, 7), (7, 4),
+                        (0, 4), (1, 5), (2, 6), (3, 7)]
+            aabb_edges = [[corners[a].tolist(), corners[b].tolist()] for a, b in edge_idx]
+            rr.log(
+                f"{phase}/world/aabb_edges",
+                rr.LineStrips3D(
+                    aabb_edges,
+                    colors=[[255, 245, 120, 255]] * len(aabb_edges),
+                    radii=[aabb_edge_r] * len(aabb_edges),
+                ),
+            )
+            rr.log(
+                f"{phase}/world/aabb_corners",
+                rr.Points3D(
+                    corners,
+                    colors=[[255, 245, 120]] * corners.shape[0],
+                    radii=[aabb_edge_r * 1.15] * corners.shape[0],
+                ),
+            )
 
         if voxels is not None:
             v = np.asarray(voxels, dtype=np.float32)

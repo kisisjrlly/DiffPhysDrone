@@ -25,25 +25,22 @@ training collision rate. The curves are convergence diagnostics; all navigation
 claims use the held-out closed-loop evaluations summarized in Figure 3 and
 Tables 1--2.
 
-## Figure 3 | Active camera control improves navigation while increasing valid depth.
+## Figure 3 | Navigation gains are scene-dependent.
 
 All methods are evaluated for 300 episodes, with 100 episodes in each scene.
-**a,b,** Overall success and depth-fill estimates with 95% confidence intervals.
-**c,** Per-scene success change relative to fixed camera. **d,** Empirical
+**a,** Per-scene success change relative to fixed camera. **b,** Empirical
 distribution of terminal goal distance. The proposed policy improves navigation
-success while substantially increasing valid depth over fixed, random-fixed, and
-non-differentiable camera baselines.
+success while reducing the fraction of episodes that terminate far from the
+goal.
 
 ## Figure 4 | The learned camera policy implements scene-specific near-slit sensing.
 
-**a,** Near-slit camera-parameter fingerprint for the final policy. **b,**
-Exposure-gain response plane, where marker area scales with power and the grey
-cross denotes the nominal camera setting. **c,** Near-slit degradation proxy
-encountered by the final policy. **d,** Exposure and gain profiles as a function
-of local distance to the wall; grey shading denotes the near-slit window. **e,**
-Median successful trajectories with 10--90% episode envelopes. Low-reflectance
-dark-material scenes keep exposure/gain high near the wall, whereas glare
-suppresses both parameters.
+**a,** Exposure-gain response plane, where marker area scales with power and
+the grey cross denotes the nominal camera setting. **b,** Exposure and gain
+profiles as a function of local distance to the wall; grey shading denotes the
+near-slit window. **c,** Median successful trajectories with 10--90% episode
+envelopes. Low-reflectance dark-material scenes keep exposure/gain high near
+the wall, whereas glare suppresses both parameters.
 
 ## Figure 5 | Camera control changes what the policy observes near the slit.
 
@@ -60,9 +57,6 @@ three-subfigure layout.
 
 ## Figure 6 | Camera relabeling and flight adaptation are complementary.
 
-**a,** Glare-dark camera separation is measured in the relabeled teacher data
-and in online closed-loop rollouts for the pretrained, DAgger-relabelled and
-final policies. **b,** The separation is mainly carried by exposure and gain:
-low-reflectance dark-material scenes require higher values than glare. **c,**
-Camera semantics alone is insufficient for flight; final performance requires
-combining DAgger camera relabeling with flight-only adaptation.
+Glare-dark camera separation is measured in the relabeled teacher data and in
+online closed-loop rollouts for the pretrained, DAgger-relabelled and final
+policies.
