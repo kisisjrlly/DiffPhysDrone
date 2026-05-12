@@ -1,8 +1,11 @@
+% latexmk -pdf -interaction=nonstopmode -halt-on-error 'Paper_diff_depth_journal.tex
 \documentclass[lettersize,journal]{IEEEtran}
 \usepackage{amsmath,amsfonts,amssymb}
 \usepackage{array}
 \usepackage{booktabs}
-\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[caption=false,font=footnotesize,labelfont=sf,textfont=sf]{subfig}
 \usepackage{graphicx}
 \usepackage{stfloats}
 \usepackage{textcomp}
@@ -19,29 +22,26 @@
 \maketitle
 
 \begin{abstract}
-Depth images are often treated as passive geometric measurements in visual
-navigation. Active stereo depth cameras violate this assumption: projector
-power, exposure, and gain change the observation that a controller will receive
-on the next step. This coupling is especially consequential near narrow
-apertures, where a small loss of depth support can remove the very geometry
-needed for collision avoidance. We study this problem in a controlled
-quadrotor slit-navigation benchmark with three localized sensing regimes:
-back-light glare through the opening, specular side-wall material that can
-produce unstable or false depth, and low-reflectance material that weakens
-active return. We introduce a split-stem active-depth policy in which the
-flight branch remains adaptable while the camera branch, including its visual
-stem, is fixed during final flight adaptation. This design prevents flight
-optimization from moving the feature basis used by the learned camera
-controller. The training pipeline combines differentiable camera-teacher
-relabeling, supervised camera pretraining, DAgger-style online relabeling, and
-flight-only adaptation. In held-out closed-loop evaluation over 900 episodes,
-the final policy achieves 0.751 success, 0.249 collision, 0.975 depth fill, and
-0.550 terminal distance, improving over fixed, random-fixed,
-non-differentiable learned-camera, and blind baselines. Mechanistic analyses
-show that the policy preserves scene-specific near-slit camera behavior:
-glare suppresses exposure and gain, while low-reflectance material raises
-them. These results support the view that active depth control can improve
-navigation when sensing semantics are kept stable during policy adaptation.
+Differentiable simulation has made it possible to backpropagate task losses
+through dynamics, planning, and control, but the perception stage is still
+often treated as a non-differentiable boundary. As a result, gradient flow
+stops at the sensor output and the agent cannot directly optimize how it
+should sense the scene. We address this limitation with a differentiable
+active depth perception framework for quadrotor slit navigation, where the
+active depth sensor itself is modeled as part of the computational graph.
+Projector power, exposure, and gain become trainable variables that shape the
+observed depth map, allowing navigation loss to flow backward through sensing
+and control to the sensor parameters. The resulting closed loop does not only
+learn how to fly through a narrow aperture, but also how to configure the
+camera to preserve task-relevant geometry under glare, specular reflection,
+and low-reflectance degradation. To stabilize this learning process, we use a
+split-stem policy that keeps camera semantics fixed during final flight
+adaptation while still allowing the flight branch to improve. In held-out
+closed-loop evaluation, the final policy achieves 0.751 success, 0.249
+collision, 0.975 depth fill, and 0.550 terminal distance, improving over
+fixed, random-fixed, non-differentiable learned-camera, and blind baselines.
+These results show that active depth sensing can complete the differentiable
+learning loop for embodied UAV navigation.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -50,38 +50,62 @@ perception, quadrotor navigation
 \end{IEEEkeywords}
 
 \section{Introduction}
-Active depth sensing is a closed-loop problem: the policy does not merely
-consume depth, it chooses the camera settings that determine what depth will be
-observed next. For active stereo and structured-light sensors, projector power,
-exposure, and gain modify not only brightness but the validity of the geometric
-cue itself. This coupling matters most near narrow apertures, where a small
-loss of usable depth can erase the very boundary needed for collision
-avoidance.
+Differentiable robotics has recently expanded from dynamics and control into
+full simulation pipelines. Differentiable simulators now provide gradients
+through physical evolution, enabling robot policies to be trained with
+analytical feedback rather than pure trial-and-error search
+\cite{newburyReviewDifferentiableSimulators2024,zhangDiffAeroGPUAcceleratedDifferentiable2025,zhangLearningVisionbasedAgile2025,heegLearningQuadrotorControl2025a}. In parallel,
+camera simulation has begun to support inverse rendering and embodied AI with
+explicit optical modeling and calibration-aware rendering
+\cite{chenDiffPhysCamDifferentiablePhysicsBased2025b}. These advances have
+made the perception-to-control pipeline increasingly differentiable, but a key
+gap remains: the sensing stage itself is still often optimized as a fixed
+black box rather than as a trainable physical process.
 
-We study this coupling in a minimal slit-navigation benchmark. A quadrotor
-must pass through a single wall opening under three localized sensing regimes
-that keep the geometry fixed while perturbing the depth observation in
-physically distinct ways. Glare back-lights the opening, specular side-wall
-material produces false or unstable depth, and low-reflectance material
-starves the sensor of return. Because the navigation geometry is shared,
-differences in performance can be traced to active sensing rather than to map
-complexity or long-horizon planning.
+This gap matters in vision-based UAV navigation, where the quality of a depth
+observation directly depends on the sensor configuration. Projector power,
+exposure, and gain are not merely image-style knobs. They determine whether the
+geometry needed for obstacle avoidance is visible at all. The issue becomes
+critical near narrow apertures, where glare, specular reflections, or weak
+return can erase the local depth support needed by the controller. In such
+cases, the policy may know that a maneuver failed, but it cannot propagate
+that failure back to the sensing parameters that caused it.
 
-A second failure mode appears when the camera and flight controllers share a
-visual stem. Final flight optimization can improve the trajectory while moving
-the feature basis used by the camera head, so the semantics of the learned
-camera policy drift. We avoid that failure mode by duplicating the visual stem
-and freezing the camera branch during final flight adaptation, while leaving
-the flight branch trainable on the learned-camera observation distribution.
+Prior work has already shown that perception and control should not be
+optimized independently. Perception-aware flight, trajectory planning, and
+speed adaptation improve navigation by accounting for the sensing field of
+view or the state-estimation regime
+\cite{florenceIntegratedPerceptionControl2020,songLearningPerceptionAwareAgile2023,tordesillasDeepPANTHERLearningBasedPerceptionAware2023,zhaoLearningSpeedAdaptation2024a,huSeeingPixelMotion2025}. However,
+these methods still rely on fixed sensing models, hand-designed sensing rules,
+or teacher-student distillation. They do not provide a differentiable path
+from task loss to the physical parameters of the sensor itself.
 
-Our pipeline combines differentiable camera-teacher relabeling, camera
-pretraining, DAgger-style online relabeling, and split-stem flight adaptation.
-In held-out evaluation, the final policy improves success and collision over
-fixed, random-fixed, non-differentiable, and blind baselines, while also
-producing scene-specific camera responses near the slit. The main claim is
-therefore not simply that active sensing raises fill, but that active sensing
-improves navigation when camera semantics are stabilized separately from flight
-optimization.
+In this paper, we close that loop with a differentiable active depth
+perception framework for slit navigation. The key idea is to model the active
+depth sensor as a differentiable module inside the sim-to-real training
+pipeline, so that the navigation loss can flow backward through sensing,
+simulation, and control to the sensor parameters. This enables the agent to
+learn not only how to fly through a narrow aperture, but also how to configure
+the camera so that the aperture geometry remains observable under degraded
+visual conditions. To keep this end-to-end learning stable, we further use a
+split-stem policy and a DAgger-style relabeling stage that separate camera
+semantics from final flight adaptation \cite{ross2011dagger}.
+
+The main contributions of this paper are as follows.
+\begin{itemize}
+    \item We propose a differentiable active depth perception model that makes
+    projector power, exposure, and gain part of the computational graph.
+    \item We integrate that model into a closed-loop UAV learning pipeline so
+    that task gradients can propagate through perception, simulation, and
+    control.
+    \item We introduce a split-stem adaptation strategy and teacher relabeling
+    procedure to stabilize the learned camera semantics during flight
+    optimization.
+    \item We validate the framework on a slit-navigation benchmark with glare,
+    specular, and low-reflectance depth degradation regimes, showing improved
+    closed-loop performance over fixed, random-fixed, non-differentiable, and
+    blind baselines.
+\end{itemize}
 
 \begin{figure*}[!t]
 \centering
@@ -100,234 +124,393 @@ adaptation freezes the camera branch while updating the flight branch.}
 \end{figure*}
 
 \section{Related Work}
-Active perception frames sensing as an action rather than a passive
-measurement. Early formulations argued that a robot should control its sensors
-to improve the information available for subsequent decisions
-\cite{bajcsy1988active,aloimonos1988active}. Later perspectives preserve the
-same central idea: perception and action cannot always be optimized
-independently when the action changes the measurement process
-\cite{revisitingactiveperception}. Our work instantiates this principle in the
-narrow but practical case of active depth sensing. The action is not only the
-vehicle motion, but also the camera setting that determines the next depth
-observation.
+\subsection{Differentiable Simulation and Control}
+Differentiable simulation has become a core mechanism for closing the gap
+between physical dynamics and gradient-based policy learning
+\cite{newburyReviewDifferentiableSimulators2024}. In aerial robotics, this has
+enabled policies to be optimized directly through physics models, from
+diffusion-like differentiable control pipelines to vision-based agile flight
+\cite{zhangDiffAeroGPUAcceleratedDifferentiable2025,zhangLearningVisionbasedAgile2025,heegLearningQuadrotorControl2025a,romeroActorCriticModelPredictive2025}.
+These studies establish the key premise that task loss can be propagated
+through dynamics and control, so that the learned policy is not tuned by
+heuristic reward shaping alone. However, their differentiability usually ends
+at the observation interface: the simulator can backpropagate through motion,
+but the sensing process is still treated as an input generator rather than as a
+trainable physical module.
 
-Depth-based aerial navigation commonly treats depth as a geometric input to a
-controller or planner. This abstraction is reasonable when depth quality is
-stable, but it hides the sensor-parameter decisions that are available on
-active cameras. Automatic exposure or fixed-register operation can be adequate
-in benign scenes, yet neither is explicitly optimized for the local geometric
-cue that matters for a flight task. In a slit-navigation task, the relevant
-quantity is not global image brightness. It is whether the aperture boundary,
-adjacent wall, and through-slit return remain reliable enough for the controller
-to make a collision-free decision.
+\subsection{Differentiable Rendering and Camera Simulation}
+The second line of work concerns photorealistic simulation and inverse
+rendering. Procedural renderers and robotic simulators such as BlenderProc2,
+VISTA 2.0, Habitat 3.0, and Chrono::Sensor have made it easier to synthesize
+large-scale visual data for embodied AI
+\cite{denningerBlenderProc22023,aminiVISTA2022,puigHabitat32023,elmquistSensorSimulation2021}.
+In parallel, camera-simulation studies have examined how sensor parameters,
+optical artifacts, and calibration affect downstream perception
+\cite{blasinskiOptimizingImage2018,liuCameraParameters2020,lyuValidationImageSystems2022,carlsonModelingCameraEffects2018,carlsonSensorTransfer2019}.
+DiffPhysCam extends this direction by making the camera itself differentiable
+and physically calibrated, so that optical effects such as defocus blur,
+exposure variation, and other sensor artifacts can be optimized together with
+the rest of the pipeline \cite{chenDiffPhysCamDifferentiablePhysicsBased2025b}.
 
-The training procedure also relates to imitation learning under distribution
-shift. DAgger reduces compounding error by labeling states visited by the
-learner rather than only states from an initial expert distribution
-\cite{ross2011dagger}. We use the same principle for the camera controller. A
-differentiable camera teacher labels the states encountered by the current
-learned-camera policy, and the camera head is then trained on that relabeled
-online distribution. The distinctive issue in our setting is not only whether
-the camera head can fit teacher labels, but whether those camera semantics
-remain stable while the flight policy is later adapted.
+Recent differentiable-rendering systems further improve the fidelity of
+simulation-based learning. NeRF, Instant-NGP, Nerfstudio, Gaussian Splatting,
+SuGaR, and NVDiffRecMC have all advanced the reconstruction and synthesis of
+3D scenes from images \cite{mildenhallNeRF2020,mullerInstantNGP2022,tancikNerfstudio2023,kerblGaussianSplatting2023,guedonSuGaR2024,hasselgrenNVDiffRecMC2022}.
+At the same time, several works model camera optics explicitly within the
+rendering loop, including Neural Camera Simulators, depth-of-field-aware
+differentiable rendering, and NeRF variants with editable camera settings or
+thin-lens effects \cite{ouyangNeuralCameraSimulators2021,pidhorskyiDepthOfField2022,sunCaSENeRF2023,kimLensNeRF2024,wuDoFNeRF2022,wangNeRFocus2022}.
+These methods are highly relevant to our setting, but they mainly target
+photorealism or inverse rendering. By contrast, our objective is task-driven
+active sensing: the camera settings are optimized because they change the
+navigation outcome, not only because they improve image realism.
 
-\section{Method}
-\subsection{Task Formulation}
-We write scalars in italic, vectors in bold, and descriptive subscripts in
-upright type. The system state at step $t$ consists of the observed depth image
-$D_t^{\mathrm{obs}}$, the low-dimensional flight state $\mathbf{s}_t$, the
-camera state $\mathbf{c}_t = [P_t,E_t,G_t]^\top$, and recurrent hidden state
-variables. The camera channels are normalized to $[0,1]$ and correspond to
-projector power $P_t$, exposure $E_t$, and gain $G_t$.
+\subsection{Perception-Aware and Active UAV Navigation}
+Vision-based UAV navigation has long recognized that perception and control
+must be coupled. Classical active-perception work established sensing as an
+action that should be chosen to improve future decisions
+\cite{bajcsy1988active,aloimonos1988active,revisitingactiveperception}.
+Modern UAV systems follow the same principle in more task-specific forms,
+including integrated perception-control, perception-aware agile flight,
+perception-aware trajectory planning, and speed adaptation in clutter
+\cite{florenceIntegratedPerceptionControl2020,songLearningPerceptionAwareAgile2023,tordesillasDeepPANTHERLearningBasedPerceptionAware2023,zhaoLearningSpeedAdaptation2024a,huSeeingPixelMotion2025}.
+Agile-flight platforms and benchmark systems further show how tightly coupled
+perception-action design improves high-speed flight
+\cite{loquercioDeepDroneRacing2018,loquercioLearningHighSpeed2021,foehnAgilicious2022,kaufmannChampionLevelDroneRacing2023}.
+These works motivate the present paper, but they still assume a fixed sensing
+model or a fixed observation encoder. Our contribution is to make the sensor
+parameters themselves differentiable and to use that gradient signal to close
+the loop between flight, sensing, and task loss.
 
-The policy is a coupled controller
+\subsection{Imitation Learning and Closed-Loop Relabeling}
+The training procedure is also related to imitation learning under covariate
+shift. DAgger reduces compounding error by relabeling the states encountered by
+the learner rather than restricting supervision to expert trajectories
+\cite{ross2011dagger}. We reuse that idea at the sensor level: a differentiable
+camera teacher generates relabeling targets for the states visited by the
+current policy, and the learned camera branch is then stabilized before flight
+adaptation. This separation is important because camera semantics and flight
+control are coupled but not identical objectives. The relabeling stage keeps
+the perception branch interpretable while the final flight-only optimization
+consumes the resulting observation distribution.
+
+\section{Method Overview}
+\noindent
+Let $\mathbf{x}_t$ be the quadrotor state, $\mathbf{c}_t=[P_t,E_t,G_t]^\top$
+the active-depth camera state, and $\rho_t\in\{\mathrm{glare},\mathrm{specular},
+\mathrm{dark}\}$ the local sensing regime. The proposed method learns a
+closed-loop map
 \begin{equation}
-    (\mathbf{u}_t, \mathbf{c}_{t+1}^{\star}, \mathbf{h}_{t+1})
-    = \pi_\theta(D_t^{\mathrm{obs}}, \mathbf{s}_t, \mathbf{c}_t, \mathbf{h}_t),
+    \Pi_\theta:
+    (D_t^{\mathrm{obs}},\mathbf{s}_t,\mathbf{c}_t,\mathbf{h}_t,\mathbf{q}_t)
+    \mapsto
+    (\mathbf{u}_t,\mathbf{c}_{t+1}^{\star},\mathbf{h}_{t+1},\mathbf{q}_{t+1}),
 \end{equation}
-where $\mathbf{u}_t$ is the flight command, $\mathbf{c}_{t+1}^{\star}$ is the
-target camera command, and $\mathbf{h}_t$ is the recurrent hidden state. The
-applied camera state obeys a first-order update
-\begin{equation}
-    \mathbf{c}_{t+1} = \alpha \mathbf{c}_t + (1-\alpha)\mathbf{c}_{t+1}^{\star},
-\end{equation}
-with $\alpha \in (0,1)$ capturing camera latency. This matters because the
-camera choice at one step changes the observation distribution available to the
-next step.
+where $\mathbf{u}_t$ is a local acceleration command and
+$\mathbf{c}_{t+1}^{\star}$ is an absolute camera target. The main technical
+choice is to represent the sensor as a differentiable module
+$\mathcal{S}_{\phi}$ and to train the camera branch through teacher
+optimization and online relabeling, instead of relying on sparse collision
+gradients alone.
 
-The benchmark is intentionally minimal. In local scene coordinates, the vehicle
-starts before a single wall and aims for a goal behind it. The slit center is
-randomized laterally, and the wall is randomly rotated in the world frame so
-that the policy must use local depth and state cues rather than memorize a
-fixed world direction. The geometry is fixed; only the sensing regime changes.
-
-\subsection{Differentiable Active-Depth Sensor}
-The simulator first renders raw geometric depth $D_t^{\mathrm{raw}}$ from the
-current pose. Raw depth depends only on scene geometry and pose, not on camera
-parameters. A differentiable active-depth module then maps
-$D_t^{\mathrm{raw}}$ and $\mathbf{c}_t$ to the observed depth
-$D_t^{\mathrm{obs}}$, a validity mask $M_t$, and a set of quality proxies.
-This separation is central: camera control cannot alter geometry, but it can
-alter whether geometry is observed as usable depth.
-
-The camera model is intentionally compact. Normalized exposure $E_t$ is mapped
-to an effective integration time
-\begin{equation}
-    t_{\mathrm{eff}} = \mathrm{clip}(t_{\min} + t_{\mathrm{span}} E_t,\,
-    t_{\mathrm{eff,min}}, t_{\mathrm{eff,max}}),
-\end{equation}
-and gain $G_t$ is mapped to a smooth amplification scale
-\begin{equation}
-    G_{\mathrm{iso}} = G_{\mathrm{base}} + G_{\mathrm{scale}}
-    \frac{(G_t+\epsilon)^\gamma-\epsilon^\gamma}{(1+\epsilon)^\gamma-\epsilon^\gamma}.
-\end{equation}
-The constants above define the admissible operating range. Projector power and
-integration time increase the active return,
-\begin{equation}
-    S_{\mathrm{act}} = \frac{k_a P_t t_{\mathrm{eff}}}{(D_t^{\mathrm{raw}})^2 + c_d},
-\end{equation}
-while exposure and gain increase the passive amplification term,
-\begin{equation}
-    S_{\mathrm{pass}} = k_p t_{\mathrm{eff}}\sqrt{G_{\mathrm{iso}}}.
-\end{equation}
-The model then combines motion blur, gain-dependent noise, range attenuation,
-local depth edges, and scene masks into a continuous quality proxy, and uses a
-sigmoid validity map to produce differentiable valid-depth support. The exact
-physical constants are not meant to reproduce a specific camera firmware; they
-are chosen to preserve the causal relation between camera parameters and depth
-reliability.
-
-\subsection{Scene-Dependent Degradation Regimes}
-The three sensing regimes are localized around the slit so that geometry is
-shared while sensing difficulty changes. This isolates the effect of camera
-control from the effect of path geometry.
-\begin{itemize}
-    \item \textbf{Glare} models opening-centered back-light or infrared
-    contamination. This is a saturation problem near the aperture boundary:
-    excessive exposure or gain washes out the contrast that identifies the
-    slit, even when projector power remains high.
-    \item \textbf{Specular} models reflective side-wall material adjacent to
-    the slit. This is a local reflection problem: high active power or
-    unfavorable settings can produce holes, unstable edges, or false near depth
-    around the reflective patches.
-    \item \textbf{Dark} models low-reflectance or infrared-absorbing side-wall
-    material. This is a return-starvation problem: higher exposure and gain can
-    recover weak return, but they also increase blur and noise costs.
-\end{itemize}
-The regimes therefore require different camera behavior. A single nominal
-camera setting is not expected to be uniformly optimal.
-
-\subsection{Depth Encoding and Split-Stem Policy}
-The policy consumes a two-channel depth encoding rather than raw metric depth
-alone. Let $\tilde D_t$ denote the observed depth after invalid pixels are set
-to zero and valid pixels are clamped to the sensor range. The encoding is
-designed to preserve both near-field collision cues and through-slit
-background cues:
+\subsection{Closed-Loop Differentiable System}
+The rollout recurrence is
 \begin{align}
-\phi_t^{\mathrm{near}} &=
-\mathrm{Pool}_{\max}\left(
-\mathcal{N}\left(\frac{1}{\tilde D_t}\right) \odot M_t
-\right), \\
-\phi_t^{\mathrm{far}} &=
-\mathrm{Pool}_{\mathrm{avg}}\left(
-\mathcal{N}(\tilde D_t) \odot M_t
-\right),
+    D_t^{\mathrm{raw}} &=
+    \mathcal{R}(\mathbf{x}_t,\mathcal{M}), \label{eq:raw_depth}\\
+    (D_t^{\mathrm{obs}},Q_t,M_t) &=
+    \mathcal{S}_{\phi}(D_t^{\mathrm{raw}},\mathbf{c}_t,\rho_t,\mathbf{x}_t),
+    \label{eq:sensor}\\
+    \mathbf{s}_t &=
+    \psi_{\mathrm{flight}}(\mathbf{x}_t,\mathbf{x}_{\mathrm{goal}},
+    \mathbf{c}_t), \label{eq:state}\\
+    \mathbf{m}_t &=
+    \psi_{\mathrm{cam}}(\mathbf{x}_t,\mathbf{c}_t), \label{eq:cam_motion}\\
+    (\mathbf{u}_t,\mathbf{c}_{t+1}^{\star},\mathbf{h}_{t+1},\mathbf{q}_{t+1})
+    &= \Pi_\theta(D_t^{\mathrm{obs}},\mathbf{s}_t,\mathbf{c}_t,
+    \mathbf{m}_t,\mathbf{h}_t,\mathbf{q}_t), \label{eq:policy}\\
+    \mathbf{c}_{t+1}
+    &= \alpha\mathbf{c}_t+(1-\alpha)\mathbf{c}_{t+1}^{\star},
+    \quad \alpha=0.7, \label{eq:camera_ema}\\
+    \mathbf{x}_{t+1}
+    &= f_{\mathrm{dyn}}(\mathbf{x}_t,\mathbf{u}_t,\Delta t_t).
+    \label{eq:dynamics}
 \end{align}
-where $M_t$ is the validity mask and $\mathcal{N}(\cdot)$ maps values into
-$[0,1]$. The near channel emphasizes close obstacles and aperture boundaries,
-while the far channel preserves the through-slit and back-wall cues that signal
-free space. This decomposition is necessary because a single global depth
-summary is insufficient near the slit: the controller must reason about both
-edge proximity and aperture continuity.
+Here $\mathcal{R}$ is the geometric renderer and $\mathcal{M}$ is the slit
+scene. The state encoder $\psi_{\mathrm{flight}}$ includes goal-relative local
+motion and safety margin; $\psi_{\mathrm{cam}}$ includes current camera state,
+local velocity, and attitude but excludes the goal vector. This prevents the
+camera controller from using a privileged geometric schedule.
 
-The split-stem architecture then separates the representation used by flight
-and camera control. The flight branch uses a trainable visual stem and a
-recurrent controller to produce the acceleration command. The camera branch
-uses a copied stem and camera-specific recurrent state to produce the next
-camera target. During final flight adaptation, the camera branch and its copied
-stem are frozen. The forward pass still uses the learned camera, but the flight
-branch is the only part updated by gradient descent. This prevents the flight
-optimizer from rewriting the feature basis that the camera policy depends on.
-
-\subsection{Camera Teacher, Relabeling, and Flight Adaptation}
-Direct end-to-end optimization of flight and camera variables can entangle two
-distinct objectives: the camera must produce a useful observation, while the
-flight controller must act on that observation. A camera setting that lowers a
-training loss on one rollout may still destroy the semantics of the learned
-camera policy or shift the observation distribution away from what the flight
-branch expects. We therefore split the training into three stages.
-
-First, a differentiable camera teacher generates supervision targets for the
-visited states by optimizing a depth-health objective. The teacher favors high
-fill, low blur, controlled noise, smooth transitions, and nominal recovery in
-healthy regions. Second, the camera head is pretrained on rollout data.
-Third, the current learned-camera policy is rolled out in closed loop, those
-online states are relabeled again by the teacher, and the camera head is
-updated on the relabeled distribution. This DAgger-style step is essential
-because the camera semantics learned from fixed-camera rollouts are not always
-stable when the observation distribution shifts.
-
-Formally, let $\bar{\mathbf{c}}_{t+1}$ denote the teacher label for the next
-camera command at step $t$. Camera pretraining and relabeling minimize a
-supervised regression loss of the form
+For a horizon $T$, the differentiable training objective can be written as
 \begin{equation}
-    \mathcal{L}_{\mathrm{sup}} =
-    \bigl\|\mathbf{c}_{t+1}^{\star} - \bar{\mathbf{c}}_{t+1}\bigr\|_2^2,
+    \mathcal{J}(\theta)=
+    \sum_{t=0}^{T-1}
+    \ell_{\mathrm{nav}}(\mathbf{x}_t,\mathbf{u}_t)
+    +\ell_{\mathrm{sens}}(M_t,\mathbf{c}_t,\mathbf{x}_t).
+    \label{eq:full_objective}
 \end{equation}
-while the final flight-only stage minimizes $\mathcal{L}_{\mathrm{flight}}$
-with the camera branch frozen. This is not a cosmetic choice. It explicitly
-separates semantic learning of the camera from policy adaptation of the flight
-controller. Without this separation, the flight optimizer can improve
-short-horizon navigation while silently changing the meaning of the learned
-camera outputs.
+The camera receives task information only if
+\begin{equation}
+    \frac{\partial \mathcal{J}}{\partial \mathbf{c}_t}
+    =
+    \frac{\partial \mathcal{J}}{\partial D_t^{\mathrm{obs}}}
+    \frac{\partial D_t^{\mathrm{obs}}}{\partial \mathbf{c}_t}
+    +
+    \frac{\partial \mathcal{J}}{\partial \mathbf{x}_{t+1}}
+    \frac{\partial \mathbf{x}_{t+1}}{\partial \mathbf{u}_t}
+    \frac{\partial \mathbf{u}_t}{\partial D_t^{\mathrm{obs}}}
+    \frac{\partial D_t^{\mathrm{obs}}}{\partial \mathbf{c}_t}
+    \label{eq:camera_gradient}
+\end{equation}
+is nonzero. Equation~\eqref{eq:camera_gradient} is the motivation for making
+active perception differentiable.
 
-\subsection{Optimization Objectives}
-The flight objective combines velocity tracking, smoothness, and collision
-avoidance terms. Let $\mathcal{L}_v$ denote the velocity-tracking loss,
-$\mathcal{L}_{\mathrm{acc}}$ the acceleration penalty,
-$\mathcal{L}_{\mathrm{jerk}}$ the jerk penalty, and
-$\mathcal{L}_{\mathrm{collide}}$ the collision-avoidance loss. With
-non-negative weights $\lambda_v$, $\lambda_a$, $\lambda_j$, and $\lambda_c$,
+\subsection{Differentiable Active-Depth Model}
+The sensor maps camera registers to a soft validity field. Exposure and gain
+are
+\begin{align}
+    \tau(E_t) &=
+    \mathrm{clip}(t_{\min}+t_{\mathrm{span}}E_t,t_{\mathrm{lo}},t_{\mathrm{hi}}),
+    \label{eq:exp_time}\\
+    \Gamma(G_t) &=
+    \Gamma_0+\Gamma_s
+    \frac{(G_t+\epsilon)^\gamma-\epsilon^\gamma}
+    {(1+\epsilon)^\gamma-\epsilon^\gamma}.
+    \label{eq:iso_gain}
+\end{align}
+Given $Z=D_t^{\mathrm{raw}}$, the active and passive returns are
+\begin{align}
+    S_{\mathrm{act}}(Z,\mathbf{c}_t)
+    &=\frac{k_aP_t\tau(E_t)}{Z^2+c_d}, \\
+    S_{\mathrm{pass}}(\mathbf{c}_t)
+    &=k_p\tau(E_t)\sqrt{\Gamma(G_t)}.
+\end{align}
+Let $B_t$ denote range, edge, ambient, blur, and noise penalties, and let
+$A_{\rho_t}$ denote the regime-specific artifact map. The differentiable
+quality and validity maps are
+\begin{align}
+    Q_t &=
+    \mathrm{clip}\Bigl(
+    \sigma\bigl(a_s(S_{\mathrm{act}}+S_{\mathrm{pass}})-B_t\bigr)
+    -A_{\rho_t},0,1\Bigr), \label{eq:quality}\\
+    M_t &= \sigma\left(\frac{Q_t-\tau_q}{\sigma_q}\right), \label{eq:validity}\\
+    D_t^{\mathrm{obs}} &=
+    Z\odot\left(\mathrm{sg}(\mathbb{I}[M_t>0.5]-M_t)+M_t\right).
+    \label{eq:st_depth}
+\end{align}
+The straight-through term in \eqref{eq:st_depth} gives hard invalid pixels in
+the forward pass and soft gradients in the backward pass.
+
+The regime artifact $A_{\rho_t}$ is localized around the slit:
 \begin{equation}
-    \mathcal{L}_{\mathrm{flight}} =
-    \lambda_v \mathcal{L}_v
-    + \lambda_a \mathcal{L}_{\mathrm{acc}}
-    + \lambda_j \mathcal{L}_{\mathrm{jerk}}
-    + \lambda_c \mathcal{L}_{\mathrm{collide}} .
+    A_{\rho_t}=
+    \begin{cases}
+    A_{\mathrm{glare}}(E_t,G_t,P_t), & \rho_t=\mathrm{glare},\\
+    A_{\mathrm{spec}}(P_t,E_t,G_t), & \rho_t=\mathrm{specular},\\
+    A_{\mathrm{dark}}(P_t,E_t,G_t), & \rho_t=\mathrm{dark}.
+    \end{cases}
+    \label{eq:regimes}
 \end{equation}
-The camera-teacher objective balances depth health and camera operating costs.
-With non-negative weights $\lambda_f$, $\lambda_b$, $\lambda_n$, $\lambda_s$,
-and $\lambda_m$,
+Glare penalizes high exposure/gain near the aperture, specular material
+penalizes high active return near side-wall patches, and dark material rewards
+exposure/gain recovery while retaining blur/noise costs.
+
+\subsection{Split-Stem Policy}
+The observed depth is encoded by two complementary channels:
+\begin{align}
+    \phi_t^{\mathrm{near}} &=
+    \mathrm{Pool}_{\max}
+    \left(\mathcal{N}(1/\tilde D_t)\odot M_t\right),\\
+    \phi_t^{\mathrm{far}} &=
+    \mathrm{Pool}_{\mathrm{avg}}
+    \left(\mathcal{N}(\tilde D_t)\odot M_t\right),\\
+    \Phi_t &= [\phi_t^{\mathrm{near}},\phi_t^{\mathrm{far}}].
+    \label{eq:depth_encoding}
+\end{align}
+The flight and camera branches use separate visual stems:
+\begin{align}
+    \mathbf{z}_t^f &= F_f(\Phi_t),&
+    \mathbf{z}_t^c &= F_c(\Phi_t),\\
+    \boldsymbol{\xi}_t &= [\mathbf{z}_t^f,W_s\mathbf{s}_t],&
+    \mathbf{g}_t &= \sigma(W_g\boldsymbol{\xi}_t),\\
+    \mathbf{r}_t &=
+    \varphi\!\left(\mathbf{g}_t\odot\mathbf{z}_t^f+
+    (1-\mathbf{g}_t)\odot W_s\mathbf{s}_t\right),\\
+    \mathbf{h}_{t+1} &= \mathrm{GRU}_f(\mathbf{r}_t,\mathbf{h}_t),&
+    \mathbf{u}_t &= W_u\varphi(\mathbf{h}_{t+1}),\\
+    \mathbf{a}_t^c &=
+    [A_c(\mathbf{z}_t^c),W_c\mathbf{c}_t,W_m\mathbf{m}_t],\\
+    \mathbf{q}_{t+1} &= \mathrm{GRU}_c(\mathbf{a}_t^c,\mathbf{q}_t),\\
+    \mathbf{c}_{t+1}^{\star} &= \sigma(W_o\varphi(\mathbf{q}_{t+1})).
+    \label{eq:split_stem}
+\end{align}
+The camera stem $F_c$ is initialized from $F_f$ but has independent parameters.
+During flight-only adaptation, all camera-side parameters are frozen:
 \begin{equation}
-    \mathcal{L}_{\mathrm{cam}} =
-    \lambda_f \mathcal{L}_{\mathrm{fill}}
-    + \lambda_b \mathcal{L}_{\mathrm{blur}}
-    + \lambda_n \mathcal{L}_{\mathrm{noise}}
-    + \lambda_s \mathcal{L}_{\mathrm{smooth}}
-    + \lambda_m \mathcal{L}_{\mathrm{nominal}} .
+\begin{aligned}
+    \Theta_{\mathrm{cam}}=\{&
+    F_c,A_c,W_c,W_m,\mathrm{GRU}_c,W_o,\\
+    &\mathrm{camera\ normalization\ layers}\}.
+    \label{eq:freeze_set}
+\end{aligned}
 \end{equation}
-The fill term penalizes insufficient valid depth support, blur scales with
-vehicle speed and exposure time, noise scales with gain, and the nominal term
-encourages recovery toward ordinary camera settings when the depth image is
-already healthy. These terms are not intended to reproduce a particular camera
-firmware. They provide a task-level differentiable approximation of the
-tradeoffs that make active depth sensing useful for navigation.
+
+\subsection{Teacher Optimization}
+For each visited state, the camera teacher solves a local differentiable
+optimization problem. Let $\bar{\mathbf{c}}=\sigma(\boldsymbol{\eta})$ be the
+teacher candidate. Define patch fill as a lower-tail average over pooled
+validity:
+\begin{align}
+    \mathbf{p}(\bar{\mathbf{c}})
+    &=\mathrm{vec}\!\left(
+    \mathrm{Pool}_{6\times8}(M(\bar{\mathbf{c}}))\right),\\
+    r_{\mathrm{fill}}(\bar{\mathbf{c}})
+    &=\frac{1}{K}\sum_{i\in\mathrm{BottomK}(\mathbf{p},K)}p_i .
+    \label{eq:fill_cvar}
+\end{align}
+The teacher objective is
+\begin{equation}
+\begin{aligned}
+    \bar{\mathbf{c}}_{t+1}
+    &=\arg\min_{\bar{\mathbf{c}}\in[0,1]^3}
+    \mathcal{L}_{\mathrm{teach}}(\bar{\mathbf{c}}),\\
+    \mathcal{L}_{\mathrm{teach}}
+    =&\lambda_f[r_{\min}-r_{\mathrm{fill}}(\bar{\mathbf{c}})]_+^2
+    +\lambda_b\|v_t\tau(\bar E)\|_2^2\\
+    &+\lambda_n\bar G^2
+    +\lambda_s\|\bar{\mathbf{c}}-\mathbf{c}_t\|_2^2\\
+    &+\lambda_m\omega_t
+    \|\bar{\mathbf{c}}-\mathbf{c}_{\mathrm{nom}}\|_2^2 .
+    \label{eq:teacher_loss}
+\end{aligned}
+\end{equation}
+In the final DAgger relabeling stage, \eqref{eq:teacher_loss} is optimized for
+120 Adam steps with learning rate $0.08$; teacher camera EMA is disabled.
+
+\begin{algorithm}[t]
+\caption{Camera Teacher Dataset and Head Pretraining}
+\label{alg:teacher_pretrain}
+\begin{algorithmic}[1]
+\Require frozen policy $\Pi_{\theta_0}$, scenarios $\mathcal{R}$,
+rollouts $N$, horizon $T$
+\Ensure camera-pretrained checkpoint $\theta_{\mathrm{cam}}$
+\State $\mathcal{D}_{\mathrm{cam}}\gets\emptyset$
+\For{$\rho\in\mathcal{R}$}
+  \For{$n=1,\ldots,N$}
+    \State reset simulator with regime $\rho$
+    \State initialize $\mathbf{c}_0=[0.5,0.5,0.5]^\top$
+    \For{$t=0,\ldots,T-1$}
+      \State render $D_t^{\mathrm{obs}}$ using \eqref{eq:sensor}
+      \State compute $\mathbf{s}_t,\mathbf{m}_t$ by
+      \eqref{eq:state}--\eqref{eq:cam_motion}
+      \State $(\mathbf{u}_t,\mathbf{c}_{t+1}^{\star})\gets
+      \Pi_{\theta_0}(D_t^{\mathrm{obs}},\mathbf{s}_t,\mathbf{c}_t,\mathbf{m}_t)$
+      \State $\bar{\mathbf{c}}_{t+1}\gets
+      \arg\min \mathcal{L}_{\mathrm{teach}}$ by \eqref{eq:teacher_loss}
+      \State append
+      $(D_t^{\mathrm{obs}},\mathbf{s}_t,\mathbf{c}_t,\mathbf{m}_t,
+      \bar{\mathbf{c}}_{t+1},\rho)$ to $\mathcal{D}_{\mathrm{cam}}$
+      \State step dynamics with $\mathbf{u}_t$
+    \EndFor
+  \EndFor
+\EndFor
+\State freeze $\Theta\setminus\Theta_{\mathrm{cam}}$
+\State train $\Theta_{\mathrm{cam}}$ on $\mathcal{D}_{\mathrm{cam}}$ by
+\eqref{eq:supervised_loss}
+\State \Return best validation checkpoint $\theta_{\mathrm{cam}}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Camera Supervision and DAgger Relabeling}
+For a sequence dataset
+\begin{equation}
+    \mathcal{D}_{\mathrm{cam}}=
+    \{D^{\mathrm{obs}},\mathbf{s},\mathbf{c},\mathbf{m},
+    \bar{\mathbf{c}},\rho,x_{\mathrm{local}},r_{\mathrm{fill}}\},
+    \label{eq:dataset}
+\end{equation}
+the camera branch is trained by recurrent supervised regression:
+\begin{equation}
+\begin{aligned}
+    \mathcal{L}_{\mathrm{sup}}
+    =&\frac{1}{BT}\sum_{b,t}
+    \mathrm{SmoothL1}
+    (\mathbf{c}_{b,t+1}^{\star},\bar{\mathbf{c}}_{b,t+1})\\
+    &+\lambda_{\Delta c}
+    \|\mathbf{c}_{b,t+1}^{\star}-\mathbf{c}_{b,t}^{\star}\|_2^2 .
+    \label{eq:supervised_loss}
+\end{aligned}
+\end{equation}
+The final relabeled dataset contains 144 sequences and 11,520 labels, with
+teacher mean/std $P/E/G=0.584/0.408/0.403$ and $0.164/0.197/0.181$.
+
+\begin{algorithm}[t]
+\caption{DAgger Relabeling and Flight-Only Adaptation}
+\label{alg:dagger_flightonly}
+\begin{algorithmic}[1]
+\Require offline camera checkpoint $\theta_{\mathrm{pre}}$,
+teacher loss \eqref{eq:teacher_loss}
+\Ensure final split-stem policy $\theta^\star$
+\State $\theta\gets\theta_{\mathrm{pre}}$
+\State $\mathcal{D}_{\mathrm{dagger}}\gets\emptyset$
+\For{online learned-camera rollout}
+  \For{$t=0,\ldots,T-1$}
+    \State student predicts $\mathbf{c}_{t+1}^{\star}$ and updates
+    $\mathbf{c}_{t+1}$ by \eqref{eq:camera_ema}
+    \State teacher labels the visited state:
+    $\bar{\mathbf{c}}_{t+1}\gets\arg\min \mathcal{L}_{\mathrm{teach}}$
+    \State append online sample to $\mathcal{D}_{\mathrm{dagger}}$
+  \EndFor
+\EndFor
+\State retrain $\Theta_{\mathrm{cam}}$ on $\mathcal{D}_{\mathrm{dagger}}$
+using \eqref{eq:supervised_loss}
+\State freeze $\Theta_{\mathrm{cam}}$ and detach
+$(\mathbf{c}_{t+1}^{\star},\mathbf{q}_{t+1})$
+\State optimize $\Theta\setminus\Theta_{\mathrm{cam}}$ by
+\eqref{eq:flight_loss} under learned-camera rollouts
+\State \Return $\theta^\star$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Flight Adaptation Objective}
+The final flight-only stage optimizes
+\begin{equation}
+\begin{aligned}
+    \mathcal{L}_{\mathrm{flight}}
+    ={}&\lambda_v\mathcal{L}_v
+    +\lambda_a\mathcal{L}_{\mathrm{acc}}
+    +\lambda_j\mathcal{L}_{\mathrm{jerk}}
+    +\lambda_c\mathcal{L}_{\mathrm{collide}},\\
+    \theta^\star
+    ={}&\arg\min_{\theta\setminus\Theta_{\mathrm{cam}}}
+    \mathbb{E}_{\rho,\mathbf{x}_0}
+    \sum_{t=0}^{T-1}\mathcal{L}_{\mathrm{flight}}(t),
+    \quad \Theta_{\mathrm{cam}}\ \mathrm{frozen}.
+    \label{eq:flight_loss}
+\end{aligned}
+\end{equation}
+Thus, the camera branch defines the observation distribution, while the flight
+branch alone is updated to exploit that distribution.
 
 \section{Experimental Setup}
 \subsection{Evaluation Rationale}
-The experiments are designed to test three linked claims. First, active camera
-control should improve closed-loop navigation compared with fixed or
-task-agnostic camera settings. Second, any improvement should be accompanied by
-healthier depth observations, because the proposed mechanism is sensing rather
-than arbitrary flight regularization. Third, the learned camera response should
-be scene-specific near the slit: glare should suppress exposure and gain,
-whereas low-reflectance material should increase them.
+The experiments are organized around the central differentiability claim. If
+the proposed sensor model really closes the perception-simulation-control
+loop, then three outcomes should appear together. First, active camera control
+should improve closed-loop navigation compared with fixed or task-agnostic
+camera settings. Second, the improvement should be accompanied by healthier
+depth observations, because the mechanism is improved sensing rather than
+arbitrary flight regularization. Third, the camera response should be
+scene-specific near the slit: glare should suppress exposure and gain, whereas
+low-reflectance material should increase them.
 
 This rationale determines the organization of the evaluation. Overall success
-and collision quantify the navigation outcome. Depth fill measures whether the
-observation stream remains usable. Phase-wise camera statistics and
-matched-pose depth sequences test whether the learned behavior is consistent
-with the intended active-sensing mechanism.
+and collision quantify the task-level endpoint of the gradient chain. Depth
+fill measures whether the observation stream remains usable. Phase-wise camera
+statistics and matched-pose depth sequences test whether the learned behavior
+is consistent with the intended active-sensing mechanism rather than a
+trajectory artifact.
 
 \subsection{Benchmark Configuration}
 Each episode lasts 60 control steps at 15 Hz, so the closed-loop horizon spans
@@ -382,7 +565,7 @@ differentiable active-sensing training signal develops the same scene-specific
 behavior. The blind baseline removes depth information and provides a lower
 bound on geometry-free flight.
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
 \small
 \begin{tabular}{lll}
@@ -402,7 +585,7 @@ DAgger & diagnostic & relabeled camera policy before flight adaptation \\
 Only the first five methods are primary navigation baselines; pretrain and
 DAgger are included to separate camera semantics from flight adaptation.}
 \label{tab:methods}
-\end{table}
+\end{table*}
 
 \subsection{Metrics and Statistical Reporting}
 An episode is successful when the vehicle reaches the goal region without
@@ -441,6 +624,12 @@ difference. These phase-wise statistics are diagnostic rather than training
 targets.
 
 \section{Results}
+\noindent
+The results are presented as evidence for a closed-loop sensing mechanism. We
+first check that training converges, then test whether differentiable active
+sensing improves navigation, and finally inspect whether the learned sensor
+actions are physically interpretable near the aperture.
+
 \subsection{Training Curves Are a Convergence Check, Not the Main Evidence}
 Figure~\ref{fig:train_curve} reports training loss, success, and collision
 curves for the comparison methods. Their role is diagnostic rather than
@@ -482,6 +671,11 @@ blind controller. The collision rate falls from 0.333 for fixed camera to 0.249
 for the proposed policy. The improvement is not only a geometric-control
 effect: depth fill rises from 0.721 under fixed camera to 0.975 under the
 active policy.
+In Table~\ref{tab:journal_main_navigation}, bracketed values denote 95\%
+confidence intervals. Success and collision are episode-level rates with
+Wilson intervals, fill is the mean valid-depth fraction with bootstrap
+intervals, and $\Delta$ columns are measured relative to the fixed-camera
+baseline.
 
 \input{journal_assets/tables/table1_primary_navigation.tex}
 
@@ -526,6 +720,8 @@ is a saturation problem near the aperture boundary. The camera can suppress
 overexposure and recover a large amount of valid depth, yet the remaining error
 is concentrated exactly where the controller needs clean contrast, so the gain
 in success is smaller than the gain in fill.
+Each scene-level entry in Table~\ref{tab:journal_scene_breakdown} is reported
+as success/fill, where fill is the mean valid-depth fraction.
 
 \input{journal_assets/tables/table2_scene_breakdown.tex}
 
@@ -551,6 +747,10 @@ narrow confidence interval, whereas fixed camera, non-differentiable learned
 camera, and blind control remain at or near zero. Random fixed camera has small
 separation because its sampled settings differ between episodes, but that
 separation is not scene-conditional and remains far below the proposed policy.
+Table~\ref{tab:journal_camera_response} reports normalized near-slit camera
+commands as $P/E/G$, corresponding to projector power, exposure, and gain.
+The G--D L1 column is the mean absolute difference between glare and dark
+near-slit camera commands, with 95\% bootstrap confidence intervals.
 
 \input{journal_assets/tables/table3_camera_response.tex}
 
@@ -583,7 +783,7 @@ without reproducing the same scene-conditional motion, which explains why its
 navigation performance remains weaker.
 
 \subsection{Matched-Pose Depth Sequences Isolate the Camera Effect}
-The qualitative depth sequences in Figure~\ref{fig:depth_seq} provide a visual
+The qualitative depth sequences in Figures~\ref{fig:depth_seq_glare}--\ref{fig:depth_seq_specular} provide a visual
 counterpart to the scalar metrics. Each panel re-renders observed depth at
 matched poses, using the same raw geometric depth but different camera settings.
 This matched-pose construction matters because it separates camera effects from
@@ -594,15 +794,23 @@ under the same geometry.
 
 \begin{figure*}[!t]
 \centering
-\subfloat[Glare]{\includegraphics[width=0.32\textwidth]{fig5_depth_observation_sequence_glare.pdf}}
-\hfil
-\subfloat[Dark]{\includegraphics[width=0.32\textwidth]{fig5_depth_observation_sequence_dark.pdf}}
-\hfil
-\subfloat[Specular]{\includegraphics[width=0.32\textwidth]{fig5_depth_observation_sequence_specular.pdf}}
-\caption{Matched-pose depth observation sequences rendered along the same rollout
-poses. The raw geometry is fixed; only the camera parameters change the observed
-depth.}
-\label{fig:depth_seq}
+\includegraphics[width=1.0\textwidth]{fig5_depth_observation_sequence_glare.pdf}
+\caption{Matched-pose depth observation sequences rendered along the same rollout poses (Glare). The raw geometry is fixed; only the camera parameters change the observed depth.}
+\label{fig:depth_seq_glare}
+\end{figure*}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=1.0\textwidth]{fig5_depth_observation_sequence_dark.pdf}
+\caption{Matched-pose depth observation sequences rendered along the same rollout poses (Dark). The raw geometry is fixed; only the camera parameters change the observed depth.}
+\label{fig:depth_seq_dark}
+\end{figure*}
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=1.0\textwidth]{fig5_depth_observation_sequence_specular.pdf}
+\caption{Matched-pose depth observation sequences rendered along the same rollout poses (Specular). The raw geometry is fixed; only the camera parameters change the observed depth.}
+\label{fig:depth_seq_specular}
 \end{figure*}
 
 The sequences explain why fill alone is not the whole story. In glare, nominal

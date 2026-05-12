@@ -1,9 +1,10 @@
-\begin{table}[t]
+\begin{table*}[t]
 \centering
-\small
-\begin{tabular}{lcccc}
+\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcccc@{}}
 \toprule
-Method & Glare p/e/g & Dark p/e/g & Specular p/e/g & Glare--dark L1 \\
+Method & \shortstack{Glare\\$P/E/G$} & \shortstack{Dark\\$P/E/G$} & \shortstack{Specular\\$P/E/G$} & \shortstack{Glare--dark L1\\(95\% CI)} \\
 \midrule
 \textbf{Ours} & \textbf{0.731/0.088/0.120} & \textbf{0.665/0.694/0.683} & \textbf{0.408/0.366/0.381} & \textbf{0.412 [0.406,0.417]} \\
 Fixed & 0.500/0.500/0.500 & 0.500/0.500/0.500 & 0.500/0.500/0.500 & 0.000 [0.000,0.000] \\
@@ -13,7 +14,7 @@ Pretrain & 0.714/0.061/0.103 & 0.682/0.724/0.709 & 0.392/0.352/0.365 & 0.433 [0.
 DAgger & 0.728/0.069/0.109 & 0.676/0.727/0.708 & 0.392/0.360/0.368 & 0.436 [0.426,0.445] \\
 Blind & 0.500/0.500/0.500 & 0.500/0.500/0.500 & 0.500/0.500/0.500 & 0.000 [0.000,0.000] \\
 \bottomrule
-\end{tabular}
-\caption{Episode-aggregated near-slit camera behavior. Glare--dark L1 is the mean absolute camera-parameter difference between glare and dark near-slit phases, with bootstrap 95\% confidence intervals.}
+\end{tabular*}
+\caption{Near-slit camera commands and glare--dark separation.}
 \label{tab:journal_camera_response}
-\end{table}
+\end{table*}

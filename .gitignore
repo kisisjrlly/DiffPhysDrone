@@ -15,3 +15,28 @@ configs/paper_final_full_auto_*
 configs/slit_active_sensing_auto_*
 .waylog/*
 paper/paper_tex.zip
+
+# LaTeX intermediate / temporary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.xdv
+
+# Latexmk / engine helpers
+*.nav
+*.snm
+*.vrb
+*.dvi
+
+# Editor/OS noise
+.DS_Store

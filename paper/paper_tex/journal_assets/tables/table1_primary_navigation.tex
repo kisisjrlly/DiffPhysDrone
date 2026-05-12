@@ -1,9 +1,10 @@
-\begin{table}[t]
+\begin{table*}[t]
 \centering
-\small
-\begin{tabular}{lccccc}
+\footnotesize
+\renewcommand{\arraystretch}{1.14}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccccc@{}}
 \toprule
-Method & Success & $\Delta$Success & Collision & Fill & $\Delta$Fill \\
+Method & \shortstack{Success rate\\(95\% CI)} & \shortstack{$\Delta$ success\\vs. Fixed} & \shortstack{Collision rate\\(95\% CI)} & \shortstack{Depth fill rate\\(95\% CI)} & \shortstack{$\Delta$ fill\\vs. Fixed} \\
 \midrule
 \textbf{Ours} & \textbf{0.751 [0.722,0.778]} & \textbf{+0.084} & 0.249 [0.222,0.278] & \textbf{0.975 [0.974,0.977]} & \textbf{+0.255} \\
 Fixed & 0.667 [0.635,0.697] & +0.000 & 0.333 [0.303,0.365] & 0.721 [0.712,0.728] & +0.000 \\
@@ -11,7 +12,7 @@ Random fixed & 0.627 [0.595,0.658] & -0.040 & 0.373 [0.342,0.405] & 0.743 [0.733
 Non-diff. & 0.580 [0.547,0.612] & -0.087 & 0.420 [0.388,0.453] & 0.757 [0.746,0.767] & +0.036 \\
 Blind & 0.032 [0.023,0.046] & -0.634 & 0.968 [0.954,0.977] & 0.622 [0.616,0.627] & -0.099 \\
 \bottomrule
-\end{tabular}
-\caption{Primary closed-loop navigation results over 900 episodes per method. Brackets denote 95\% confidence intervals: Wilson intervals for binary outcomes and bootstrap intervals over episodes for fill. Deltas are relative to the fixed-camera baseline.}
+\end{tabular*}
+\caption{Primary closed-loop navigation performance.}
 \label{tab:journal_main_navigation}
-\end{table}
+\end{table*}

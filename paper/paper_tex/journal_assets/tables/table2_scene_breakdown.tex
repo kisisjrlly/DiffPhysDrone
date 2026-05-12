@@ -1,9 +1,11 @@
 \begin{table}[t]
 \centering
-\small
-\begin{tabular}{lccc}
+\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\setlength{\tabcolsep}{9pt}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-Method & Glare & Dark & Specular \\
+Method & \shortstack{Glare\\Succ./Fill} & \shortstack{Dark\\Succ./Fill} & \shortstack{Specular\\Succ./Fill} \\
 \midrule
 \textbf{Ours} & \textbf{0.67/0.96} & \textbf{0.82/0.98} & \textbf{0.76/0.99} \\
 Fixed & 0.65/0.69 & 0.68/0.70 & 0.66/0.77 \\
@@ -12,6 +14,6 @@ Non-diff. & 0.60/0.67 & 0.62/0.67 & 0.52/0.93 \\
 Blind & 0.03/0.60 & 0.03/0.59 & 0.03/0.68 \\
 \bottomrule
 \end{tabular}
-\caption{Scene-level success/fill rates. Each scene contains 300 closed-loop episodes per method.}
+\caption{Scene-wise success and depth-fill rates.}
 \label{tab:journal_scene_breakdown}
 \end{table}

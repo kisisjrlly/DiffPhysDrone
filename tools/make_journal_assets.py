@@ -67,30 +67,42 @@ METHOD_ORDER_NO_BLIND = ["flightonly", "fixed", "randfix", "nondiff"]
 TRAINING_METHOD_ORDER = ["flightonly", "fixed", "randfix", "nondiff", "zero"]
 DIAG_ORDER = ["pretrained", "dagger", "flightonly"]
 
+# These dimensions match the widths used by Paper_diff_depth_journal.tex.
+# Keeping the generated panel close to its final printed size prevents LaTeX
+# from shrinking 8 pt plot text down to unreadable 4--5 pt text.
+TRIPLE_PANEL_W = DOUBLE_COL * 0.32
+TRIPLE_PANEL_H = 1.78
+HALF_PANEL_W = DOUBLE_COL * 0.48
+HALF_PANEL_H = 2.35
+WIDE_PANEL_W = DOUBLE_COL * 0.62
+WIDE_PANEL_H = 2.55
+TRAJ_PANEL_W = DOUBLE_COL * 0.34
+
 
 def set_journal_style() -> None:
-    """Conservative Nature/Science-like plot style."""
+    """Publication plot style with readable final-size typography."""
 
     plt.rcParams.update(
         {
-            "font.family": "sans-serif",
-            "font.sans-serif": ["Arial", "Helvetica", "Liberation Sans", "DejaVu Sans"],
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "Times", "Nimbus Roman", "DejaVu Serif"],
+            "mathtext.fontset": "stix",
             "pdf.fonttype": 42,
             "ps.fonttype": 42,
             "svg.fonttype": "none",
-            "font.size": 6.0,
-            "axes.titlesize": 6.4,
-            "axes.labelsize": 6.0,
-            "xtick.labelsize": 5.6,
-            "ytick.labelsize": 5.6,
-            "legend.fontsize": 5.4,
-            "axes.linewidth": 0.55,
-            "lines.linewidth": 1.0,
-            "patch.linewidth": 0.5,
-            "xtick.major.width": 0.5,
-            "ytick.major.width": 0.5,
-            "xtick.major.size": 2.5,
-            "ytick.major.size": 2.5,
+            "font.size": 8.0,
+            "axes.titlesize": 8.0,
+            "axes.labelsize": 8.0,
+            "xtick.labelsize": 7.4,
+            "ytick.labelsize": 7.4,
+            "legend.fontsize": 7.2,
+            "axes.linewidth": 0.7,
+            "lines.linewidth": 1.2,
+            "patch.linewidth": 0.65,
+            "xtick.major.width": 0.65,
+            "ytick.major.width": 0.65,
+            "xtick.major.size": 3.0,
+            "ytick.major.size": 3.0,
             "axes.spines.top": False,
             "axes.spines.right": False,
             "figure.dpi": 120,
@@ -112,7 +124,7 @@ def save_all(fig: plt.Figure, out_base: Path) -> None:
 
 
 def label_panel(ax: plt.Axes, label: str, x: float = -0.12, y: float = 1.04) -> None:
-    ax.text(x, y, label, transform=ax.transAxes, ha="left", va="bottom", fontsize=8.0, fontweight="bold")
+    ax.text(x, y, label, transform=ax.transAxes, ha="left", va="bottom", fontsize=9.0, fontweight="bold")
 
 
 def clean_axis(ax: plt.Axes, grid: str | None = None) -> None:
@@ -141,7 +153,7 @@ def draw_round_box(ax: plt.Axes, xy: tuple[float, float], wh: tuple[float, float
             linewidth=0.55,
         )
     )
-    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=5.4, linespacing=1.08)
+    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", fontsize=7.0, linespacing=1.08)
 
 
 def draw_fig1_task_schematic(ax_task: plt.Axes) -> None:
@@ -168,11 +180,11 @@ def draw_fig1_task_schematic(ax_task: plt.Axes) -> None:
                 linewidth=0.55,
             )
         )
-        ax_task.text(0.41, yy, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=5.5, va="center")
-    ax_task.text(-1.55, 0.84, "Slit task", fontsize=6.1, fontweight="bold", va="top")
-    ax_task.text(-1.39, -0.15, "start", ha="center", fontsize=5.2)
-    ax_task.text(1.45, -0.15, "goal", ha="center", fontsize=5.2)
-    ax_task.text(0.09, -0.19, "slit", ha="left", fontsize=5.0)
+        ax_task.text(0.41, yy, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=7.0, va="center")
+    ax_task.text(-1.55, 0.84, "Slit task", fontsize=8.0, fontweight="bold", va="top")
+    ax_task.text(-1.39, -0.15, "start", ha="center", fontsize=7.0)
+    ax_task.text(1.45, -0.15, "goal", ha="center", fontsize=7.0)
+    ax_task.text(0.09, -0.19, "slit", ha="left", fontsize=7.0)
 
 
 def draw_fig1_active_loop(ax_loop: plt.Axes) -> None:
@@ -192,8 +204,8 @@ def draw_fig1_active_loop(ax_loop: plt.Axes) -> None:
     ax_loop.annotate("", xy=(0.69, 0.41), xytext=(0.69, 0.62), arrowprops=arrow)
     ax_loop.annotate("", xy=(0.38, 0.325), xytext=(0.50, 0.325), arrowprops=dict(arrowstyle="<|-", lw=0.65, color="#333333"))
     ax_loop.annotate("", xy=(0.22, 0.62), xytext=(0.22, 0.41), arrowprops=dict(arrowstyle="<|-", lw=0.65, color="#333333"))
-    ax_loop.text(0.04, 0.91, "Active-depth loop", fontsize=6.1, fontweight="bold", va="top")
-    ax_loop.text(0.04, 0.09, "policy acts on vehicle state and sensor state", fontsize=5.1, color="#4A4A4A")
+    ax_loop.text(0.04, 0.91, "Active-depth loop", fontsize=8.0, fontweight="bold", va="top")
+    ax_loop.text(0.04, 0.09, "policy acts on vehicle state and sensor state", fontsize=7.0, color="#4A4A4A")
 
 
 def draw_fig1_protocol(ax_train: plt.Axes) -> None:
@@ -212,10 +224,10 @@ def draw_fig1_protocol(ax_train: plt.Axes) -> None:
     for x in [0.21, 0.45, 0.69]:
         ax_train.annotate("", xy=(x + 0.045, 0.67), xytext=(x + 0.01, 0.67), arrowprops=arrow)
     ax_train.add_patch(patches.Rectangle((0.15, 0.20), 0.68, 0.17, facecolor="#F7F7F7", edgecolor="#333333", linewidth=0.5))
-    ax_train.text(0.49, 0.285, "closed-loop evaluation\n7 methods x 3 scenes\n300 episodes per scene", ha="center", va="center", fontsize=4.65, linespacing=1.0)
+    ax_train.text(0.49, 0.285, "closed-loop evaluation\n7 methods x 3 scenes\n300 episodes per scene", ha="center", va="center", fontsize=6.2, linespacing=1.0)
     ax_train.annotate("", xy=(0.48, 0.37), xytext=(0.84, 0.57), arrowprops=arrow)
-    ax_train.text(0.02, 0.91, "Relabel and adapt", fontsize=6.1, fontweight="bold", va="top")
-    ax_train.text(0.02, 0.09, "final adaptation freezes the camera branch", fontsize=5.1, color="#4A4A4A")
+    ax_train.text(0.02, 0.91, "Relabel and adapt", fontsize=8.0, fontweight="bold", va="top")
+    ax_train.text(0.02, 0.09, "final adaptation freezes the camera branch", fontsize=7.0, color="#4A4A4A")
 
 
 def bootstrap_delta_ci(
@@ -303,17 +315,17 @@ def read_training_curves(eval_dir: Path) -> pd.DataFrame:
 
 def fig1_panel_exports(out_dir: Path) -> None:
     panel_dir = out_dir / "panels"
-    fig = plt.figure(figsize=(SINGLE_COL, 2.15))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.75))
     ax = fig.add_subplot(111)
     draw_fig1_task_schematic(ax)
     save_all(fig, panel_dir / "fig1a_task_schematic")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.15))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.75))
     ax = fig.add_subplot(111)
     draw_fig1_active_loop(ax)
     save_all(fig, panel_dir / "fig1b_active_depth_loop")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.15))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.75))
     ax = fig.add_subplot(111)
     draw_fig1_protocol(ax)
     save_all(fig, panel_dir / "fig1c_relabeled_training_protocol")
@@ -352,7 +364,7 @@ def fig2_training_convergence_panels(training: pd.DataFrame, out_dir: Path) -> N
         ("fig2c_training_collision", "collision_rate", "training collision", "linear"),
     ]
     for name, metric, ylabel, scale in specs:
-        fig = plt.figure(figsize=(SINGLE_COL, 2.25))
+        fig = plt.figure(figsize=(TRIPLE_PANEL_W, TRIPLE_PANEL_H))
         ax = fig.add_subplot(111)
         draw_training_metric(ax, training, metric, ylabel, scale)
         if metric == "loss":
@@ -377,7 +389,7 @@ def draw_metric_forest(
         mean, lo, hi = metric_ci(episodes, method, metric)
         ax.plot([lo, hi], [yi, yi], color="#222222", lw=0.7, zorder=1)
         ax.scatter([mean], [yi], s=30, color=METHOD_COLOR[method], edgecolor="#222222", linewidth=0.45, zorder=2)
-        ax.text(xlim[1] + 0.018 * (xlim[1] - xlim[0]), yi, f"{mean:.2f}", va="center", fontsize=5.2)
+        ax.text(xlim[1] + 0.018 * (xlim[1] - xlim[0]), yi, f"{mean:.2f}", va="center", fontsize=7.0)
     ax.set_yticks(y_positions)
     if show_ylabels:
         ax.set_yticklabels([METHOD_LABEL_J[m] for m in METHOD_ORDER_MAIN])
@@ -424,7 +436,7 @@ def draw_scene_delta_heatmap(ax: plt.Axes, episodes: pd.DataFrame) -> None:
     ax.set_yticklabels([METHOD_LABEL_J[m] for m in methods])
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
-            ax.text(j, i, f"{data[i, j]:+.2f}", ha="center", va="center", fontsize=5.3, color="#111111")
+            ax.text(j, i, f"{data[i, j]:+.2f}", ha="center", va="center", fontsize=7.0, color="#111111")
     ax.set_title("Per-scene success gain", pad=5)
     return im
 
@@ -453,7 +465,7 @@ def draw_success_fill_plane(ax: plt.Axes, episodes: pd.DataFrame) -> None:
             "nondiff": -0.015,
             "zero": 0.020,
         }[method]
-        ax.text(fill[0] + dx, succ[0] + dy, METHOD_LABEL_J[method], fontsize=5.2)
+        ax.text(fill[0] + dx, succ[0] + dy, METHOD_LABEL_J[method], fontsize=7.0)
     ax.set_xlabel("depth fill rate")
     ax.set_ylabel("success rate")
     ax.set_xlim(0.70, 0.99)
@@ -479,26 +491,26 @@ def draw_terminal_ecdf(ax: plt.Axes, episodes: pd.DataFrame) -> None:
 def fig3_navigation_panels(episodes: pd.DataFrame, out_dir: Path) -> None:
     panel_dir = out_dir / "panels"
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.30))
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
     draw_metric_forest(ax, episodes, "success_rate", "success rate", (0.0, 1.0), show_ylabels=True)
     ax.set_title("Navigation success", pad=5)
     save_all(fig, panel_dir / "fig3a_navigation_success")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.30))
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
     draw_metric_forest(ax, episodes, "fill_rate", "depth fill rate", (0.65, 1.0), show_ylabels=True)
     ax.set_title("Observation quality", pad=5)
     save_all(fig, panel_dir / "fig3b_depth_fill")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
     im = draw_scene_delta_heatmap(ax, episodes)
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
     cbar.set_label(r"$\Delta$ success")
     save_all(fig, panel_dir / "fig3c_scene_success_gain")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
     draw_terminal_ecdf(ax, episodes)
     save_all(fig, panel_dir / "fig3d_terminal_distance_ecdf")
@@ -514,7 +526,7 @@ def draw_camera_heatmap(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
     ax.set_yticklabels([SCENE_LABEL[s] for s in SCENES])
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
-            ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center", fontsize=5.3, color="#111111")
+            ax.text(j, i, f"{data[i, j]:.2f}", ha="center", va="center", fontsize=7.0, color="#111111")
     ax.set_title("Near-slit camera settings", pad=5)
     return im
 
@@ -539,7 +551,7 @@ def draw_exposure_gain_plane(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
             zorder=1,
         )
         ax.scatter([e], [g], s=34 + 62 * p, color=SCENE_COLOR[scene], edgecolor="#222222", linewidth=0.45, zorder=3)
-        ax.text(e + 0.020, g + 0.012, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=5.3)
+        ax.text(e + 0.020, g + 0.012, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=7.0)
     ax.set_xlabel("exposure")
     ax.set_ylabel("gain")
     ax.set_xlim(0.0, 0.86)
@@ -629,29 +641,29 @@ def fig4_camera_mechanism_panels(
 ) -> None:
     panel_dir = out_dir / "panels"
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
     ax = fig.add_subplot(111)
     draw_camera_heatmap(ax, phase_ep)
     save_all(fig, panel_dir / "fig4a_camera_fingerprint")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
     ax = fig.add_subplot(111)
     draw_exposure_gain_plane(ax, phase_ep)
     save_all(fig, panel_dir / "fig4b_exposure_gain_plane")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.20))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
     ax = fig.add_subplot(111)
     draw_near_slit_degradation(ax, phase_ep)
     save_all(fig, panel_dir / "fig4c_near_slit_degradation")
 
-    fig = plt.figure(figsize=(DOUBLE_COL * 0.62, 2.65))
+    fig = plt.figure(figsize=(WIDE_PANEL_W, WIDE_PANEL_H))
     sub = GridSpec(2, 1, figure=fig, hspace=0.12)
     ax_top = fig.add_subplot(sub[0, 0])
     ax_bottom = fig.add_subplot(sub[1, 0], sharex=ax_top)
     draw_profile_pair(ax_top, ax_bottom, traces)
     save_all(fig, panel_dir / "fig4d_exposure_gain_profiles")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(TRAJ_PANEL_W, 1.95))
     ax = fig.add_subplot(111)
     draw_trajectory_envelope(ax, episodes, traces)
     save_all(fig, panel_dir / "fig4e_trajectory_envelopes")
@@ -705,7 +717,7 @@ def draw_dagger_semantics_progress(ax: plt.Axes, phase_ep: pd.DataFrame, diagnos
         if np.isfinite(lo):
             ax.errorbar([xi], [mean], yerr=[[mean - lo], [hi - mean]], fmt="none", ecolor="#222222", elinewidth=0.55, capsize=1.5)
         ax.scatter([xi], [mean], s=29, color=color, edgecolor="#222222", linewidth=0.42, zorder=3)
-        ax.text(xi, mean + 0.025, f"{mean:.2f}", ha="center", fontsize=5.1)
+        ax.text(xi, mean + 0.025, f"{mean:.2f}", ha="center", fontsize=7.0)
     ax.set_xticks(x)
     ax.set_xticklabels(stages, rotation=28, ha="right")
     ax.set_ylabel("glare-dark camera L1")
@@ -757,7 +769,7 @@ def draw_separation_success(ax: plt.Axes, episodes: pd.DataFrame, phase_ep: pd.D
     }
     for method in scatter_methods:
         dx, dy = label_offsets[method]
-        ax.text(coords[method][0] + dx, coords[method][1] + dy, METHOD_LABEL_J[method], fontsize=5.0)
+        ax.text(coords[method][0] + dx, coords[method][1] + dy, METHOD_LABEL_J[method], fontsize=7.0)
     ax.annotate("", xy=coords["dagger"], xytext=coords["pretrained"], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=4, shrinkB=4))
     ax.annotate("", xy=coords["flightonly"], xytext=coords["dagger"], arrowprops=dict(arrowstyle="-|>", lw=0.65, color="#555555", shrinkA=4, shrinkB=4))
     ax.set_xlabel("camera separation")
@@ -773,17 +785,17 @@ def fig6_dagger_diagnosis_panels(
 ) -> None:
     panel_dir = out_dir / "panels"
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
     ax = fig.add_subplot(111)
     draw_dagger_semantics_progress(ax, phase_ep, diagnosis)
     save_all(fig, panel_dir / "fig6a_camera_semantics_progress")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
     ax = fig.add_subplot(111)
     draw_dark_glare_param_deltas(ax, phase_ep)
     save_all(fig, panel_dir / "fig6b_dark_glare_parameter_delta")
 
-    fig = plt.figure(figsize=(SINGLE_COL, 2.35))
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
     ax = fig.add_subplot(111)
     draw_separation_success(ax, episodes, phase_ep)
     save_all(fig, panel_dir / "fig6c_separation_success")
@@ -803,12 +815,13 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     scene_counts = episodes[episodes["method"].isin(METHOD_ORDER_MAIN)].groupby(["method", "scene_name"]).size()
     episodes_per_scene = int(scene_counts.min()) if len(scene_counts) else 0
     rows = [
-        r"\begin{table}[t]",
+        r"\begin{table*}[t]",
         r"\centering",
-        r"\small",
-        r"\begin{tabular}{lccccc}",
+        r"\footnotesize",
+        r"\renewcommand{\arraystretch}{1.14}",
+        r"\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccccc@{}}",
         r"\toprule",
-        r"Method & Success & $\Delta$Success & Collision & Fill & $\Delta$Fill \\",
+        r"Method & \shortstack{Success rate\\(95\% CI)} & \shortstack{$\Delta$ success\\vs. Fixed} & \shortstack{Collision rate\\(95\% CI)} & \shortstack{Depth fill rate\\(95\% CI)} & \shortstack{$\Delta$ fill\\vs. Fixed} \\",
         r"\midrule",
     ]
     for method in METHOD_ORDER_MAIN:
@@ -832,10 +845,10 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
         rows.append(" & ".join(cells) + r" \\")
     rows += [
         r"\bottomrule",
-        r"\end{tabular}",
-        rf"\caption{{Primary closed-loop navigation results over {episodes_per_method} episodes per method. Brackets denote 95\% confidence intervals: Wilson intervals for binary outcomes and bootstrap intervals over episodes for fill. Deltas are relative to the fixed-camera baseline.}}",
+        r"\end{tabular*}",
+        rf"\caption{{Primary closed-loop navigation performance.}}",
         r"\label{tab:journal_main_navigation}",
-        r"\end{table}",
+        r"\end{table*}",
         "",
     ]
     write_text(table_dir / "table1_primary_navigation.tex", "\n".join(rows))
@@ -843,10 +856,12 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     rows = [
         r"\begin{table}[t]",
         r"\centering",
-        r"\small",
-        r"\begin{tabular}{lccc}",
+        r"\footnotesize",
+        r"\renewcommand{\arraystretch}{1.12}",
+        r"\setlength{\tabcolsep}{9pt}",
+        r"\begin{tabular}{@{}lccc@{}}",
         r"\toprule",
-        r"Method & Glare & Dark & Specular \\",
+        r"Method & \shortstack{Glare\\Succ./Fill} & \shortstack{Dark\\Succ./Fill} & \shortstack{Specular\\Succ./Fill} \\",
         r"\midrule",
     ]
     for method in METHOD_ORDER_MAIN:
@@ -862,7 +877,7 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     rows += [
         r"\bottomrule",
         r"\end{tabular}",
-        rf"\caption{{Scene-level success/fill rates. Each scene contains {episodes_per_scene} closed-loop episodes per method.}}",
+        rf"\caption{{Scene-wise success and depth-fill rates.}}",
         r"\label{tab:journal_scene_breakdown}",
         r"\end{table}",
         "",
@@ -870,12 +885,13 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
     write_text(table_dir / "table2_scene_breakdown.tex", "\n".join(rows))
 
     rows = [
-        r"\begin{table}[t]",
+        r"\begin{table*}[t]",
         r"\centering",
-        r"\small",
-        r"\begin{tabular}{lcccc}",
+        r"\footnotesize",
+        r"\renewcommand{\arraystretch}{1.12}",
+        r"\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcccc@{}}",
         r"\toprule",
-        r"Method & Glare p/e/g & Dark p/e/g & Specular p/e/g & Glare--dark L1 \\",
+        r"Method & \shortstack{Glare\\$P/E/G$} & \shortstack{Dark\\$P/E/G$} & \shortstack{Specular\\$P/E/G$} & \shortstack{Glare--dark L1\\(95\% CI)} \\",
         r"\midrule",
     ]
     for method in ["flightonly", "fixed", "randfix", "nondiff", "pretrained", "dagger", "zero"]:
@@ -889,10 +905,10 @@ def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -
         rows.append(" & ".join(cells) + r" \\")
     rows += [
         r"\bottomrule",
-        r"\end{tabular}",
-        r"\caption{Episode-aggregated near-slit camera behavior. Glare--dark L1 is the mean absolute camera-parameter difference between glare and dark near-slit phases, with bootstrap 95\% confidence intervals.}",
+        r"\end{tabular*}",
+        r"\caption{Near-slit camera commands and glare--dark separation.}",
         r"\label{tab:journal_camera_response}",
-        r"\end{table}",
+        r"\end{table*}",
         "",
     ]
     write_text(table_dir / "table3_camera_response.tex", "\n".join(rows))

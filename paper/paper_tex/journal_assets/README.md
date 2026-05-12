@@ -3,7 +3,7 @@
 This directory contains submission-oriented figures and LaTeX tables generated
 from:
 
-`paper/experiment/results/final_dagger_flightonly_eval_20260510_splitstem`
+`paper/paper_tex/origion_results`
 
 The older `paper_assets` directory is diagnostic only and should not be used in a
 paper submission. This `journal_assets` directory is the current recommended
