@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="165.99685pt" height="126pt" viewBox="0 0 165.99685 126" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-05-15T13:02:32.200115</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.9.4, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 126 
+L 165.99685 126 
+L 165.99685 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 13.386192 49.9968 
+L 62.788422 49.9968 
+Q 65.675565 49.9968 65.675565 47.8296 
+L 65.675565 28.8064 
+Q 65.675565 26.6392 62.788422 26.6392 
+L 13.386192 26.6392 
+Q 10.499049 26.6392 10.499049 28.8064 
+L 10.499049 47.8296 
+Q 10.499049 49.9968 13.386192 49.9968 
+z
+" clip-path="url(#p731f20bad3)" style="fill: #e8f1fa; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 83.960806 49.9968 
+L 142.986847 49.9968 
+Q 145.873991 49.9968 145.873991 47.8296 
+L 145.873991 28.8064 
+Q 145.873991 26.6392 142.986847 26.6392 
+L 83.960806 26.6392 
+Q 81.073663 26.6392 81.073663 28.8064 
+L 81.073663 47.8296 
+Q 81.073663 49.9968 83.960806 49.9968 
+z
+" clip-path="url(#p731f20bad3)" style="fill: #fff1d6; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 83.960806 95.7488 
+L 142.986847 95.7488 
+Q 145.873991 95.7488 145.873991 93.5816 
+L 145.873991 74.5584 
+Q 145.873991 72.3912 142.986847 72.3912 
+L 83.960806 72.3912 
+Q 81.073663 72.3912 81.073663 74.5584 
+L 81.073663 93.5816 
+Q 81.073663 95.7488 83.960806 95.7488 
+z
+" clip-path="url(#p731f20bad3)" style="fill: #e8f5ed; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 13.386192 95.7488 
+L 62.788422 95.7488 
+Q 65.675565 95.7488 65.675565 93.5816 
+L 65.675565 74.5584 
+Q 65.675565 72.3912 62.788422 72.3912 
+L 13.386192 72.3912 
+Q 10.499049 72.3912 10.499049 74.5584 
+L 10.499049 93.5816 
+Q 10.499049 95.7488 13.386192 95.7488 
+z
+" clip-path="url(#p731f20bad3)" style="fill: #f2f2f2; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(27.984885 36.626231)">camera</text>
+    <!-- $p,e,g$ -->
+    <g transform="translate(30.247307 43.37305)">
+     <text>
+      <tspan style="font: italic 7px 'STIXGeneral'" x="0 6.288797 12.157581" y="-0.90625">peg</tspan>
+      <tspan style="font: 7px 'STIXGeneral'" x="3.528 9.396783" y="-0.90625">,,</tspan>
+     </text>
+    </g>
+   </g>
+   <g id="text_2">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(94.684842 36.626231)">differentiable</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(96.467108 43.37305)">active depth</text>
+   </g>
+   <g id="text_3">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(96.460546 82.365106)">policy GRU</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(92.065311 89.12505)">flight + camera</text>
+   </g>
+   <g id="text_4">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(27.46262 82.378231)">depth +</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(31.67301 89.12505)">state</text>
+   </g>
+   <g id="patch_6">
+    <path d="M 64.751717 38.318 
+Q 73.37391 38.318 81.269381 38.318 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 78.069381 36.718 
+L 81.269381 38.318 
+L 78.069381 39.918 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 113.473827 49.548916 
+Q 113.473827 61.1929 113.473827 72.110163 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 115.073827 68.910163 
+L 113.473827 72.110163 
+L 111.873827 68.910163 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 80.274574 84.07 
+Q 73.376292 84.07 65.751288 84.07 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 77.074574 82.47 
+L 80.274574 84.07 
+L 77.074574 85.67 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 38.087307 71.11236 
+Q 38.087307 61.194737 38.087307 50.550391 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 39.687307 67.91236 
+L 38.087307 71.11236 
+L 36.487307 67.91236 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="text_5">
+    <text style="font: 700 8px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif; text-anchor: start" x="9.215874" y="19.0585" transform="rotate(-0 9.215874 19.0585)">Active-depth loop</text>
+   </g>
+   <g id="text_6">
+    <text style="fill: #4a4a4a; font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif; text-anchor: start" x="9.215874" y="112.364" transform="rotate(-0 9.215874 112.364)">policy acts on vehicle state and sensor state</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p731f20bad3">
+   <rect x="2.8" y="2.8" width="160.39685" height="120.4"/>
+  </clipPath>
+ </defs>
+</svg>

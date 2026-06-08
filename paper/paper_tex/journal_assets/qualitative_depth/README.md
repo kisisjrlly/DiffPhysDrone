@@ -6,7 +6,7 @@
 
 Outputs:
 
-- `figures/fig5_depth_observation_sequence_<scene>.pdf`: matched-pose raw/depth comparison.
+- `figures/depth_observation_sequence_<scene>.pdf`: matched-pose raw/depth comparison.
 - `qualitative_depth/depth_sequence_rows.csv`: per-panel camera parameters and local metrics.
 - `qualitative_depth/depth_sequence_arrays.npz`: raw depth, observed depth, quality, invalid and effect arrays.
 

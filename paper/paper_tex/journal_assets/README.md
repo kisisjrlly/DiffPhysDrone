@@ -11,31 +11,37 @@ figure/table set.
 
 ## Composite figures
 
-- `figures/fig5_depth_observation_sequence_glare.pdf`
-- `figures/fig5_depth_observation_sequence_dark.pdf`
-- `figures/fig5_depth_observation_sequence_specular.pdf`
+- `figures/depth_observation_sequence_glare.pdf`
+- `figures/depth_observation_sequence_dark.pdf`
+- `figures/depth_observation_sequence_specular.pdf`
 
 ## Panel figures
 
 The `figures/panels/` directory contains the standalone subfigure assets used by
 the manuscript for Figures 1, 2, 3, 4, and 6.
 
-- `figures/panels/fig2a_training_loss.pdf`
-- `figures/panels/fig2b_training_success.pdf`
-- `figures/panels/fig2c_training_collision.pdf`
-- `figures/panels/fig1a_task_schematic.pdf`
-- `figures/panels/fig1b_active_depth_loop.pdf`
-- `figures/panels/fig1c_relabeled_training_protocol.pdf`
-- `figures/panels/fig3c_scene_success_gain.pdf`
-- `figures/panels/fig3d_terminal_distance_ecdf.pdf`
-- `figures/panels/fig4b_exposure_gain_plane.pdf`
-- `figures/panels/fig4d_exposure_gain_profiles.pdf`
-- `figures/panels/fig4e_trajectory_envelopes.pdf`
-- `figures/panels/fig6a_camera_semantics_progress.pdf`
+- `figures/panels/training_loss.pdf`
+- `figures/panels/training_success.pdf`
+- `figures/panels/training_collision.pdf`
+- `figures/panels/task_schematic.pdf`
+- `figures/panels/active_depth_loop.pdf`
+- `figures/panels/relabeled_training_protocol.pdf`
+- `figures/panels/primary_success_rate.pdf`
+- `figures/panels/primary_collision_rate.pdf`
+- `figures/panels/primary_depth_fill.pdf`
+- `figures/panels/fill_success_coupling.pdf`
+- `figures/panels/scene_success_heatmap.pdf`
+- `figures/panels/terminal_distance_ecdf.pdf`
+- `figures/panels/camera_peg_grouped_bars.pdf`
+- `figures/panels/exposure_gain_plane.pdf`
+- `figures/panels/glare_dark_separation.pdf`
+- `figures/panels/exposure_gain_profiles.pdf`
+- `figures/panels/trajectory_envelopes.pdf`
+- `figures/panels/camera_semantics_progress.pdf`
+- `figures/panels/stage_success_progress.pdf`
 
 ## Tables
 
-- `tables/table1_primary_navigation.tex`
 - `tables/table2_scene_breakdown.tex`
 - `tables/table3_camera_response.tex`
 

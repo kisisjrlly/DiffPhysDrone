@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="165.99685pt" height="126pt" viewBox="0 0 165.99685 126" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-05-15T13:02:32.463225</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.9.4, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 126 
+L 165.99685 126 
+L 165.99685 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 8.574287 56.0168 
+L 35.520957 56.0168 
+Q 38.408101 56.0168 38.408101 53.8496 
+L 38.408101 31.2144 
+Q 38.408101 29.0472 35.520957 29.0472 
+L 8.574287 29.0472 
+Q 5.687143 29.0472 5.687143 31.2144 
+L 5.687143 53.8496 
+Q 5.687143 56.0168 8.574287 56.0168 
+z
+" clip-path="url(#p2dc715f041)" style="fill: #e8f1fa; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 47.069531 56.0168 
+L 74.016202 56.0168 
+Q 76.903345 56.0168 76.903345 53.8496 
+L 76.903345 31.2144 
+Q 76.903345 29.0472 74.016202 29.0472 
+L 47.069531 29.0472 
+Q 44.182387 29.0472 44.182387 31.2144 
+L 44.182387 53.8496 
+Q 44.182387 56.0168 47.069531 56.0168 
+z
+" clip-path="url(#p2dc715f041)" style="fill: #fff1d6; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 85.564775 56.0168 
+L 112.511446 56.0168 
+Q 115.398589 56.0168 115.398589 53.8496 
+L 115.398589 31.2144 
+Q 115.398589 29.0472 112.511446 29.0472 
+L 85.564775 29.0472 
+Q 82.677631 29.0472 82.677631 31.2144 
+L 82.677631 53.8496 
+Q 82.677631 56.0168 85.564775 56.0168 
+z
+" clip-path="url(#p2dc715f041)" style="fill: #e8f5ed; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 124.060019 56.0168 
+L 151.00669 56.0168 
+Q 153.893833 56.0168 153.893833 53.8496 
+L 153.893833 31.2144 
+Q 153.893833 29.0472 151.00669 29.0472 
+L 124.060019 29.0472 
+Q 121.172876 29.0472 121.172876 31.2144 
+L 121.172876 53.8496 
+Q 121.172876 56.0168 124.060019 56.0168 
+z
+" clip-path="url(#p2dc715f041)" style="fill: #f3e8f2; stroke: #333333; stroke-width: 0.55; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 26.859528 99.12 
+L 135.929386 99.12 
+L 135.929386 78.652 
+L 26.859528 78.652 
+z
+" clip-path="url(#p2dc715f041)" style="fill: #f7f7f7; stroke: #333333; stroke-width: 0.5; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(13.299263 40.840231)">online</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(12.7152 47.58705)">rollout</text>
+   </g>
+   <g id="text_2">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(50.440444 40.840231)">teacher</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(51.021772 47.58705)">relabel</text>
+   </g>
+   <g id="text_3">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(88.935688 40.840231)">camera</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(88.155298 47.58705)">pretrain</text>
+   </g>
+   <g id="text_4">
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(122.563198 40.833669)">flight-only</text>
+    <text style="font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(129.953667 47.593613)">adapt</text>
+   </g>
+   <g id="patch_7">
+    <path d="M 39.087829 42.532 
+Q 40.896684 42.532 41.978816 42.532 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 38.778816 40.932 
+L 41.978816 42.532 
+L 38.778816 44.132 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 77.583074 42.532 
+Q 79.391928 42.532 80.47406 42.532 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 77.27406 40.932 
+L 80.47406 42.532 
+L 77.27406 44.132 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 116.078318 42.532 
+Q 117.887172 42.532 118.969305 42.532 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 115.769305 40.932 
+L 118.969305 42.532 
+L 115.769305 44.132 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="text_5">
+    <text style="font: 6.2px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(53.244035 84.744109)">closed-loop evaluation</text>
+    <text style="font: 6.2px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(55.047847 90.375453)">7 methods x 3 scenes</text>
+    <text style="font: 6.2px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif" transform="translate(52.899644 96.006797)">300 episodes per scene</text>
+   </g>
+   <g id="patch_10">
+    <path d="M 136.6135 54.955599 
+Q 108.664999 66.610716 81.387234 77.986123 
+" style="fill: none; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+    <path d="M 84.956539 78.231199 
+L 81.387234 77.986123 
+L 83.724877 75.277725 
+z
+" style="fill: #333333; stroke: #333333; stroke-width: 0.65; stroke-linecap: round"/>
+   </g>
+   <g id="text_6">
+    <text style="font: 700 8px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif; text-anchor: start" x="6.007937" y="18.9335" transform="rotate(-0 6.007937 18.9335)">Relabel and adapt</text>
+   </g>
+   <g id="text_7">
+    <text style="fill: #4a4a4a; font: 7px 'Times New Roman', 'Times', 'Nimbus Roman', 'DejaVu Serif', serif; text-anchor: start" x="6.007937" y="112.364" transform="rotate(-0 6.007937 112.364)">final adaptation freezes the camera branch</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p2dc715f041">
+   <rect x="2.8" y="2.8" width="160.39685" height="120.4"/>
+  </clipPath>
+ </defs>
+</svg>

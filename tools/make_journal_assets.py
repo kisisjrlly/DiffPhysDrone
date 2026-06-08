@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -76,6 +77,7 @@ HALF_PANEL_H = 2.35
 WIDE_PANEL_W = DOUBLE_COL * 0.62
 WIDE_PANEL_H = 2.55
 TRAJ_PANEL_W = DOUBLE_COL * 0.34
+FULL_PANEL_H = 2.35
 
 
 def set_journal_style() -> None:
@@ -109,14 +111,21 @@ def set_journal_style() -> None:
     )
 
 
-def save_all(fig: plt.Figure, out_base: Path) -> None:
+def save_all(fig: plt.Figure, out_base: Path, *, auto_layout: bool = True) -> None:
     out_base.parent.mkdir(parents=True, exist_ok=True)
+    # Keep the exported page size equal to the requested figure size.  Using a
+    # tight bounding box makes each PDF page depend on tick labels, legends, and
+    # colorbars, so LaTeX subfigures with the same width end up with different
+    # apparent plotting areas.
+    if auto_layout:
+        try:
+            fig.tight_layout(pad=0.35)
+        except Exception:
+            pass
     for ext in ("pdf", "svg", "png"):
         fig.savefig(
             out_base.with_suffix(f".{ext}"),
             dpi=600 if ext == "png" else None,
-            bbox_inches="tight",
-            pad_inches=0.035,
             facecolor="white",
         )
     plt.close(fig)
@@ -317,17 +326,17 @@ def fig1_panel_exports(out_dir: Path) -> None:
     fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.75))
     ax = fig.add_subplot(111)
     draw_fig1_task_schematic(ax)
-    save_all(fig, panel_dir / "fig1a_task_schematic")
+    save_all(fig, panel_dir / "task_schematic")
 
     fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.75))
     ax = fig.add_subplot(111)
     draw_fig1_active_loop(ax)
-    save_all(fig, panel_dir / "fig1b_active_depth_loop")
+    save_all(fig, panel_dir / "active_depth_loop")
 
     fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.75))
     ax = fig.add_subplot(111)
     draw_fig1_protocol(ax)
-    save_all(fig, panel_dir / "fig1c_relabeled_training_protocol")
+    save_all(fig, panel_dir / "relabeled_training_protocol")
 
 
 def draw_training_metric(ax: plt.Axes, training: pd.DataFrame, metric: str, ylabel: str, scale: str) -> None:
@@ -344,7 +353,7 @@ def draw_training_metric(ax: plt.Axes, training: pd.DataFrame, metric: str, ylab
             label=METHOD_LABEL_J[method],
             linewidth=1.15,
         )
-    ax.set_xlabel("training step")
+    ax.set_xlabel("Training step")
     ax.set_ylabel(ylabel)
     clean_axis(ax, "y")
     if scale == "log":
@@ -358,9 +367,9 @@ def fig2_training_convergence_panels(training: pd.DataFrame, out_dir: Path) -> N
         return
     panel_dir = out_dir / "panels"
     specs = [
-        ("fig2a_training_loss", "loss", "training loss", "log"),
-        ("fig2b_training_success", "success_rate", "training success", "linear"),
-        ("fig2c_training_collision", "collision_rate", "training collision", "linear"),
+        ("training_loss", "loss", "Training loss", "log"),
+        ("training_success", "success_rate", "Training success", "linear"),
+        ("training_collision", "collision_rate", "Training collision", "linear"),
     ]
     for name, metric, ylabel, scale in specs:
         fig = plt.figure(figsize=(TRIPLE_PANEL_W, TRIPLE_PANEL_H))
@@ -372,7 +381,7 @@ def fig2_training_convergence_panels(training: pd.DataFrame, out_dir: Path) -> N
 
 
 def draw_overall_forest(ax: plt.Axes, episodes: pd.DataFrame) -> None:
-    draw_metric_forest(ax, episodes, "success_rate", "success rate", (0.0, 1.0), show_ylabels=True)
+    draw_metric_forest(ax, episodes, "success_rate", "Success rate", (0.0, 1.0), show_ylabels=True)
 
 
 def draw_metric_forest(
@@ -400,6 +409,137 @@ def draw_metric_forest(
     clean_axis(ax, "x")
 
 
+def draw_primary_metric_axis(
+    ax: plt.Axes,
+    episodes: pd.DataFrame,
+    metric: str,
+    title: str,
+    show_ylabels: bool,
+) -> None:
+    y_positions = np.arange(len(METHOD_ORDER_MAIN))[::-1]
+    for yi, method in zip(y_positions, METHOD_ORDER_MAIN):
+        mean, lo, hi = metric_ci(episodes, method, metric)
+        ax.barh(
+            yi,
+            mean,
+            height=0.58,
+            color=METHOD_COLOR[method],
+            alpha=0.88 if method == "flightonly" else 0.66,
+            edgecolor="#222222",
+            linewidth=0.35,
+            zorder=2,
+        )
+        ax.errorbar(
+            [mean],
+            [yi],
+            xerr=[[mean - lo], [hi - mean]],
+            fmt="none",
+            ecolor="#222222",
+            elinewidth=0.65,
+            capsize=1.6,
+            zorder=3,
+        )
+        if mean > 0.90:
+            ax.text(mean - 0.035, yi, f"{mean:.2f}", va="center", ha="right", fontsize=6.9, color="white")
+        else:
+            ax.text(mean + 0.025, yi, f"{mean:.2f}", va="center", ha="left", fontsize=6.9)
+    ax.set_yticks(y_positions)
+    if show_ylabels:
+        ax.set_yticklabels([METHOD_LABEL_J[m] for m in METHOD_ORDER_MAIN])
+    else:
+        ax.set_yticklabels([])
+    ax.set_xlim(0.0, 1.02)
+    ax.set_ylim(-0.55, len(METHOD_ORDER_MAIN) - 0.45)
+    ax.set_xlabel("Episode fraction")
+    clean_axis(ax, "x")
+
+
+def draw_primary_performance_overview(episodes: pd.DataFrame, out_dir: Path) -> None:
+    axis_rect = [0.31, 0.29, 0.64, 0.62]
+    panel_specs = [
+        ("primary_success_rate", "success_rate", "Success rate", True),
+        ("primary_collision_rate", "collision_rate", "Collision rate", True),
+        ("primary_depth_fill", "fill_rate", "Depth fill rate", True),
+    ]
+    for name, metric, title, show_ylabels in panel_specs:
+        fig = plt.figure(figsize=(TRIPLE_PANEL_W, TRIPLE_PANEL_H))
+        ax = fig.add_axes(axis_rect)
+        draw_primary_metric_axis(ax, episodes, metric, "", show_ylabels=show_ylabels)
+        ax.set_xlabel("Episode fraction")
+        save_all(fig, out_dir / name, auto_layout=False)
+
+
+def draw_fill_success_delta_plane(ax: plt.Axes, episodes: pd.DataFrame) -> None:
+    methods = ["flightonly", "randfix", "nondiff"]
+    ax.axhline(0, color="#222222", lw=0.65, zorder=0)
+    ax.axvline(0, color="#222222", lw=0.65, zorder=0)
+    ax.fill_between([-4, 30], 0, 13, color="#E8F5ED", alpha=0.55, zorder=-2)
+    ax.text(11.8, 10.4, "Task-useful sensing", fontsize=7.0, color="#33664A", ha="center")
+    ax.scatter([0], [0], s=30, facecolor="white", edgecolor="#222222", linewidth=0.55, zorder=3)
+    ax.text(0.55, -1.7, "Fixed", fontsize=7.0, color="#4A4A4A")
+    for method in methods:
+        dx = bootstrap_delta_ci(episodes, method, "fixed", "fill_rate")
+        dy = bootstrap_delta_ci(episodes, method, "fixed", "success_rate")
+        x = 100.0 * dx[0]
+        y = 100.0 * dy[0]
+        ax.errorbar(
+            [x],
+            [y],
+            xerr=[[100.0 * (dx[0] - dx[1])], [100.0 * (dx[2] - dx[0])]],
+            yerr=[[100.0 * (dy[0] - dy[1])], [100.0 * (dy[2] - dy[0])]],
+            fmt="none",
+            ecolor="#222222",
+            elinewidth=0.55,
+            capsize=1.6,
+            zorder=2,
+        )
+        ax.scatter([x], [y], s=42, color=METHOD_COLOR[method], edgecolor="#222222", linewidth=0.45, zorder=4)
+        offsets = {
+            "flightonly": (-1.5, 1.4, "right"),
+            "randfix": (0.7, 1.1, "left"),
+            "nondiff": (0.8, -1.9, "left"),
+        }
+        ox, oy, ha = offsets[method]
+        ax.text(x + ox, y + oy, METHOD_LABEL_J[method], fontsize=7.1, ha=ha)
+    ax.set_xlabel(r"$\Delta$ Depth fill vs. fixed (percentage points)")
+    ax.set_ylabel(r"$\Delta$ Success vs. fixed (percentage points)")
+    ax.set_xlim(-3.0, 28.5)
+    ax.set_ylim(-11.5, 12.5)
+    clean_axis(ax, "both")
+
+
+def draw_scene_success_fill_heatmap(ax: plt.Axes, episodes: pd.DataFrame) -> None:
+    methods = METHOD_ORDER_MAIN
+    success = np.zeros((len(methods), len(SCENES)))
+    fill = np.zeros_like(success)
+    for i, method in enumerate(methods):
+        for j, scene in enumerate(SCENES):
+            success[i, j] = metric_ci(episodes, method, "success_rate", scene)[0]
+            fill[i, j] = metric_ci(episodes, method, "fill_rate", scene)[0]
+    im = ax.imshow(success, cmap="YlGnBu", vmin=0.0, vmax=0.86, aspect="auto")
+    ax.set_xticks(np.arange(len(SCENES)))
+    ax.set_xticklabels([SCENE_LABEL[s] for s in SCENES])
+    ax.set_yticks(np.arange(len(methods)))
+    ax.set_yticklabels([METHOD_LABEL_J[m] for m in methods])
+    for i in range(success.shape[0]):
+        for j in range(success.shape[1]):
+            color = "white" if success[i, j] > 0.50 else "#111111"
+            ax.text(
+                j,
+                i,
+                f"S {success[i, j]:.2f}\nF {fill[i, j]:.2f}",
+                ha="center",
+                va="center",
+                fontsize=6.7,
+                color=color,
+                linespacing=1.0,
+            )
+    ax.tick_params(length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    return im
+
+
 def draw_delta_panel(ax: plt.Axes, episodes: pd.DataFrame) -> None:
     methods = ["flightonly", "randfix", "nondiff", "zero"]
     metrics = [("success_rate", "success"), ("fill_rate", "fill")]
@@ -414,11 +554,10 @@ def draw_delta_panel(ax: plt.Axes, episodes: pd.DataFrame) -> None:
     ax.axvline(0, color="#222222", lw=0.65)
     ax.set_yticks(y)
     ax.set_yticklabels([METHOD_LABEL_J[m] for m in methods])
-    ax.set_xlabel(r"$\Delta$ versus fixed camera")
+    ax.set_xlabel(r"$\Delta$ Versus fixed camera")
     ax.set_xlim(-0.72, 0.22)
     ax.legend(frameon=False, loc="lower left", ncol=2, handletextpad=0.35)
     clean_axis(ax, "x")
-    ax.set_title("Effect size", pad=5)
 
 
 def draw_scene_delta_heatmap(ax: plt.Axes, episodes: pd.DataFrame) -> None:
@@ -436,7 +575,6 @@ def draw_scene_delta_heatmap(ax: plt.Axes, episodes: pd.DataFrame) -> None:
     for i in range(data.shape[0]):
         for j in range(data.shape[1]):
             ax.text(j, i, f"{data[i, j]:+.2f}", ha="center", va="center", fontsize=7.0, color="#111111")
-    ax.set_title("Per-scene success gain", pad=5)
     return im
 
 
@@ -465,12 +603,11 @@ def draw_success_fill_plane(ax: plt.Axes, episodes: pd.DataFrame) -> None:
             "zero": 0.020,
         }[method]
         ax.text(fill[0] + dx, succ[0] + dy, METHOD_LABEL_J[method], fontsize=7.0)
-    ax.set_xlabel("depth fill rate")
-    ax.set_ylabel("success rate")
+    ax.set_xlabel("Depth fill rate")
+    ax.set_ylabel("Success rate")
     ax.set_xlim(0.70, 0.99)
     ax.set_ylim(0.0, 0.84)
     clean_axis(ax, "both")
-    ax.set_title("Performance-observation coupling", pad=5)
 
 
 def draw_terminal_ecdf(ax: plt.Axes, episodes: pd.DataFrame) -> None:
@@ -478,29 +615,35 @@ def draw_terminal_ecdf(ax: plt.Axes, episodes: pd.DataFrame) -> None:
         vals = np.sort(episodes[episodes["method"] == method]["final_goal_dist"].astype(float).to_numpy())
         y = np.arange(1, len(vals) + 1) / len(vals)
         ax.step(vals, y, where="post", color=METHOD_COLOR[method], label=METHOD_LABEL_J[method], lw=1.05)
-    ax.set_xlabel("terminal distance to goal (m)")
-    ax.set_ylabel("episode fraction")
+    ax.set_xlabel("Terminal distance to goal (m)")
+    ax.set_ylabel("Episode fraction")
     ax.set_xlim(0, 1.9)
     ax.set_ylim(0, 1.0)
     clean_axis(ax, "both")
     ax.legend(frameon=False, loc="lower right")
-    ax.set_title("Terminal distance distribution", pad=5)
 
 
 def fig3_navigation_panels(episodes: pd.DataFrame, out_dir: Path) -> None:
     panel_dir = out_dir / "panels"
 
+    draw_primary_performance_overview(episodes, panel_dir)
+
     fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
-    im = draw_scene_delta_heatmap(ax, episodes)
+    draw_fill_success_delta_plane(ax, episodes)
+    save_all(fig, panel_dir / "fill_success_coupling")
+
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
+    ax = fig.add_subplot(111)
+    im = draw_scene_success_fill_heatmap(ax, episodes)
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
-    cbar.set_label(r"$\Delta$ success")
-    save_all(fig, panel_dir / "fig3c_scene_success_gain")
+    cbar.set_label("Success rate")
+    save_all(fig, panel_dir / "scene_success_heatmap")
 
     fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
     ax = fig.add_subplot(111)
     draw_terminal_ecdf(ax, episodes)
-    save_all(fig, panel_dir / "fig3d_terminal_distance_ecdf")
+    save_all(fig, panel_dir / "terminal_distance_ecdf")
 
 
 def draw_exposure_gain_plane(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
@@ -524,12 +667,91 @@ def draw_exposure_gain_plane(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
         )
         ax.scatter([e], [g], s=34 + 62 * p, color=SCENE_COLOR[scene], edgecolor="#222222", linewidth=0.45, zorder=3)
         ax.text(e + 0.020, g + 0.012, SCENE_LABEL[scene], color=SCENE_COLOR[scene], fontsize=7.0)
-    ax.set_xlabel("exposure")
-    ax.set_ylabel("gain")
+    ax.set_xlabel("Exposure")
+    ax.set_ylabel("Gain")
     ax.set_xlim(0.0, 0.86)
     ax.set_ylim(0.0, 0.82)
     clean_axis(ax, "both")
-    ax.set_title("Exposure-gain response plane", pad=5)
+
+
+def draw_camera_peg_grouped_bars(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
+    x = np.arange(len(SCENES))
+    width = 0.23
+    params = ["power", "exposure", "gain"]
+    offsets = [-width, 0.0, width]
+    for off, param in zip(offsets, params):
+        means = []
+        los = []
+        his = []
+        for scene in SCENES:
+            mean, lo, hi = scene_param_ci(phase_ep, "flightonly", scene, "near", param)
+            means.append(mean)
+            los.append(lo)
+            his.append(hi)
+        means = np.asarray(means)
+        los = np.asarray(los)
+        his = np.asarray(his)
+        ax.bar(
+            x + off,
+            means,
+            width=width,
+            color=PARAM_COLOR[param],
+            alpha=0.82,
+            edgecolor="#222222",
+            linewidth=0.35,
+            label=param.capitalize(),
+            zorder=2,
+        )
+        ax.errorbar(
+            x + off,
+            means,
+            yerr=[means - los, his - means],
+            fmt="none",
+            ecolor="#222222",
+            elinewidth=0.55,
+            capsize=1.4,
+            zorder=3,
+        )
+    ax.set_xticks(x)
+    ax.set_xticklabels([SCENE_LABEL[s] for s in SCENES])
+    ax.set_ylim(0.0, 0.86)
+    ax.set_ylabel("Normalized command")
+    ax.legend(frameon=False, ncol=3, loc="upper center", bbox_to_anchor=(0.5, 1.16), handlelength=1.4)
+    clean_axis(ax, "y")
+
+
+def draw_scene_separation_bars(ax: plt.Axes, phase_ep: pd.DataFrame) -> None:
+    methods = ["flightonly", "dagger", "pretrained", "fixed", "randfix", "nondiff", "zero"]
+    y = np.arange(len(methods))[::-1]
+    for yi, method in zip(y, methods):
+        mean, lo, hi = l1_scene_separation_ci(phase_ep, method)
+        ax.barh(
+            yi,
+            mean,
+            height=0.55,
+            color=METHOD_COLOR[method],
+            alpha=0.86 if method == "flightonly" else 0.62,
+            edgecolor="#222222",
+            linewidth=0.35,
+            zorder=2,
+        )
+        if np.isfinite(lo):
+            ax.errorbar(
+                [mean],
+                [yi],
+                xerr=[[mean - lo], [hi - mean]],
+                fmt="none",
+                ecolor="#222222",
+                elinewidth=0.55,
+                capsize=1.4,
+                zorder=3,
+            )
+        ax.text(mean + 0.012, yi, f"{mean:.2f}", va="center", fontsize=6.8)
+    ax.set_yticks(y)
+    ax.set_yticklabels([METHOD_LABEL_J[m] for m in methods])
+    ax.set_xlim(0.0, 0.48)
+    ax.set_xlabel("Mean absolute P/E/G difference")
+    clean_axis(ax, "x")
 
 
 def draw_profile_pair(ax_top: plt.Axes, ax_bottom: plt.Axes, traces: pd.DataFrame) -> None:
@@ -546,15 +768,24 @@ def draw_profile_pair(ax_top: plt.Axes, ax_bottom: plt.Axes, traces: pd.DataFram
                 alpha=0.11,
                 linewidth=0,
             )
-    for ax, ylabel in [(ax_top, "exposure"), (ax_bottom, "gain")]:
+    for ax, ylabel in [(ax_top, "Exposure"), (ax_bottom, "Gain")]:
         ax.axvspan(-0.25, 0.25, color="#BDBDBD", alpha=0.17, lw=0)
         ax.axvline(0, color="#333333", lw=0.55)
         ax.set_ylim(0, 0.84)
         ax.set_ylabel(ylabel)
         clean_axis(ax, "both")
-    ax_top.legend(frameon=False, loc="upper right", ncol=3, handlelength=1.6)
+    ax_top.legend(
+        frameon=False,
+        loc="upper right",
+        ncol=3,
+        fontsize=5.8,
+        handlelength=1.0,
+        columnspacing=0.55,
+        handletextpad=0.25,
+        borderaxespad=0.1,
+    )
     ax_top.tick_params(labelbottom=False)
-    ax_bottom.set_xlabel("local x relative to wall (m)")
+    ax_bottom.set_xlabel("Local x relative to wall (m)")
 
 
 def draw_trajectory_envelope(ax: plt.Axes, episodes: pd.DataFrame, traces: pd.DataFrame) -> None:
@@ -570,34 +801,53 @@ def draw_trajectory_envelope(ax: plt.Axes, episodes: pd.DataFrame, traces: pd.Da
     ax.set_xlim(-1.55, 1.55)
     ax.set_ylim(-0.85, 0.85)
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlabel("local x (m)")
-    ax.set_ylabel("local y (m)")
+    ax.set_xlabel("Local x (m)")
+    ax.set_ylabel("Local y (m)")
     clean_axis(ax, "both")
-    ax.legend(frameon=False, loc="upper right")
-    ax.set_title("Successful trajectory envelopes", pad=5)
+    ax.legend(
+        frameon=False,
+        loc="upper right",
+        fontsize=5.8,
+        handlelength=1.0,
+        labelspacing=0.18,
+        borderaxespad=0.1,
+    )
 
 
 def fig4_camera_mechanism_panels(
     episodes: pd.DataFrame, traces: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path
 ) -> None:
     panel_dir = out_dir / "panels"
+    top_axis_rect = [0.31, 0.23, 0.64, 0.60]
+    bottom_axis_rect = [0.24, 0.25, 0.68, 0.62]
 
-    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.90))
-    ax = fig.add_subplot(111)
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
+    ax = fig.add_axes(top_axis_rect)
+    draw_camera_peg_grouped_bars(ax, phase_ep)
+    save_all(fig, panel_dir / "camera_peg_grouped_bars", auto_layout=False)
+
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, TRIPLE_PANEL_H))
+    ax = fig.add_axes(bottom_axis_rect)
     draw_exposure_gain_plane(ax, phase_ep)
-    save_all(fig, panel_dir / "fig4b_exposure_gain_plane")
+    save_all(fig, panel_dir / "exposure_gain_plane", auto_layout=False)
 
-    fig = plt.figure(figsize=(WIDE_PANEL_W, WIDE_PANEL_H))
+    fig = plt.figure(figsize=(HALF_PANEL_W, HALF_PANEL_H))
+    ax = fig.add_axes(top_axis_rect)
+    draw_scene_separation_bars(ax, phase_ep)
+    save_all(fig, panel_dir / "glare_dark_separation", auto_layout=False)
+
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, TRIPLE_PANEL_H))
     sub = GridSpec(2, 1, figure=fig, hspace=0.12)
     ax_top = fig.add_subplot(sub[0, 0])
     ax_bottom = fig.add_subplot(sub[1, 0], sharex=ax_top)
     draw_profile_pair(ax_top, ax_bottom, traces)
-    save_all(fig, panel_dir / "fig4d_exposure_gain_profiles")
+    fig.subplots_adjust(left=0.23, right=0.97, top=0.83, bottom=0.28, hspace=0.16)
+    save_all(fig, panel_dir / "exposure_gain_profiles", auto_layout=False)
 
-    fig = plt.figure(figsize=(TRAJ_PANEL_W, 1.95))
-    ax = fig.add_subplot(111)
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, TRIPLE_PANEL_H))
+    ax = fig.add_axes(bottom_axis_rect)
     draw_trajectory_envelope(ax, episodes, traces)
-    save_all(fig, panel_dir / "fig4e_trajectory_envelopes")
+    save_all(fig, panel_dir / "trajectory_envelopes", auto_layout=False)
 
 
 def offline_dagger_sep(diagnosis: pd.DataFrame) -> float:
@@ -633,11 +883,55 @@ def draw_dagger_semantics_progress(ax: plt.Axes, phase_ep: pd.DataFrame, diagnos
         ax.text(xi, mean + 0.025, f"{mean:.2f}", ha="center", fontsize=7.0)
     ax.set_xticks(x)
     ax.set_xticklabels(stages, rotation=28, ha="right")
-    ax.set_ylabel("glare-dark camera L1")
+    ax.set_ylabel("Glare-dark camera L1")
     finite_vals = [float(v) for v in vals if np.isfinite(v)]
     ax.set_ylim(0, max(0.42, max(finite_vals) * 1.20))
     clean_axis(ax, "y")
-    ax.set_title("Online camera semantics", pad=5)
+
+
+def draw_stage_success_progress(ax: plt.Axes, episodes: pd.DataFrame) -> None:
+    stages = ["pretrained", "dagger", "flightonly"]
+    x = np.arange(len(stages))
+    means = []
+    los = []
+    his = []
+    for method in stages:
+        mean, lo, hi = metric_ci(episodes, method, "success_rate")
+        means.append(mean)
+        los.append(lo)
+        his.append(hi)
+    means = np.asarray(means)
+    los = np.asarray(los)
+    his = np.asarray(his)
+    colors = [METHOD_COLOR[m] for m in stages]
+    bars = ax.bar(
+        x,
+        means,
+        width=0.58,
+        color=colors,
+        edgecolor="#222222",
+        linewidth=0.35,
+        zorder=2,
+    )
+    for bar, alpha in zip(bars, [0.62, 0.72, 0.90]):
+        bar.set_alpha(alpha)
+    ax.errorbar(
+        x,
+        means,
+        yerr=[means - los, his - means],
+        fmt="none",
+        ecolor="#222222",
+        elinewidth=0.55,
+        capsize=1.5,
+        zorder=3,
+    )
+    for xi, mean in zip(x, means):
+        ax.text(xi, mean + 0.025, f"{mean:.2f}", ha="center", fontsize=7.0)
+    ax.set_xticks(x)
+    ax.set_xticklabels(["Pretrain", "DAgger", "Flight-only"], rotation=18, ha="right")
+    ax.set_ylim(0.0, 0.84)
+    ax.set_ylabel("Success rate")
+    clean_axis(ax, "y")
 
 
 def fig6_dagger_diagnosis_panels(
@@ -648,7 +942,77 @@ def fig6_dagger_diagnosis_panels(
     fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
     ax = fig.add_subplot(111)
     draw_dagger_semantics_progress(ax, phase_ep, diagnosis)
-    save_all(fig, panel_dir / "fig6a_camera_semantics_progress")
+    save_all(fig, panel_dir / "camera_semantics_progress")
+
+    fig = plt.figure(figsize=(TRIPLE_PANEL_W, 1.95))
+    ax = fig.add_subplot(111)
+    draw_stage_success_progress(ax, episodes)
+    save_all(fig, panel_dir / "stage_success_progress")
+
+
+def copy_existing_qualitative_depth_assets(eval_dir: Path, out_dir: Path) -> None:
+    src_root = eval_dir / "journal_assets"
+    src_fig_dir = src_root / "figures"
+    dst_fig_dir = out_dir / "figures"
+    if src_fig_dir.exists():
+        dst_fig_dir.mkdir(parents=True, exist_ok=True)
+        for path in src_fig_dir.glob("fig5_depth_observation_sequence_*.*"):
+            dst_name = path.name.replace("fig5_", "", 1)
+            shutil.copy2(path, dst_fig_dir / dst_name)
+    src_qual = src_root / "qualitative_depth"
+    if src_qual.exists():
+        shutil.copytree(src_qual, out_dir / "qualitative_depth", dirs_exist_ok=True)
+        qual_readme = out_dir / "qualitative_depth" / "README.md"
+        if qual_readme.exists():
+            readme_text = qual_readme.read_text(encoding="utf-8")
+            qual_readme.write_text(
+                readme_text.replace(
+                    "figures/fig5_depth_observation_sequence_<scene>.pdf",
+                    "figures/depth_observation_sequence_<scene>.pdf",
+                ),
+                encoding="utf-8",
+            )
+
+
+def cleanup_obsolete_assets(out_dir: Path) -> None:
+    """Remove numbered manuscript-figure aliases that are no longer referenced."""
+
+    obsolete_bases = [
+        out_dir / "figures" / "depth_keyframe_montage",
+        out_dir / "figures" / "fig5_depth_keyframe_montage",
+        out_dir / "figures" / "fig5_depth_observation_sequence_glare",
+        out_dir / "figures" / "fig5_depth_observation_sequence_dark",
+        out_dir / "figures" / "fig5_depth_observation_sequence_specular",
+        out_dir / "figures" / "panels" / "fig1a_task_schematic",
+        out_dir / "figures" / "panels" / "fig1b_active_depth_loop",
+        out_dir / "figures" / "panels" / "fig1c_relabeled_training_protocol",
+        out_dir / "figures" / "panels" / "fig2a_training_loss",
+        out_dir / "figures" / "panels" / "fig2b_training_success",
+        out_dir / "figures" / "panels" / "fig2c_training_collision",
+        out_dir / "figures" / "panels" / "fig3a_primary_success_rate",
+        out_dir / "figures" / "panels" / "fig3a_primary_collision_rate",
+        out_dir / "figures" / "panels" / "fig3a_primary_depth_fill",
+        out_dir / "figures" / "panels" / "fig3a_primary_performance_overview",
+        out_dir / "figures" / "panels" / "fig3b_fill_success_coupling",
+        out_dir / "figures" / "panels" / "fig3c_scene_success_gain",
+        out_dir / "figures" / "panels" / "fig3c_scene_success_heatmap",
+        out_dir / "figures" / "panels" / "fig3d_terminal_distance_ecdf",
+        out_dir / "figures" / "panels" / "fig4a_camera_peg_grouped_bars",
+        out_dir / "figures" / "panels" / "fig4b_exposure_gain_plane",
+        out_dir / "figures" / "panels" / "fig4c_glare_dark_separation",
+        out_dir / "figures" / "panels" / "fig4d_exposure_gain_profiles",
+        out_dir / "figures" / "panels" / "fig4e_trajectory_envelopes",
+        out_dir / "figures" / "panels" / "fig6a_camera_semantics_progress",
+        out_dir / "figures" / "panels" / "fig6b_stage_success_progress",
+    ]
+    for base in obsolete_bases:
+        for ext in (".pdf", ".svg", ".png"):
+            path = base.with_suffix(ext)
+            if path.exists():
+                path.unlink()
+    table1 = out_dir / "tables" / "table1_primary_navigation.tex"
+    if table1.exists():
+        table1.unlink()
 
 
 def write_text(path: Path, text: str) -> None:
@@ -658,51 +1022,6 @@ def write_text(path: Path, text: str) -> None:
 
 def make_tables(episodes: pd.DataFrame, phase_ep: pd.DataFrame, out_dir: Path) -> None:
     table_dir = out_dir / "tables"
-    fixed_success = metric_ci(episodes, "fixed", "success_rate")[0]
-    fixed_fill = metric_ci(episodes, "fixed", "fill_rate")[0]
-    main_counts = episodes[episodes["method"].isin(METHOD_ORDER_MAIN)].groupby("method").size()
-    episodes_per_method = int(main_counts.min()) if len(main_counts) else 0
-    scene_counts = episodes[episodes["method"].isin(METHOD_ORDER_MAIN)].groupby(["method", "scene_name"]).size()
-    episodes_per_scene = int(scene_counts.min()) if len(scene_counts) else 0
-    rows = [
-        r"\begin{table*}[t]",
-        r"\centering",
-        r"\footnotesize",
-        r"\renewcommand{\arraystretch}{1.14}",
-        r"\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccccc@{}}",
-        r"\toprule",
-        r"Method & \shortstack{Success rate\\(95\% CI)} & \shortstack{$\Delta$ success\\vs. Fixed} & \shortstack{Collision rate\\(95\% CI)} & \shortstack{Depth fill rate\\(95\% CI)} & \shortstack{$\Delta$ fill\\vs. Fixed} \\",
-        r"\midrule",
-    ]
-    for method in METHOD_ORDER_MAIN:
-        success = metric_ci(episodes, method, "success_rate")
-        collision = metric_ci(episodes, method, "collision_rate")
-        fill = metric_ci(episodes, method, "fill_rate")
-        cells = [
-            METHOD_LABEL_J[method],
-            ci_cell(*success),
-            f"{success[0] - fixed_success:+.3f}",
-            ci_cell(*collision),
-            ci_cell(*fill),
-            f"{fill[0] - fixed_fill:+.3f}",
-        ]
-        if method == "flightonly":
-            cells[0] = r"\textbf{Ours}"
-            cells[1] = rf"\textbf{{{cells[1]}}}"
-            cells[2] = rf"\textbf{{{cells[2]}}}"
-            cells[4] = rf"\textbf{{{cells[4]}}}"
-            cells[5] = rf"\textbf{{{cells[5]}}}"
-        rows.append(" & ".join(cells) + r" \\")
-    rows += [
-        r"\bottomrule",
-        r"\end{tabular*}",
-        rf"\caption{{Primary closed-loop navigation performance.}}",
-        r"\label{tab:journal_main_navigation}",
-        r"\end{table*}",
-        "",
-    ]
-    write_text(table_dir / "table1_primary_navigation.tex", "\n".join(rows))
-
     rows = [
         r"\begin{table}[t]",
         r"\centering",
@@ -789,25 +1108,29 @@ WandB training exports are plotted for the final active-camera policy, fixed
 camera, random fixed camera, non-differentiable learned camera, and blind
 zero-depth control. **a,** training loss. **b,** training success rate. **c,**
 training collision rate. The curves are convergence diagnostics; all navigation
-claims use the held-out closed-loop evaluations summarized in Figure 3 and
-Tables 1--2.
+claims use the held-out closed-loop evaluations summarized in Figure 3 and the
+main text.
 
-## Figure 3 | Navigation gains are scene-dependent.
+## Figure 3 | Navigation gains require perception-control coupling.
 
 All methods are evaluated for 300 episodes, with 100 episodes in each scene.
-**a,** Per-scene success change relative to fixed camera. **b,** Empirical
-distribution of terminal goal distance. The proposed policy improves navigation
-success while reducing the fraction of episodes that terminate far from the
-goal.
+**a,** Primary success, collision, and depth-fill rates with 95% confidence
+intervals. **b,** Change in depth fill versus change in success relative to the
+fixed-camera baseline, reported in percentage points. **c,** Scene-wise
+success/fill heatmap. **d,** Empirical distribution of terminal goal distance.
+The proposed policy is the only learned-camera method that turns recovered
+valid depth into higher closed-loop success.
 
 ## Figure 4 | The learned camera policy implements scene-specific near-slit sensing.
 
-**a,** Exposure-gain response plane, where marker area scales with power and
-the grey cross denotes the nominal camera setting. **b,** Exposure and gain
-profiles as a function of local distance to the wall; grey shading denotes the
-near-slit window. **c,** Median successful trajectories with 10--90% episode
-envelopes. Low-reflectance dark-material scenes keep exposure/gain high near
-the wall, whereas glare suppresses both parameters.
+**a,** Near-slit power, exposure, and gain grouped by scene. **b,**
+Exposure-gain response plane, where marker area scales with power and the grey
+cross denotes the nominal camera setting. **c,** Glare-dark separation across
+methods. **d,** Exposure and gain profiles as a function of local distance to
+the wall; grey shading denotes the near-slit window. **e,** Median successful
+trajectories with 10--90% episode envelopes. Low-reflectance dark-material
+scenes keep exposure/gain high near the wall, whereas glare suppresses both
+parameters.
 
 ## Figure 5 | Camera control changes what the policy observes near the slit.
 
@@ -819,14 +1142,16 @@ trajectory provides the reference poses. At each pose, raw geometric depth is
 shown together with observed depth re-rendered using camera parameters from
 fixed, random-fixed, and final active-camera policies. The comparison isolates
 the sensor-parameter effect on the depth image at identical vehicle poses.
-The manuscript uses the glare, dark, and specular composites as a compact
-three-subfigure layout.
+The manuscript keeps the glare, dark, and specular sequence composites as
+separate full-width figures.
 
 ## Figure 6 | Camera relabeling and flight adaptation are complementary.
 
 Glare-dark camera separation is measured in the relabeled teacher data and in
 online closed-loop rollouts for the pretrained, DAgger-relabelled and final
-policies.
+policies. A second panel reports success for the same online checkpoints,
+showing that camera semantics become operational only after flight-only
+adaptation.
 """
     write_text(out_dir / "caption_drafts.md", text)
 
@@ -845,31 +1170,37 @@ figure/table set.
 
 ## Composite figures
 
-- `figures/fig5_depth_observation_sequence_glare.pdf`
-- `figures/fig5_depth_observation_sequence_dark.pdf`
-- `figures/fig5_depth_observation_sequence_specular.pdf`
+- `figures/depth_observation_sequence_glare.pdf`
+- `figures/depth_observation_sequence_dark.pdf`
+- `figures/depth_observation_sequence_specular.pdf`
 
 ## Panel figures
 
 The `figures/panels/` directory contains the standalone subfigure assets used by
 the manuscript for Figures 1, 2, 3, 4, and 6.
 
-- `figures/panels/fig2a_training_loss.pdf`
-- `figures/panels/fig2b_training_success.pdf`
-- `figures/panels/fig2c_training_collision.pdf`
-- `figures/panels/fig1a_task_schematic.pdf`
-- `figures/panels/fig1b_active_depth_loop.pdf`
-- `figures/panels/fig1c_relabeled_training_protocol.pdf`
-- `figures/panels/fig3c_scene_success_gain.pdf`
-- `figures/panels/fig3d_terminal_distance_ecdf.pdf`
-- `figures/panels/fig4b_exposure_gain_plane.pdf`
-- `figures/panels/fig4d_exposure_gain_profiles.pdf`
-- `figures/panels/fig4e_trajectory_envelopes.pdf`
-- `figures/panels/fig6a_camera_semantics_progress.pdf`
+- `figures/panels/training_loss.pdf`
+- `figures/panels/training_success.pdf`
+- `figures/panels/training_collision.pdf`
+- `figures/panels/task_schematic.pdf`
+- `figures/panels/active_depth_loop.pdf`
+- `figures/panels/relabeled_training_protocol.pdf`
+- `figures/panels/primary_success_rate.pdf`
+- `figures/panels/primary_collision_rate.pdf`
+- `figures/panels/primary_depth_fill.pdf`
+- `figures/panels/fill_success_coupling.pdf`
+- `figures/panels/scene_success_heatmap.pdf`
+- `figures/panels/terminal_distance_ecdf.pdf`
+- `figures/panels/camera_peg_grouped_bars.pdf`
+- `figures/panels/exposure_gain_plane.pdf`
+- `figures/panels/glare_dark_separation.pdf`
+- `figures/panels/exposure_gain_profiles.pdf`
+- `figures/panels/trajectory_envelopes.pdf`
+- `figures/panels/camera_semantics_progress.pdf`
+- `figures/panels/stage_success_progress.pdf`
 
 ## Tables
 
-- `tables/table1_primary_navigation.tex`
 - `tables/table2_scene_breakdown.tex`
 - `tables/table3_camera_response.tex`
 
@@ -909,9 +1240,11 @@ def main() -> None:
     fig3_navigation_panels(episodes, fig_dir)
     fig4_camera_mechanism_panels(episodes, traces, phase_ep, fig_dir)
     fig6_dagger_diagnosis_panels(episodes, phase_ep, diagnosis, fig_dir)
+    copy_existing_qualitative_depth_assets(eval_dir, out_dir)
     make_tables(episodes, phase_ep, out_dir)
     write_captions(out_dir)
     write_readme(out_dir, eval_dir)
+    cleanup_obsolete_assets(out_dir)
     print(f"[journal-assets] wrote: {out_dir}")
 
 

@@ -22,25 +22,29 @@ WandB training exports are plotted for the final active-camera policy, fixed
 camera, random fixed camera, non-differentiable learned camera, and blind
 zero-depth control. **a,** training loss. **b,** training success rate. **c,**
 training collision rate. The curves are convergence diagnostics; all navigation
-claims use the held-out closed-loop evaluations summarized in Figure 3 and
-Tables 1--2.
+claims use the held-out closed-loop evaluations summarized in Figure 3 and the
+main text.
 
-## Figure 3 | Navigation gains are scene-dependent.
+## Figure 3 | Navigation gains require perception-control coupling.
 
 All methods are evaluated for 300 episodes, with 100 episodes in each scene.
-**a,** Per-scene success change relative to fixed camera. **b,** Empirical
-distribution of terminal goal distance. The proposed policy improves navigation
-success while reducing the fraction of episodes that terminate far from the
-goal.
+**a,** Primary success, collision, and depth-fill rates with 95% confidence
+intervals. **b,** Change in depth fill versus change in success relative to the
+fixed-camera baseline, reported in percentage points. **c,** Scene-wise
+success/fill heatmap. **d,** Empirical distribution of terminal goal distance.
+The proposed policy is the only learned-camera method that turns recovered
+valid depth into higher closed-loop success.
 
 ## Figure 4 | The learned camera policy implements scene-specific near-slit sensing.
 
-**a,** Exposure-gain response plane, where marker area scales with power and
-the grey cross denotes the nominal camera setting. **b,** Exposure and gain
-profiles as a function of local distance to the wall; grey shading denotes the
-near-slit window. **c,** Median successful trajectories with 10--90% episode
-envelopes. Low-reflectance dark-material scenes keep exposure/gain high near
-the wall, whereas glare suppresses both parameters.
+**a,** Near-slit power, exposure, and gain grouped by scene. **b,**
+Exposure-gain response plane, where marker area scales with power and the grey
+cross denotes the nominal camera setting. **c,** Glare-dark separation across
+methods. **d,** Exposure and gain profiles as a function of local distance to
+the wall; grey shading denotes the near-slit window. **e,** Median successful
+trajectories with 10--90% episode envelopes. Low-reflectance dark-material
+scenes keep exposure/gain high near the wall, whereas glare suppresses both
+parameters.
 
 ## Figure 5 | Camera control changes what the policy observes near the slit.
 
@@ -52,11 +56,13 @@ trajectory provides the reference poses. At each pose, raw geometric depth is
 shown together with observed depth re-rendered using camera parameters from
 fixed, random-fixed, and final active-camera policies. The comparison isolates
 the sensor-parameter effect on the depth image at identical vehicle poses.
-The manuscript uses the glare, dark, and specular composites as a compact
-three-subfigure layout.
+The manuscript keeps the glare, dark, and specular sequence composites as
+separate full-width figures.
 
 ## Figure 6 | Camera relabeling and flight adaptation are complementary.
 
 Glare-dark camera separation is measured in the relabeled teacher data and in
 online closed-loop rollouts for the pretrained, DAgger-relabelled and final
-policies.
+policies. A second panel reports success for the same online checkpoints,
+showing that camera semantics become operational only after flight-only
+adaptation.

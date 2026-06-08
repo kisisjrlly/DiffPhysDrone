@@ -51,7 +51,7 @@ $$
    我们实现了一个最小化单墙狭缝任务，包含随机狭缝位置、随机飞行朝向和三类传感退化场景，便于隔离主动深度感知对导航的影响。
 
 2. **可微相机参数到深度质量的闭环模型。**  
-   仿真器将理想几何深度转换为由功率、曝光和增益控制的退化深度，并输出填充率、局部质量、运动模糊和噪声代理，供 teacher 优化和策略训练使用。
+   仿真器将理想几何深度转换为由功率、曝光和增益控制的退化深度，并返回策略使用的退化深度和质量图。填充率由下游 depth-health 统计计算，运动模糊和噪声代理由训练/teacher 损失根据速度、曝光时间和增益构造。
 
 3. **闭环相机 teacher relabel 流程。**  
    我们发现固定分布上的 camera pretrain 会在 learned-camera 在线分布中出现 dark/glare 混淆。因此引入 DAgger-style relabel：用 learned camera 访问在线状态，再用可微 teacher 优化器重标注这些状态。
@@ -126,11 +126,11 @@ $$
 然后可微主动深度模型根据相机状态和场景 profile 生成退化深度：
 
 $$
-D_t,Q_t,\Psi_t =
+D_t,Q_t =
 \mathcal{S}_\phi(Z_t,c_t,x_t).
 $$
 
-其中 $D_t$ 是策略输入深度图，$Q_t$ 是质量或有效性代理，$\Psi_t$ 包含填充率、patch CVaR 填充、模糊代理、噪声代理和场景退化统计。
+其中 $D_t$ 是策略输入深度图，$Q_t$ 是传感器质量图。填充率不是 `render_diff_depth` 的返回量，而是在 teacher 和训练损失中由下游 depth-health 统计对当前传感器响应计算；模糊和噪声代理也不是传感器返回量，而分别由 $\|v_t\|\tau(e_t)$ 和 $g_t^2$ 构造。
 
 模型保留以下因果关系：
 
@@ -175,11 +175,13 @@ $$
 \mathcal{L}_{\mathrm{teacher}}
 =
 \lambda_{\mathrm{fill}}\mathcal{L}_{\mathrm{fill}}
-\lambda_{\mathrm{blur}}\mathcal{L}_{\mathrm{blur}}
-\lambda_{\mathrm{noise}}\mathcal{L}_{\mathrm{noise}}
-\lambda_{\mathrm{smooth}}\mathcal{L}_{\mathrm{smooth}}
-\lambda_{\mathrm{nominal}}\mathcal{L}_{\mathrm{nominal}} .
++\lambda_{\mathrm{blur}}\mathcal{L}_{\mathrm{blur}}
++\lambda_{\mathrm{noise}}\mathcal{L}_{\mathrm{noise}}
++\lambda_{\mathrm{smooth}}\mathcal{L}_{\mathrm{smooth}}
++\lambda_{\mathrm{nominal}}\mathcal{L}_{\mathrm{nominal}} .
 $$
+
+其中 $\mathcal{L}_{\mathrm{fill}}$ 来自下游 depth-health 统计的 lower-tail patch fill，$\mathcal{L}_{\mathrm{blur}}=(\|v_t\|\tau(e_t))^2$，$\mathcal{L}_{\mathrm{noise}}=g_t^2$。因此 teacher 的可微性主要来自“相机参数 $\rightarrow$ observed depth/quality response $\rightarrow$ depth-health fill”的链路，而不是来自额外的第三个传感器返回量。
 
 最终采用的 DAgger relabel 参数为：
 
