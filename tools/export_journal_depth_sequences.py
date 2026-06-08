@@ -149,6 +149,10 @@ def capture_trajectory_local_xy(env, captures: list[RolloutCapture]) -> np.ndarr
     return np.asarray([capture_local_xy(env, cap) for cap in captures], dtype=np.float32)
 
 
+def sanitize_name(text: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in str(text))
+
+
 def choose_captures(env, captures: list[RolloutCapture], targets: list[float]) -> list[RolloutCapture]:
     if not captures:
         raise RuntimeError("rollout produced no captures")
@@ -317,6 +321,38 @@ def save_npz(path: Path, maps: dict[tuple[str, int, str], dict[str, np.ndarray |
                 arrays[f"{prefix}_{name}"] = np.asarray(arr)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(path, **arrays)
+
+
+def write_trajectories(
+    q_dir: Path,
+    trajectories: dict[tuple[str, str], np.ndarray],
+    slot: str,
+) -> None:
+    q_dir.mkdir(parents=True, exist_ok=True)
+    arrays: dict[str, np.ndarray] = {}
+    rows: list[dict] = []
+    for (scene, method), trajectory in sorted(trajectories.items()):
+        scene_key = sanitize_name(scene)
+        method_key = sanitize_name(method)
+        slot_key = sanitize_name(slot)
+        arr = np.asarray(trajectory, dtype=np.float32)
+        arrays[f"{scene_key}_{method_key}_{slot_key}_local_xy"] = arr
+        np.save(q_dir / f"trajectory_{method_key}_{scene_key}_{slot_key}.npy", arr)
+        for step, xy in enumerate(arr):
+            rows.append(
+                {
+                    "scene_name": scene,
+                    "method": method,
+                    "method_label": METHOD_LABEL.get(method, method),
+                    "slot": slot,
+                    "step": int(step),
+                    "local_x": float(xy[0]),
+                    "local_y": float(xy[1]),
+                }
+            )
+    if arrays:
+        np.savez_compressed(q_dir / "trajectories_local_xy.npz", **arrays)
+    write_csv(q_dir / "trajectory_rows.csv", rows)
 
 
 def setup_style() -> None:
@@ -508,6 +544,9 @@ def write_report(path: Path, rows: list[dict], scenes: list[str], slot: str) -> 
         "- `figures/fig5_depth_observation_sequence_<scene>.pdf`: matched-pose raw/depth comparison.",
         "- `qualitative_depth/depth_sequence_rows.csv`: per-panel camera parameters and local metrics.",
         "- `qualitative_depth/depth_sequence_arrays.npz`: raw depth, observed depth, quality, invalid and effect arrays.",
+        "- `qualitative_depth/trajectory_rows.csv`: complete local rollout trajectory for every exported scene and method.",
+        "- `qualitative_depth/trajectories_local_xy.npz`: complete local rollout trajectories keyed by scene/method/slot.",
+        "- `qualitative_depth/trajectory_<method>_<scene>_<slot>.npy`: compatibility trajectory arrays for downstream plotting.",
         "",
         "Interpretation:",
         "",
@@ -559,6 +598,7 @@ def main() -> None:
 
     all_rows: list[dict] = []
     all_maps: dict[tuple[str, int, str, str], dict[str, np.ndarray | None]] = {}
+    all_trajectories: dict[tuple[str, str], np.ndarray] = {}
     for scene_idx, scene in enumerate(cli.scenarios):
         args_by_method = {}
         env_by_method = {}
@@ -579,6 +619,7 @@ def main() -> None:
             env_by_method[method] = env
             caps_by_method[method] = caps
             trajectory_by_method[method] = trajectory
+            all_trajectories[(scene, method)] = trajectory
 
         ref_env = env_by_method["flightonly"]
         ref_args = args_by_method["flightonly"]
@@ -605,6 +646,7 @@ def main() -> None:
         )
     write_csv(q_dir / "depth_sequence_rows.csv", all_rows)
     save_npz(q_dir / "depth_sequence_arrays.npz", all_maps)
+    write_trajectories(q_dir, all_trajectories, slot)
     write_report(q_dir / "README.md", all_rows, list(cli.scenarios), slot)
     print(f"[qual-depth] wrote: {q_dir}")
     print(f"[qual-depth] figures: {fig_dir}")
