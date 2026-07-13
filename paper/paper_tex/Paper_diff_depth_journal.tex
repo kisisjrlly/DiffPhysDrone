@@ -185,13 +185,13 @@ The paper makes four contributions.
 \centering
 \includegraphics[width=1.0\textwidth]{fig_concept_overview_framework.png}
 
-\caption{Validation task and training protocol. A controlled aperture-crossing
-scenario instantiates the broader idea of task-driven differentiable
-perception with an active depth camera under localized degradation regimes. The
-policy controls both flight and camera parameters. Online states are relabeled
-by a differentiable camera teacher, the camera branch is pretrained on those
-labels, and final flight adaptation freezes the camera branch while updating
-the flight branch.}
+\caption{Overall framework of task-driven differentiable perception for drone
+navigation. The controlled aperture-crossing scenario serves as the validation
+task and instantiates the method under localized depth-degradation regimes. The
+policy jointly controls flight and camera parameters. Online states are
+relabeled by a differentiable camera teacher; the camera branch is pretrained
+on those labels; and the final flight-only stage freezes the camera branch
+while updating the flight branch.}
 \label{fig:system_protocol}
 \end{figure*}
 
