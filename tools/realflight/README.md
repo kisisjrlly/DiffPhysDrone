@@ -11,6 +11,16 @@
 主机：浏览器直接打开 `http://192.168.1.208:8090`，无需安装任何软件。
 该页面只应在可信局域网内使用（当前无鉴权）。
 
+## 快速验证
+
+```bash
+# 状态（参数 + 深度话题是否在线）
+curl http://192.168.1.208:8090/state
+
+# 抓一帧 MJPEG 深度流
+curl -o /tmp/depth.mjpeg http://192.168.1.208:8090/depth.mjpeg
+```
+
 ## 机载端命令
 
 ```bash
@@ -28,6 +38,18 @@ bash ~/start_depth_web.sh
 - 增益（D455 下限 16）
 - 激光功率（mW）
 - 发射器（关闭/激光/激光自动/LED）
+
+## 从本机同步/执行远端命令
+
+仓库内的 `upload.py` / `remote.py` 用于把脚本上传到机载电脑或一次性执行
+远端命令，SSH 密码通过环境变量提供，不写入文件：
+
+```bash
+RS_SSH_PASS=... python3 tools/realflight/upload.py \
+  tools/realflight/depth_web_tool.py /home/xgg/depth_web_tool.py
+RS_SSH_PASS=... python3 tools/realflight/remote.py \
+  'bash ~/start_depth_tools.sh'
+```
 
 ## 主机端命令
 
