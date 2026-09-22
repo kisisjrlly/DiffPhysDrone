@@ -122,10 +122,26 @@ def init_camera_params(env, B, device):
         [exposure.detach(), gain.detach()],
         -1,
     )
+
+    calibration = getattr(getattr(env, "gray_camera", None), "calibration", None)
+    nominal_delay = int(getattr(calibration, "command_delay_frames", 0))
+    jitter = int(getattr(calibration, "command_delay_jitter_frames", 0))
+    if jitter > 0:
+        delta = int(torch.randint(
+            low=-jitter,
+            high=jitter + 1,
+            size=(1,),
+            device=device,
+        ).item())
+    else:
+        delta = 0
+    env._camera_effective_delay_frames = max(nominal_delay + delta, 0)
     return exposure, gain
 
 
 def _camera_delay_frames(env):
+    if hasattr(env, "_camera_effective_delay_frames"):
+        return int(env._camera_effective_delay_frames)
     camera = getattr(env, "gray_camera", None)
     calibration = getattr(camera, "calibration", None)
     return int(getattr(calibration, "command_delay_frames", 0))
