@@ -82,7 +82,10 @@ python -m pytest -q \
   tests/test_differentiable_gray_camera.py \
   tests/test_ideal_gray_renderer.py \
   tests/test_model_gray_mode.py \
-  tests/test_gray_rollout_helpers.py
+  tests/test_gray_rollout_helpers.py \
+  tests/test_auto_exposure.py \
+  tests/test_gray_configs.py \
+  tests/test_no_legacy_d455_core.py
 
 python tools/test_gray_env_render.py
 
@@ -92,6 +95,10 @@ TASK=gray_gate_blind bash run.sh
 
 # fixed-camera stress test
 TASK=gray_gate_mixed_fixed bash run.sh
+
+# classical non-task-gradient controls (use the same flight checkpoint for eval)
+CONFIG=configs/gray_camera_mean_ae.args CKPT=<flight_ckpt> bash eval.sh
+CONFIG=configs/gray_camera_gradient_ae.args CKPT=<flight_ckpt> bash eval.sh
 ```
 
 Only when fixed grayscale navigation clearly outperforms the blind baseline
