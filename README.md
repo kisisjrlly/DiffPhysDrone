@@ -1,79 +1,62 @@
+> **Branch notice (2026-09-22):** this branch is transitioning from the legacy D455-inspired differentiable-depth line to **monochrome IMX900 task-driven differentiable camera control**. Executable code is still mostly the old depth implementation. The authoritative implementation plan is under [docs/grayscale_imx900](docs/grayscale_imx900/README.md). Do not interpret the current depth code as the final grayscale design.
+
 > **免责声明**：当前md中的描述并不完全等价项目中的代码实现，真实的实现以代码为准。
 
-# DiffPhysDrone diff_depth-only
+# DiffPhysDrone — Grayscale IMX900 transition branch
 
-本分支已经收敛为 `diff_depth` 的单主线版本。
+## New target
 
-## Scope
+The selected real camera is **e-con Systems e-CAM37M_CUONX / Sony IMX900 monochrome global shutter**, connected by MIPI CSI-2 to the **DAMIAO DM-ORIN NX V2.X** carrier hosting the Jetson Orin NX 8GB.
 
-- 仅支持 `diff_depth`
-- 传感器控制语义固定为 `power / exposure / gain`
-- 策略输入固定为单通道深度
+The new research question is:
 
-## Current Pipeline
+> Can navigation loss exploit gradients through a calibrated differentiable grayscale image-formation model to learn useful online exposure/gain control for a small quadrotor?
 
-1. `config.py`
-   只保留 `diff_depth` 主线参数
-2. `env_cuda.py`
-   使用 `render_diff_depth(power, exposure, gain)` 生成可微深度
-3. `model.py`
-   只接收 `depth_obs`
-4. `rollout_ops.py`
-   只维护 `power / exposure / gain` 更新和 `diff_depth` 渲染
-5. `trainer.py`
-   只统计 `diff_depth` 相关损失与指标
-6. `eval.py`
-   只走 `diff_depth` 推理链路
+Start here:
 
-## Main Losses
+- [Grayscale/IMX900 design index](docs/grayscale_imx900/README.md)
+- [Full technical plan](docs/grayscale_imx900/TECHNICAL_PLAN.md)
+- [Related work survey](docs/grayscale_imx900/RELATED_WORK.md)
+- [Hardware integration plan](docs/grayscale_imx900/HARDWARE_IMX900.md)
+- [Calibration and sim-to-real](docs/grayscale_imx900/CALIBRATION_SIM2REAL.md)
+- [Codex implementation guide](docs/grayscale_imx900/CODEX_IMPLEMENTATION_GUIDE.md)
+- [Current real drone inventory](real_drone.sh)
 
-- `loss_v`
-- `loss_obj_avoidance`
-- `loss_collide`
-- `loss_d_acc`
-- `loss_d_jerk`
-- `loss_cam_smooth`
-- `loss_diff_depth_power`
-- `loss_diff_depth_blur`
-- `loss_diff_depth_noise`
+## Legacy implementation retained for reference
 
-## Main Metrics
+The code inherited from `active-sensing-4f-tools-2b-core` currently remains a `diff_depth` pipeline:
 
-- `diff_depth_fill_rate`
-- `diff_depth_hole_rate`
-- `speed_exposure_corr`
-- `power_obstacle_corr`
+1. `config.py` contains the depth-era configuration.
+2. `env_cuda.py` renders geometric depth and applies a D455-inspired differentiable model.
+3. `model.py` currently consumes depth-derived 2-channel features.
+4. `rollout_ops.py` currently maintains `power / exposure / gain`.
+5. `trainer.py` and `eval.py` still log depth-specific metrics.
 
-## Running
+This is intentional during the planning phase so the old working line remains inspectable.
 
-训练：
+## Planned replacement
 
-```bash
-bash run.sh
-```
+~~~text
+old:
+geometry -> ideal depth -> D455-inspired sensor(power, exposure, gain) -> depth policy
 
-评估：
+new:
+geometry/material/light -> ideal grayscale irradiance
+ -> calibrated differentiable camera(exposure, gain, noise, saturation, motion blur)
+ -> [current gray, previous gray]
+ -> flight policy + camera policy
+~~~
 
-```bash
-bash eval.sh
-```
+## Implementation discipline
 
-默认主配置：
+Do not immediately rewrite the whole repository.
 
-- [configs/slit_active_sensing.args](/home/zhaoguodong/work/code/DiffPhysDrone/configs/slit_active_sensing.args)
+The first implementation task should only add:
 
-默认不再隐式叠加 `CAM_PROFILE`。如需叠加，请显式传入：
+- grayscale camera semantics;
+- a pure-PyTorch `DifferentiableGrayCamera`;
+- synthetic gradient/finite-difference tests.
 
-```bash
-CAM_PROFILE=low bash run.sh
-```
+Then implement the ideal grayscale renderer, fixed-camera grayscale flight, and finally differentiable-vs-detached camera learning.
 
-## Notes
-
-- 当前论文主线建议使用 `diff_sensor_impl diff_depth=python`
-- `diff_depth=cuda` 仍可用于对照与梯度检查，但论文主结果默认使用 `python`
-- 本分支的目标是围绕 `diff_depth` 论文主线继续精简与强化
-- 当前版本render_depth是不可微的，如果你想做的是：动作改变位姿
-位姿改变下一帧看到的东西
-再把“未来看见什么”的梯度反传回动作
-那 render_depth 就必须至少对 pos / R 近似可微，否则这条“通过改变视角改善感知”的梯度链会断掉。
+See `docs/grayscale_imx900/CODEX_IMPLEMENTATION_GUIDE.md` for the staged gates.
