@@ -8,8 +8,8 @@
 
 Before modifying executable code:
 
-- keep \`active-sensing-4f-tools-2b-core\` untouched;
-- work only on \`active-sensing-grayscale-imx900\` or descendants;
+- keep `active-sensing-4f-tools-2b-core` untouched;
+- work only on `active-sensing-grayscale-imx900` or descendants;
 - do not delete legacy D455 code until grayscale functionality has replacements and tests;
 - tag/record the current branch head.
 
@@ -26,7 +26,7 @@ camera_action_dim = 3 | 2
 
 For the gray path add explicit config for:
 
-- \`gray_width\`, \`gray_height\`;
+- `gray_width`, `gray_height`;
 - physical exposure min/max;
 - gain min/max;
 - sensor gradient mode;
@@ -39,7 +39,7 @@ Acceptance:
 
 - old depth configs still parse/run;
 - gray config parses;
-- no silent reuse of D455 \`power\` semantics.
+- no silent reuse of D455 `power` semantics.
 
 ## Phase 2 — ideal grayscale renderer
 
@@ -64,7 +64,7 @@ Acceptance:
 
 ## Phase 3 — differentiable gray camera
 
-Implement \`DifferentiableGrayCamera\` in PyTorch.
+Implement `DifferentiableGrayCamera` in PyTorch.
 
 Inputs:
 
@@ -112,7 +112,7 @@ Replace depth preprocessing on the gray path with:
 
 Keep existing 2-channel visual stem initially.
 
-Refactor names so gray code does not call variables \`depth_obs\`.
+Refactor names so gray code does not call variables `depth_obs`.
 
 Acceptance:
 
@@ -248,7 +248,7 @@ After hardware works:
 
 Create something like:
 
-\`tools/realflight/imx900_camera_node.py\`
+`tools/realflight/imx900_camera_node.py`
 
 Responsibilities:
 
@@ -319,7 +319,7 @@ docs/
     ...
 ~~~
 
-CUDA functions may stay in \`src/quadsim_kernel.cu\` initially, but split them later if the file becomes difficult to maintain.
+CUDA functions may stay in `src/quadsim_kernel.cu` initially, but split them later if the file becomes difficult to maintain.
 
 ## Required regression tests
 
@@ -353,7 +353,7 @@ Create automated tests for:
 The first implementation PR should contain only:
 
 - gray config/semantics skeleton;
-- \`DifferentiableGrayCamera\` with synthetic input;
+- `DifferentiableGrayCamera` with synthetic input;
 - finite-difference gradient tests;
 - no renderer changes;
 - no training changes.
