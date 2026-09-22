@@ -134,7 +134,7 @@ def update_camera_params(cam_params, exposure, gain, env):
         hist = torch.stack([exposure.detach(), gain.detach()], -1)
         return exposure.detach(), gain.detach(), hist
 
-    alpha = float(getattr(env, "camera_ema_alpha", 0.7))
+    alpha = float(getattr(env, "camera_smoothing_alpha", 0.7))
     e_target, g_target = cam_params.unbind(-1)
     e_target = e_target.clamp(0.0, 1.0)
     g_target = g_target.clamp(0.0, 1.0)
