@@ -22,6 +22,8 @@ class MetricSmoother:
         "cam/dark_fraction",
         "cam/blur_strength",
         "cam/light_scale",
+        "cam/motion_proxy",
+        "cam/characteristic_depth",
         "cam/grad_norm",
         "iter_per_sec",
         "sim_fps",
