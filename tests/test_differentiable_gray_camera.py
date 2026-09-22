@@ -178,3 +178,24 @@ def test_build_from_args_uses_gray_config_fields():
     assert camera.semantics.gain_factor_max == 6.0
     assert camera.blur_kernel_size == 3
     assert camera.quantization_bits == 8
+
+
+def test_soft_saturation_stays_bounded_and_gradient_decays():
+    camera = _camera(
+        blur_scale=0.0,
+        saturation_mode="soft",
+        soft_clip_beta=12.0,
+    )
+    low_signal = torch.tensor([0.15], requires_grad=True)
+    high_signal = torch.tensor([0.95], requires_grad=True)
+    gain = torch.tensor([0.0])
+
+    image = torch.ones((1, 1, 8, 8))
+    low = camera(image, low_signal, gain, enable_noise=False)[0].mean()
+    high = camera(image, high_signal, gain, enable_noise=False)[0].mean()
+    grad_low = torch.autograd.grad(low, low_signal, retain_graph=False)[0].abs()
+    grad_high = torch.autograd.grad(high, high_signal, retain_graph=False)[0].abs()
+
+    assert 0.0 <= float(low) <= 1.0
+    assert 0.0 <= float(high) <= 1.0
+    assert grad_high < grad_low
