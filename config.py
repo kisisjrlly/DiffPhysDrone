@@ -51,6 +51,8 @@ def build_parser():
     parser.add_argument('--gray_height', type=int, default=48)
     parser.add_argument('--gray_nn_width', type=int, default=32)
     parser.add_argument('--gray_nn_height', type=int, default=24)
+    parser.add_argument('--policy_gray_mode', type=str, default='gray',
+                        choices=['gray', 'zero'])
 
     parser.add_argument('--scenarios', nargs='*', default=list(SUPPORTED_SCENARIOS))
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None)
@@ -387,6 +389,7 @@ def print_runtime_mode(args):
             f'gain_factor={args.gray_gain_factor_min}..{args.gray_gain_factor_max}, '
             f'saturation={args.gray_saturation_mode}'
         )
+        print(f"policy_gray_mode          : {args.policy_gray_mode}")
         print('gray_pipeline_status       : fixed-camera grayscale training path wired; validate with smoke test before long runs')
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
