@@ -1,45 +1,49 @@
-> **免责声明**：当前md中的描述并不完全等价项目中的代码实现，真实的实现以代码为准。
+# Code Map — Grayscale / IMX900 Branch
 
-# diff_depth-only Code Map
+## Core files
 
-## Main Files
+- `config.py` — grayscale-only experiment configuration.
+- `main_cuda.py` — training entry point.
+- `eval.py` — grayscale evaluation entry point.
+- `env_cuda.py` — quadrotor dynamics environment, wall/slit geometry,
+  illumination scenarios, and ideal grayscale rendering bridge.
+- `model.py` — recurrent flight policy plus 2-D exposure/gain controller.
+- `rollout_ops.py` — grayscale sensor rendering, state construction, camera
+  actuator update, and action decoding.
+- `losses.py` — navigation losses plus camera switching smoothness.
+- `trainer.py` — full-BPTT grayscale rollout/training.
+- `sensors/gray_camera_semantics.py` — normalized -> physical camera mapping.
+- `sensors/differentiable_gray_camera.py` — differentiable exposure/gain,
+  noise, saturation, quantization, and motion-blur model.
+- `render/ideal_gray.py` — generic geometry -> scene irradiance.
+- `autograd_ops.py` — differentiable quadrotor dynamics only.
+- `src/quadsim_kernel.cu` — generic collision/ray-intersection CUDA kernels.
+- `src/quadsim.cpp` — CUDA bindings; no D455 sensor API remains.
 
-- [config.py](/home/zhaoguodong/work/code/DiffPhysDrone/config.py)
-  只保留 `diff_depth` 主线参数
-- [main_cuda.py](/home/zhaoguodong/work/code/DiffPhysDrone/main_cuda.py)
-  训练入口
-- [eval.py](/home/zhaoguodong/work/code/DiffPhysDrone/eval.py)
-  评估入口
-- [model.py](/home/zhaoguodong/work/code/DiffPhysDrone/model.py)
-  单深度分支策略网络
-- [rollout_ops.py](/home/zhaoguodong/work/code/DiffPhysDrone/rollout_ops.py)
-  `power / exposure / gain` 更新、状态构造、动作解码
-- [trainer.py](/home/zhaoguodong/work/code/DiffPhysDrone/trainer.py)
-  rollout、TBPTT、Full-BPTT、日志
-- [losses.py](/home/zhaoguodong/work/code/DiffPhysDrone/losses.py)
-  统一损失定义
-- [train_utils.py](/home/zhaoguodong/work/code/DiffPhysDrone/train_utils.py)
-  WandB 过滤、调度辅助、环境构造
-- [env_cuda.py](/home/zhaoguodong/work/code/DiffPhysDrone/env_cuda.py)
-  物理环境与 `diff_depth` 传感器仿真
-- [autograd_ops.py](/home/zhaoguodong/work/code/DiffPhysDrone/autograd_ops.py)
-  CUDA autograd 封装，重点看 `diff_render` 与 `diff_render_diff_depth`
-- [src/quadsim.cpp](/home/zhaoguodong/work/code/DiffPhysDrone/src/quadsim.cpp)
-  C++ 绑定入口
-- [src/quadsim_kernel.cu](/home/zhaoguodong/work/code/DiffPhysDrone/src/quadsim_kernel.cu)
-  CUDA kernel 实现
+## Runtime dataflow
 
-## Runtime Dataflow
+1. `env_cuda.Env.render_gray_ideal()` calls generic
+   `quadsim_cuda.render_depth()` to obtain ray intersections.
+2. `render/ideal_gray.py` converts geometry into monochrome scene irradiance.
+3. `rollout_ops.render_gray_sensor()` applies
+   `DifferentiableGrayCamera(irradiance, exposure, gain)`.
+4. Policy input is `[current_gray, previous_gray]`.
+5. Flight branch outputs acceleration.
+6. Camera branch outputs normalized `[exposure, gain]`.
+7. `sensor_grad_mode=full` preserves the navigation-loss gradient through
+   exposure/gain -> image; `detached` cuts that path.
+8. Camera actions affect subsequent frames through the actuator EMA.
 
-1. `main_cuda.py` 解析参数并创建 `Env` 与 `Model`
-2. `trainer.py` 每步调用 `rollout_ops.render_sensors()`
-3. `env_cuda.py` 通过 `render_diff_depth(power, exposure, gain)` 生成深度图
-4. `model.py` 消费 `depth_obs + state`
-5. `rollout_ops.update_camera_params()` 更新 `power / exposure / gain`
-6. `trainer.py` 聚合物理损失与 `diff_depth` 光学损失
-7. `train_utils.py` 只记录当前有效的 `diff_depth` loss 与指标
+## Important semantic boundary
 
-## Key Semantics
+`render_depth` in the CUDA extension is a **geometric ray caster**, not a
+RealSense/depth-sensor simulation. Do not reintroduce D455 semantics around it.
 
-- 运行时控制通道统一为 `power / exposure / gain`
-- power 成本统一由 `loss_diff_depth_power` 表达：只惩罚高于 `cam_power_baseline` 的部分
+## Current experiment gates
+
+- `gray_gate_fixed.args`: visual navigation baseline.
+- `gray_gate_blind.args`: zero-image control.
+- `gray_gate_mixed_fixed.args`: fixed-camera illumination stress test.
+- `gray_camera_full.args`: frozen-flight differentiable camera learning.
+- `gray_camera_detached.args`: matched sensor-gradient ablation.
+- `gray_camera_random_static.args`: static random camera baseline.
