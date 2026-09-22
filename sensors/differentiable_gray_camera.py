@@ -30,11 +30,11 @@ class DifferentiableGrayCamera(nn.Module):
         read_noise_std: float = 0.005,
         read_noise_gain_scale: float = 0.35,
         black_level: float = 0.0,
-        blur_scale: float = 1.0,
+        blur_scale: float = 0.08,
         blur_kernel_size: int = 5,
         dark_threshold: float = 0.05,
-        saturation_mode: str = "ste",
-        soft_clip_beta: float = 6.0,
+        saturation_mode: str = "soft",
+        soft_clip_beta: float = 12.0,
         quantization_bits: int = 0,
     ):
         super().__init__()
@@ -119,11 +119,14 @@ class DifferentiableGrayCamera(nn.Module):
             hard = signal.clamp(0.0, 1.0)
             return signal + (hard - signal).detach()
 
+        # Smooth approximation of min(max(signal, 0), 1):
+        # nearly linear below full-well and asymptotically approaches 1 above
+        # it. Unlike a straight-through hard clip, the exposure/gain gradient
+        # decays in the saturated region instead of pretending clipped pixels
+        # remain fully informative.
         beta = self.soft_clip_beta
-        lo = torch.sigmoid(signal.new_tensor(-0.5 * beta))
-        hi = torch.sigmoid(signal.new_tensor(0.5 * beta))
-        y = torch.sigmoid(beta * (signal - 0.5))
-        return (y - lo) / (hi - lo)
+        upper = signal - F.softplus(signal - 1.0, beta=beta)
+        return upper.clamp_min(0.0)
 
     def _quantize(self, image: torch.Tensor) -> torch.Tensor:
         if self.quantization_bits <= 0:
