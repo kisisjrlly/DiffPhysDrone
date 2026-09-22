@@ -367,8 +367,14 @@ class Env:
             device=self.p.device,
             dtype=self.p.dtype,
         )
-        quadsim_cuda.render_depth(
+        normals = torch.empty(
+            (B, self.height, self.width, 3),
+            device=self.p.device,
+            dtype=self.p.dtype,
+        )
+        quadsim_cuda.render_geometry(
             depth,
+            normals,
             self.balls,
             self.cyl,
             self.cyl_h,
@@ -384,6 +390,7 @@ class Env:
             depth,
             render_R,
             render_p,
+            normals=normals,
             fov_x_half_tan=self._fov_x_half_tan,
             ambient=self.gray_nominal_ambient * light_scale,
             diffuse=self.gray_nominal_diffuse * light_scale,
@@ -396,6 +403,7 @@ class Env:
         if return_aux:
             aux = dict(aux or {})
             aux["geometry_depth"] = depth.detach()
+            aux["geometry_normals"] = normals.detach()
             aux["light_scale"] = light_scale.detach()
         return gray, aux
 
