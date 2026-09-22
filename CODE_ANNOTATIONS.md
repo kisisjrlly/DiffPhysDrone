@@ -22,9 +22,11 @@
 
 ## Runtime dataflow
 
-1. `env_cuda.Env.render_gray_ideal()` calls generic
-   `quadsim_cuda.render_depth()` to obtain ray intersections.
-2. `render/ideal_gray.py` converts geometry into monochrome scene irradiance.
+1. `env_cuda.Env.render_gray_ideal()` calls
+   `quadsim_cuda.render_geometry()` to obtain ray-hit distance and exact
+   surface normals.
+2. `render/ideal_gray.py` converts that internal geometry into monochrome
+   scene irradiance.
 3. `rollout_ops.render_gray_sensor()` applies
    `DifferentiableGrayCamera(irradiance, exposure, gain)`.
 4. Policy input is `[current_gray, previous_gray]`.
@@ -36,8 +38,9 @@
 
 ## Important semantic boundary
 
-`render_depth` in the CUDA extension is a **geometric ray caster**, not a
-RealSense/depth-sensor simulation. Do not reintroduce D455 semantics around it.
+`render_geometry` is an internal **geometric ray caster**, not a camera
+sensor simulation. Its hit distance/normals must remain internal to appearance
+rendering and must never become privileged policy observations.
 
 ## Current experiment gates
 
