@@ -143,6 +143,10 @@ class Model(nn.Module):
             "fc_cam",
         ))
 
+    def initialize_camera_visual_from_flight(self):
+        """Warm-start camera visual features from a trained flight stem."""
+        self.cam_stem.load_state_dict(self.stem.state_dict())
+
     def freeze_camera_for_flight_only(self):
         frozen = []
         for name, param in self.named_parameters():
