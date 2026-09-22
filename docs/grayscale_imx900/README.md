@@ -2,170 +2,140 @@
 
 > Branch: `active-sensing-grayscale-imx900`
 >
-> Status: **D455 executable path removed; grayscale-only pipeline implemented to
-> the fixed-navigation / frozen-flight camera-training gate. Local CUDA rebuild
-> and smoke tests are required before long runs.**
+> Status: grayscale-only executable path; IMX900 calibration-driven camera
+> surrogate implemented; real camera parameters still unmeasured.
 
 ## 1. Branch scope
 
 This branch studies:
 
-> task-driven differentiable exposure/gain control for closed-loop monocular
-> grayscale quadrotor navigation.
+> real-camera-calibrated differentiable exposure/gain control for closed-loop
+> monocular grayscale quadrotor navigation.
 
-Selected real camera:
+Selected camera/platform:
 
-- e-con Systems e-CAM37M_CUONX
-- Sony IMX900 monochrome global shutter
-- MIPI CSI-2
-- Jetson Orin NX 8GB
-- DAMIAO DM-ORIN NX V2.X
+- e-con Systems e-CAM37M_CUONX;
+- Sony IMX900 monochrome global shutter;
+- MIPI CSI-2;
+- Jetson Orin NX 8GB;
+- DAMIAO DM-ORIN NX V2.X.
 
-The previous D455 work is preserved in
-`active-sensing-4f-tools-2b-core`, not in this branch.
+The old D455 work is not part of this branch.
 
-## 2. Important cleanup boundary
+## 2. Open-source adoption decision
 
-Removed here:
+The 2026-09-22 code-level review concluded:
 
-- projector-power camera action;
-- D455/depth sensor semantics;
-- differentiable-depth autograd wrappers;
-- D455 CUDA forward/backward sensor kernels;
-- glare/specular/dark hand-written depth degradation;
-- depth fill/quality/false-depth losses;
-- D455 calibration, teacher, DAgger, probe, and real-flight depth tools;
-- old depth experiment configurations.
+- **End2endImaging:** adopt its sensor-physics/configuration structure as a
+  reference, not its numerical defaults or current `MonoSensor` unchanged.
+- **DeepLens:** keep out of the v1 runtime; use later only if real data shows
+  lens PSF/distortion/vignetting is a major sim-to-real gap.
+- **JOCA:** treat as closest conceptual prior work and an experiment-design
+  reference; do not use its GA/DF-Grad correction in the main causal method.
+  At review time no root LICENSE file was found, so do not vendor/copy its code
+  without separate licensing clarification.
 
-Retained:
+Detailed evidence and the resulting architecture are in
+[OPEN_SOURCE_CAMERA_MODEL_REVIEW.md](OPEN_SOURCE_CAMERA_MODEL_REVIEW.md).
 
-- differentiable quadrotor dynamics;
-- collision geometry;
-- generic CUDA ray intersection.
+## 3. Current camera implementation
 
-The grayscale branch now exposes only `quadsim_cuda.render_geometry()`, which
-returns internal ray-hit distance plus exact surface normals for appearance
-rendering. There is no public `render_depth` sensor API in this branch. The
-internal hit distance is never fed to the policy and must not be described as a
-simulated depth camera.
+The old generic `DifferentiableGrayCamera` / `GrayCameraSemantics`
+split has been replaced by:
 
-## 3. Current pipeline
+- `sensors/imx900_calibration.py` — sensor-specific physical/calibration
+  parameters and normalized-action mappings;
+- `sensors/imx900_camera.py` — lightweight differentiable IMX900 surrogate;
+- `configs/calibration/imx900_provisional.json` — unmeasured development
+  profile.
 
-```text
+The runtime model implements:
+
+- exposure integration;
+- calibrated gain mapping, including optional piecewise LUT;
+- End2endImaging-inspired shot/read-noise decomposition;
+- black level;
+- saturation/full-scale normalization;
+- optional quantization with STE;
+- exposure-dependent motion blur.
+
+The numerical coefficients are loaded from the profile, not duplicated across
+experiment configs.
+
+## 4. Current pipeline
+
+~~~text
 geometry
-  -> CUDA ray hit distance + exact hit normal (internal)
+  -> CUDA hit distance + exact normal (internal)
   -> ideal grayscale irradiance
-       - exact surface normals
-       - Lambertian illumination
-       - procedural texture
-       - nominal/dark/bright/transitions
-  -> DifferentiableGrayCamera
-       - exposure
-       - gain
-       - shot/read noise
-       - saturation
-       - quantization surrogate
-       - motion blur
+  -> IMX900DifferentiableCamera
+       <- IMX900Calibration JSON
   -> [current_gray, previous_gray]
        -> recurrent flight policy
        -> recurrent exposure/gain policy
-```
+~~~
 
-## 4. Current experiment configs
+The flight branch must not directly receive exposure/gain in the main
+full-vs-detached experiment.
 
-- `gray_gate_fixed.args` — fixed nominal camera, real grayscale input.
-- `gray_gate_blind.args` — matched zero-image control.
-- `gray_gate_mixed_fixed.args` — fixed camera under dark/bright/transitions.
-- `gray_camera_random_static.args` — random static E/G baseline.
-- `gray_camera_full.args` — frozen-flight camera-only training with sensor gradient.
-- `gray_camera_detached.args` — matched camera-only run with E/G detached before image formation.
+## 5. Calibration boundary
 
-## 5. Required local gate now
+The profile fields that must eventually come from the real e-con/IMX900 stack
+include:
 
-Because CUDA bindings/kernels were cleaned, rebuild before any test:
+- exposure range/step and response scale;
+- gain mapping/LUT;
+- shot noise alpha/beta;
+- read noise vs gain;
+- black level;
+- saturation/full scale;
+- RAW bit depth;
+- motion-blur coefficient;
+- command-to-effective-frame latency.
 
-```bash
-cd /home/zhaoguodong/work/code/DiffPhysDrone
-git checkout active-sensing-grayscale-imx900
-git pull
+The following remain surrogate/training choices:
 
-conda activate mappo-mpc
-pip install -e src
+- blur kernel shape/size in v1;
+- smooth-saturation beta;
+- characteristic-depth floor used by the motion proxy;
+- network resolution;
+- domain randomization.
 
-python -m pytest -q \
-  tests/test_differentiable_gray_camera.py \
-  tests/test_ideal_gray_renderer.py \
-  tests/test_model_gray_mode.py \
-  tests/test_gray_rollout_helpers.py
+## 6. Causal experiment
 
-python tools/test_gray_env_render.py
-```
+Main comparison:
 
-Inspect `logs/gray_smoke/`. Nominal/dark/bright images must be visibly
-different while preserving the slit geometry.
+~~~text
+same frozen flight checkpoint
+same camera network
+same environment distribution
+same optimization budget
 
-Then run the matched navigation pair:
+learned-detached
+      vs
+learned-differentiable
+~~~
 
-```bash
-TASK=gray_gate_fixed bash run.sh
-TASK=gray_gate_blind bash run.sh
-```
+The only intended difference is whether navigation loss can traverse
+exposure/gain -> image formation.
 
-Do **not** interpret active-camera results until fixed grayscale navigation
-clearly beats the blind control.
-
-## 6. Camera-learning gate
-
-After a successful flight checkpoint exists:
-
-```bash
-TASK=gray_camera_full \
-RUN_EXTRA_ARGS="--resume checkpoint/<flight>/checkpointXXXX.pth" \
-bash run.sh
-
-TASK=gray_camera_detached \
-RUN_EXTRA_ARGS="--resume checkpoint/<flight>/checkpointXXXX.pth" \
-bash run.sh
-```
-
-Both must start from the same flight checkpoint.
+Do not add JOCA-style search/teacher correction to the main method. It can be a
+separate later baseline.
 
 ## 7. Documents
 
-1. [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md)
-2. [RELATED_WORK.md](RELATED_WORK.md)
-3. [HARDWARE_IMX900.md](HARDWARE_IMX900.md)
-4. [CALIBRATION_SIM2REAL.md](CALIBRATION_SIM2REAL.md)
-5. [CODEX_IMPLEMENTATION_GUIDE.md](CODEX_IMPLEMENTATION_GUIDE.md)
+1. [OPEN_SOURCE_CAMERA_MODEL_REVIEW.md](OPEN_SOURCE_CAMERA_MODEL_REVIEW.md)
+2. [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md)
+3. [RELATED_WORK.md](RELATED_WORK.md)
+4. [HARDWARE_IMX900.md](HARDWARE_IMX900.md)
+5. [CALIBRATION_SIM2REAL.md](CALIBRATION_SIM2REAL.md)
+6. [CODEX_IMPLEMENTATION_GUIDE.md](CODEX_IMPLEMENTATION_GUIDE.md)
 
-## 8. What is intentionally still provisional
+## 8. Current implementation gate
 
-The current exposure range, gain mapping, shot/read noise, saturation behavior,
-motion blur coefficient, and command dynamics are simulation placeholders.
+The architecture is now settled enough that the next steps should be
+validation/calibration work, not another wholesale camera-model rewrite.
 
-They must be replaced/calibrated from the real e-con IMX900 hardware before
-sim-to-real claims.
-
-
-## 9. Causal experiment guardrails
-
-The main full-vs-detached experiment must not give the flight policy direct
-access to exposure/gain. Therefore `include_camera_state_in_obs` defaults to
-false and all main grayscale configs explicitly use
-`--no-include_camera_state_in_obs`.
-
-The camera controller still receives current exposure/gain through its dedicated
-camera-state branch. This preserves actuator awareness while ensuring the flight
-policy can benefit from camera actions only through the resulting images.
-
-Motion blur now uses a detached task-relevant proxy
-
-[
-m \approx \|v\| / Z_{char},
-]
-
-where `Z_char` is the median valid geometric ray-hit distance. This internal
-geometry quantity is used only inside image formation; it is never exposed to
-the policy. The approximation makes long exposure more costly when the vehicle
-moves quickly near the gate, creating the intended low-light versus blur
-trade-off.
+The provisional JSON profile is for software development only. Before any
+real-camera claim, replace it with a profile generated from measured IMX900
+data and use `--require_calibrated_imx900`.
