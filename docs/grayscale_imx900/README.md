@@ -41,19 +41,21 @@ Retained:
 
 - differentiable quadrotor dynamics;
 - collision geometry;
-- generic CUDA ray intersection;
-- `quadsim_cuda.render_depth()` **only as internal geometric ray depth**.
+- generic CUDA ray intersection.
 
-The retained ray depth is never fed to the policy and must not be described as
-a simulated depth camera.
+The grayscale branch now exposes only `quadsim_cuda.render_geometry()`, which
+returns internal ray-hit distance plus exact surface normals for appearance
+rendering. There is no public `render_depth` sensor API in this branch. The
+internal hit distance is never fed to the policy and must not be described as a
+simulated depth camera.
 
 ## 3. Current pipeline
 
 ```text
 geometry
-  -> generic CUDA ray depth (internal)
+  -> CUDA ray hit distance + exact hit normal (internal)
   -> ideal grayscale irradiance
-       - geometry-derived normals
+       - exact surface normals
        - Lambertian illumination
        - procedural texture
        - nominal/dark/bright/transitions
