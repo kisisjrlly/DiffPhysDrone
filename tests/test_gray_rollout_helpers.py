@@ -99,7 +99,7 @@ def test_state_vector_adds_two_camera_values():
     assert camera_motion.shape == (2, 6)
 
 
-def test_camera_ema_uses_configured_alpha():
+def test_camera_smoothing_uses_configured_alpha():
     env = _DummyEnv(batch=1)
     env.camera_smoothing_alpha = 0.5
     exposure = torch.tensor([0.2])
@@ -113,7 +113,19 @@ def test_camera_ema_uses_configured_alpha():
 def test_motion_proxy_increases_when_scene_is_closer():
     env = _DummyEnv(batch=1)
     env.v[:] = torch.tensor([[2.0, 0.0, 0.0]])
-    env.gray_camera.blur_scale = 1.0
+    env.gray_camera = IMX900DifferentiableCamera(
+        IMX900Calibration(
+            profile_name="blur-test",
+            calibrated=True,
+            source="unit test",
+            exposure_us_min=100.0,
+            exposure_us_max=1000.0,
+            exposure_reference_us=1000.0,
+            gain_factor_min=1.0,
+            gain_factor_max=2.0,
+            blur_scale=1.0,
+        )
+    )
     exposure = torch.tensor([0.7])
     gain = torch.tensor([0.0])
 
@@ -125,3 +137,41 @@ def test_motion_proxy_increases_when_scene_is_closer():
 
     assert near_aux["motion_proxy"].item() > far_aux["motion_proxy"].item()
     assert near_aux["blur_strength"].mean() > far_aux["blur_strength"].mean()
+
+
+def test_measured_command_delay_is_separate_from_policy_smoothing():
+    env = _DummyEnv(batch=1)
+    env.camera_smoothing_alpha = 0.0
+    env.gray_camera = IMX900DifferentiableCamera(
+        IMX900Calibration(
+            profile_name="delay-test",
+            calibrated=True,
+            source="unit test",
+            exposure_us_min=100.0,
+            exposure_us_max=1000.0,
+            exposure_reference_us=1000.0,
+            gain_factor_min=1.0,
+            gain_factor_max=2.0,
+            blur_scale=0.0,
+            command_delay_frames=1,
+        )
+    )
+    exposure, gain = init_camera_params(env, 1, torch.device("cpu"))
+    initial = torch.stack([exposure, gain], -1)
+
+    first_target = torch.tensor([[0.8, 0.2]])
+    e1, g1, requested1 = update_camera_params(
+        first_target, exposure, gain, env
+    )
+    torch.testing.assert_close(torch.stack([e1, g1], -1), initial)
+    torch.testing.assert_close(requested1, first_target)
+
+    second_target = torch.tensor([[0.1, 0.9]])
+    e2, g2, requested2 = update_camera_params(
+        second_target, e1, g1, env
+    )
+    torch.testing.assert_close(
+        torch.stack([e2, g2], -1),
+        first_target,
+    )
+    torch.testing.assert_close(requested2, second_target)
