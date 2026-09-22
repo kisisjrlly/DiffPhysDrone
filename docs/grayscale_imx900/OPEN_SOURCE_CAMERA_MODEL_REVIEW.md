@@ -423,3 +423,77 @@ Potential differentiators relative to JOCA:
 - direct full-vs-detached sensor-gradient experiment.
 
 Re-run the literature search before manuscript submission.
+
+
+---
+
+## 8. Implementation consequences in this branch
+
+The review is now reflected in code rather than being documentation-only.
+
+### 8.1 End2endImaging-inspired parts adopted
+
+Implemented in `IMX900Calibration` / `IMX900DifferentiableCamera`:
+
+- physical sensor parameters live in a calibration profile instead of scattered
+  experiment flags;
+- shot/read noise are separated;
+- black level, saturation/full scale, and bit depth are explicit;
+- stochastic noise uses reparameterized samples so exposure/gain remain useful
+  gradient variables;
+- forward quantization can use an STE rather than hard-breaking the action
+  gradient.
+
+Additional calibration support added after the review:
+
+- exposure action -> microseconds can be `linear` or an observed LUT;
+- gain action -> effective gain can be `linear`, `log`, or an observed LUT;
+- read noise vs effective gain can be a compact power law or an observed LUT;
+- an optional monotonic response LUT can represent an unavoidable fixed ISP
+  response when a RAW/linear path cannot be used.
+
+These LUTs are deliberately piecewise differentiable so measured camera curves
+can replace assumptions without changing the policy interface.
+
+### 8.2 JOCA-inspired parts adopted
+
+Implemented or retained:
+
+- camera action is exactly normalized `[exposure, gain]`;
+- the camera controller observes its own current actuator state;
+- the primary objective remains the downstream navigation objective;
+- low-light / bright / transition / fast-motion conditions form the camera
+  stress benchmark;
+- a matched `full` vs `detached` sensor-gradient experiment remains the
+  primary causal test.
+
+Not adopted in the main method:
+
+- GA/DF-Grad correction targets;
+- search-based camera teacher supervision.
+
+Those remain optional later baselines so the main experiment can answer one
+clean question: does the explicit exposure/gain image-formation gradient help?
+
+### 8.3 DeepLens decision
+
+No runtime dependency was added.
+
+If future held-out real data demonstrates a dominant lens-driven residual, the
+preferred route is:
+
+`DeepLens offline -> fitted compact PSF/distortion/vignetting surrogate -> runtime`.
+
+Do not put a full optical simulator inside every UAV BPTT frame without evidence
+that lens fidelity is the limiting sim-to-real error.
+
+### 8.4 Real-camera handoff
+
+The intended hardware handoff is now profile-driven:
+
+`real e-con/IMX900 characterization -> measured JSON profile -> same camera
+surrogate and policy interface`.
+
+The software model should not need another structural rewrite when the camera
+arrives; hardware work should mostly replace provisional profile values with
+measured mappings/curves and actuator timing.
