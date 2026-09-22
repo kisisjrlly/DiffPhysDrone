@@ -72,10 +72,14 @@ for f in "${cfg_files[@]}"; do
 done
 
 read -r -a cfg_tokens <<< "$cfg_args"
+sensor_type="diff_depth"
 camera_control_mode="learned"
 sensor_grad_mode="full"
 policy_depth_mode="depth"
 for ((i=0; i<${#cfg_tokens[@]}; i++)); do
+	if [ "${cfg_tokens[$i]}" = "--sensor_type" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
+		sensor_type="${cfg_tokens[$((i+1))]}"
+	fi
 	if [ "${cfg_tokens[$i]}" = "--camera_control_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
 		camera_control_mode="${cfg_tokens[$((i+1))]}"
 	fi
@@ -89,7 +93,11 @@ done
 
 # 获取当前日期和时间，用于日志文件名 (Get current date and time for log file name)
 date=$(date +%Y-%m-%d-%H-%M-%S)
-run_tag="cam-${camera_control_mode}_grad-${sensor_grad_mode}_depth-${policy_depth_mode}"
+if [ "$sensor_type" = "gray" ]; then
+	run_tag="sensor-gray_cam-${camera_control_mode}_grad-${sensor_grad_mode}"
+else
+	run_tag="sensor-diff_depth_cam-${camera_control_mode}_grad-${sensor_grad_mode}_depth-${policy_depth_mode}"
+fi
 log_file="logs/${date}-${task}-${run_tag}.log"
 echo "log file: $log_file"
 
