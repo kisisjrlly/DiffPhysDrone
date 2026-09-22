@@ -161,23 +161,24 @@ remaining useful for gradients with respect to exposure/gain.
 
 ### 3.1 Exposure mapping
 
-The camera policy produces normalized
+The camera policy produces normalized exposure (e\in[0,1]).
 
-[
-ein[0,1].
-]
-
-The calibration profile maps it to exposure time:
+The calibration profile maps it to physical exposure time:
 
 [
 T=T(e).
 ]
 
-The development profile currently uses a linear range, but the real min/max and
-step must come from the driver/camera.
+Supported calibration mappings:
 
-Exposure command quantization may be modeled with a straight-through estimator
-once the real step is known.
+- `linear`: development/simple driver mapping;
+- `lut`: measured normalized-action -> effective microseconds.
+
+The measured LUT is preferred whenever the deployed driver/camera command path
+is not accurately represented by a linear mapping.
+
+Real command quantization is represented by `step_us`; training uses an STE
+for the forward snap so the exposure action retains a usable gradient.
 
 ### 3.2 Gain mapping
 
@@ -236,7 +237,9 @@ The coefficients must be fitted from IMX900 data.
 
 ### 3.5 Read noise
 
-The compact v1 read-noise model is:
+Two calibration modes are supported.
+
+Compact power-law surrogate:
 
 [
 sigma_{read}
@@ -244,10 +247,18 @@ sigma_{read}
 sigma_{r0}G^{p_r}.
 ]
 
-This is deliberately low-parameter.
+Measured LUT:
 
-If measured data require a more complex gain-dependent curve, replace it with a
-calibrated LUT rather than adding arbitrary scene-specific terms.
+[
+sigma_{read}
+=
+operatorname{interp}
+left(G;{G_i,sigma_i}ight).
+]
+
+The power law is a low-parameter development model. The measured LUT is
+preferred when dark-frame characterization shows systematic gain-dependent
+structure that the power law cannot fit.
 
 ### 3.6 Reparameterized stochastic sensor
 
@@ -298,7 +309,22 @@ The main training configuration currently prefers a smooth saturation shoulder
 so that strongly exposed images do not pretend to retain fully linear
 gradients.
 
-### 3.9 Quantization
+### 3.9 Fixed response curve
+
+The preferred deployed path is RAW/linear monochrome, in which case the
+response mapping is identity.
+
+If the real e-con/Jetson capture path contains an unavoidable fixed nonlinear
+response, calibration may supply a monotonic piecewise-differentiable LUT:
+
+[
+I_{resp}=R(I_{linear}).
+]
+
+This is not an optimization variable; it represents a fixed measured part of
+the deployed imaging chain.
+
+### 3.10 Quantization
 
 If the measured capture path is RAW10:
 
@@ -322,7 +348,7 @@ Training backward uses STE.
 
 Bit depth is stored in the calibration profile.
 
-### 3.10 Motion blur
+### 3.11 Motion blur
 
 Long exposure must have a cost, otherwise maximum exposure becomes a trivial
 solution.
@@ -453,7 +479,10 @@ The real system will have:
 - update-rate limits.
 
 The calibration schema stores command-delay metadata, and the rollout already
-implements a frame-delay queue driven by `command_delay_frames`.
+implements a frame-delay queue driven by `command_delay_frames`. It also
+supports `command_delay_jitter_frames`, sampled once per episode to represent
+measured frame-domain timing spread without confusing that hardware effect with
+policy smoothing.
 
 The separate `camera_smoothing_alpha` parameter is a policy-command
 regularizer, not a measured IMX900 actuator law. Main experiment configs set it
