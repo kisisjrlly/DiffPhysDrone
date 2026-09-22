@@ -1,10 +1,10 @@
 import torch
 
 from rollout_ops import (
-    build_gray_state_vector,
-    init_gray_camera_params,
+    build_state_vector,
+    init_camera_params,
     render_gray_sensor,
-    update_gray_camera_params,
+    update_camera_params,
 )
 from sensors.differentiable_gray_camera import DifferentiableGrayCamera
 from sensors.gray_camera_semantics import GrayCameraSemantics
@@ -14,6 +14,7 @@ class _DummyEnv:
     def __init__(self, batch=2):
         self.batch_size = batch
         self.camera_control_mode = "learned"
+        self.camera_ema_alpha = 0.7
         self.fixed_camera_exposure = 0.3
         self.fixed_camera_gain = 0.2
         self.fixed_random_exposure_range = (0.1, 0.9)
@@ -36,11 +37,14 @@ class _DummyEnv:
 
     def render_gray_ideal(self, return_aux=False):
         image = torch.full((self.batch_size, 1, 8, 8), 0.2)
-        aux = {"hit_mask": torch.ones(self.batch_size, 8, 8, dtype=torch.bool)}
+        aux = {
+            "hit_mask": torch.ones(self.batch_size, 8, 8, dtype=torch.bool),
+            "light_scale": torch.ones(self.batch_size),
+        }
         return image, aux if return_aux else None
 
 
-def test_gray_sensor_gradient_switch_only_controls_camera_params():
+def test_sensor_gradient_switch_only_controls_camera_params():
     env = _DummyEnv(batch=1)
     exposure = torch.tensor([0.4], requires_grad=True)
     gain = torch.tensor([0.3], requires_grad=True)
@@ -54,27 +58,27 @@ def test_gray_sensor_gradient_switch_only_controls_camera_params():
     assert not detached.requires_grad
 
 
-def test_gray_camera_init_and_update_shapes():
+def test_camera_init_and_update_shapes():
     env = _DummyEnv(batch=3)
-    exposure, gain = init_gray_camera_params(env, 3, torch.device("cpu"))
+    exposure, gain = init_camera_params(env, 3, torch.device("cpu"))
     assert exposure.shape == (3,)
     assert gain.shape == (3,)
 
     target = torch.tensor([[0.2, 0.4], [0.3, 0.5], [0.4, 0.6]])
-    e2, g2, hist = update_gray_camera_params(target, exposure, gain, env)
+    e2, g2, hist = update_camera_params(target, exposure, gain, env)
     assert e2.shape == (3,)
     assert g2.shape == (3,)
     assert hist.shape == (3, 2)
 
 
-def test_gray_state_vector_adds_two_camera_values():
+def test_state_vector_adds_two_camera_values():
     env = _DummyEnv(batch=2)
     target_v = torch.ones(2, 3)
     local_frame = torch.eye(3).repeat(2, 1, 1)
     exposure = torch.tensor([0.25, 0.75])
     gain = torch.tensor([0.1, 0.9])
 
-    state, local_v, camera_state, camera_motion = build_gray_state_vector(
+    state, local_v, camera_state, camera_motion = build_state_vector(
         env,
         target_v,
         local_frame,
@@ -87,3 +91,14 @@ def test_gray_state_vector_adds_two_camera_values():
     assert local_v.shape == (2, 3)
     assert camera_state.shape == (2, 2)
     assert camera_motion.shape == (2, 6)
+
+
+def test_camera_ema_uses_configured_alpha():
+    env = _DummyEnv(batch=1)
+    env.camera_ema_alpha = 0.5
+    exposure = torch.tensor([0.2])
+    gain = torch.tensor([0.4])
+    target = torch.tensor([[0.8, 0.6]])
+    e2, g2, _ = update_camera_params(target, exposure, gain, env)
+    torch.testing.assert_close(e2, torch.tensor([0.5]))
+    torch.testing.assert_close(g2, torch.tensor([0.5]))
