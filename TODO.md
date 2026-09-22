@@ -27,8 +27,8 @@ not maintained here.
 - [x] Keep exposure-dependent motion blur in the camera model.
 - [ ] Tune lighting ranges so no single fixed exposure/gain dominates all cases.
 - [ ] Add speed-conditioned analysis and transition plots.
-- [ ] Add classical mean-intensity AE baseline.
-- [ ] Add a gradient/image-detail heuristic AE baseline.
+- [x] Add classical mean-intensity AE baseline.
+- [x] Add a gradient/image-detail heuristic AE baseline.
 
 ## P3 — isolate the differentiable-sensor contribution
 
