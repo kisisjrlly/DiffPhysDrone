@@ -103,6 +103,12 @@ def select_policy_depth_obs(depth_obs, mode: str = 'depth'):
     return depth_obs
 
 
+def select_policy_gray_obs(gray_obs, mode: str = 'gray'):
+    if str(mode).strip().lower() in {'zero', 'blind', 'none'}:
+        return torch.zeros_like(gray_obs)
+    return gray_obs
+
+
 def build_local_frame(env):
     fwd = env.R[:, :, 0].clone()
     fwd[:, 2] = 0
