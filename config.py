@@ -333,6 +333,18 @@ def validate_args(args):
         if not (0.0 <= val <= 1.0):
             raise ValueError(f'--{name} must be in [0, 1]')
 
+    # The grayscale method is intentionally task-driven.  Legacy D455
+    # image-quality losses must never leak into gray training.
+    if args.sensor_type == 'gray':
+        for name in [
+            'coef_diff_depth_power',
+            'coef_diff_depth_blur',
+            'coef_diff_depth_noise',
+            'coef_diff_depth_fill',
+        ]:
+            setattr(args, name, 0.0)
+        args.diff_depth_min_fill_rate = 0.0
+
     # Fixed / randfix baselines should not carry any camera-training objective.
     # The camera is not learned there, so these coefficients only add confusion
     # in logs and config files.
