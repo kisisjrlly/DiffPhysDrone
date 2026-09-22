@@ -67,3 +67,13 @@ def test_camera_physics_are_not_duplicated_in_experiment_configs():
         assert "--imx900_calibration" in text
         for token in forbidden:
             assert token not in text, f"{token} should live in calibration JSON, found in {path}"
+
+
+def test_main_configs_do_not_use_unmeasured_camera_smoothing():
+    parser = build_parser()
+    for path in sorted(Path("configs").glob("gray_*.args")):
+        args = parser.parse_args(_tokens(path))
+        assert args.camera_smoothing_alpha == 0.0, (
+            f"{path} should keep policy smoothing disabled; use coef_cam_smooth "
+            "or a measured actuator profile instead"
+        )
