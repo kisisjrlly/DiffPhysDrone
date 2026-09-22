@@ -33,12 +33,6 @@
 - 6S 1300 mAh 95C battery;
 - prop guards currently documented.
 
-### Legacy sensor
-
-- Intel RealSense D455.
-- The D455 is legacy/reference hardware for this new branch.
-- The planned final grayscale method should not depend on D455 depth.
-
 ## 2. Selected new camera
 
 **e-con Systems e-CAM37M_CUONX, monochrome, Sony IMX900.**
@@ -178,19 +172,28 @@ Every recorded frame should log:
 
 This is required to measure actuation latency and align the simulator.
 
-## 8. D455 transition strategy
+## 8. Capture-pipeline requirements
 
-During bring-up only, D455 may remain mounted or used on a bench for:
+For calibration and final deployment, prefer the most linear monochrome path
+available, ideally RAW10/RAW12.
 
-- safety/reference depth;
-- trajectory debugging;
-- independent collision validation.
+Disable or freeze, where supported:
 
-For main experimental claims:
+- auto exposure;
+- auto gain;
+- auto brightness;
+- digital gain not controlled by the policy;
+- denoise;
+- sharpening/edge enhancement;
+- HDR or alternate shutter modes;
+- gamma/nonlinear ISP processing.
 
-- grayscale policy input must not contain D455 depth;
-- camera policy must not contain D455-derived privileged information;
-- D455 may be removed to reduce weight once the grayscale system is reliable.
+If any processing cannot be disabled, record it and calibrate the deployed
+pipeline as-is.
+
+The hardware characterization must produce a measured calibration JSON
+compatible with `sensors/imx900_calibration.py`. Do not put measured camera
+constants directly into experiment `.args` files.
 
 ## 9. Update this file after hardware arrival
 
@@ -206,4 +209,7 @@ Record:
 - measured end-to-end latency;
 - measured exposure/gain update latency;
 - camera + lens + cable mass;
-- measured power draw.
+- measured power draw;
+- saved measured calibration profile path;
+- whether the profile is marked `calibrated: true`;
+- exact auto/ISP functions disabled or left enabled.
