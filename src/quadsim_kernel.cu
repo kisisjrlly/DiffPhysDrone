@@ -806,6 +806,54 @@ __global__ void render_depth_kernel(
         n_drones_per_group, batch_base, b, B);
 }
 
+
+// Geometry rendering kernel: returns ray depth and exact hit normal.
+template <typename scalar_t>
+__global__ void render_geometry_kernel(
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> depth,
+    torch::PackedTensorAccessor<scalar_t,4,torch::RestrictPtrTraits,size_t> normals,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> balls,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> cylinders_h,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> voxels,
+    torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> R,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> pos,
+    int n_drones_per_group,
+    float fov_x_half_tan) {
+
+    const int c = blockIdx.x * blockDim.x + threadIdx.x;
+    const int B = depth.size(0);
+    const int H = depth.size(1);
+    const int W = depth.size(2);
+    if (c >= B * H * W) return;
+    const int b = c / (H * W);
+    const int u = (c % (H * W)) / W;
+    const int v = c % W;
+
+    const scalar_t fov = (scalar_t)fov_x_half_tan;
+    const scalar_t fov_y_ht = fov / W * H;
+    const scalar_t fu = (2 * (u + 0.5) / H - 1) * fov_y_ht - 1e-5;
+    const scalar_t fv = (2 * (v + 0.5) / W - 1) * fov - 1e-5;
+
+    scalar_t dx = R[b][0][0] - fu * R[b][0][2] - fv * R[b][0][1];
+    scalar_t dy = R[b][1][0] - fu * R[b][1][2] - fv * R[b][1][1];
+    scalar_t dz = R[b][2][0] - fu * R[b][2][2] - fv * R[b][2][1];
+
+    const int batch_base = (b / n_drones_per_group) * n_drones_per_group;
+    scalar_t nx = 0, ny = 0, nz = 0;
+    const scalar_t t = trace_ray_with_normal_device(
+        dx, dy, dz,
+        pos[b][0], pos[b][1], pos[b][2],
+        balls, cylinders, cylinders_h, voxels, pos,
+        n_drones_per_group, batch_base, b, B,
+        &nx, &ny, &nz);
+
+    depth[b][u][v] = t;
+    normals[b][u][v][0] = nx;
+    normals[b][u][v][1] = ny;
+    normals[b][u][v][2] = nz;
+}
+
 } // namespace
 
 // ============================================================================
@@ -899,6 +947,49 @@ void render_depth_cuda(
     AT_DISPATCH_FLOATING_TYPES(canvas.type(), "render_depth_cuda", ([&] {
         render_depth_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
             canvas.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            voxels.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            R.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            pos.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+            n_drones_per_group,
+            fov_x_half_tan);
+    }));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    at::cuda::getCurrentCUDAStream().synchronize();
+}
+
+
+// Generic geometry renderer for grayscale appearance: depth + exact hit normal.
+void render_geometry_cuda(
+    torch::Tensor depth,
+    torch::Tensor normals,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    float fov_x_half_tan) {
+
+    TORCH_CHECK(depth.dim() == 3, "depth must be [B,H,W]");
+    TORCH_CHECK(normals.dim() == 4 && normals.size(3) == 3,
+                "normals must be [B,H,W,3]");
+    TORCH_CHECK(depth.size(0) == normals.size(0)
+                && depth.size(1) == normals.size(1)
+                && depth.size(2) == normals.size(2),
+                "depth/normals shape mismatch");
+
+    const int threads = 1024;
+    size_t state_size = depth.numel();
+    const dim3 blocks((state_size + threads - 1) / threads);
+
+    AT_DISPATCH_FLOATING_TYPES(depth.type(), "render_geometry_cuda", ([&] {
+        render_geometry_kernel<scalar_t><<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>>(
+            depth.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+            normals.packed_accessor<scalar_t,4,torch::RestrictPtrTraits,size_t>(),
             balls.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             cylinders_h.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
