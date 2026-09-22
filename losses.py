@@ -92,6 +92,34 @@ def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq
     return result
 
 
+def compute_gray_camera_losses(cam_hist, cam_initial=None):
+    """Camera loss for the grayscale main method.
+
+    Deliberately contains only actuator smoothness.  Image-quality proxies are
+    diagnostics, not supervision, so the main camera policy is driven by the
+    downstream navigation objective.
+    """
+    device = _infer_loss_device(cam_hist, cam_initial)
+    result = {
+        'loss_cam_smooth': torch.zeros((), device=device),
+        'loss_diff_depth_power': torch.zeros((), device=device),
+        'loss_diff_depth_blur': torch.zeros((), device=device),
+        'loss_diff_depth_noise': torch.zeros((), device=device),
+        'loss_diff_depth_fill': torch.zeros((), device=device),
+    }
+    if cam_hist is None:
+        return result
+    cam_for_smooth = cam_hist
+    if cam_initial is not None:
+        init = cam_initial.to(device=cam_hist.device, dtype=cam_hist.dtype)
+        if init.ndim == cam_hist.ndim - 1:
+            init = init.unsqueeze(0)
+        cam_for_smooth = torch.cat([init.detach(), cam_hist], dim=0)
+    if cam_for_smooth.shape[0] > 1:
+        result['loss_cam_smooth'] = cam_for_smooth.diff(1, 0).pow(2).mean()
+    return result
+
+
 def aggregate_loss(physics_losses, camera_losses, args):
     loss = (
         args.coef_v * physics_losses['loss_v']
