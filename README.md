@@ -77,3 +77,32 @@ CAM_PROFILE=low bash run.sh
 位姿改变下一帧看到的东西
 再把“未来看见什么”的梯度反传回动作
 那 render_depth 就必须至少对 pos / R 近似可微，否则这条“通过改变视角改善感知”的梯度链会断掉。
+
+## Minimal closed-loop active-sensing check
+
+`tools/run_simple_active_sensing_closed_loop.py` is a checkpoint-free
+diagnostic for the smallest useful causal comparison. It keeps the waypoint
+controller and rollout fixed and changes only camera selection:
+
+- `fixed`: one fixed camera setting;
+- `randfix`: one random setting held for the episode;
+- `diffopt_detached`: the same differentiable optimizer initialization, with
+  the sensor-to-observation search removed (the no-gradient control);
+- `diffopt`: optimizes `power/exposure/gain` through the differentiable sensor;
+- `oracle_grid`: an upper-bound grid search, for diagnosis only.
+
+Run a short smoke experiment on CUDA with:
+
+```bash
+python3 tools/run_simple_active_sensing_closed_loop.py \
+  --scenarios glare --slots left \
+  --methods fixed diffopt_detached diffopt \
+  --timesteps 12
+```
+
+The CSV output records success, collision, commitment, fill rate, quality,
+invalid rate, and the selected sensor setting. This comparison is a simulator
+diagnostic; it is not a trained policy or real-flight result. Before claiming
+hardware relevance, calibrate the parameter response with the D455 tools under
+`tools/realflight/` and compare the simulator response with recorded depth/IR
+measurements.

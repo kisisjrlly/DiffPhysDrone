@@ -191,6 +191,19 @@ def _choose_camera(method: str, env, args, rng, oracle_grid, diffopt_init, diffo
     if method == "diffopt":
         setting, row = _diffopt_current(env, args, diffopt_init, diffopt_steps, diffopt_lr)
         return setting, row, rand_static
+    if method == "diffopt_detached":
+        # Matched control for diffopt: use the same parameterization and
+        # initialization, but remove the sensor-to-observation gradient.
+        # This intentionally does not search the oracle grid, so any gain
+        # from `diffopt` can be attributed to the differentiable response.
+        setting = CameraSetting(
+            "diffopt_detached",
+            float(diffopt_init[0]),
+            float(diffopt_init[1]),
+            float(diffopt_init[2]),
+        )
+        row, _ = _render_current(env, args, setting)
+        return setting, row, rand_static
     raise ValueError(f"unsupported method {method!r}")
 
 
@@ -322,7 +335,11 @@ def _make_arg_parser():
     parser.add_argument("--out_dir", default="paper/experiment/results/simple_active_sensing_closed_loop")
     parser.add_argument("--scenarios", nargs="*", default=["glare", "specular", "dark"])
     parser.add_argument("--slots", nargs="*", default=["left", "right"])
-    parser.add_argument("--methods", nargs="*", default=["fixed", "randfix", "oracle_grid", "diffopt"])
+    parser.add_argument(
+        "--methods", nargs="*",
+        default=["fixed", "randfix", "diffopt_detached", "diffopt", "oracle_grid"],
+        help="camera-selection baselines; diffopt_detached is the no-gradient control",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--timesteps", type=int, default=90)
