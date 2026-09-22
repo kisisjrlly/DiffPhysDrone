@@ -20,6 +20,8 @@ class _DummyEnv:
         self.fixed_random_exposure_range = (0.1, 0.9)
         self.fixed_random_gain_range = (0.1, 0.8)
         self.gray_enable_noise = False
+        self.gray_motion_depth_floor = 0.35
+        self.geometry_depth = torch.full((batch, 8, 8), 2.0)
         self.v = torch.zeros(batch, 3)
         self.R = torch.eye(3).repeat(batch, 1, 1)
         self.margin = torch.ones(batch)
@@ -40,6 +42,7 @@ class _DummyEnv:
         aux = {
             "hit_mask": torch.ones(self.batch_size, 8, 8, dtype=torch.bool),
             "light_scale": torch.ones(self.batch_size),
+            "geometry_depth": self.geometry_depth,
         }
         return image, aux if return_aux else None
 
@@ -102,3 +105,20 @@ def test_camera_ema_uses_configured_alpha():
     e2, g2, _ = update_camera_params(target, exposure, gain, env)
     torch.testing.assert_close(e2, torch.tensor([0.5]))
     torch.testing.assert_close(g2, torch.tensor([0.5]))
+
+
+def test_motion_proxy_increases_when_scene_is_closer():
+    env = _DummyEnv(batch=1)
+    env.v[:] = torch.tensor([[2.0, 0.0, 0.0]])
+    env.gray_camera.blur_scale = 1.0
+    exposure = torch.tensor([0.7])
+    gain = torch.tensor([0.0])
+
+    env.geometry_depth[:] = 4.0
+    _, far_aux = render_gray_sensor(env, exposure, gain, differentiable=False)
+
+    env.geometry_depth[:] = 0.5
+    _, near_aux = render_gray_sensor(env, exposure, gain, differentiable=False)
+
+    assert near_aux["motion_proxy"].item() > far_aux["motion_proxy"].item()
+    assert near_aux["blur_strength"].mean() > far_aux["blur_strength"].mean()
