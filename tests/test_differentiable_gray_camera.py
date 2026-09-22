@@ -1,6 +1,6 @@
 import torch
 
-from sensors.differentiable_gray_camera import DifferentiableGrayCamera
+from sensors.differentiable_gray_camera import DifferentiableGrayCamera, build_from_args
 from sensors.gray_camera_semantics import GrayCameraSemantics
 
 
@@ -150,3 +150,31 @@ def test_semantics_clamps_normalized_commands():
     assert semantics.exposure_to_us(2.0) == 1000.0
     assert semantics.gain_to_factor(-1.0) == 1.0
     assert semantics.gain_to_factor(2.0) == 4.0
+
+
+def test_build_from_args_uses_gray_config_fields():
+    from types import SimpleNamespace
+
+    args = SimpleNamespace(
+        gray_exposure_us_min=50.0,
+        gray_exposure_us_max=5000.0,
+        gray_exposure_reference_us=500.0,
+        gray_gain_factor_min=1.0,
+        gray_gain_factor_max=6.0,
+        gray_shot_noise_scale=0.02,
+        gray_read_noise_std=0.003,
+        gray_read_noise_gain_scale=0.4,
+        gray_black_level=0.01,
+        gray_blur_scale=0.7,
+        gray_blur_kernel_size=3,
+        gray_dark_threshold=0.04,
+        gray_saturation_mode="ste",
+        gray_soft_clip_beta=5.0,
+        gray_quantization_bits=8,
+    )
+    camera = build_from_args(args)
+    assert camera.semantics.exposure_us_min == 50.0
+    assert camera.semantics.exposure_us_max == 5000.0
+    assert camera.semantics.gain_factor_max == 6.0
+    assert camera.blur_kernel_size == 3
+    assert camera.quantization_bits == 8
