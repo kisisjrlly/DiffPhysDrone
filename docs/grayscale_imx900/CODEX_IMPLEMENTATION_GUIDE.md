@@ -41,7 +41,7 @@ Acceptance:
 - gray config parses;
 - no silent reuse of D455 `power` semantics.
 
-## Phase 2 — ideal grayscale renderer ← NEXT
+## Phase 2 — ideal grayscale renderer ✅ CODE PRESENT / CUDA SMOKE PENDING
 
 Add a CUDA/PyTorch entry point that returns ideal grayscale appearance.
 
@@ -62,7 +62,7 @@ Acceptance:
 - textured gate is visually distinguishable;
 - batch rendering works on GPU.
 
-## Phase 3 — differentiable gray camera
+## Phase 3 — differentiable gray camera ✅ IMPLEMENTED
 
 Implement `DifferentiableGrayCamera` in PyTorch.
 
@@ -102,7 +102,7 @@ Acceptance tests:
 6. repeated forward with fixed noise tensors is deterministic;
 7. no NaN/Inf in valid parameter range.
 
-## Phase 4 — grayscale policy input
+## Phase 4 — grayscale policy input ✅ IMPLEMENTED / INTEGRATION TEST PENDING
 
 Replace depth preprocessing on the gray path with:
 
@@ -121,7 +121,7 @@ Acceptance:
 - frame tensors stay on GPU;
 - old depth mode still works if intentionally retained.
 
-## Phase 5 — 2-D camera action
+## Phase 5 — 2-D camera action ✅ IMPLEMENTED / INTEGRATION TEST PENDING
 
 Gray camera controller:
 
@@ -144,7 +144,7 @@ Acceptance:
 - logs show requested and applied camera state separately;
 - detached/full gradient mode differs only in sensor gradient path.
 
-## Phase 6 — fixed-camera grayscale flight
+## Phase 6 — fixed-camera grayscale flight 🟡 TRAINING PATH READY / RESULT PENDING
 
 Do **not** learn camera control yet.
 
@@ -350,11 +350,25 @@ Create automated tests for:
 
 ## Current handoff point
 
-Phase 1 is now implemented on `active-sensing-grayscale-imx900`:
+The code now reaches the first end-to-end **fixed-camera grayscale navigation** gate.
 
-- gray config/semantics skeleton;
-- `DifferentiableGrayCamera`;
-- finite-difference exposure/gain gradient tests;
-- sensor-effect tests.
+Before changing the learning problem further, run locally:
 
-The next implementation task is **Phase 2 only**: add the ideal grayscale renderer while keeping training/model integration unchanged. Because Phase 2 touches CUDA geometry code, compile/reinstall the extension in the `mappo-mpc` environment and add deterministic rendering tests before proceeding to Phase 4.
+~~~bash
+conda activate mappo-mpc
+python -m pytest -q \
+  tests/test_differentiable_gray_camera.py \
+  tests/test_ideal_gray_renderer.py \
+  tests/test_model_gray_mode.py \
+  tests/test_gray_rollout_helpers.py
+python tools/test_gray_env_render.py
+TASK=gray_gate_fixed LOG_TO_FILE=1 bash run.sh
+~~~
+
+Do not proceed to learned exposure/gain until:
+
+1. the smoke renderer produces meaningful textured grayscale images;
+2. the fixed-camera policy learns navigation significantly better than a blind/zero-image control;
+3. exposure/gain changes produce the intended brightness/noise/blur trade-offs.
+
+If these pass, the next development unit is Phase 7: illumination/motion benchmark construction, followed by classical AE baselines and then the matched learned-detached vs differentiable experiment.
