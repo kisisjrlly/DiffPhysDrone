@@ -62,6 +62,7 @@ def render_ideal_grayscale(
     R: torch.Tensor,
     pos: torch.Tensor,
     *,
+    normals: Optional[torch.Tensor] = None,
     fov_x_half_tan: float = 0.82,
     ambient: ScalarLike = 0.25,
     diffuse: ScalarLike = 0.75,
@@ -90,26 +91,45 @@ def render_ideal_grayscale(
         raise ValueError("pos must have shape [B, 3]")
     if not torch.is_floating_point(depth):
         raise TypeError("depth must be floating point")
+    if normals is not None:
+        if normals.shape != (depth.shape[0], depth.shape[1], depth.shape[2], 3):
+            raise ValueError("normals must have shape [B,H,W,3]")
+        if not torch.is_floating_point(normals):
+            raise TypeError("normals must be floating point")
 
     if detach_geometry:
         depth, R, pos = depth.detach(), R.detach(), pos.detach()
+        if normals is not None:
+            normals = normals.detach()
 
     _, H, W = depth.shape
     rays = _camera_rays(R.to(depth), H, W, fov_x_half_tan)
     points = pos.to(depth)[:, None, None, :] + depth[..., None] * rays
 
-    d_row = _central_difference(points, 1)
-    d_col = _central_difference(points, 2)
-    normal = F.normalize(torch.cross(d_col, d_row, dim=-1), p=2, dim=-1, eps=1e-6)
     view_to_camera = F.normalize(-rays, p=2, dim=-1, eps=1e-6)
+    if normals is None:
+        d_row = _central_difference(points, 1)
+        d_col = _central_difference(points, 2)
+        normal = F.normalize(torch.cross(d_col, d_row, dim=-1), p=2, dim=-1, eps=1e-6)
+        jump = _neighbor_depth_jump(depth)
+        normal = torch.where(
+            (jump > float(normal_depth_jump))[..., None],
+            view_to_camera,
+            normal,
+        )
+    else:
+        normal_norm = torch.linalg.vector_norm(normals, dim=-1, keepdim=True)
+        normal = F.normalize(normals, p=2, dim=-1, eps=1e-6)
+        normal = torch.where(normal_norm > 1e-6, normal, view_to_camera)
+        jump = torch.zeros_like(depth)
+
+    # Keep lighting two-sided with respect to the viewing surface convention:
+    # orient the normal toward the camera before Lambertian evaluation.
     normal = torch.where(
         ((normal * view_to_camera).sum(dim=-1, keepdim=True) < 0.0),
         -normal,
         normal,
     )
-
-    jump = _neighbor_depth_jump(depth)
-    normal = torch.where((jump > float(normal_depth_jump))[..., None], view_to_camera, normal)
 
     light = torch.as_tensor(light_direction, device=depth.device, dtype=depth.dtype)
     if light.numel() != 3:
