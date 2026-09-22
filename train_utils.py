@@ -103,6 +103,7 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         gray_light_jitter=args.gray_light_jitter,
         gray_texture_strength=args.gray_texture_strength,
         gray_texture_scale=args.gray_texture_scale,
+        gray_motion_depth_floor=args.gray_motion_depth_floor,
     )
     env.gray_camera = build_gray_camera(args).to(device)
     env.gray_enable_noise = bool(args.gray_enable_noise)
