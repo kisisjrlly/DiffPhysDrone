@@ -104,21 +104,44 @@ def decode_action_direct(raw_act, R, env, B, max_acc_cmd):
 def init_camera_params(env, B, device):
     mode = getattr(env, "camera_control_mode", "learned")
     if mode in {"fixed", "mean_ae", "gradient_ae"}:
-        return (
-            torch.full((B,), float(env.fixed_camera_exposure), device=device),
-            torch.full((B,), float(env.fixed_camera_gain), device=device),
-        )
-    if mode == "fixed_random_static":
+        exposure = torch.full((B,), float(env.fixed_camera_exposure), device=device)
+        gain = torch.full((B,), float(env.fixed_camera_gain), device=device)
+    elif mode == "fixed_random_static":
         e_lo, e_hi = env.fixed_random_exposure_range
         g_lo, g_hi = env.fixed_random_gain_range
-        return (
-            torch.empty((B,), device=device).uniform_(e_lo, e_hi),
-            torch.empty((B,), device=device).uniform_(g_lo, g_hi),
-        )
-    return (
-        torch.full((B,), 0.5, device=device),
-        torch.full((B,), 0.5, device=device),
+        exposure = torch.empty((B,), device=device).uniform_(e_lo, e_hi)
+        gain = torch.empty((B,), device=device).uniform_(g_lo, g_hi)
+    else:
+        exposure = torch.full((B,), 0.5, device=device)
+        gain = torch.full((B,), 0.5, device=device)
+
+    # Camera actuator state is episode-local. The measured delay comes from the
+    # selected IMX900 calibration profile. The provisional profile uses zero.
+    env._camera_command_queue = []
+    env._camera_requested_state = torch.stack(
+        [exposure.detach(), gain.detach()],
+        -1,
     )
+    return exposure, gain
+
+
+def _camera_delay_frames(env):
+    camera = getattr(env, "gray_camera", None)
+    calibration = getattr(camera, "calibration", None)
+    return int(getattr(calibration, "command_delay_frames", 0))
+
+
+def _apply_camera_command_delay(env, requested, current_applied):
+    delay = max(_camera_delay_frames(env), 0)
+    queue = getattr(env, "_camera_command_queue", None)
+    if queue is None:
+        queue = []
+        env._camera_command_queue = queue
+
+    queue.append(requested)
+    if len(queue) <= delay:
+        return current_applied
+    return queue.pop(0)
 
 
 def update_camera_params(cam_params, exposure, gain, env):
@@ -126,21 +149,32 @@ def update_camera_params(cam_params, exposure, gain, env):
         raise ValueError("camera policy must output [exposure, gain]")
 
     mode = getattr(env, "camera_control_mode", "learned")
-    if mode == "fixed":
-        e = torch.full_like(exposure, float(env.fixed_camera_exposure))
-        g = torch.full_like(gain, float(env.fixed_camera_gain))
-        return e, g, torch.stack([e, g], -1)
-    if mode == "fixed_random_static":
-        hist = torch.stack([exposure.detach(), gain.detach()], -1)
-        return exposure.detach(), gain.detach(), hist
+    current = torch.stack([exposure, gain], -1)
 
-    alpha = float(getattr(env, "camera_smoothing_alpha", 0.7))
-    e_target, g_target = cam_params.unbind(-1)
-    e_target = e_target.clamp(0.0, 1.0)
-    g_target = g_target.clamp(0.0, 1.0)
-    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_target
-    gain = alpha * gain.detach() + (1.0 - alpha) * g_target
-    return exposure, gain, cam_params
+    if mode == "fixed":
+        requested = torch.stack(
+            [
+                torch.full_like(exposure, float(env.fixed_camera_exposure)),
+                torch.full_like(gain, float(env.fixed_camera_gain)),
+            ],
+            -1,
+        )
+    elif mode == "fixed_random_static":
+        requested = current.detach()
+    else:
+        alpha = float(getattr(env, "camera_smoothing_alpha", 0.7))
+        e_target, g_target = cam_params.unbind(-1)
+        target = torch.stack(
+            [e_target.clamp(0.0, 1.0), g_target.clamp(0.0, 1.0)],
+            -1,
+        )
+        # This is policy-command smoothing only. Real camera latency/step
+        # behavior is modeled separately from the calibration profile.
+        requested = alpha * current.detach() + (1.0 - alpha) * target
+
+    env._camera_requested_state = requested
+    applied = _apply_camera_command_delay(env, requested, current.detach())
+    return applied[:, 0], applied[:, 1], requested
 
 
 def _stack_history_or_tensor(values):
