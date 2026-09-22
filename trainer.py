@@ -20,6 +20,7 @@ from rollout_ops import (
     render_sensors,
     render_gray_sensor,
     select_policy_depth_obs,
+    select_policy_gray_obs,
     build_local_frame,
     build_state_vector,
     build_gray_state_vector,
@@ -255,6 +256,10 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             if prev_gray is None:
                 prev_gray = gray_frame
             policy_gray_obs = torch.cat([gray_frame, prev_gray], dim=1)
+            policy_gray_obs = select_policy_gray_obs(
+                policy_gray_obs,
+                getattr(args, 'policy_gray_mode', 'gray'),
+            )
             prev_gray = gray_frame
 
             sat = gray_aux.get('saturation_fraction')
