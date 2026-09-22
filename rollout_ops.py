@@ -162,7 +162,7 @@ def update_camera_params(cam_params, exposure, gain, env):
     elif mode == "fixed_random_static":
         requested = current.detach()
     else:
-        alpha = float(getattr(env, "camera_smoothing_alpha", 0.7))
+        alpha = float(getattr(env, "camera_smoothing_alpha", 0.0))
         e_target, g_target = cam_params.unbind(-1)
         target = torch.stack(
             [e_target.clamp(0.0, 1.0), g_target.clamp(0.0, 1.0)],
