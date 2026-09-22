@@ -1,386 +1,370 @@
-# Codex Implementation Guide
+# Codex Implementation Guide — IMX900 Grayscale Line
 
 > This file is the implementation contract for future local Codex work.
 >
-> Do not attempt all stages in one change. Make small, testable commits.
+> Do not restore the old D455 path. Do not replace the camera model with a large
+> third-party dependency without revisiting the design decision documented in
+> OPEN_SOURCE_CAMERA_MODEL_REVIEW.md.
 
-## Phase 0 — protect the old result ✅ COMPLETE
+## Phase 0 — legacy separation ✅ COMPLETE
 
-The legacy D455 implementation is preserved in
-`active-sensing-4f-tools-2b-core`. The current branch is intentionally
-grayscale-only; do not restore a compatibility switch.
+- D455 executable sensor path removed from this branch.
+- old paper/results archive removed from this branch.
+- old work remains available from history/legacy branch.
 
-## Phase 1 — configuration and semantics only ✅ IMPLEMENTED / CLEANED
+## Phase 1 — geometry / appearance renderer ✅ IMPLEMENTED
 
-Add a camera-mode abstraction without changing behavior.
+Current contract:
 
-Target concepts:
+`quadsim_cuda.render_geometry()`
 
-~~~text
-sensor_type = diff_depth | gray
-camera_action_dim = 3 | 2
-~~~
+returns:
 
-For the gray path add explicit config for:
+- internal ray-hit distance;
+- exact hit normal.
 
-- `gray_width`, `gray_height`;
-- physical exposure min/max;
-- gain min/max;
-- sensor gradient mode;
-- blur/noise toggles;
-- lighting/randomization parameters.
+These values are used only for appearance rendering.
 
-Create a single camera semantics class for normalized<->physical conversion.
+Never expose them to the policy as privileged depth observations.
 
-Acceptance:
+`render/ideal_gray.py` currently applies:
 
-- grayscale configs parse;
-- camera action is exactly exposure/gain;
-- no D455 power or depth-sensor semantics remain in executable core code.
-
-## Phase 2 — ideal grayscale renderer ✅ IMPLEMENTED / CUDA REBUILD+SMOKE PENDING
-
-Add a CUDA/PyTorch entry point that returns ideal grayscale appearance.
-
-Use the generic CUDA ray tracer to return ray-hit distance and exact hit
-normals in one pass. Do not reintroduce a depth-camera API or estimate normals
-from a depth observation.
-
-Initial scene appearance:
-
-- ambient + Lambertian directional lighting;
-- per-object albedo;
+- Lambertian illumination;
+- ambient light;
 - procedural texture;
-- deterministic mode for tests.
+- nominal/dark/bright/transitions.
 
-Acceptance:
+Do not replace this with a heavy renderer before the core experiment is
+validated.
 
-- output finite in [0,1];
-- camera motion changes viewpoint;
-- normals produce expected shading;
-- textured gate is visually distinguishable;
-- batch rendering works on GPU.
+## Phase 2 — calibration-driven IMX900 surrogate ✅ IMPLEMENTED
 
-## Phase 3 — differentiable gray camera ✅ IMPLEMENTED
-
-Implement `DifferentiableGrayCamera` in PyTorch.
-
-Inputs:
+The old generic camera-semantic split has been replaced by:
 
 ~~~text
-ideal_gray
-exposure01
-gain01
-motion state
-optional deterministic noise tensors
+configs/calibration/imx900_provisional.json
+              |
+              v
+sensors/imx900_calibration.py
+              |
+              v
+sensors/imx900_camera.py
 ~~~
 
-Outputs:
+### Required design rules
 
-~~~text
-sensor_gray
-aux metrics
-~~~
+1. Physical sensor coefficients belong in the JSON calibration profile.
+2. Experiment configs should not duplicate exposure/gain/noise coefficients.
+3. The repository provisional profile must remain `calibrated: false`.
+4. Real/sim-to-real runs should use `--require_calibrated_imx900`.
+5. Do not copy coefficients from End2endImaging, JOCA/Basler, or unrelated
+   camera datasheets into the measured IMX900 profile.
 
-Aux:
+### Camera model components
 
-- physical exposure;
-- physical gain;
-- saturation fraction;
-- dark fraction;
-- noise std estimate;
-- blur strength.
+Current surrogate:
 
-Acceptance tests:
+- exposure integration;
+- gain mapping: linear/log/LUT;
+- shot noise alpha/beta;
+- gain-dependent read noise;
+- black level;
+- saturation/full-scale normalization;
+- STE quantization;
+- exposure-dependent motion blur.
 
-1. exposure gradient matches finite difference;
-2. gain gradient matches finite difference;
-3. increasing exposure brightens a non-saturated static image;
-4. high exposure eventually saturates;
-5. high motion + long exposure increases blur metric;
-6. repeated forward with fixed noise tensors is deterministic;
-7. no NaN/Inf in valid parameter range.
+### Required tests
 
-## Phase 4 — grayscale policy input ✅ IMPLEMENTED / INTEGRATION TEST PENDING
+- exposure finite-difference gradient;
+- gain finite-difference gradient;
+- LUT gain mapping gradient;
+- fixed stochastic samples -> deterministic output;
+- long exposure + motion -> increased blur;
+- saturation gradient decays;
+- JSON profile load/build;
+- provisional-profile rejection when required.
 
-Replace depth preprocessing on the gray path with:
+## Phase 3 — policy integration ✅ IMPLEMENTED / RESULT PENDING
 
-\[
-[current\ gray, previous\ gray].
-\]
+Visual input:
 
-Keep existing 2-channel visual stem initially.
+[
+[I_t,I_{t-1}].
+]
 
-Refactor names so gray code does not call variables `depth_obs`.
+Camera action/state:
 
-Acceptance:
+[
+[E_t,G_t].
+]
 
-- forward pass supports gray frames;
-- previous-frame reset at episode start is defined;
-- frame tensors stay on GPU;
-- old depth mode still works if intentionally retained.
+The camera branch may observe current exposure/gain.
 
-## Phase 5 — 2-D camera action ✅ IMPLEMENTED / INTEGRATION TEST PENDING
+For the main causal experiment, the flight branch must **not** directly receive
+camera state.
 
-Gray camera controller:
+The camera can influence flight only through resulting pixels.
 
-~~~text
-camera_state = [exposure, gain]
-camera_action = [target exposure, target gain]
-~~~
+## Phase 4 — fixed grayscale navigation 🟡 RESULT PENDING
 
-Remove power only on gray path.
+Before active camera learning:
 
-Add a configurable camera-actuator model:
+1. fixed nominal camera;
+2. matched blind/zero-image control.
 
-- EMA/slew limit;
-- update interval;
-- optional command delay queue.
+Pass condition:
 
-Acceptance:
+- grayscale navigation materially outperforms the blind baseline.
 
-- dimensions are correct end-to-end;
-- logs show requested and applied camera state separately;
-- detached/full gradient mode differs only in sensor gradient path.
+If not, fix appearance/navigation before touching camera learning.
 
-## Phase 6 — fixed-camera grayscale flight 🟡 TRAINING PATH READY / RESULT PENDING
+## Phase 5 — stress environment 🟡 CODE PRESENT / RESULT PENDING
 
-Do **not** learn camera control yet.
+Use:
 
-Train/evaluate fixed-camera grayscale navigation.
-
-First benchmark:
-
-- textured gate/slit;
-- nominal light;
-- modest randomization.
-
-Pass gate before moving on:
-
-- success reliably above blind/zero-image baseline;
-- collision rate reasonable;
-- policy demonstrably uses image input.
-
-Add an image-zero ablation to test this.
-
-## Phase 7 — illumination and motion benchmark
-
-Add:
-
-- low-light;
-- high-light;
-- bright-to-dark;
+- dark;
+- bright;
 - dark-to-bright;
-- fast gate approach.
+- bright-to-dark;
+- fast/near gate approach.
 
-Verify manually that:
+Verify:
 
-- no single fixed exposure/gain dominates all conditions;
-- long exposure helps dark static scenes;
-- long exposure hurts fast motion through blur;
-- high gain improves signal but increases noise.
+- long exposure helps low-light signal;
+- long exposure hurts fast image motion;
+- gain improves signal while increasing measured-model noise;
+- no one fixed setting dominates all conditions.
 
-If these trade-offs do not appear, fix the sensor model before learning camera control.
+If this trade-off is absent, do not train the learned camera policy yet.
 
-## Phase 8 — classical baselines
+## Phase 6 — classical baselines 🟡 CODE PRESENT / VALIDATION PENDING
 
-Implement:
+Required:
 
 - fixed nominal;
 - random-static;
-- mean-brightness AE;
-- gradient-based AE.
+- mean AE;
+- gradient AE.
 
-Keep camera update rate and actuator constraints matched.
+Keep actuator/update constraints matched.
 
-## Phase 9 — learned camera, frozen flight
+## Phase 7 — primary camera experiment 🟡 CODE PRESENT / RESULT PENDING
 
-Freeze the successful flight policy.
+Start from one successful frozen flight checkpoint.
 
-Train camera policy only.
+Run:
 
-Two methods:
+### learned-detached
 
-### detached
+Cut:
 
-~~~python
-gray = camera(
-    ideal,
-    exposure.detach(),
-    gain.detach(),
-    ...
-)
+[
+(E,G)ightarrow I
+]
+
+gradient at the sensor boundary.
+
+### learned-differentiable
+
+Preserve:
+
+[
+L_{nav}
+ightarrow I
+ightarrow(E,G)
+ightarrow	heta_{cam}.
+]
+
+Everything else must match:
+
+- flight checkpoint;
+- camera network;
+- optimizer;
+- data distribution;
+- random seeds where practical;
+- training budget.
+
+Do not add search-based teacher targets to either condition.
+
+## Phase 8 — optional JOCA-style comparison ⬜ OPTIONAL
+
+Only after the primary full-vs-detached result is understood.
+
+Possible comparison:
+
+- local exposure/gain grid search;
+- derivative-free perturbation;
+- JOCA-style correction target.
+
+Important:
+
+- implement independently;
+- cite JOCA;
+- do not vendor JOCA code without license clarification;
+- report as a separate method.
+
+## Phase 9 — real IMX900 characterization ⬜ HARDWARE PENDING
+
+Create/complete tools:
+
+~~~text
+tools/grayscale_calibration/
+  inspect_controls.py
+  capture_dark.py
+  sweep_exposure.py
+  sweep_gain.py
+  capture_ptc.py
+  measure_motion_blur.py
+  measure_latency.py
+  fit_imx900_profile.py
+  validate_imx900_profile.py
+  report.py
 ~~~
 
-### differentiable
+Output one measured JSON profile.
 
-~~~python
-gray = camera(
-    ideal,
-    exposure,
-    gain,
-    ...
-)
+Do not edit model source to insert measured coefficients.
+
+## Phase 10 — actuator model ⬜ HARDWARE PENDING
+
+The current EMA is a policy/control smoothing mechanism, not a measured camera
+actuator model.
+
+After latency characterization:
+
+- separate requested from effective settings;
+- implement real step/quantization;
+- add command-delay queue;
+- add measured jitter if material;
+- preserve timestamps/metadata.
+
+The calibration profile already has fields for command steps and nominal delay.
+
+## Phase 11 — optional optics refinement ⬜ ONLY IF NEEDED
+
+Do not add DeepLens by default.
+
+Trigger this phase only if held-out real data demonstrates a material
+lens-driven residual:
+
+- PSF blur;
+- distortion;
+- vignetting;
+- defocus.
+
+Preferred workflow:
+
+~~~text
+real lens data / lens spec
+      |
+      v
+DeepLens offline study
+      |
+      v
+small fitted PSF/distortion/vignetting surrogate
+      |
+      v
+DiffPhysDrone runtime
 ~~~
 
-Everything else must match.
+Do not run a full optical simulator per BPTT frame unless a specific experiment
+requires it.
 
-Log the gradient norm reaching camera output/parameters.
+## Phase 12 — real camera wrapper ⬜ HARDWARE PENDING
 
-Primary go/no-go:
-
-- differentiable method must show stable, reproducible benefit over detached on at least one deliberately constructed mixed illumination/motion task;
-- camera trajectories must be physically interpretable;
-- no degenerate bound saturation.
-
-## Phase 10 — joint fine-tuning
-
-Only after Phase 9 passes.
-
-Use small learning rate and separate parameter groups.
-
-Report both frozen-flight and joint results; do not hide the simpler causal experiment.
-
-## Phase 11 — real IMX900 wrapper
-
-After hardware works:
-
-Create something like:
+Target:
 
 `tools/realflight/imx900_camera_node.py`
 
 Responsibilities:
 
-- V4L2/GStreamer or e-con-supported capture path;
-- explicit disable of auto controls;
-- manual exposure/gain setting;
-- frame timestamps;
-- requested/effective parameter logging;
-- frame drop stats;
-- ROS publication if the existing real-flight stack remains ROS1.
+- camera stream via supported e-con/V4L2/GStreamer path;
+- disable auto controls;
+- manual exposure/gain;
+- frame timestamp;
+- requested camera settings;
+- effective settings if metadata exposes them;
+- command timestamp;
+- dropped/stale frame statistics;
+- safe nominal fallback.
 
-Do not bind the navigation model directly to an undocumented shell command.
+## Phase 13 — real flight ⬜ PENDING
 
-## Phase 12 — calibration tools
+Order:
 
-Implement:
+1. bench stream;
+2. manual parameter control;
+3. calibration;
+4. surrogate fit;
+5. held-out bench validation;
+6. mounted motors-off;
+7. hover;
+8. slow gate;
+9. illumination transition;
+10. final benchmark.
 
-~~~text
-tools/grayscale_calibration/capture_dark.py
-tools/grayscale_calibration/sweep_exposure.py
-tools/grayscale_calibration/sweep_gain.py
-tools/grayscale_calibration/measure_latency.py
-tools/grayscale_calibration/measure_motion_blur.py
-tools/grayscale_calibration/fit_camera_model.py
-tools/grayscale_calibration/report.py
-~~~
+## Open-source dependency rules
 
-Every tool must save raw metadata and be rerunnable.
+### End2endImaging
 
-## Phase 13 — real deployment
+Allowed:
 
-Map normalized actions to the calibrated physical controls.
+- study modeling structure;
+- cite project/papers;
+- reimplement necessary compact equations;
+- Apache-2.0 permits code reuse if license obligations are followed.
 
-Validate:
+Current project decision:
 
-- range clamping;
-- update latency;
-- camera thread safety;
-- policy/frame timing;
-- watchdog fallback.
+- no hard runtime dependency;
+- do not copy numerical defaults as IMX900 values.
 
-Fallback behavior:
+### DeepLens
 
-- if camera control fails, revert to safe nominal exposure/gain;
-- if frames become stale, flight policy should enter a predefined safe behavior rather than extrapolate indefinitely.
+Allowed and Apache-2.0.
 
-## Suggested file architecture
+Current project decision:
 
-~~~text
-sensors/
-  gray_camera_semantics.py
-  differentiable_gray_camera.py
+- optional offline optics tool only.
 
-render/
-  gray_render.py
+### JOCA
 
-configs/
-  gray_gate_fixed.args
-  gray_gate_active.args
+Current review did not find a root LICENSE file.
 
-tools/
-  grayscale_calibration/
-  realflight/
-    imx900_camera_node.py
+Therefore:
 
-docs/
-  grayscale_imx900/
-    ...
-~~~
-
-CUDA functions may stay in `src/quadsim_kernel.cu` initially, but split them later if the file becomes difficult to maintain.
-
-## Required regression tests
-
-Create automated tests for:
-
-- camera normalized/physical mapping;
-- exposure finite-difference gradient;
-- gain finite-difference gradient;
-- deterministic renderer scene;
-- grayscale policy forward shape;
-- detached mode gradient absence;
-- full mode gradient presence;
-- actuator delay/slew behavior;
-- no D455 power dependency in grayscale config.
+- do not copy/vendor its source into this repository;
+- use as prior work and algorithmic reference;
+- independently implement any comparison;
+- clarify licensing before deeper code reuse.
 
 ## Coding principles
 
-1. Prefer explicit names over preserving depth-era names.
-2. Centralize physical units.
-3. Separate requested camera target from applied/effective state.
-4. Keep sensor stochasticity controllable by seeded/fixed noise.
-5. Make every ablation a config switch, not a forked code path.
-6. Never silently use privileged ground-truth depth in the gray policy.
-7. Keep classical AE independent from navigation loss.
-8. Do not optimize image-quality losses in the main differentiable method unless explicitly running an ablation.
-9. Log enough state to reproduce any paper figure.
-10. Every stage should have a small acceptance test before proceeding.
+1. One physical source of truth: the calibration JSON.
+2. Keep calibrated quantities separate from training-surrogate hyperparameters.
+3. No privileged internal geometry in the policy.
+4. No camera-state shortcut into the flight branch for the main causal test.
+5. Use fixed noise tensors for gradient unit tests.
+6. Every learned-camera claim must include the matched detached control.
+7. Do not use image-quality supervision silently.
+8. Do not use JOCA-style search correction silently.
+9. Do not call the provisional profile “IMX900 calibrated.”
+10. Re-run the literature search before paper submission.
 
-## Current handoff point
+## Current handoff
 
-The executable branch has now been cleaned to grayscale-only. The immediate
-task is **validation, not another architectural rewrite**.
+The next useful work is **not** another camera architecture rewrite.
 
-Run:
+Before real hardware arrives:
 
-```bash
-conda activate mappo-mpc
-pip install -e src
+- keep the calibration-profile architecture stable;
+- validate fixed grayscale navigation;
+- validate the illumination/motion conflict;
+- validate full-vs-detached behavior.
 
-python -m pytest -q \
-  tests/test_differentiable_gray_camera.py \
-  tests/test_ideal_gray_renderer.py \
-  tests/test_model_gray_mode.py \
-  tests/test_gray_rollout_helpers.py
+When hardware arrives:
 
-python tools/test_gray_env_render.py
-TASK=gray_gate_fixed bash run.sh
-TASK=gray_gate_blind bash run.sh
-```
-
-Go/no-go criteria:
-
-1. CUDA extension rebuild succeeds with only `render_geometry` exposed for appearance geometry and no references to removed D455/depth-camera symbols.
-2. All grayscale unit tests pass.
-3. Smoke images show useful slit/texture cues in nominal, dark, and bright scenes.
-4. Fixed-gray navigation materially outperforms the zero-image control.
-
-Only after all four pass should Codex implement/tune classical AE baselines and
-run the mixed-illumination camera-learning experiment.
-
-For camera learning, use the same successful flight checkpoint for
-`gray_camera_full` and `gray_camera_detached`. The flight network should be
-frozen via `--train_camera_only`; gradients must still propagate through the
-frozen flight computation to image pixels and then, only in the full condition,
-through the camera model to exposure/gain.
+- characterize the exact e-con/IMX900/Jetson pipeline;
+- fit a new JSON profile;
+- enable `--require_calibrated_imx900`;
+- then evaluate sim-to-real.
