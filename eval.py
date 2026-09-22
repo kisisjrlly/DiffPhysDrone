@@ -278,8 +278,11 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
 
     success = reached & (~collided)
     cam_stats = compute_camera_param_stats(exposure_hist, gain_hist)
+    calibration = getattr(env, "imx900_calibration", None)
     row = {
         "scenario": scene_name,
+        "camera_profile": getattr(calibration, "profile_name", ""),
+        "camera_profile_calibrated": bool(getattr(calibration, "calibrated", False)),
         "success_rate": float(success.float().mean().cpu()),
         "collision_rate": float(collided.float().mean().cpu()),
         "goal_reach_rate": float(reached.float().mean().cpu()),
