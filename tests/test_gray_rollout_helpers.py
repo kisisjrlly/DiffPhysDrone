@@ -14,7 +14,7 @@ class _DummyEnv:
     def __init__(self, batch=2):
         self.batch_size = batch
         self.camera_control_mode = "learned"
-        self.camera_ema_alpha = 0.7
+        self.camera_smoothing_alpha = 0.7
         self.fixed_camera_exposure = 0.3
         self.fixed_camera_gain = 0.2
         self.fixed_random_exposure_range = (0.1, 0.9)
@@ -101,7 +101,7 @@ def test_state_vector_adds_two_camera_values():
 
 def test_camera_ema_uses_configured_alpha():
     env = _DummyEnv(batch=1)
-    env.camera_ema_alpha = 0.5
+    env.camera_smoothing_alpha = 0.5
     exposure = torch.tensor([0.2])
     gain = torch.tensor([0.4])
     target = torch.tensor([[0.8, 0.6]])
