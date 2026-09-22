@@ -13,7 +13,10 @@ class Model(nn.Module):
                  depth_nn_height=12,
                  depth_use_pipeline=True,
                  depth_min_valid=0.3,
-                 depth_max_range=6.0) -> None:
+                 depth_max_range=6.0,
+                 sensor_type='diff_depth',
+                 gray_nn_width=32,
+                 gray_nn_height=24) -> None:
         """
         初始化无人机的策略网络模型 (Policy Network)。
         Args:
@@ -30,6 +33,12 @@ class Model(nn.Module):
         self.depth_use_pipeline = bool(depth_use_pipeline)
         self.depth_min_valid = max(float(depth_min_valid), 1e-3)
         self.depth_max_range = max(float(depth_max_range), self.depth_min_valid + 1e-3)
+        self.sensor_type = str(sensor_type).strip().lower()
+        if self.sensor_type not in {'diff_depth', 'gray'}:
+            raise ValueError(f'unsupported sensor_type: {sensor_type!r}')
+        self.gray_nn_width = max(int(gray_nn_width), 1)
+        self.gray_nn_height = max(int(gray_nn_height), 1)
+        self.camera_action_dim = 2 if self.sensor_type == 'gray' else 3
 
         def make_spatial_stem(cin: int, small_input_friendly: bool = False):
             _ = small_input_friendly
@@ -55,8 +64,11 @@ class Model(nn.Module):
         self.cam_motion_dim = 24
         self.cam_hidden_dim = 96
 
-        # 如果启用了相机状态观测，flight branch 的物理观测维度需要增加 3 维
-        actual_obs_dim = dim_obs + (3 if self.include_camera_state_in_obs else 0)
+        # Camera-state size follows the active sensor: depth uses
+        # power/exposure/gain, grayscale uses exposure/gain.
+        actual_obs_dim = dim_obs + (
+            self.camera_action_dim if self.include_camera_state_in_obs else 0
+        )
 
         # Flight branch uses the trainable visual stem.
         # Camera branch uses a separate copy so later flight-only fine-tuning
@@ -143,7 +155,7 @@ class Model(nn.Module):
         self.cam_img_adapter[-1].weight.data.mul_(0.01)
         self.cam_img_adapter[-1].bias.data.zero_()
         self.cam_img_norm = nn.LayerNorm(self.feat_dim)
-        self.cam_state_proj = nn.Linear(3, self.cam_state_dim)
+        self.cam_state_proj = nn.Linear(self.camera_action_dim, self.cam_state_dim)
         self.cam_state_norm = nn.LayerNorm(self.cam_state_dim)
         self.cam_motion_proj = nn.Linear(6, self.cam_motion_dim)
         self.cam_motion_norm = nn.LayerNorm(self.cam_motion_dim)
@@ -153,7 +165,7 @@ class Model(nn.Module):
         )
         self.cam_gru = nn.GRUCell(self.cam_hidden_dim, self.cam_hidden_dim)
         self.cam_hx_norm = nn.LayerNorm(self.cam_hidden_dim)
-        self.fc_cam = nn.Linear(self.cam_hidden_dim, 3, bias=True)
+        self.fc_cam = nn.Linear(self.cam_hidden_dim, self.camera_action_dim, bias=True)
         self.fc_cam.weight.data.mul_(0.01)
         # 初始化偏置为 0，这样经过后续的 sigmoid 激活后，初始输出在 0.5 附近（即默认的居中参数）
         self.fc_cam.bias.data.zero_()
@@ -305,8 +317,36 @@ class Model(nn.Module):
 
         return x_depth
 
+    def preprocess_gray_input(self, gray_obs=None, add_noise=False):
+        """Prepare [current_gray, previous_gray] for the shared 2-channel stem."""
+        if gray_obs is None:
+            raise ValueError('gray sensor model requires gray_obs input')
+        x = gray_obs
+        if x.dim() == 3:
+            x = x[:, None]
+        if x.dim() != 4:
+            raise ValueError(
+                f'gray input expects (B,2,H,W) or a single (B,H,W) frame, got {tuple(x.shape)}'
+            )
+        if x.shape[1] == 1:
+            x = torch.cat([x, x], dim=1)
+        if x.shape[1] != 2:
+            raise ValueError(f'gray input must contain 2 channels, got {x.shape[1]}')
+        x = x.clamp(0.0, 1.0)
+        target = (self.gray_nn_height, self.gray_nn_width)
+        if tuple(x.shape[-2:]) != target:
+            x = F.adaptive_avg_pool2d(x, target)
+        if add_noise:
+            x = (x + torch.randn_like(x) * 0.005).clamp(0.0, 1.0)
+        return x * 2.0 - 1.0
+
+    def preprocess_visual_input(self, *, depth_obs=None, gray_obs=None, add_noise=False):
+        if self.sensor_type == 'gray':
+            return self.preprocess_gray_input(gray_obs=gray_obs, add_noise=add_noise)
+        return self.preprocess_depth_input(depth_obs=depth_obs, add_noise=add_noise)
+
     def forward(self, v, hx=None, return_intent=False,
-                depth_obs=None, add_noise=False, cam_hx=None,
+                depth_obs=None, gray_obs=None, add_noise=False, cam_hx=None,
                 camera_state=None, camera_motion_state=None):
         """
         前向传播函数。
@@ -323,13 +363,17 @@ class Model(nn.Module):
             hx: 更新后的 GRU 隐藏状态。
         """
         # ==========================
-        # A. 深度输入预处理
-        x_depth = self.preprocess_depth_input(depth_obs=depth_obs, add_noise=add_noise)
+        # A. Sensor-specific visual preprocessing
+        x_visual = self.preprocess_visual_input(
+            depth_obs=depth_obs,
+            gray_obs=gray_obs,
+            add_noise=add_noise,
+        )
 
         # ==========================
         # B. 视觉特征提取
         # ==========================
-        flight_img_feat = self.stem(x_depth)
+        flight_img_feat = self.stem(x_visual)
         
         # ==========================
         # C. 多模态融合 + 时序建模
@@ -349,15 +393,15 @@ class Model(nn.Module):
 
         act = raw
         if camera_state is None or not self.include_camera_state_in_obs:
-            cam_state = torch.zeros(v.shape[0], 3, device=v.device, dtype=v.dtype)
+            cam_state = torch.zeros(v.shape[0], self.camera_action_dim, device=v.device, dtype=v.dtype)
         else:
             cam_state = camera_state.to(device=v.device, dtype=v.dtype)
         if camera_motion_state is None:
             camera_motion_state = torch.zeros(v.shape[0], 6, device=v.device, dtype=v.dtype)
         else:
             camera_motion_state = camera_motion_state.to(device=v.device, dtype=v.dtype)
-        cam_img_raw = self.cam_stem(x_depth)
-        cam_spatial = self.cam_spatial_proj(self.cam_spatial_stem(x_depth).flatten(1))
+        cam_img_raw = self.cam_stem(x_visual)
+        cam_spatial = self.cam_spatial_proj(self.cam_spatial_stem(x_visual).flatten(1))
         cam_img_feat = self.cam_img_norm(
             cam_img_raw
             + 0.25 * self.cam_img_adapter(cam_img_raw)
