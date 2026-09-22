@@ -80,6 +80,7 @@ class Env:
         gray_light_jitter=0.08,
         gray_texture_strength=0.35,
         gray_texture_scale=5.0,
+        gray_motion_depth_floor=0.35,
     ):
         self.device = device
         self.batch_size = int(batch_size)
@@ -146,6 +147,7 @@ class Env:
         self.gray_light_jitter = float(gray_light_jitter)
         self.gray_texture_strength = float(gray_texture_strength)
         self.gray_texture_scale = float(gray_texture_scale)
+        self.gray_motion_depth_floor = float(gray_motion_depth_floor)
 
         self.g_std = torch.tensor([0.0, 0.0, -9.80665], device=device)
         self.v_wind_w = torch.tensor([1.0, 1.0, 0.2], device=device)
