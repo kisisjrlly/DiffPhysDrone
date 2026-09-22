@@ -1,262 +1,516 @@
-# Calibration and Sim-to-Real Protocol
+# Calibration and Sim-to-Real Protocol — e-con IMX900
 
 ## 1. Goal
 
-Fit a compact differentiable image-formation model that reproduces the **task-relevant response** of the real IMX900 camera to exposure, gain, illumination and motion.
+Fit a compact differentiable surrogate that reproduces the **task-relevant**
+response of the real e-con e-CAM37M_CUONX / Sony IMX900 camera stack.
 
-Do not attempt transistor-level camera simulation.
+The target is not transistor-level simulation.
 
-Required agreement:
+The output of calibration is a JSON profile consumed by:
 
-- monotonic intensity response;
-- saturation onset;
-- noise versus signal/gain;
-- black level;
-- motion blur versus exposure/motion;
-- parameter quantization/ranges;
-- command-to-effective-frame latency.
+- `sensors/imx900_calibration.py`;
+- `sensors/imx900_camera.py`.
 
-## 2. Data format
+Development profile:
 
-Create:
+`configs/calibration/imx900_provisional.json`
+
+It is marked `calibrated: false`.
+
+A real fitted profile should be saved separately, for example:
+
+`configs/calibration/imx900_measured_<date>.json`
+
+and marked:
+
+~~~json
+"calibrated": true
+~~~
+
+For runs that must reject placeholders, use:
+
+~~~text
+--require_calibrated_imx900
+~~~
+
+---
+
+## 2. Freeze the real capture pipeline first
+
+Calibrate the exact stack that will be flown:
+
+[
+	ext{IMX900 sensor}
++
+	ext{e-con module}
++
+	ext{lens}
++
+	ext{e-con driver/BSP}
++
+	ext{Jetson capture path}.
+]
+
+Before data collection, record:
+
+- exact e-con SKU;
+- lens SKU/focal length;
+- JetPack/L4T;
+- e-con driver/BSP version;
+- pixel format;
+- resolution;
+- FPS;
+- exposure control name/range/step;
+- gain control name/range/step;
+- whether effective settings are reported per frame.
+
+Disable or freeze, where possible:
+
+- auto exposure;
+- auto gain;
+- auto brightness;
+- digital gain that is not part of the intended action;
+- denoise;
+- sharpening/edge enhancement;
+- HDR/alternate shutter modes;
+- nonlinear gamma/ISP processing.
+
+Prefer RAW10/RAW12 or the most linear monochrome path available.
+
+If hidden ISP processing cannot be disabled, characterize the **actual deployed
+pipeline** rather than pretending it is RAW.
+
+---
+
+## 3. Calibration profile schema
+
+The current JSON schema separates physical quantities from training
+hyperparameters.
+
+### Exposure
+
+~~~json
+"exposure": {
+  "min_us": ...,
+  "max_us": ...,
+  "reference_us": ...,
+  "step_us": ...,
+  "signal_scale": ...
+}
+~~~
+
+Fit/record:
+
+- driver-supported min/max;
+- real command step;
+- a convenient reference exposure;
+- signal scale connecting normalized simulator irradiance to observed camera
+  response.
+
+### Gain
+
+~~~json
+"gain": {
+  "mapping": "linear | log | lut",
+  "min_factor": ...,
+  "max_factor": ...,
+  "step_factor": ...,
+  "lut_x": ...,
+  "lut_factor": ...
+}
+~~~
+
+Prefer a measured LUT if the command-to-amplification curve is not accurately
+represented by a simple law.
+
+`lut_x` is the normalized policy command in [0,1].
+
+### Noise
+
+~~~json
+"noise": {
+  "shot_alpha": ...,
+  "shot_beta": ...,
+  "read_std_base": ...,
+  "read_gain_exponent": ...
+}
+~~~
+
+The runtime surrogate currently uses:
+
+[
+sigma_{shot}
+=
+G(alphasqrt{q}+eta),
+]
+
+[
+sigma_{read}
+=
+sigma_{r0}G^{p_r}.
+]
+
+If real data strongly reject this compact form, extend the calibration profile
+with a measured curve/LUT rather than adding scene-dependent heuristics.
+
+### Other sensor fields
+
+~~~json
+"black_level": ...,
+"saturation_level": ...,
+"quantization_bits": ...,
+"motion_blur": {"scale": ...},
+"actuator": {"command_delay_frames": ...}
+~~~
+
+---
+
+## 4. Dataset format
+
+Create a machine-readable calibration dataset under:
 
 `tools/grayscale_calibration/`
 
-and store each capture with a machine-readable manifest.
+or an external data directory referenced by a manifest.
 
-Recommended fields:
+Every frame/sequence should record:
 
 ~~~text
 timestamp
+frame_id
 scene_id
 illumination_id
-distance
-target_type
 requested_exposure
 requested_gain
 effective_exposure
 effective_gain
-frame_id
-image_path
-camera_temperature (if available)
 fps
+pixel_format
+camera_temperature (if available)
+image_path
 notes
 ~~~
 
-Never keep calibration knowledge only in notebook cells.
+Do not keep calibration facts only inside notebooks.
 
-## 3. Dark-frame calibration
+---
+
+## 5. Dark-frame calibration
 
 Condition:
 
-- lens cap / fully dark enclosure;
-- fixed camera temperature as far as practical;
-- auto exposure/gain disabled.
+- lens cap or light-tight enclosure;
+- auto controls disabled;
+- stable temperature where practical.
 
-Sweep gain over its usable range.
+Sweep the intended gain range.
 
-For each setting capture at least ~100 frames initially.
+For each setting collect enough frames to estimate temporal statistics, e.g.
+100–500 frames.
 
 Estimate:
 
 - black-level mean;
 - temporal dark/read noise;
-- hot-pixel statistics;
-- gain dependence of variance.
-
-Fit a smooth low-parameter model \(\sigma_r(G)\).
-
-## 4. Exposure response
-
-Use:
-
-- stable LED illumination;
-- matte gray/white target;
-- no flickering PWM source unless synchronized.
-
-At fixed gain, sweep exposure over the intended navigation range.
-
-Measure central ROI mean/variance.
+- hot pixels;
+- variance versus gain.
 
 Fit:
 
-\[
-\mu(T)\approx f_T(T,L)
-\]
+- `black_level`;
+- `read_std_base`;
+- `read_gain_exponent` or a future measured LUT.
 
-and identify:
+Do not copy noise values from End2endImaging or JOCA/Basler into the measured
+profile.
 
-- linear region;
-- black-floor region;
-- saturation knee;
-- hard saturation.
+---
 
-## 5. Gain response
+## 6. Exposure response
 
-At several fixed exposures and illumination levels, sweep gain.
+Use a stable, non-flickering light source and a matte uniform target.
 
-Fit the mapping from camera control value to effective amplification.
-
-Do not assume the command is linear amplitude gain. If exposed in dB, fit/convert explicitly.
-
-## 6. Photon-transfer-style characterization
-
-For uniform illumination levels, estimate pairs:
-
-\[
-(\mu,\sigma^2).
-\]
-
-Use these data to fit the shot/read-noise model used in the differentiable camera.
-
-A simple model is acceptable if validated:
-
-\[
-\sigma^2=a(G)\mu+b(G).
-\]
-
-## 7. Saturation and quantization
+At fixed gain, sweep exposure over the intended flight range.
 
 Measure:
 
+- ROI mean;
+- ROI variance;
+- saturation fraction.
+
+Identify:
+
+- black-floor region;
+- linear region;
+- saturation knee;
+- full-scale output.
+
+Fit:
+
+- exposure min/max/step;
+- `reference_us`;
+- `signal_scale`;
+- `saturation_level`.
+
+A development camera model may remain normalized, but the fitted response
+should reproduce the real curve over the operating range.
+
+---
+
+## 7. Gain response
+
+At several exposure and illumination levels, sweep the real gain control.
+
+Determine whether the real control is best represented by:
+
+- linear factor;
+- logarithmic factor;
+- measured LUT.
+
+The project already supports a piecewise differentiable gain LUT.
+
+Fit:
+
+- `gain.mapping`;
+- factor range;
+- optional command step;
+- LUT points.
+
+Do not assume that a driver value or dB label is directly a linear amplitude
+factor.
+
+---
+
+## 8. Photon-transfer-style noise characterization
+
+For multiple uniform illumination levels, measure:
+
+[
+(mu,sigma^2)
+]
+
+after subtracting the dark/black component.
+
+Repeat at several gains.
+
+Use this data to fit the compact surrogate:
+
+[
+sigma_{shot}
+=
+G(alphasqrt{q}+eta),
+]
+
+[
+sigma_{read}
+=
+sigma_{r0}G^{p_r}.
+]
+
+Validate the fit on held-out illumination/gain settings.
+
+The objective is not a perfect CMOS physics model; it is a compact surrogate
+whose signal/noise trends match the real sensor in the task operating range.
+
+---
+
+## 9. Bit depth, black level, saturation, and response curve
+
+Record:
+
+- RAW10 / RAW12 / other format;
 - digital maximum;
-- bit depth/output format;
 - black level;
 - clipping behavior;
-- any gamma/ISP processing that cannot be disabled.
+- gamma/nonlinearity if present;
+- any unavoidable ISP transformation.
 
-Prefer raw/linear monochrome modes when supported.
+Set:
 
-If the real pipeline applies hidden nonlinear processing, either disable it or fit an explicit response curve.
+- `quantization_bits`;
+- `black_level`;
+- `saturation_level`.
 
-## 8. Motion blur calibration
+If a nonlinear response cannot be disabled and is material, extend the
+calibration profile with a fitted response curve.
 
-Use a high-contrast target.
+---
 
-Option A:
-- rotate the camera at known angular velocity.
+## 10. Motion blur calibration
 
-Option B:
-- move a target at known image-plane speed.
+The current simulator uses a lightweight blur coefficient, not a full temporal
+optics model.
 
-Sweep exposure.
+Use a high-contrast edge/texture target.
 
-Measure edge-spread/blur width.
+Collect data over:
 
-Fit a model:
+- multiple exposures;
+- multiple known translational/angular speeds;
+- multiple target distances.
 
-\[
-w_{blur}=f(T,\omega,v,Z).
-\]
+Measure edge-spread or another blur-width statistic.
 
-The initial simulator may use a simplified coefficient, but its scale must come from measurement.
+Fit the v1 relationship around:
 
-## 9. Parameter-change latency
+[
+mapproxrac{|v|}{Z},
+]
 
-This is critical for active sensing.
+[
+b
+=
+1-exp
+left(
+-k_brac{T}{T_{ref}}m
+ight).
+]
+
+Store the fitted (k_b) as:
+
+`motion_blur.scale`.
+
+If the residual error is too large, the next upgrade is temporal multi-pose
+integration, not arbitrary scene-specific blur rules.
+
+---
+
+## 11. Command-to-effective-frame latency
+
+Active sensing depends on **when** a requested setting actually becomes visible.
 
 Procedure:
 
 1. stream at fixed FPS;
 2. alternate two strongly different exposure values;
-3. timestamp each command;
-4. detect in captured frames when brightness changes;
-5. estimate frame-delay distribution.
+3. timestamp every command;
+4. detect the first frame whose intensity reflects the new exposure;
+5. repeat many times;
+6. repeat for gain.
 
-Repeat for gain.
-
-Record:
+Measure:
 
 - median delay;
 - 95th percentile;
 - jitter;
-- whether the driver reports effective settings per frame.
+- frame-count delay;
+- whether metadata reports effective settings.
 
-Use these measurements in simulation.
+Store the nominal frame delay as:
 
-## 10. Illumination transition benchmark
+`actuator.command_delay_frames`.
 
-Create a task-relevant bench sequence:
+The current profile stores this value even though the full measured actuator
+queue should only be enabled once hardware behavior is known.
 
-- bright -> dark;
-- dark -> bright;
-- bright source near gate;
-- low-light textured gate;
-- fast camera motion under low light.
+---
 
-These sequences are useful before flight because camera-control quality can be diagnosed without risking the drone.
+## 12. Camera intrinsics and mounting
 
-## 11. Simulator fitting
+In addition to sensor-response calibration, measure:
 
-Fit parameters using train/validation scenes separately.
+- (f_x,f_y,c_x,c_y);
+- distortion;
+- actual FoV;
+- camera-to-body extrinsics.
 
-The simulator should predict distributions/statistics, not exact random pixel noise.
+The current simulator `fov_x_half_tan` and `cam_angle` are development
+parameters, not a final real-camera calibration.
 
-Suggested fitted parameters:
+If lens distortion/PSF/vignetting becomes a major residual error, that is the
+decision point for an offline DeepLens study.
 
-~~~text
-black_level
-exposure_scale
-gain_mapping parameters
-read_noise(gain)
-shot_noise coefficient(s)
-saturation shoulder
-quantization mode
-blur coefficient(s)
-vignetting (optional)
-latency/hold model
-~~~
+---
 
-## 12. Validation plots
+## 13. Fitting output
 
-Required report plots:
+The fitting tool should write a complete JSON profile rather than editing source
+code.
 
-1. mean intensity vs exposure: real vs sim;
-2. mean intensity vs gain: real vs sim;
+Expected future tool:
+
+`tools/grayscale_calibration/fit_imx900_profile.py`
+
+Inputs:
+
+- exposure sweep;
+- gain sweep;
+- dark frames;
+- PTC data;
+- blur sequences;
+- latency data.
+
+Output:
+
+- fitted JSON profile;
+- fit metrics;
+- validation plots;
+- held-out error summary.
+
+---
+
+## 14. Required validation plots
+
+At minimum:
+
+1. mean intensity vs exposure — real vs surrogate;
+2. mean intensity vs gain — real vs surrogate;
 3. variance vs mean at several gains;
-4. saturation fraction vs exposure;
-5. blur width vs exposure at multiple speeds;
-6. command-to-effective-frame latency histogram;
-7. example real/sim frames for dark/nominal/bright conditions.
+4. read-noise estimate vs gain;
+5. saturation fraction vs exposure;
+6. blur width vs exposure at several speeds/distances;
+7. command-to-effective-frame latency histogram;
+8. representative real/sim images in dark/nominal/bright cases.
 
-## 13. Acceptance criteria before flight training claims
+---
 
-Do not require pixel-perfect matching.
+## 15. Acceptance criteria
 
-Require:
+Do not require pixel-perfect images.
 
-- correct response direction across operating range;
-- similar saturation transition;
-- noise magnitude/order compatible with real data;
-- blur trend compatible with real measurements;
-- latency modeled;
-- held-out calibration scenes not grossly mismatched.
+Require the surrogate to reproduce task-relevant trends:
 
-Document deviations rather than hiding them.
+- correct exposure-response direction and scale;
+- correct gain-response trend;
+- similar saturation onset;
+- realistic noise order/magnitude;
+- realistic blur trend;
+- modeled command latency;
+- acceptable held-out response curves.
 
-## 14. Sim-to-real randomization
+Document mismatches explicitly.
 
-After fitting a nominal camera model, randomize around calibration uncertainty:
+---
 
-- illumination;
-- albedo/texture;
-- noise coefficients;
+## 16. Sim-to-real randomization
+
+After fitting a nominal profile, randomize around **measured uncertainty**:
+
+- light level;
+- material albedo/texture;
+- shot/read coefficients;
 - response scale;
 - blur coefficient;
-- latency by ± measured jitter;
-- small exposure/gain mapping perturbations.
+- command latency/jitter;
+- small gain/exposure mapping perturbations.
 
-Do not randomize so broadly that the calibrated model becomes irrelevant.
+Do not use excessively broad randomization to hide an uncalibrated model.
 
-## 15. Real-flight validation order
+---
 
-1. bench camera control;
-2. hand-held camera motion;
-3. mounted drone, motors off;
-4. armed hover;
-5. low-speed straight flight;
-6. low-speed gate approach;
-7. controlled illumination transition;
-8. full benchmark.
+## 17. Real-flight validation order
 
-At every stage retain a manual emergency-stop / PX4 safety procedure.
+1. bench camera stream;
+2. manual exposure/gain command;
+3. calibration dataset;
+4. surrogate fit;
+5. held-out bench validation;
+6. hand-held motion;
+7. camera mounted, motors off;
+8. hover;
+9. low-speed gate approach;
+10. illumination transition;
+11. full benchmark.
+
+Use normal PX4/manual safety procedures throughout.
