@@ -10,7 +10,7 @@ Repository:
 https://github.com/vccimaging/End2endImaging
 
 Useful component:
-\`end2end_imaging/sensor/mono_sensor.py\`
+`end2end_imaging/sensor/mono_sensor.py`
 
 Why it matters:
 
@@ -25,8 +25,8 @@ Why it matters:
 Important limitation for DiffPhysDrone:
 
 - it is not a pre-calibrated IMX900 digital twin;
-- its current \`MonoSensor\` does not directly provide the exact online exposure/gain actuator model required here;
-- hard \`round\` / \`clip\` operations in realistic forward simulation are not sufficient by themselves for stable task-gradient camera control.
+- its current `MonoSensor` does not directly provide the exact online exposure/gain actuator model required here;
+- hard `round` / `clip` operations in realistic forward simulation are not sufficient by themselves for stable task-gradient camera control.
 
 Use it as a structural/reference implementation, not as ground-truth IMX900 behavior.
 
