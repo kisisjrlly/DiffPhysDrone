@@ -58,6 +58,7 @@
 --gray_black_level 0.0
 --gray_blur_scale 0.08
 --gray_blur_kernel_size 5
+--gray_motion_depth_floor 0.35
 --gray_dark_threshold 0.05
 --gray_saturation_mode soft
 --gray_soft_clip_beta 12.0
