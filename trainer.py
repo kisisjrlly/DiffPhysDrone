@@ -7,6 +7,10 @@ import torch
 from torch.cuda.amp import autocast
 from tqdm import tqdm
 
+from controllers.auto_exposure import (
+    gradient_auto_exposure_target,
+    mean_auto_exposure_target,
+)
 from losses import compute_camera_losses, compute_physics_losses, aggregate_loss
 from rollout_ops import (
     render_gray_sensor,
@@ -152,9 +156,25 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             B,
             args.max_acc_cmd,
         )
+
+        if args.camera_control_mode == "mean_ae":
+            cam_target = mean_auto_exposure_target(
+                gray_frame.detach(),
+                exposure.detach(),
+                gain.detach(),
+            )
+        elif args.camera_control_mode == "gradient_ae":
+            cam_target = gradient_auto_exposure_target(
+                gray_frame.detach(),
+                exposure.detach(),
+                gain.detach(),
+            )
+        else:
+            cam_target = cam_params.float()
+
         render_exposure, render_gain = exposure, gain
         exposure, gain, cam_hist_entry = update_camera_params(
-            cam_params.float(),
+            cam_target,
             exposure,
             gain,
             env,
