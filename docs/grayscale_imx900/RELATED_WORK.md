@@ -82,7 +82,23 @@ A learned camera policy alone is not the contribution. The differentiable sensor
 
 ## 3. Direct task-driven camera control: important novelty boundary
 
-Recent task-driven adaptive-camera work, including JOCA / joint optimisation of camera adaptive control, is directly relevant because it optimizes camera settings for downstream tasks using differentiable image formation/rendering.
+### JOCA — Task-Driven Joint Optimisation of Camera Hardware and Adaptive Camera Control Algorithms
+
+Paper:
+https://openaccess.thecvf.com/content/WACV2026/html/Yan_JOCA_Task-Driven_Joint_Optimisation_of_Camera_Hardware_and_Adaptive_Camera_WACV_2026_paper.html
+
+Authors: Chengyang Yan, Mitch Bryson, Donald G. Dansereau. WACV 2026.
+
+JOCA is the closest known prior work found in the 2026 literature search. It jointly optimizes fixed camera hardware parameters, an adaptive camera-control network, and downstream perception. Its experiments explicitly include dynamic exposure/gain, low light, and motion blur; it introduces DF-Grad to handle non-differentiable image effects.
+
+This changes the novelty boundary substantially. DiffPhysDrone should not present generic “task-driven differentiable exposure/gain control” as new.
+
+### TaCOS — Task-Specific Camera Optimization with Simulation
+
+Paper:
+https://openaccess.thecvf.com/content/WACV2025/html/Yan_TaCOS_Task-Specific_Camera_Optimization_with_Simulation_WACV_2025_paper.html
+
+TaCOS (WACV 2025) is another important precursor on simulation-based task-specific camera co-design. It focuses on camera design rather than the exact closed-loop UAV problem here, but it belongs in the final related-work chain.
 
 Therefore this project must **not** claim:
 
