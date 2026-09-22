@@ -97,8 +97,8 @@ Do not connect the camera based only on “22-pin 0.5 mm” matching.
 
 Obtain the exact e-con driver/device-tree settings:
 
-- \`num_lanes\`;
-- \`tegra_sinterface\`;
+- `num_lanes`;
+- `tegra_sinterface`;
 - CSI port;
 - VI channel;
 - lane polarity;
@@ -201,7 +201,7 @@ Record:
 - cable SKU and length;
 - JetPack/L4T version;
 - e-con driver version;
-- \`v4l2-ctl --all\` output;
+- `v4l2-ctl --all` output;
 - tested formats/FPS;
 - measured end-to-end latency;
 - measured exposure/gain update latency;
