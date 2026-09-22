@@ -98,25 +98,20 @@ def build_parser():
     p.add_argument("--fixed_random_gain_min", type=float, default=0.02)
     p.add_argument("--fixed_random_gain_max", type=float, default=0.90)
 
-    # Provisional camera-model values. Replace with measured e-con/IMX900
-    # values after hardware characterization.
-    p.add_argument("--gray_exposure_us_min", type=float, default=100.0)
-    p.add_argument("--gray_exposure_us_max", type=float, default=8000.0)
-    p.add_argument("--gray_exposure_reference_us", type=float, default=1000.0)
-    p.add_argument("--gray_gain_factor_min", type=float, default=1.0)
-    p.add_argument("--gray_gain_factor_max", type=float, default=8.0)
-    p.add_argument("--gray_shot_noise_scale", type=float, default=0.015)
-    p.add_argument("--gray_read_noise_std", type=float, default=0.005)
-    p.add_argument("--gray_read_noise_gain_scale", type=float, default=0.35)
-    p.add_argument("--gray_black_level", type=float, default=0.0)
-    p.add_argument("--gray_blur_scale", type=float, default=0.08)
+    # Camera physics live in a calibration profile, not in experiment configs.
+    # The repository default is explicitly provisional/unmeasured and must be
+    # replaced by a fitted IMX900 profile before sim-to-real claims.
+    p.add_argument(
+        "--imx900_calibration",
+        default="configs/calibration/imx900_provisional.json",
+    )
+    # Surrogate/training hyperparameters that are not claimed as sensor specs.
     p.add_argument("--gray_blur_kernel_size", type=int, default=5)
     # Characteristic-depth floor for the image-motion proxy |v| / Z.
     p.add_argument("--gray_motion_depth_floor", type=float, default=0.35)
     p.add_argument("--gray_dark_threshold", type=float, default=0.05)
     p.add_argument("--gray_saturation_mode", choices=["ste", "hard", "soft"], default="soft")
     p.add_argument("--gray_soft_clip_beta", type=float, default=12.0)
-    p.add_argument("--gray_quantization_bits", type=int, default=0)
     p.add_argument("--gray_enable_noise", default=True, action=argparse.BooleanOptionalAction)
 
     p.add_argument("--ellipsoid_collision", default=False, action="store_true")
@@ -178,20 +173,18 @@ def validate_args(args):
         raise ValueError("--gray_width/--gray_height must be >= 1")
     if args.gray_nn_width < 1 or args.gray_nn_height < 1:
         raise ValueError("--gray_nn_width/--gray_nn_height must be >= 1")
-    if args.gray_exposure_us_min <= 0 or args.gray_exposure_us_max <= args.gray_exposure_us_min:
-        raise ValueError("invalid grayscale exposure range")
-    if args.gray_exposure_reference_us <= 0:
-        raise ValueError("--gray_exposure_reference_us must be > 0")
-    if args.gray_gain_factor_min <= 0 or args.gray_gain_factor_max < args.gray_gain_factor_min:
-        raise ValueError("invalid grayscale gain range")
+    if not args.imx900_calibration:
+        raise ValueError("--imx900_calibration must be set")
+    if not os.path.isfile(args.imx900_calibration):
+        raise ValueError(
+            f"--imx900_calibration not found: {args.imx900_calibration}"
+        )
     if args.gray_blur_kernel_size < 1 or args.gray_blur_kernel_size % 2 == 0:
         raise ValueError("--gray_blur_kernel_size must be a positive odd integer")
     if args.gray_motion_depth_floor <= 0:
         raise ValueError("--gray_motion_depth_floor must be > 0")
     if not (0.0 <= args.gray_dark_threshold <= 1.0):
         raise ValueError("--gray_dark_threshold must be in [0,1]")
-    if args.gray_quantization_bits < 0:
-        raise ValueError("--gray_quantization_bits must be >= 0")
     if args.loss_v_window < 1 or args.base_control_freq <= 0:
         raise ValueError("invalid temporal configuration")
     if args.simple_goal_x <= args.simple_start_x:
@@ -258,10 +251,9 @@ def print_runtime_mode(args):
     print(
         "gray_camera               : "
         f"{args.gray_width}x{args.gray_height} -> "
-        f"{args.gray_nn_width}x{args.gray_nn_height}, "
-        f"exposure_us={args.gray_exposure_us_min}..{args.gray_exposure_us_max}, "
-        f"gain_factor={args.gray_gain_factor_min}..{args.gray_gain_factor_max}"
+        f"{args.gray_nn_width}x{args.gray_nn_height}"
     )
+    print(f"imx900_calibration        : {args.imx900_calibration}")
     print(
         "illumination              : "
         f"dark={args.gray_dark_scale}, bright={args.gray_bright_scale}, "
