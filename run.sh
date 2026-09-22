@@ -76,6 +76,7 @@ sensor_type="diff_depth"
 camera_control_mode="learned"
 sensor_grad_mode="full"
 policy_depth_mode="depth"
+policy_gray_mode="gray"
 for ((i=0; i<${#cfg_tokens[@]}; i++)); do
 	if [ "${cfg_tokens[$i]}" = "--sensor_type" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
 		sensor_type="${cfg_tokens[$((i+1))]}"
@@ -89,12 +90,15 @@ for ((i=0; i<${#cfg_tokens[@]}; i++)); do
 	if [ "${cfg_tokens[$i]}" = "--policy_depth_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
 		policy_depth_mode="${cfg_tokens[$((i+1))]}"
 	fi
+	if [ "${cfg_tokens[$i]}" = "--policy_gray_mode" ] && [ $((i+1)) -lt ${#cfg_tokens[@]} ]; then
+		policy_gray_mode="${cfg_tokens[$((i+1))]}"
+	fi
 done
 
 # 获取当前日期和时间，用于日志文件名 (Get current date and time for log file name)
 date=$(date +%Y-%m-%d-%H-%M-%S)
 if [ "$sensor_type" = "gray" ]; then
-	run_tag="sensor-gray_cam-${camera_control_mode}_grad-${sensor_grad_mode}"
+	run_tag="sensor-gray_cam-${camera_control_mode}_grad-${sensor_grad_mode}_vision-${policy_gray_mode}"
 else
 	run_tag="sensor-diff_depth_cam-${camera_control_mode}_grad-${sensor_grad_mode}_depth-${policy_depth_mode}"
 fi
