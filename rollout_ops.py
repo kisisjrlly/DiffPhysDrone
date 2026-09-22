@@ -10,7 +10,32 @@ def render_gray_sensor(env, exposure, gain, differentiable=True):
     ideal, render_aux = env.render_gray_ideal(return_aux=True)
     sensor_exposure = exposure if differentiable else exposure.detach()
     sensor_gain = gain if differentiable else gain.detach()
-    motion = env.v.norm(2, -1).detach()
+
+    # Approximate image-motion magnitude. Translational optical flow grows
+    # roughly with speed / scene depth, so the same vehicle speed should blur
+    # more strongly when approaching a nearby gate. Geometry is detached: this
+    # term shapes the camera model only and does not create a hidden depth path
+    # into the navigation policy.
+    speed = env.v.norm(2, -1).detach()
+    geometry_depth = (render_aux or {}).get("geometry_depth")
+    if isinstance(geometry_depth, torch.Tensor):
+        hit_mask = geometry_depth < 99.0
+        valid_depth = torch.where(
+            hit_mask,
+            geometry_depth,
+            torch.full_like(geometry_depth, float("nan")),
+        )
+        char_depth = torch.nanmedian(valid_depth.flatten(1), dim=1).values
+        fallback = torch.full_like(char_depth, 3.0)
+        char_depth = torch.where(torch.isfinite(char_depth), char_depth, fallback)
+        char_depth = char_depth.clamp_min(
+            float(getattr(env, "gray_motion_depth_floor", 0.35))
+        )
+        motion = speed / char_depth
+    else:
+        char_depth = torch.full_like(speed, 1.0)
+        motion = speed
+
     gray, camera_aux = env.gray_camera(
         ideal,
         sensor_exposure,
@@ -21,6 +46,8 @@ def render_gray_sensor(env, exposure, gain, differentiable=True):
     aux = dict(render_aux or {})
     aux.update(camera_aux or {})
     aux["ideal_gray"] = ideal.detach()
+    aux["motion_proxy"] = motion.detach()
+    aux["characteristic_depth"] = char_depth.detach()
     return gray, aux
 
 
