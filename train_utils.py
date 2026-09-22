@@ -7,7 +7,7 @@ import torch
 import wandb
 
 from env_cuda import Env
-from sensors.differentiable_gray_camera import build_from_args as build_gray_camera
+from sensors.imx900_camera import build_from_args as build_imx900_camera
 
 
 class MetricSmoother:
@@ -107,6 +107,6 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         gray_texture_scale=args.gray_texture_scale,
         gray_motion_depth_floor=args.gray_motion_depth_floor,
     )
-    env.gray_camera = build_gray_camera(args).to(device)
+    env.gray_camera = build_imx900_camera(args).to(device)
     env.gray_enable_noise = bool(args.gray_enable_noise)
     return env
