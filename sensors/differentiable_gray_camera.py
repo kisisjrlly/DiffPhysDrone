@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .gray_camera_semantics import GrayCameraSemantics
+from .gray_camera_semantics import GrayCameraSemantics, from_args as semantics_from_args
 
 
 class DifferentiableGrayCamera(nn.Module):
@@ -103,11 +103,12 @@ class DifferentiableGrayCamera(nn.Module):
         strength = strength.clamp(0.0, 1.0)
 
         pad = self.blur_kernel_size // 2
+        padded = F.pad(irradiance, (pad, pad, pad, pad), mode="replicate")
         blurred = F.avg_pool2d(
-            irradiance,
+            padded,
             kernel_size=self.blur_kernel_size,
             stride=1,
-            padding=pad,
+            padding=0,
         )
         return irradiance + strength * (blurred - irradiance), strength
 
@@ -194,3 +195,20 @@ class DifferentiableGrayCamera(nn.Module):
             "dark_fraction": (image <= self.dark_threshold).to(image.dtype).mean(dim=reduce_dims),
         }
         return image, aux
+
+
+def build_from_args(args) -> DifferentiableGrayCamera:
+    """Construct the grayscale camera from the repository argparse namespace."""
+    return DifferentiableGrayCamera(
+        semantics_from_args(args),
+        shot_noise_scale=float(args.gray_shot_noise_scale),
+        read_noise_std=float(args.gray_read_noise_std),
+        read_noise_gain_scale=float(args.gray_read_noise_gain_scale),
+        black_level=float(args.gray_black_level),
+        blur_scale=float(args.gray_blur_scale),
+        blur_kernel_size=int(args.gray_blur_kernel_size),
+        dark_threshold=float(args.gray_dark_threshold),
+        saturation_mode=str(args.gray_saturation_mode),
+        soft_clip_beta=float(args.gray_soft_clip_beta),
+        quantization_bits=int(args.gray_quantization_bits),
+    )
