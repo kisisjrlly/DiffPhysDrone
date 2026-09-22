@@ -111,6 +111,8 @@ def build_parser():
     p.add_argument("--gray_black_level", type=float, default=0.0)
     p.add_argument("--gray_blur_scale", type=float, default=0.08)
     p.add_argument("--gray_blur_kernel_size", type=int, default=5)
+    # Characteristic-depth floor for the image-motion proxy |v| / Z.
+    p.add_argument("--gray_motion_depth_floor", type=float, default=0.35)
     p.add_argument("--gray_dark_threshold", type=float, default=0.05)
     p.add_argument("--gray_saturation_mode", choices=["ste", "hard", "soft"], default="soft")
     p.add_argument("--gray_soft_clip_beta", type=float, default=12.0)
@@ -184,6 +186,8 @@ def validate_args(args):
         raise ValueError("invalid grayscale gain range")
     if args.gray_blur_kernel_size < 1 or args.gray_blur_kernel_size % 2 == 0:
         raise ValueError("--gray_blur_kernel_size must be a positive odd integer")
+    if args.gray_motion_depth_floor <= 0:
+        raise ValueError("--gray_motion_depth_floor must be > 0")
     if not (0.0 <= args.gray_dark_threshold <= 1.0):
         raise ValueError("--gray_dark_threshold must be in [0,1]")
     if args.gray_quantization_bits < 0:
