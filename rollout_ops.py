@@ -1,85 +1,12 @@
-"""Minimal rollout helpers for direct-action active-sensing training."""
+"""Rollout helpers for grayscale active sensing."""
+
 import torch
 import torch.nn.functional as F
 
-from camera_semantics import CameraSemantics
-
-
-_DEFAULT_CAMERA_SEMANTICS = CameraSemantics()
-
-
-def diff_depth_exposure_to_time(exposure01, camera_semantics=None):
-    cam_sem = camera_semantics if camera_semantics is not None else _DEFAULT_CAMERA_SEMANTICS
-    return cam_sem.exposure_to_time(exposure01)
-
-
-def compute_depth_fill_rate(depth_obs, min_valid_depth: float = 0.3, softness=None):
-    if softness is None or float(softness) <= 0.0:
-        return (depth_obs >= float(min_valid_depth)).float().mean()
-    return torch.sigmoid((depth_obs - float(min_valid_depth)) / float(softness)).mean()
-
-
-def sensor_validity_map(env):
-    aux = env.get_last_diff_depth_train_aux() if env is not None and hasattr(env, 'get_last_diff_depth_train_aux') else {}
-    return aux.get('valid_prob_map', None)
-
-
-def detach_sensor_train_aux(env):
-    """Detach cached differentiable sensor maps for sensor_grad_mode=detached."""
-    if env is None or not hasattr(env, 'get_last_diff_depth_train_aux'):
-        return
-    aux = env.get_last_diff_depth_train_aux()
-    if not aux:
-        return
-    detached = {
-        key: value.detach() if isinstance(value, torch.Tensor) else value
-        for key, value in aux.items()
-    }
-    if hasattr(env, '_store_last_diff_depth_train_aux'):
-        env._store_last_diff_depth_train_aux(detached)
-
-
-def compute_depth_fill_health(env, depth_obs, min_valid_depth: float = 0.3,
-                              patch_rows: int = 6, patch_cols: int = 8,
-                              cvar_frac: float = 0.25):
-    valid_prob = sensor_validity_map(env)
-    if valid_prob is not None:
-        valid = valid_prob.clamp(0.0, 1.0)
-    else:
-        valid = (depth_obs >= float(min_valid_depth)).float()
-    if valid.ndim == 2:
-        valid = valid.unsqueeze(0)
-    elif valid.ndim == 4:
-        valid = valid[:, 0] if valid.shape[1] == 1 else valid.mean(dim=1)
-    if valid.ndim != 3:
-        raise ValueError(f'fill health expects [H,W], [B,H,W], or [B,C,H,W], got {tuple(valid.shape)}')
-    rows = max(1, int(patch_rows))
-    cols = max(1, int(patch_cols))
-    patch_fill = F.adaptive_avg_pool2d(valid[:, None], (rows, cols)).flatten(1)
-    frac = min(max(float(cvar_frac), 0.0), 1.0)
-    num_patches = int(patch_fill.shape[1])
-    k = num_patches if frac >= 1.0 else max(1, int(num_patches * frac + 0.999999))
-    return torch.topk(patch_fill, k=k, dim=1, largest=False).values.mean(dim=1)
-
-
-def render_sensors(env, ctl_dt, power, exposure, gain, differentiable=True):
-    _ = ctl_dt
-    depth_obs, quality = env.render_diff_depth(power, exposure, gain)
-    if not differentiable:
-        depth_obs = depth_obs.detach()
-        quality = quality.detach() if isinstance(quality, torch.Tensor) else quality
-        detach_sensor_train_aux(env)
-    return depth_obs, quality
-
 
 def render_gray_sensor(env, exposure, gain, differentiable=True):
-    """Render ideal appearance and apply the differentiable gray camera.
-
-    Geometry and vehicle-motion inputs are intentionally detached.  The
-    experimental gradient switch only controls exposure/gain -> image.
-    """
-    if not hasattr(env, 'gray_camera'):
-        raise RuntimeError('gray sensor requested but env.gray_camera is not configured')
+    if not hasattr(env, "gray_camera"):
+        raise RuntimeError("env.gray_camera is not configured")
     ideal, render_aux = env.render_gray_ideal(return_aux=True)
     sensor_exposure = exposure if differentiable else exposure.detach()
     sensor_gain = gain if differentiable else gain.detach()
@@ -89,22 +16,16 @@ def render_gray_sensor(env, exposure, gain, differentiable=True):
         sensor_exposure,
         sensor_gain,
         motion=motion,
-        enable_noise=bool(getattr(env, 'gray_enable_noise', True)),
+        enable_noise=bool(getattr(env, "gray_enable_noise", True)),
     )
     aux = dict(render_aux or {})
     aux.update(camera_aux or {})
-    aux['ideal_gray'] = ideal.detach()
+    aux["ideal_gray"] = ideal.detach()
     return gray, aux
 
 
-def select_policy_depth_obs(depth_obs, mode: str = 'depth'):
-    if str(mode).strip().lower() in {'zero', 'blind', 'none'}:
-        return torch.zeros_like(depth_obs)
-    return depth_obs
-
-
-def select_policy_gray_obs(gray_obs, mode: str = 'gray'):
-    if str(mode).strip().lower() in {'zero', 'blind', 'none'}:
+def select_policy_gray_obs(gray_obs, mode="gray"):
+    if str(mode).strip().lower() in {"zero", "blind", "none"}:
         return torch.zeros_like(gray_obs)
     return gray_obs
 
@@ -115,56 +36,23 @@ def build_local_frame(env):
     up = torch.zeros_like(fwd)
     up[:, 2] = 1
     fwd = F.normalize(fwd, 2, -1)
-    return torch.stack([fwd, torch.cross(up, fwd), up], -1)
+    return torch.stack([fwd, torch.cross(up, fwd, dim=-1), up], -1)
 
 
-def build_state_vector(env, target_v, R, power, exposure, gain, no_odom, include_camera_state):
+def build_state_vector(env, target_v, R, exposure, gain, no_odom, include_camera_state):
     tv_local = torch.squeeze(target_v[:, None] @ R, 1)
     local_v = torch.squeeze(env.v[:, None] @ R, 1)
-    st = [tv_local, env.R[:, 2], env.margin[:, None]]
+    parts = [tv_local, env.R[:, 2], env.margin[:, None]]
     if not no_odom:
-        st.insert(0, local_v)
+        parts.insert(0, local_v)
 
+    camera_state = torch.stack([exposure * 2.0 - 1.0, gain * 2.0 - 1.0], -1)
     if include_camera_state:
-        camera_state = torch.stack([power * 2.0 - 1.0, exposure * 2.0 - 1.0, gain * 2.0 - 1.0], -1)
-    else:
-        camera_state = torch.zeros_like(local_v)
-    state_parts = list(st)
-    if include_camera_state:
-        state_parts.append(camera_state)
-    state = torch.cat(state_parts, -1)
+        parts.append(camera_state)
+    state = torch.cat(parts, -1)
 
-    speed_scale = getattr(env, 'max_speed', None)
-    if speed_scale is None:
-        local_v_norm = local_v
-    else:
-        local_v_norm = local_v / speed_scale.clamp_min(1e-3)
-    camera_motion_state = torch.cat([local_v_norm.clamp(-2.0, 2.0), env.R[:, :, 2]], -1)
-    return state, local_v, camera_state, camera_motion_state
-
-
-def build_gray_state_vector(env, target_v, R, exposure, gain, no_odom, include_camera_state):
-    """State construction for the 2-D exposure/gain grayscale controller."""
-    tv_local = torch.squeeze(target_v[:, None] @ R, 1)
-    local_v = torch.squeeze(env.v[:, None] @ R, 1)
-    st = [tv_local, env.R[:, 2], env.margin[:, None]]
-    if not no_odom:
-        st.insert(0, local_v)
-
-    camera_state = torch.stack(
-        [exposure * 2.0 - 1.0, gain * 2.0 - 1.0],
-        -1,
-    )
-    state_parts = list(st)
-    if include_camera_state:
-        state_parts.append(camera_state)
-    state = torch.cat(state_parts, -1)
-
-    speed_scale = getattr(env, 'max_speed', None)
-    if speed_scale is None:
-        local_v_norm = local_v
-    else:
-        local_v_norm = local_v / speed_scale.clamp_min(1e-3)
+    speed_scale = getattr(env, "max_speed", None)
+    local_v_norm = local_v if speed_scale is None else local_v / speed_scale.clamp_min(1e-3)
     camera_motion_state = torch.cat(
         [local_v_norm.clamp(-2.0, 2.0), env.R[:, :, 2]],
         -1,
@@ -175,10 +63,7 @@ def build_gray_state_vector(env, target_v, R, exposure, gain, no_odom, include_c
 def compute_target_velocity(target_v_raw, env):
     goal_dist = torch.norm(target_v_raw, 2, -1, keepdim=True)
     tv_dir = target_v_raw / goal_dist.clamp_min(1e-6)
-    # Slow down near the target instead of asking the policy to fly through it
-    # at max speed.  The stop radius is task-generic and only depends on the
-    # vehicle speed scale, not on wall/gap geometry.
-    slow_radius = float(getattr(env, 'target_slow_radius', 0.8))
+    slow_radius = float(getattr(env, "target_slow_radius", 0.8))
     speed_scale = (goal_dist / max(slow_radius, 1e-6)).clamp(0.0, 1.0)
     return tv_dir * env.max_speed * speed_scale
 
@@ -186,75 +71,22 @@ def compute_target_velocity(target_v_raw, env):
 def decode_action_direct(raw_act, R, env, B, max_acc_cmd):
     _ = env, B
     act_local = raw_act[..., :3].clamp(-float(max_acc_cmd), float(max_acc_cmd))
-    act_world = torch.squeeze(act_local[:, None] @ R.transpose(1, 2), 1)
-    return act_world
+    return torch.squeeze(act_local[:, None] @ R.transpose(1, 2), 1)
 
 
 def init_camera_params(env, B, device):
-    mode = getattr(env, 'camera_control_mode', 'learned')
-    if mode == 'fixed':
-        return (
-            torch.full((B,), float(env.fixed_camera_power), device=device),
-            torch.full((B,), float(env.fixed_camera_exposure), device=device),
-            torch.full((B,), float(env.fixed_camera_gain), device=device),
-        )
-    if mode == 'fixed_random_static':
-        p_lo, p_hi = env.fixed_random_power_range
-        e_lo, e_hi = env.fixed_random_exposure_range
-        g_lo, g_hi = env.fixed_random_gain_range
-        return (
-            torch.empty((B,), device=device).uniform_(float(p_lo), float(p_hi)),
-            torch.empty((B,), device=device).uniform_(float(e_lo), float(e_hi)),
-            torch.empty((B,), device=device).uniform_(float(g_lo), float(g_hi)),
-        )
-    base = float(getattr(env, 'cam_power_baseline', 0.5))
-    return (
-        torch.full((B,), base, device=device),
-        torch.full((B,), 0.5, device=device),
-        torch.full((B,), 0.5, device=device),
-    )
-
-
-def update_camera_params(cam_params, power, exposure, gain, env):
-    if cam_params is None:
-        raise ValueError('diff_depth camera path requires cam_params')
-
-    mode = getattr(env, 'camera_control_mode', 'learned')
-    if mode == 'fixed':
-        p = torch.full_like(power, float(env.fixed_camera_power))
-        e = torch.full_like(exposure, float(env.fixed_camera_exposure))
-        g = torch.full_like(gain, float(env.fixed_camera_gain))
-        return p, e, g, torch.stack([p, e, g], -1)
-    if mode == 'fixed_random_static':
-        hist = torch.stack([power.detach(), exposure.detach(), gain.detach()], -1)
-        return power.detach(), exposure.detach(), gain.detach(), hist
-
-    alpha = 0.7
-    p_new, e_new, g_new = cam_params.unbind(-1)
-    p_new = p_new.clamp(0.0, 1.0)
-    e_new = e_new.clamp(0.0, 1.0)
-    g_new = g_new.clamp(0.0, 1.0)
-
-    power = alpha * power.detach() + (1.0 - alpha) * p_new
-    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_new
-    gain = alpha * gain.detach() + (1.0 - alpha) * g_new
-    return power, exposure, gain, cam_params
-
-
-def init_gray_camera_params(env, B, device):
-    """Initialize normalized exposure/gain for the grayscale camera."""
-    mode = getattr(env, 'camera_control_mode', 'learned')
-    if mode == 'fixed':
+    mode = getattr(env, "camera_control_mode", "learned")
+    if mode == "fixed":
         return (
             torch.full((B,), float(env.fixed_camera_exposure), device=device),
             torch.full((B,), float(env.fixed_camera_gain), device=device),
         )
-    if mode == 'fixed_random_static':
+    if mode == "fixed_random_static":
         e_lo, e_hi = env.fixed_random_exposure_range
         g_lo, g_hi = env.fixed_random_gain_range
         return (
-            torch.empty((B,), device=device).uniform_(float(e_lo), float(e_hi)),
-            torch.empty((B,), device=device).uniform_(float(g_lo), float(g_hi)),
+            torch.empty((B,), device=device).uniform_(e_lo, e_hi),
+            torch.empty((B,), device=device).uniform_(g_lo, g_hi),
         )
     return (
         torch.full((B,), 0.5, device=device),
@@ -262,26 +94,25 @@ def init_gray_camera_params(env, B, device):
     )
 
 
-def update_gray_camera_params(cam_params, exposure, gain, env):
-    """Apply a grayscale camera target while preserving the old EMA semantics."""
+def update_camera_params(cam_params, exposure, gain, env):
     if cam_params is None or cam_params.shape[-1] != 2:
-        raise ValueError('gray camera path requires cam_params[..., 2]')
+        raise ValueError("camera policy must output [exposure, gain]")
 
-    mode = getattr(env, 'camera_control_mode', 'learned')
-    if mode == 'fixed':
+    mode = getattr(env, "camera_control_mode", "learned")
+    if mode == "fixed":
         e = torch.full_like(exposure, float(env.fixed_camera_exposure))
         g = torch.full_like(gain, float(env.fixed_camera_gain))
         return e, g, torch.stack([e, g], -1)
-    if mode == 'fixed_random_static':
+    if mode == "fixed_random_static":
         hist = torch.stack([exposure.detach(), gain.detach()], -1)
         return exposure.detach(), gain.detach(), hist
 
-    alpha = 0.7
-    e_new, g_new = cam_params.unbind(-1)
-    e_new = e_new.clamp(0.0, 1.0)
-    g_new = g_new.clamp(0.0, 1.0)
-    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_new
-    gain = alpha * gain.detach() + (1.0 - alpha) * g_new
+    alpha = float(getattr(env, "camera_ema_alpha", 0.7))
+    e_target, g_target = cam_params.unbind(-1)
+    e_target = e_target.clamp(0.0, 1.0)
+    g_target = g_target.clamp(0.0, 1.0)
+    exposure = alpha * exposure.detach() + (1.0 - alpha) * e_target
+    gain = alpha * gain.detach() + (1.0 - alpha) * g_target
     return exposure, gain, cam_params
 
 
@@ -292,28 +123,15 @@ def _stack_history_or_tensor(values):
         return values
     if len(values) == 0:
         return None
-    return torch.stack([x.detach() if isinstance(x, torch.Tensor) and x.requires_grad else x for x in values])
+    return torch.stack(values)
 
 
-def compute_camera_param_stats(power_seq, exposure_seq, gain_seq):
-    power_seq = _stack_history_or_tensor(power_seq)
-    exposure_seq = _stack_history_or_tensor(exposure_seq)
-    gain_seq = _stack_history_or_tensor(gain_seq)
-    if power_seq is None or exposure_seq is None or gain_seq is None:
-        return {}
-    return {
-        'power_mean': float(power_seq.mean().item()),
-        'exposure_mean': float(exposure_seq.mean().item()),
-        'gain_mean': float(gain_seq.mean().item()),
-    }
-
-
-def compute_gray_camera_param_stats(exposure_seq, gain_seq):
+def compute_camera_param_stats(exposure_seq, gain_seq):
     exposure_seq = _stack_history_or_tensor(exposure_seq)
     gain_seq = _stack_history_or_tensor(gain_seq)
     if exposure_seq is None or gain_seq is None:
         return {}
     return {
-        'exposure_mean': float(exposure_seq.mean().item()),
-        'gain_mean': float(gain_seq.mean().item()),
+        "exposure_mean": float(exposure_seq.detach().mean().item()),
+        "gain_mean": float(gain_seq.detach().mean().item()),
     }
