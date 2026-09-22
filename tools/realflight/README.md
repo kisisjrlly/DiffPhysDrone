@@ -1,80 +1,39 @@
-# 真机 D455 深度监控与调参
+# Real-flight Camera Integration — e-con IMX900
 
-## 链路
+The legacy RealSense D455 web/depth control helpers have been removed from this
+branch. The selected primary camera is:
 
-机载电脑（ROS Noetic）：
+- e-con Systems e-CAM37M_CUONX
+- Sony IMX900 monochrome global shutter
+- MIPI CSI-2
+- Jetson Orin NX 8GB on DAMIAO DM-ORIN NX V2.X carrier
 
-- `realsense2_camera` 发布 `/camera/depth/image_rect_raw`（640x480@15，深度单位为 mm）
-- `depth_web_tool.py` 订阅深度话题，彩色化后通过 HTTP MJPEG 推流，并把页面上的
-  滑块映射到 `/camera/stereo_module/set_parameters`（dynamic_reconfigure）
+## Current status
 
-主机：浏览器直接打开 `http://192.168.1.208:8090`，无需安装任何软件。
-该页面只应在可信局域网内使用（当前无鉴权）。
+The real IMX900 runtime node is not implemented yet because the exact e-con
+driver/BSP, V4L2 control names/ranges, pixel formats, and command-to-effective-
+frame latency must be measured on the purchased hardware first.
 
-## 快速验证
+See:
 
-```bash
-# 状态（参数 + 深度话题是否在线）
-curl http://192.168.1.208:8090/state
+- `docs/grayscale_imx900/HARDWARE_IMX900.md`
+- `docs/grayscale_imx900/CALIBRATION_SIM2REAL.md`
 
-# 抓一帧 MJPEG 深度流
-curl -o /tmp/depth.mjpeg http://192.168.1.208:8090/depth.mjpeg
+## Planned runtime interface
+
+The future wrapper should provide explicit operations equivalent to:
+
+```python
+set_exposure_us(value)
+set_gain(value)
+grab_frame_with_timestamp()
+get_requested_settings()
+get_effective_settings_if_available()
 ```
 
-## 机载端命令
+Auto exposure/auto gain must be disabled for the main experiments.
 
-```bash
-# 一键启动相机 + Web 工具（自动脱离 SSH 会话）
-bash ~/start_depth_tools.sh
+## Generic remote helpers
 
-# 只启动/重启 Web 工具（相机已在运行时可单独用）
-bash ~/start_depth_web.sh
-```
-
-页面控件：
-
-- 自动曝光开关
-- 曝光（us）
-- 增益（D455 下限 16）
-- 激光功率（mW）
-- 发射器（关闭/激光/激光自动/LED）
-
-## 从本机同步/执行远端命令
-
-仓库内的 `upload.py` / `remote.py` 用于把脚本上传到机载电脑或一次性执行
-远端命令，SSH 密码通过环境变量提供，不写入文件：
-
-```bash
-RS_SSH_PASS=... python3 tools/realflight/upload.py \
-  tools/realflight/depth_web_tool.py /home/xgg/depth_web_tool.py
-RS_SSH_PASS=... python3 tools/realflight/remote.py \
-  'bash ~/start_depth_tools.sh'
-```
-
-## 主机端命令
-
-```bash
-bash tools/realflight/open_depth_web.sh
-```
-
-或手动打开 `http://192.168.1.208:8090`。
-
-## 常用调试
-
-```bash
-# 机载上直接设置参数
-rosrun dynamic_reconfigure dynparam set /camera/stereo_module exposure 10000
-rosrun dynamic_reconfigure dynparam set /camera/stereo_module gain 16
-rosrun dynamic_reconfigure dynparam set /camera/stereo_module laser_power 150.0
-rosrun dynamic_reconfigure dynparam set /camera/stereo_module emitter_enabled 1
-```
-
-## 已知问题与解决
-
-1. D455 在 Orin NX 上曾被内核 `uvcvideo` 反复占用导致深度流不发布，已通过
-   `/etc/modprobe.d/blacklist-uvcvideo.conf` 持久化黑名单解决。
-2. 曝光/增益动态设置曾报 `get_xu(id=11) ... Resource temporarily unavailable`，
-   根因是旧驱动残留导致自动曝光 XU 处于坏状态；USB 设备重新枚举/多次重启后恢复。
-   若再出现，执行：
-   `sudo python3 -c "import usb.core,usb.util; d=usb.core.find(idVendor=0x8086,idProduct=0x0b5c); d.reset()"`
-   或重启相机进程后重试。
+`remote.py` and `upload.py` are retained because they are generic SSH
+utilities and are not tied to D455.
