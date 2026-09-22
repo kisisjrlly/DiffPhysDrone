@@ -17,6 +17,18 @@ void render_depth_cuda(
     int n_drones_per_group,
     float fov_x_half_tan);
 
+void render_geometry_cuda(
+    torch::Tensor depth,
+    torch::Tensor normals,
+    torch::Tensor balls,
+    torch::Tensor cylinders,
+    torch::Tensor cylinders_h,
+    torch::Tensor voxels,
+    torch::Tensor R,
+    torch::Tensor pos,
+    int n_drones_per_group,
+    float fov_x_half_tan);
+
 void find_nearest_pt_cuda(
     torch::Tensor nearest_pt,
     torch::Tensor balls,
@@ -80,6 +92,7 @@ std::vector<torch::Tensor> run_backward_cuda(
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("render_depth", &render_depth_cuda, "render geometric ray depth (CUDA)");
+  m.def("render_geometry", &render_geometry_cuda, "render geometric ray depth + hit normals (CUDA)");
   m.def("find_nearest_pt", &find_nearest_pt_cuda, "find_nearest_pt (CUDA)");
   m.def("find_nearest_pt_ellipsoid", &find_nearest_pt_ellipsoid_cuda, "find_nearest_pt_ellipsoid (CUDA)");
   m.def("update_state_vec", &update_state_vec_cuda, "update_state_vec (CUDA)");
