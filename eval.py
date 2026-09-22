@@ -8,6 +8,10 @@ import torch
 from torch.cuda.amp.autocast_mode import autocast
 
 from config import build_parser, parse_scenarios, set_global_seed, validate_args, print_runtime_mode
+from controllers.auto_exposure import (
+    gradient_auto_exposure_target,
+    mean_auto_exposure_target,
+)
 from model import Model
 from rerun_vis import RerunVis
 from rollout_ops import (
@@ -174,9 +178,20 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
             B,
             args.max_acc_cmd,
         )
+        if args.camera_control_mode == "mean_ae":
+            cam_target = mean_auto_exposure_target(
+                gray.detach(), exposure.detach(), gain.detach()
+            )
+        elif args.camera_control_mode == "gradient_ae":
+            cam_target = gradient_auto_exposure_target(
+                gray.detach(), exposure.detach(), gain.detach()
+            )
+        else:
+            cam_target = cam_params.float()
+
         render_exposure, render_gain = exposure, gain
         exposure, gain, _ = update_camera_params(
-            cam_params.float(),
+            cam_target,
             exposure,
             gain,
             env,
