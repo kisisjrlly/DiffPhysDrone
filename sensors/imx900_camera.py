@@ -205,6 +205,11 @@ class IMX900DifferentiableCamera(nn.Module):
 
 def build_from_args(args) -> IMX900DifferentiableCamera:
     calibration = IMX900Calibration.from_json(args.imx900_calibration)
+    if bool(getattr(args, "require_calibrated_imx900", False)) and not calibration.calibrated:
+        raise ValueError(
+            "A calibrated IMX900 profile is required, but the selected profile "
+            f"is marked calibrated=false: {args.imx900_calibration}"
+        )
     return IMX900DifferentiableCamera(
         calibration,
         blur_kernel_size=int(args.gray_blur_kernel_size),
