@@ -30,12 +30,16 @@ TASK=gray_gate_blind bash run.sh
 # 2. Stress the fixed camera under changing illumination.
 TASK=gray_gate_mixed_fixed bash run.sh
 
-# 3. Train camera-only from a successful flight checkpoint.
+# 3. Evaluate classical AE on the same flight checkpoint.
+CONFIG=configs/gray_camera_mean_ae.args CKPT=<flight_ckpt> bash eval.sh
+CONFIG=configs/gray_camera_gradient_ae.args CKPT=<flight_ckpt> bash eval.sh
+
+# 4. Train camera-only from a successful flight checkpoint.
 TASK=gray_camera_full \
 RUN_EXTRA_ARGS="--resume checkpoint/<flight>/checkpointXXXX.pth" \
 bash run.sh
 
-# 4. Matched no-sensor-gradient ablation.
+# 5. Matched no-sensor-gradient ablation.
 TASK=gray_camera_detached \
 RUN_EXTRA_ARGS="--resume checkpoint/<flight>/checkpointXXXX.pth" \
 bash run.sh
