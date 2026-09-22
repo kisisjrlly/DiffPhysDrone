@@ -1,11 +1,8 @@
-# Phase 6 baseline: fixed-camera monocular grayscale navigation.
-# This is intentionally a simple nominal-light benchmark. Do not enable learned
-# camera control until this fixed-camera baseline can navigate reliably.
-
---sensor_type gray
+# Phase 1: prove monocular grayscale navigation with a fixed nominal camera.
 --camera_control_mode fixed
 --sensor_grad_mode detached
-
+--policy_gray_mode gray
+--scenarios nominal
 --batch_size 64
 --num_iters 3000
 --lr 8e-5
@@ -22,6 +19,33 @@
 --gray_height 72
 --gray_nn_width 48
 --gray_nn_height 36
+
+--simple_start_x -1.5
+--simple_goal_x 1.5
+--simple_wall_x 0.0
+--simple_slit_center_y_min -0.75
+--simple_slit_center_y_max 0.75
+--simple_slit_half_y 0.15
+--simple_slit_half_y_min 0.15
+--simple_slit_half_y_max 0.15
+--simple_slit_center_z 1.50
+--simple_back_wall_x_min 2.0
+--simple_back_wall_x_max 2.85
+
+--include_camera_state_in_obs
+--max_acc_cmd 2.2
+
+--gray_nominal_ambient 0.18
+--gray_nominal_diffuse 0.72
+--gray_dark_scale 0.12
+--gray_bright_scale 2.2
+--gray_background_intensity 0.04
+--gray_transition_x 0.0
+--gray_transition_width 0.25
+--gray_light_jitter 0.08
+--gray_texture_strength 0.35
+--gray_texture_scale 5.0
+
 --gray_exposure_us_min 100
 --gray_exposure_us_max 8000
 --gray_exposure_reference_us 1000
@@ -39,29 +63,13 @@
 --gray_quantization_bits 0
 --gray_enable_noise
 
-# The geometry still reuses the current single-wall/slit environment.
-# Scene names are legacy depth-regime labels; grayscale rendering ignores their
-# D455-specific degradation semantics in this baseline.
---scenarios glare
---simple_start_x -1.5
---simple_goal_x 1.5
---simple_wall_x 0.0
---simple_slit_center_y_min -0.75
---simple_slit_center_y_max 0.75
---simple_slit_half_y 0.15
---simple_slit_half_y_min 0.15
---simple_slit_half_y_max 0.15
---simple_slit_effect_half_z 0.75
---simple_slit_center_z 1.50
---simple_back_wall_x_min 2.00
---simple_back_wall_x_max 2.85
-
---include_camera_state_in_obs
---max_acc_cmd 2.2
-
-# Fixed normalized camera setting for the first grayscale-flight gate.
 --fixed_camera_exposure 0.35
 --fixed_camera_gain 0.15
+--fixed_random_exposure_min 0.10
+--fixed_random_exposure_max 0.90
+--fixed_random_gain_min 0.02
+--fixed_random_gain_max 0.90
+--camera_ema_alpha 0.7
 
 --coef_v 10.5
 --loss_v_window 12
@@ -69,19 +77,10 @@
 --coef_d_jerk 0.05
 --coef_obj_avoidance 0.0
 --coef_collide 6.0
---coef_cam_smooth 0.0
-
-# These are forced to zero in config validation for sensor_type=gray.
---coef_diff_depth_power 0.0
---coef_diff_depth_blur 0.0
---coef_diff_depth_noise 0.0
---coef_diff_depth_fill 0.0
+--coef_cam_smooth 0.005
 
 --vis_backend rerun
 --vis_env_idx 0
 --vis_every_iters 10
 --vis_every_steps 2
 --vis_student
-# --vis_enable
-# --wandb_disabled
-# --no-amp
