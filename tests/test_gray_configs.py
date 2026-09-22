@@ -29,6 +29,7 @@ def test_all_active_gray_configs_parse_and_validate():
             "mean_ae",
             "gradient_ae",
         }
+        assert args.imx900_calibration.endswith(".json")
 
 
 def test_camera_learning_configs_are_matched_except_sensor_gradient():
@@ -45,3 +46,24 @@ def test_camera_learning_configs_are_matched_except_sensor_gradient():
     assert full_dict == detached_dict
     assert full.sensor_grad_mode == "full"
     assert detached.sensor_grad_mode == "detached"
+
+
+def test_camera_physics_are_not_duplicated_in_experiment_configs():
+    forbidden = (
+        "--gray_exposure_us_min",
+        "--gray_exposure_us_max",
+        "--gray_exposure_reference_us",
+        "--gray_gain_factor_min",
+        "--gray_gain_factor_max",
+        "--gray_shot_noise_scale",
+        "--gray_read_noise_std",
+        "--gray_read_noise_gain_scale",
+        "--gray_black_level",
+        "--gray_blur_scale",
+        "--gray_quantization_bits",
+    )
+    for path in sorted(Path("configs").glob("gray_*.args")):
+        text = path.read_text()
+        assert "--imx900_calibration" in text
+        for token in forbidden:
+            assert token not in text, f"{token} should live in calibration JSON, found in {path}"
