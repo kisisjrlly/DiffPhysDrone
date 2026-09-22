@@ -81,7 +81,7 @@ def build_parser():
 
     p.add_argument(
         "--camera_control_mode",
-        choices=["learned", "fixed", "fixed_random_static"],
+        choices=["learned", "fixed", "fixed_random_static", "mean_ae", "gradient_ae"],
         default="learned",
     )
     p.add_argument("--sensor_grad_mode", choices=["full", "detached"], default="full")
@@ -226,7 +226,9 @@ def validate_args(args):
         raise ValueError("fixed random exposure max must be >= min")
     if args.fixed_random_gain_max < args.fixed_random_gain_min:
         raise ValueError("fixed random gain max must be >= min")
-    if args.camera_control_mode in {"fixed", "fixed_random_static"}:
+    if args.camera_control_mode in {
+        "fixed", "fixed_random_static", "mean_ae", "gradient_ae"
+    }:
         args.sensor_grad_mode = "detached"
         args.coef_cam_smooth = 0.0
     if args.train_flight_only and args.train_camera_only:
