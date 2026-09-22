@@ -6,6 +6,7 @@ import torch
 import wandb
 
 from env_cuda import Env
+from sensors.differentiable_gray_camera import build_from_args as build_gray_camera
 
 
 class MetricSmoother:
@@ -65,10 +66,18 @@ def estimate_optimizer_steps(args) -> int:
 
 
 def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
-    return Env(
+    sensor_type = str(getattr(args, 'sensor_type', 'diff_depth')).strip().lower()
+    if sensor_type == 'gray':
+        width = int(args.gray_width)
+        height = int(args.gray_height)
+    else:
+        width = int(args.depth_width)
+        height = int(args.depth_height)
+
+    env = Env(
         batch_size,
-        int(args.depth_width),
-        int(args.depth_height),
+        width,
+        height,
         args.grad_decay,
         device,
         eval_mode=eval_mode,
@@ -127,3 +136,8 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         simple_specular_false_depth_strength=args.simple_specular_false_depth_strength,
         diff_sensor_impl=args.diff_sensor_impl,
     )
+    env.sensor_type = sensor_type
+    if sensor_type == 'gray':
+        env.gray_camera = build_gray_camera(args).to(device)
+        env.gray_enable_noise = bool(args.gray_enable_noise)
+    return env
