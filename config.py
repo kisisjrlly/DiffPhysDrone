@@ -76,7 +76,10 @@ def build_parser():
     p.add_argument("--gray_texture_scale", type=float, default=5.0)
 
     p.add_argument("--no_odom", default=False, action="store_true")
-    p.add_argument("--include_camera_state_in_obs", default=True, action=argparse.BooleanOptionalAction)
+    # Keep exposure/gain out of the flight-policy state by default. The camera
+    # controller receives camera_state through its dedicated branch, while the
+    # flight policy can only benefit from camera actions through image formation.
+    p.add_argument("--include_camera_state_in_obs", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--max_acc_cmd", type=float, default=2.5)
 
     p.add_argument(
