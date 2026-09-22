@@ -1,4 +1,4 @@
-> **Branch notice (2026-09-22):** this branch is transitioning from the legacy D455-inspired differentiable-depth line to **monochrome IMX900 task-driven differentiable camera control**. Executable code is still mostly the old depth implementation. The authoritative implementation plan is under [docs/grayscale_imx900](docs/grayscale_imx900/README.md). Do not interpret the current depth code as the final grayscale design.
+> **Branch notice (2026-09-22):** this branch is transitioning from the legacy D455-inspired differentiable-depth line to **monochrome IMX900 task-driven differentiable camera control**. Phase 1 is implemented: grayscale camera semantics, differentiable exposure/gain image formation, configuration skeleton, and unit tests. The renderer and navigation/training integration are still the old depth path. The authoritative plan/status is under [docs/grayscale_imx900](docs/grayscale_imx900/README.md).
 
 > **免责声明**：当前md中的描述并不完全等价项目中的代码实现，真实的实现以代码为准。
 
@@ -51,12 +51,13 @@ geometry/material/light -> ideal grayscale irradiance
 
 Do not immediately rewrite the whole repository.
 
-The first implementation task should only add:
+Phase 1 now provides:
 
-- grayscale camera semantics;
-- a pure-PyTorch `DifferentiableGrayCamera`;
-- synthetic gradient/finite-difference tests.
+- `sensors/gray_camera_semantics.py`;
+- `sensors/differentiable_gray_camera.py`;
+- grayscale configuration fields in `config.py`;
+- `tests/test_differentiable_gray_camera.py`.
 
-Then implement the ideal grayscale renderer, fixed-camera grayscale flight, and finally differentiable-vs-detached camera learning.
+The next stage is the **ideal grayscale renderer**. Do not wire grayscale into the navigation trainer until the renderer has deterministic tests and the CUDA extension has been rebuilt successfully.
 
 See `docs/grayscale_imx900/CODEX_IMPLEMENTATION_GUIDE.md` for the staged gates.
