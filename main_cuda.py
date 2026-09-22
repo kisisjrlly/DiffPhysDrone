@@ -104,6 +104,7 @@ def main():
             f"sample={', '.join(frozen[:12])}"
         )
     elif args.train_camera_only:
+        model.initialize_camera_visual_from_flight()
         frozen = model.freeze_flight_for_camera_only()
         print(
             f"[info] train_camera_only: frozen_tensors={len(frozen)} "
