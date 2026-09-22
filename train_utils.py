@@ -108,5 +108,6 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         gray_motion_depth_floor=args.gray_motion_depth_floor,
     )
     env.gray_camera = build_imx900_camera(args).to(device)
+    env.imx900_calibration = env.gray_camera.calibration
     env.gray_enable_noise = bool(args.gray_enable_noise)
     return env
