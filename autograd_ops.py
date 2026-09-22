@@ -2,7 +2,8 @@
 
 The legacy D455/differentiable-depth sensor autograd functions were removed
 from this grayscale/IMX900 branch. Camera differentiability now lives entirely
-in sensors/differentiable_gray_camera.py.
+in sensors/imx900_camera.py, with physical coefficients supplied by the
+IMX900 calibration profile.
 """
 
 import os
