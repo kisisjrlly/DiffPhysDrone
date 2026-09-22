@@ -1045,10 +1045,19 @@ class RerunVis:
             rr.log(f"{phase}/camera/scene_effect", rr.Image(self._img_u8(scene_effect_img, mode="mask")))
 
         if cam is not None:
-            power, exposure, gain = [float(x) for x in cam]
-            rr.log(f"{phase}/camera/power", self._scalar_msg(power))
-            rr.log(f"{phase}/camera/exposure", self._scalar_msg(exposure))
-            rr.log(f"{phase}/camera/gain", self._scalar_msg(gain))
+            vals = [float(x) for x in cam]
+            if len(vals) == 2:
+                exposure, gain = vals
+                rr.log(f"{phase}/camera/exposure", self._scalar_msg(exposure))
+                rr.log(f"{phase}/camera/gain", self._scalar_msg(gain))
+            elif len(vals) == 3:
+                # Backward-compatible visualization for archived depth runs.
+                power, exposure, gain = vals
+                rr.log(f"{phase}/camera/power", self._scalar_msg(power))
+                rr.log(f"{phase}/camera/exposure", self._scalar_msg(exposure))
+                rr.log(f"{phase}/camera/gain", self._scalar_msg(gain))
+            else:
+                raise ValueError("cam must contain [exposure,gain] or legacy [power,exposure,gain]")
 
         if scalars is not None:
             for k, v in scalars.items():
