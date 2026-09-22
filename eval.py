@@ -95,6 +95,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
     dark_hist = []
     blur_hist = []
     light_hist = []
+    motion_proxy_hist = []
+    char_depth_hist = []
     trace_rows = []
 
     log_vis = bool(
@@ -207,6 +209,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
             ("dark_fraction", dark_hist),
             ("blur_strength", blur_hist),
             ("light_scale", light_hist),
+            ("motion_proxy", motion_proxy_hist),
+            ("characteristic_depth", char_depth_hist),
         ):
             val = aux.get(key)
             if isinstance(val, torch.Tensor):
@@ -230,6 +234,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 "saturation_fraction": float(aux["saturation_fraction"][0].cpu()),
                 "dark_fraction": float(aux["dark_fraction"][0].cpu()),
                 "blur_strength": float(aux["blur_strength"][0].mean().cpu()),
+                "motion_proxy": float(aux["motion_proxy"][0].cpu()),
+                "characteristic_depth": float(aux["characteristic_depth"][0].cpu()),
                 "goal_dist": float(goal_dist[0].cpu()),
                 "clearance": float(clearance[0].cpu()),
             })
@@ -251,6 +257,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                     "saturation_fraction": float(aux["saturation_fraction"][j].cpu()),
                     "dark_fraction": float(aux["dark_fraction"][j].cpu()),
                     "blur_strength": float(aux["blur_strength"][j].mean().cpu()),
+                    "motion_proxy": float(aux["motion_proxy"][j].cpu()),
+                    "characteristic_depth": float(aux["characteristic_depth"][j].cpu()),
                 },
                 drone_R=env.R[j].detach().cpu().numpy(),
                 cam_R=env.R_cam[j].detach().cpu().numpy(),
@@ -284,6 +292,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         "dark_fraction": float(torch.stack(dark_hist).mean().cpu()) if dark_hist else 0.0,
         "blur_strength": float(torch.stack(blur_hist).mean().cpu()) if blur_hist else 0.0,
         "light_scale": float(torch.stack(light_hist).mean().cpu()) if light_hist else 0.0,
+        "motion_proxy": float(torch.stack(motion_proxy_hist).mean().cpu()) if motion_proxy_hist else 0.0,
+        "characteristic_depth": float(torch.stack(char_depth_hist).mean().cpu()) if char_depth_hist else 0.0,
         "steps": len(speed_hist),
         "stop_reason": stop_reason,
     }
@@ -350,6 +360,8 @@ def main():
         "saturation_fraction",
         "dark_fraction",
         "blur_strength",
+        "motion_proxy",
+        "characteristic_depth",
     ):
         print(f"  {key:<22}: {sum(float(r[key]) for r in rows) / len(rows):.4f}")
 
