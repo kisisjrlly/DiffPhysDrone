@@ -2,11 +2,10 @@
 
 #include <vector>
 
-// ============================================================================
-// CUDA 前向声明 (CUDA forward declarations)
-// ============================================================================
+// Geometry depth is retained as a generic ray-intersection primitive for the
+// grayscale renderer. The legacy D455-specific differentiable sensor kernels
+// are intentionally not exposed on this branch.
 
-// 深度图渲染 (Render depth map)
 void render_depth_cuda(
     torch::Tensor canvas,
     torch::Tensor balls,
@@ -18,7 +17,6 @@ void render_depth_cuda(
     int n_drones_per_group,
     float fov_x_half_tan);
 
-// 寻找最近的障碍物点 (Find the nearest obstacle point)
 void find_nearest_pt_cuda(
     torch::Tensor nearest_pt,
     torch::Tensor balls,
@@ -29,7 +27,6 @@ void find_nearest_pt_cuda(
     float drone_radius,
     int n_drones_per_group);
 
-// 使用椭球体模型寻找最近的障碍物点 (Find nearest point using ellipsoid model)
 void find_nearest_pt_ellipsoid_cuda(
     torch::Tensor nearest_pt,
     torch::Tensor balls,
@@ -43,7 +40,6 @@ void find_nearest_pt_ellipsoid_cuda(
     float ellipsoid_a,
     float ellipsoid_c);
 
-// 更新状态向量 (Update state vector)
 torch::Tensor update_state_vec_cuda(
     torch::Tensor R,
     torch::Tensor a_thr,
@@ -51,7 +47,6 @@ torch::Tensor update_state_vec_cuda(
     torch::Tensor alpha,
     float yaw_inertia);
 
-// 物理仿真前向传播 (Physics simulation forward pass)
 std::vector<torch::Tensor> run_forward_cuda(
     torch::Tensor R,
     torch::Tensor dg,
@@ -67,7 +62,6 @@ std::vector<torch::Tensor> run_forward_cuda(
     float ctl_dt,
     float airmode_av2a);
 
-// 物理仿真反向传播 (Physics simulation backward pass)
 std::vector<torch::Tensor> run_backward_cuda(
     torch::Tensor R,
     torch::Tensor dg,
@@ -84,96 +78,11 @@ std::vector<torch::Tensor> run_backward_cuda(
     float grad_decay,
     float ctl_dt);
 
-// diff_depth 可微前向（返回 noisy_depth/quality）
-std::vector<torch::Tensor> render_diff_depth_forward_cuda(
-    float fov_x_half_tan,
-    torch::Tensor power,
-    torch::Tensor exposure,
-    torch::Tensor gain,
-    torch::Tensor v,
-    torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group,
-    int height,
-    int width,
-    double max_range);
-
-// diff_depth 可微反向（返回 grad_power/grad_exposure/grad_gain）
-std::vector<torch::Tensor> render_diff_depth_backward_cuda(
-    torch::Tensor grad_noisy_depth,
-    torch::Tensor grad_quality,
-    torch::Tensor noisy_depth,
-    torch::Tensor quality,
-    float fov_x_half_tan,
-    torch::Tensor power,
-    torch::Tensor exposure,
-    torch::Tensor gain,
-    torch::Tensor v,
-    torch::Tensor R,
-    torch::Tensor pos,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    int n_drones_per_group,
-    int height,
-    int width,
-    double max_range);
-
-// active-sensing minimal fused sensor core.
-std::vector<torch::Tensor> active_sensing_sensor_forward_cuda(
-    torch::Tensor depth,
-    torch::Tensor mask,
-    torch::Tensor power,
-    torch::Tensor exposure,
-    torch::Tensor gain,
-    torch::Tensor speed,
-    int regime_id,
-    double min_valid,
-    double max_range,
-    double exposure_t_min,
-    double exposure_t_span,
-    double iso_gain_base,
-    double iso_gain_scale,
-    double iso_gain_gamma,
-    double shot_noise_base);
-
-std::vector<torch::Tensor> active_sensing_sensor_backward_cuda(
-    torch::Tensor grad_quality,
-    torch::Tensor grad_effect,
-    torch::Tensor raw,
-    torch::Tensor mask,
-    torch::Tensor quality,
-    torch::Tensor power,
-    torch::Tensor exposure,
-    torch::Tensor gain,
-    torch::Tensor speed,
-    int regime_id,
-    double min_valid,
-    double max_range,
-    double exposure_t_min,
-    double exposure_t_span,
-    double iso_gain_base,
-    double iso_gain_scale,
-    double iso_gain_gamma,
-    double shot_noise_base);
-
-// ============================================================================
-// PyBind11 模块绑定 (PyBind11 module binding)
-// ============================================================================
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("render_depth", &render_depth_cuda, "render_depth (CUDA)");
+  m.def("render_depth", &render_depth_cuda, "render geometric ray depth (CUDA)");
   m.def("find_nearest_pt", &find_nearest_pt_cuda, "find_nearest_pt (CUDA)");
   m.def("find_nearest_pt_ellipsoid", &find_nearest_pt_ellipsoid_cuda, "find_nearest_pt_ellipsoid (CUDA)");
   m.def("update_state_vec", &update_state_vec_cuda, "update_state_vec (CUDA)");
   m.def("run_forward", &run_forward_cuda, "run_forward_cuda (CUDA)");
   m.def("run_backward", &run_backward_cuda, "run_backward_cuda (CUDA)");
-  m.def("render_diff_depth_forward", &render_diff_depth_forward_cuda, "render_diff_depth_forward (CUDA)");
-  m.def("render_diff_depth_backward", &render_diff_depth_backward_cuda, "render_diff_depth_backward (CUDA)");
-  m.def("active_sensing_sensor_forward", &active_sensing_sensor_forward_cuda, "active_sensing_sensor_forward (CUDA)");
-  m.def("active_sensing_sensor_backward", &active_sensing_sensor_backward_cuda, "active_sensing_sensor_backward (CUDA)");
 }
