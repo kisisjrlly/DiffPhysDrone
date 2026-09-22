@@ -2,20 +2,8 @@
 
 #include <vector>
 
-// Geometry depth is retained as a generic ray-intersection primitive for the
-// grayscale renderer. The legacy D455-specific differentiable sensor kernels
-// are intentionally not exposed on this branch.
-
-void render_depth_cuda(
-    torch::Tensor canvas,
-    torch::Tensor balls,
-    torch::Tensor cylinders,
-    torch::Tensor cylinders_h,
-    torch::Tensor voxels,
-    torch::Tensor R,
-    torch::Tensor pos,
-    int n_drones_per_group,
-    float fov_x_half_tan);
+// This extension exposes only generic geometry, collision, and differentiable
+// quadrotor dynamics. Legacy D455-specific sensor kernels are absent.
 
 void render_geometry_cuda(
     torch::Tensor depth,
@@ -91,7 +79,6 @@ std::vector<torch::Tensor> run_backward_cuda(
     float ctl_dt);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("render_depth", &render_depth_cuda, "render geometric ray depth (CUDA)");
   m.def("render_geometry", &render_geometry_cuda, "render geometric ray depth + hit normals (CUDA)");
   m.def("find_nearest_pt", &find_nearest_pt_cuda, "find_nearest_pt (CUDA)");
   m.def("find_nearest_pt_ellipsoid", &find_nearest_pt_ellipsoid_cuda, "find_nearest_pt_ellipsoid (CUDA)");
