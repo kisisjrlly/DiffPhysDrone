@@ -157,9 +157,7 @@ class IMX900DifferentiableCamera(nn.Module):
             self.calibration.shot_noise_alpha * torch.sqrt(charge + 1e-6)
             + self.calibration.shot_noise_beta
         )
-        read_std = self.calibration.read_noise_std_base * gain_factor.pow(
-            self.calibration.read_noise_gain_exponent
-        )
+        read_std = self.calibration.read_noise_std(gain_factor)
 
         noisy_signal = clean_signal
         if enable_noise:
@@ -184,12 +182,22 @@ class IMX900DifferentiableCamera(nn.Module):
         pre_clip = noisy_signal + self.calibration.black_level
         signal_normalized = pre_clip / self.calibration.saturation_level
         image = self._saturate(signal_normalized)
+        # Optional measured monotonic response for a deployed capture path whose
+        # ISP/nonlinearity cannot be disabled. RAW/linear profiles leave this
+        # as identity.
+        image = self.calibration.apply_response(image)
         image = self._quantize(image)
 
         reduce_dims = tuple(range(1, image.ndim))
         aux = {
             "exposure_us": exposure_us,
             "gain_factor": gain_factor,
+            "response_mapping_is_lut": torch.full(
+                (irradiance.shape[0],),
+                1.0 if self.calibration.response_mapping == "lut" else 0.0,
+                device=irradiance.device,
+                dtype=irradiance.dtype,
+            ),
             "blur_strength": blur_strength,
             "shot_noise_std_mean": shot_std.mean(dim=reduce_dims),
             "read_noise_std_mean": read_std.expand_as(charge).mean(dim=reduce_dims),
