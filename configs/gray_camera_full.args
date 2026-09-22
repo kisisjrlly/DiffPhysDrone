@@ -61,7 +61,7 @@
 --fixed_random_exposure_max 0.90
 --fixed_random_gain_min 0.02
 --fixed_random_gain_max 0.90
---camera_smoothing_alpha 0.7
+--camera_smoothing_alpha 0.0
 
 --coef_v 10.5
 --loss_v_window 12
