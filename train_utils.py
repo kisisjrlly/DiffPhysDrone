@@ -1,4 +1,5 @@
-"""Minimal training helpers for the active-sensing simulation branch."""
+"""Training helpers for the grayscale active-sensing branch."""
+
 import os
 from collections import defaultdict
 
@@ -10,77 +11,58 @@ from sensors.differentiable_gray_camera import build_from_args as build_gray_cam
 
 
 class MetricSmoother:
-    """Accumulates scalar metrics and flushes averaged values to WandB."""
-
     ALLOWED_EXACT = {
-        'loss',
-        'collision_rate',
-        'success_rate',
-        'charts/goal_dist',
-        'cam/power_mean',
-        'cam/exposure_mean',
-        'cam/gain_mean',
-        'cam/saturation_fraction',
-        'cam/dark_fraction',
-        'cam/blur_strength',
-        'iter_per_sec',
-        'sim_fps',
+        "loss",
+        "collision_rate",
+        "success_rate",
+        "charts/goal_dist",
+        "cam/exposure_mean",
+        "cam/gain_mean",
+        "cam/saturation_fraction",
+        "cam/dark_fraction",
+        "cam/blur_strength",
+        "cam/light_scale",
+        "cam/grad_norm",
+        "iter_per_sec",
+        "sim_fps",
     }
-    ALLOWED_PREFIXES = (
-        'loss_contrib/',
-        'loss_share/',
-    )
+    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/")
 
     def __init__(self, args):
-        self._q: dict[str, list[float]] = defaultdict(list)
+        self._q = defaultdict(list)
         self._args = args
 
-    def add(self, d: dict):
-        for k, v in d.items():
-            if k in self.ALLOWED_EXACT or any(k.startswith(prefix) for prefix in self.ALLOWED_PREFIXES):
-                self._q[k].append(float(v))
+    def add(self, d):
+        for key, value in d.items():
+            if key in self.ALLOWED_EXACT or any(key.startswith(p) for p in self.ALLOWED_PREFIXES):
+                self._q[key].append(float(value))
 
-    def flush(self, step: int):
+    def flush(self, step):
         if not self._q:
             return
-        log = {k: sum(v) / len(v) for k, v in self._q.items() if v}
-        wandb.log(log, step=step)
+        wandb.log({k: sum(v) / len(v) for k, v in self._q.items() if v}, step=step)
         self._q.clear()
 
 
-def periodic_tail_ops(iter_idx: int, checkpoint_dir: str, model, smoother: MetricSmoother):
+def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother):
     if (iter_idx + 1) % 200 == 0:
-        ckpt_path = os.path.join(checkpoint_dir, f'checkpoint{iter_idx // 200:04d}.pth')
-        print('save checkpoint to:', ckpt_path)
+        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // 200:04d}.pth")
+        print("save checkpoint to:", ckpt_path)
         torch.save(model.state_dict(), ckpt_path)
         wandb.save(ckpt_path)
     if (iter_idx + 1) % 25 == 0:
         smoother.flush(iter_idx + 1)
 
 
-def is_save_iter(i: int) -> bool:
-    if i < 2000:
-        return (i + 1) % 250 == 0
-    return (i + 1) % 1000 == 0
-
-
-def estimate_optimizer_steps(args) -> int:
+def estimate_optimizer_steps(args):
     return max(1, int(args.num_iters))
 
 
-def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
-    sensor_type = str(getattr(args, 'sensor_type', 'diff_depth')).strip().lower()
-    if sensor_type == 'gray':
-        width = int(args.gray_width)
-        height = int(args.gray_height)
-    else:
-        width = int(args.depth_width)
-        height = int(args.depth_height)
-
+def build_env(batch_size, args, device, *, eval_mode=False):
     env = Env(
         batch_size,
-        width,
-        height,
+        int(args.gray_width),
+        int(args.gray_height),
         args.grad_decay,
         device,
         eval_mode=eval_mode,
@@ -88,32 +70,16 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         cam_angle=args.cam_angle,
         ellipsoid_a=args.drone_a if args.ellipsoid_collision else 0.0,
         ellipsoid_c=args.drone_c if args.ellipsoid_collision else 0.0,
-        cam_power_baseline=args.cam_power_baseline,
         camera_control_mode=args.camera_control_mode,
         sensor_grad_mode=args.sensor_grad_mode,
-        cam_delta_max=args.cam_delta_max,
-        cam_return_rate=args.cam_return_rate,
-        fixed_camera_power=args.fixed_camera_power,
+        camera_ema_alpha=args.camera_ema_alpha,
         fixed_camera_exposure=args.fixed_camera_exposure,
         fixed_camera_gain=args.fixed_camera_gain,
-        fixed_random_power_min=args.fixed_random_power_min,
-        fixed_random_power_max=args.fixed_random_power_max,
         fixed_random_exposure_min=args.fixed_random_exposure_min,
         fixed_random_exposure_max=args.fixed_random_exposure_max,
         fixed_random_gain_min=args.fixed_random_gain_min,
         fixed_random_gain_max=args.fixed_random_gain_max,
-        cam_exposure_t_min=args.cam_exposure_t_min,
-        cam_exposure_t_span=args.cam_exposure_t_span,
-        cam_exposure_eff_min=args.cam_exposure_eff_min,
-        cam_exposure_eff_max=args.cam_exposure_eff_max,
-        cam_iso_gain_base=args.cam_iso_gain_base,
-        cam_iso_gain_scale=args.cam_iso_gain_scale,
-        cam_iso_gain_gamma=args.cam_iso_gain_gamma,
-        cam_shot_noise_base=args.cam_shot_noise_base,
-        depth_min_valid=args.depth_min_valid,
-        depth_max_range=args.depth_max_range,
         scenarios=args.scenarios,
-        sun_glare_eval_slot=getattr(args, 'sun_glare_eval_slot', None) if eval_mode else None,
         random_rotation=args.random_rotation,
         random_rotation_max_deg=args.random_rotation_max_deg,
         simple_start_x=args.simple_start_x,
@@ -124,23 +90,20 @@ def build_env(batch_size: int, args, device, *, eval_mode: bool = False) -> Env:
         simple_slit_half_y=args.simple_slit_half_y,
         simple_slit_half_y_min=args.simple_slit_half_y_min,
         simple_slit_half_y_max=args.simple_slit_half_y_max,
-        simple_slit_effect_half_z=args.simple_slit_effect_half_z,
         simple_slit_center_z=args.simple_slit_center_z,
-        simple_slit_side_effect_width_y=args.simple_slit_side_effect_width_y,
-        simple_slit_side_effect_half_z=args.simple_slit_side_effect_half_z,
-        simple_glare_halo_width_y=args.simple_glare_halo_width_y,
-        simple_glare_halo_extra_half_z=args.simple_glare_halo_extra_half_z,
-        simple_glare_halo_strength=args.simple_glare_halo_strength,
         simple_back_wall_x_min=args.simple_back_wall_x_min,
         simple_back_wall_x_max=args.simple_back_wall_x_max,
-        simple_slit_cue_halo_width_y=args.simple_slit_cue_halo_width_y,
-        simple_slit_cue_extra_half_z=args.simple_slit_cue_extra_half_z,
-        simple_key_cue_degrade_strength=args.simple_key_cue_degrade_strength,
-        simple_specular_false_depth_strength=args.simple_specular_false_depth_strength,
-        diff_sensor_impl=args.diff_sensor_impl,
+        gray_nominal_ambient=args.gray_nominal_ambient,
+        gray_nominal_diffuse=args.gray_nominal_diffuse,
+        gray_dark_scale=args.gray_dark_scale,
+        gray_bright_scale=args.gray_bright_scale,
+        gray_background_intensity=args.gray_background_intensity,
+        gray_transition_x=args.gray_transition_x,
+        gray_transition_width=args.gray_transition_width,
+        gray_light_jitter=args.gray_light_jitter,
+        gray_texture_strength=args.gray_texture_strength,
+        gray_texture_scale=args.gray_texture_scale,
     )
-    env.sensor_type = sensor_type
-    if sensor_type == 'gray':
-        env.gray_camera = build_gray_camera(args).to(device)
-        env.gray_enable_noise = bool(args.gray_enable_noise)
+    env.gray_camera = build_gray_camera(args).to(device)
+    env.gray_enable_noise = bool(args.gray_enable_noise)
     return env
