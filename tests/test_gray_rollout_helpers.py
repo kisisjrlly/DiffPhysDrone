@@ -175,3 +175,26 @@ def test_measured_command_delay_is_separate_from_policy_smoothing():
         first_target,
     )
     torch.testing.assert_close(requested2, second_target)
+
+
+def test_command_delay_jitter_is_sampled_per_episode():
+    torch.manual_seed(7)
+    env = _DummyEnv(batch=1)
+    env.gray_camera = IMX900DifferentiableCamera(
+        IMX900Calibration(
+            schema_version=2,
+            profile_name="delay-jitter-test",
+            calibrated=True,
+            source="unit test",
+            exposure_us_min=100.0,
+            exposure_us_max=1000.0,
+            exposure_reference_us=1000.0,
+            gain_factor_min=1.0,
+            gain_factor_max=2.0,
+            blur_scale=0.0,
+            command_delay_frames=2,
+            command_delay_jitter_frames=1,
+        )
+    )
+    init_camera_params(env, 1, torch.device("cpu"))
+    assert 1 <= env._camera_effective_delay_frames <= 3
