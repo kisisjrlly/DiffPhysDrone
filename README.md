@@ -106,3 +106,10 @@ diagnostic; it is not a trained policy or real-flight result. Before claiming
 hardware relevance, calibrate the parameter response with the D455 tools under
 `tools/realflight/` and compare the simulator response with recorded depth/IR
 measurements.
+
+Summarize a completed run without re-running the simulator:
+
+```bash
+python3 tools/summarize_simple_active_sensing.py \
+  /tmp/diffphysdrone-smoke/simple_closed_loop_summary.csv
+```
