@@ -55,11 +55,11 @@
 --gray_read_noise_std 0.005
 --gray_read_noise_gain_scale 0.35
 --gray_black_level 0.0
---gray_blur_scale 1.0
+--gray_blur_scale 0.08
 --gray_blur_kernel_size 5
 --gray_dark_threshold 0.05
---gray_saturation_mode ste
---gray_soft_clip_beta 6.0
+--gray_saturation_mode soft
+--gray_soft_clip_beta 12.0
 --gray_quantization_bits 0
 --gray_enable_noise
 
