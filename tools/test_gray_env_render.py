@@ -72,6 +72,10 @@ def main():
     for scenario in cli.scenarios:
         args = _project_args(cli.batch_size, scenario)
         env = build_env(cli.batch_size, args, device, eval_mode=True)
+        print(
+            f"[{scenario}] profile={env.imx900_calibration.profile_name!r} "
+            f"calibrated={env.imx900_calibration.calibrated}"
+        )
         env.reset(scene_name=scenario)
 
         ideal, render_aux = env.render_gray_ideal(return_aux=True)
