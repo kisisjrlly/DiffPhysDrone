@@ -15,6 +15,7 @@ except ModuleNotFoundError:
 
 from autograd_ops import run, active_sensing_sensor
 from camera_semantics import CameraSemantics
+from render.ideal_gray import render_ideal_grayscale
 from utils import g_decay
 
 
@@ -1351,6 +1352,50 @@ class Env:
         if self.diff_sensor_impl.get('diff_depth', 'cuda') == 'cuda':
             return self._sensor_cuda(depth, power, exposure, gain)
         return self._sensor_reference(depth, power, exposure, gain, max_range=max_range)
+
+    def render_gray_ideal(self, *, return_aux=False, **renderer_kwargs):
+        """Render ideal monochrome appearance without changing the legacy depth path.
+
+        Geometry is still produced by the existing CUDA depth renderer. The
+        grayscale appearance is reconstructed in PyTorch from the geometric
+        ray parameter, camera pose, simple Lambertian lighting, and procedural
+        texture. This method intentionally does not apply exposure/gain yet;
+        those belong to DifferentiableGrayCamera.
+        """
+        B = int(self.batch_size)
+        render_R = torch.bmm(self.R_scene_T, self.R @ self.R_cam).contiguous()
+        render_p = torch.bmm(
+            self.R_scene_T,
+            self.p[:, :, None],
+        )[:, :, 0].contiguous()
+        depth = torch.empty(
+            (B, self.height, self.width),
+            device=self.p.device,
+            dtype=self.p.dtype,
+        )
+        quadsim_cuda.render_depth(
+            depth,
+            self.balls,
+            self.cyl,
+            self.cyl_h,
+            self.voxels,
+            render_R,
+            render_p,
+            self.n_drones_per_group,
+            float(self._fov_x_half_tan),
+        )
+        gray, aux = render_ideal_grayscale(
+            depth,
+            render_R,
+            render_p,
+            fov_x_half_tan=float(self._fov_x_half_tan),
+            return_aux=return_aux,
+            **renderer_kwargs,
+        )
+        if return_aux:
+            aux = dict(aux or {})
+            aux["geometry_depth"] = depth.detach()
+        return gray, aux
 
     def render(self, ctl_dt):
         _ = ctl_dt
