@@ -86,6 +86,7 @@ def build_parser():
     )
     p.add_argument("--sensor_grad_mode", choices=["full", "detached"], default="full")
     p.add_argument("--train_flight_only", default=False, action=argparse.BooleanOptionalAction)
+    p.add_argument("--train_camera_only", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--camera_ema_alpha", type=float, default=0.7)
     p.add_argument("--fixed_camera_exposure", type=float, default=0.35)
     p.add_argument("--fixed_camera_gain", type=float, default=0.15)
@@ -228,6 +229,8 @@ def validate_args(args):
     if args.camera_control_mode in {"fixed", "fixed_random_static"}:
         args.sensor_grad_mode = "detached"
         args.coef_cam_smooth = 0.0
+    if args.train_flight_only and args.train_camera_only:
+        raise ValueError("--train_flight_only and --train_camera_only are mutually exclusive")
     if args.train_flight_only:
         args.coef_cam_smooth = 0.0
     if args.wandb_episode_history_every_iters < 1:
@@ -240,6 +243,8 @@ def print_runtime_mode(args):
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
     print(f"policy_gray_mode          : {args.policy_gray_mode}")
+    print(f"train_flight_only         : {args.train_flight_only}")
+    print(f"train_camera_only         : {args.train_camera_only}")
     print(f"scenarios                 : {args.scenarios}")
     print(
         "gray_camera               : "
