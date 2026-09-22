@@ -163,6 +163,7 @@ Implemented:
 - `model.py`: `sensor_type=gray` reuses the 2-channel CNN as `[current_gray, previous_gray]`; camera state/action becomes 2-D `[exposure, gain]`.
 - `rollout_ops.py` / `trainer.py`: grayscale sensor rendering, matched full-vs-detached exposure/gain gradient switch, gray state construction, camera update, diagnostics, and fixed-camera grayscale rollout.
 - `configs/gray_gate_fixed.args`: first fixed-camera grayscale navigation baseline.
+- `policy_gray_mode=zero` and `configs/gray_gate_blind.args`: matched zero-image control to verify that the flight policy actually uses grayscale vision.
 - `tools/test_gray_env_render.py`: local CUDA smoke test that saves ideal and sensor grayscale frames.
 - unit tests cover camera gradients/effects, ideal renderer behavior, gray model dimensions/preprocessing, and gray rollout helpers.
 
@@ -186,11 +187,14 @@ python tools/test_gray_env_render.py
 
 Inspect the saved images under `logs/gray_smoke/`. The gate/slit and textured surfaces should be visually distinguishable and the sensor image should respond sensibly to exposure/gain.
 
-Only after that smoke gate passes should the first training run start:
+Only after that smoke gate passes should the first matched training pair start:
 
 ~~~bash
 TASK=gray_gate_fixed LOG_TO_FILE=1 bash run.sh
+TASK=gray_gate_blind LOG_TO_FILE=1 bash run.sh
 ~~~
+
+The fixed-gray result must outperform the blind/zero-image control before active camera learning is considered meaningful.
 
 Still pending:
 
