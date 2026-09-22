@@ -76,7 +76,7 @@ def decode_action_direct(raw_act, R, env, B, max_acc_cmd):
 
 def init_camera_params(env, B, device):
     mode = getattr(env, "camera_control_mode", "learned")
-    if mode == "fixed":
+    if mode in {"fixed", "mean_ae", "gradient_ae"}:
         return (
             torch.full((B,), float(env.fixed_camera_exposure), device=device),
             torch.full((B,), float(env.fixed_camera_gain), device=device),
