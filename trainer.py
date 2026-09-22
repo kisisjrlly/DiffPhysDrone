@@ -92,6 +92,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     vec_history, act_history, cam_history = [], [], []
     exposure_history, gain_history = [], []
     saturation_history, dark_history, blur_history, light_history = [], [], [], []
+    motion_proxy_history, char_depth_history = [], []
 
     sensor_differentiable = args.sensor_grad_mode == "full"
 
@@ -118,6 +119,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             ("dark_fraction", dark_history),
             ("blur_strength", blur_history),
             ("light_scale", light_history),
+            ("motion_proxy", motion_proxy_history),
+            ("characteristic_depth", char_depth_history),
         ):
             value = gray_aux.get(key)
             if isinstance(value, torch.Tensor):
@@ -234,6 +237,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         "dark_history": dark_history,
         "blur_history": blur_history,
         "light_history": light_history,
+        "motion_proxy_history": motion_proxy_history,
+        "char_depth_history": char_depth_history,
         "act_buffer": act_buffer,
     }
 
@@ -358,6 +363,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             ("dark_fraction", rollout["dark_history"]),
             ("blur_strength", rollout["blur_history"]),
             ("light_scale", rollout["light_history"]),
+            ("motion_proxy", rollout["motion_proxy_history"]),
+            ("characteristic_depth", rollout["char_depth_history"]),
         ):
             if history:
                 log[f"cam/{key}"] = float(torch.stack(history).detach().mean())
