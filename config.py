@@ -105,6 +105,11 @@ def build_parser():
         "--imx900_calibration",
         default="configs/calibration/imx900_provisional.json",
     )
+    p.add_argument(
+        "--require_calibrated_imx900",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+    )
     # Surrogate/training hyperparameters that are not claimed as sensor specs.
     p.add_argument("--gray_blur_kernel_size", type=int, default=5)
     # Characteristic-depth floor for the image-motion proxy |v| / Z.
@@ -254,6 +259,7 @@ def print_runtime_mode(args):
         f"{args.gray_nn_width}x{args.gray_nn_height}"
     )
     print(f"imx900_calibration        : {args.imx900_calibration}")
+    print(f"require_calibrated_imx900 : {args.require_calibrated_imx900}")
     print(
         "illumination              : "
         f"dark={args.gray_dark_scale}, bright={args.gray_bright_scale}, "
