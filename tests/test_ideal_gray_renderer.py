@@ -43,12 +43,12 @@ def test_front_parallel_plane_has_expected_lambertian_level():
 def test_procedural_texture_creates_monocular_spatial_cues():
     depth, normals, R, pos = _plane_inputs(height=24, width=32)
     plain, _ = render_ideal_grayscale(
-        depth, R, pos,
+        depth, R, pos, normals,
         light_direction=(-1.0, 0.0, 0.0),
         texture_strength=0.0,
     )
     textured, _ = render_ideal_grayscale(
-        depth, R, pos,
+        depth, R, pos, normals,
         light_direction=(-1.0, 0.0, 0.0),
         texture_strength=0.7,
     )
