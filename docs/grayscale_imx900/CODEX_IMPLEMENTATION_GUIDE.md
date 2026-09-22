@@ -64,20 +64,26 @@ sensors/imx900_camera.py
 
 Current surrogate:
 
+- exposure mapping: linear or measured LUT;
 - exposure integration;
-- gain mapping: linear/log/LUT;
+- gain mapping: linear/log/measured LUT;
 - shot noise alpha/beta;
-- gain-dependent read noise;
+- read-noise mapping: compact power law or measured LUT;
 - black level;
 - saturation/full-scale normalization;
+- optional fixed monotonic response LUT for unavoidable ISP behavior;
 - STE quantization;
-- exposure-dependent motion blur.
+- exposure-dependent motion blur;
+- nominal camera-command delay plus measured frame-delay jitter.
 
 ### Required tests
 
 - exposure finite-difference gradient;
 - gain finite-difference gradient;
-- LUT gain mapping gradient;
+- exposure-LUT mapping gradient;
+- gain-LUT mapping gradient;
+- read-noise LUT gradient;
+- optional response-LUT gradient;
 - fixed stochastic samples -> deterministic output;
 - long exposure + motion -> increased blur;
 - saturation gradient decays;
