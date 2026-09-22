@@ -452,17 +452,19 @@ The real system will have:
 - possible driver buffering;
 - update-rate limits.
 
-The calibration schema already stores command-delay metadata.
+The calibration schema stores command-delay metadata, and the rollout already
+implements a frame-delay queue driven by `command_delay_frames`.
 
-Current EMA camera updates are a training/control smoothing mechanism, not a
-measured IMX900 actuator law.
+The separate `camera_smoothing_alpha` parameter is a policy-command
+regularizer, not a measured IMX900 actuator law.
 
 After hardware characterization:
 
-1. measure command latency;
-2. distinguish requested from effective settings;
-3. implement delay/quantization explicitly;
-4. keep any remaining EMA only if it is an intentional policy regularizer.
+1. measure command latency/jitter;
+2. replace the provisional zero-frame delay in the profile;
+3. set real exposure/gain command steps in the profile;
+4. keep policy smoothing only if it is intentionally part of the method;
+5. add measured jitter only if it materially affects performance.
 
 ---
 
