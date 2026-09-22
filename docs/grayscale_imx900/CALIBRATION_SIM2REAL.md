@@ -20,7 +20,7 @@ Required agreement:
 
 Create:
 
-\`tools/grayscale_calibration/\`
+`tools/grayscale_calibration/`
 
 and store each capture with a machine-readable manifest.
 
