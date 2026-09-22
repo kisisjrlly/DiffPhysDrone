@@ -15,18 +15,23 @@ except ModuleNotFoundError:
     plt = None
     MATPLOTLIB_AVAILABLE = False
 
-from losses import compute_camera_losses, compute_physics_losses, aggregate_loss
+from losses import compute_camera_losses, compute_gray_camera_losses, compute_physics_losses, aggregate_loss
 from rollout_ops import (
     render_sensors,
+    render_gray_sensor,
     select_policy_depth_obs,
     build_local_frame,
     build_state_vector,
+    build_gray_state_vector,
     compute_target_velocity,
     decode_action_direct,
     update_camera_params,
     diff_depth_exposure_to_time,
     init_camera_params,
+    init_gray_camera_params,
+    update_gray_camera_params,
     compute_camera_param_stats,
+    compute_gray_camera_param_stats,
     compute_depth_fill_health,
 )
 from train_utils import MetricSmoother, periodic_tail_ops
@@ -205,59 +210,156 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     h = None
     cam_h = None
     act_buffer = [env.act] * 2
-    power, exposure, gain = init_camera_params(env, B, device)
-    camera_initial = torch.stack([power.detach(), exposure.detach(), gain.detach()], -1)
+    is_gray = str(getattr(args, 'sensor_type', 'diff_depth')).lower() == 'gray'
+
+    if is_gray:
+        exposure, gain = init_gray_camera_params(env, B, device)
+        power = None
+        camera_initial = torch.stack([exposure.detach(), gain.detach()], -1)
+        prev_gray = None
+    else:
+        power, exposure, gain = init_camera_params(env, B, device)
+        camera_initial = torch.stack([power.detach(), exposure.detach(), gain.detach()], -1)
+        prev_gray = None
 
     p_history, v_history, target_v_history = [], [], []
     vec_history, act_history, cam_history = [], [], []
-    power_history, exposure_history, gain_history, speed_history, fill_history = [], [], [], [], []
+    power_history, exposure_history, gain_history = [], [], []
+    speed_history, fill_history = [], []
+    saturation_history, dark_history, blur_history = [], [], []
 
     sensor_differentiable = getattr(args, 'sensor_grad_mode', 'full') == 'full'
 
     for t in range(args.timesteps):
         base_dt = normalvariate(1 / args.base_control_freq, 0.1 / args.base_control_freq)
-        exposure_delay = float(diff_depth_exposure_to_time(exposure.mean().detach(), camera_semantics=env.cam_sem)) * 0.01
-        ctl_dt = base_dt + exposure_delay
 
-        depth_obs, _ = render_sensors(env, ctl_dt, power, exposure, gain, differentiable=sensor_differentiable)
-        depth_fill = compute_depth_fill_health(
-            env,
-            depth_obs,
-            min_valid_depth=args.depth_min_valid,
-            patch_rows=args.diff_depth_health_patch_rows,
-            patch_cols=args.diff_depth_health_patch_cols,
-            cvar_frac=args.diff_depth_health_cvar_frac,
-        )
-        policy_depth_obs = select_policy_depth_obs(depth_obs, args.policy_depth_mode)
+        if is_gray:
+            # Camera exposure occurs inside the frame period; do not add the
+            # exposure duration to the vehicle control dt.  Real command/frame
+            # latency will be measured and modeled separately.
+            ctl_dt = base_dt
+            gray_frame, gray_aux = render_gray_sensor(
+                env,
+                exposure,
+                gain,
+                differentiable=sensor_differentiable,
+            )
+            if prev_gray is None:
+                prev_gray = gray_frame
+            policy_gray_obs = torch.cat([gray_frame, prev_gray], dim=1)
+            prev_gray = gray_frame
+
+            sat = gray_aux.get('saturation_fraction')
+            dark = gray_aux.get('dark_fraction')
+            blur = gray_aux.get('blur_strength')
+            if isinstance(sat, torch.Tensor):
+                saturation_history.append(sat)
+            if isinstance(dark, torch.Tensor):
+                dark_history.append(dark)
+            if isinstance(blur, torch.Tensor):
+                blur_history.append(blur.flatten(1).mean(1))
+        else:
+            exposure_delay = float(
+                diff_depth_exposure_to_time(
+                    exposure.mean().detach(),
+                    camera_semantics=env.cam_sem,
+                )
+            ) * 0.01
+            ctl_dt = base_dt + exposure_delay
+            depth_obs, _ = render_sensors(
+                env,
+                ctl_dt,
+                power,
+                exposure,
+                gain,
+                differentiable=sensor_differentiable,
+            )
+            depth_fill = compute_depth_fill_health(
+                env,
+                depth_obs,
+                min_valid_depth=args.depth_min_valid,
+                patch_rows=args.diff_depth_health_patch_rows,
+                patch_cols=args.diff_depth_health_patch_cols,
+                cvar_frac=args.diff_depth_health_cvar_frac,
+            )
+            policy_depth_obs = select_policy_depth_obs(depth_obs, args.policy_depth_mode)
 
         vec_now = env.find_vec_to_nearest_pt()
         target_v_raw = env.p_target - env.p.detach()
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
-        state, local_v, camera_state, camera_motion_state = build_state_vector(
-            env, target_v, R, power, exposure, gain,
-            args.no_odom, args.include_camera_state_in_obs,
-        )
+
+        if is_gray:
+            state, local_v, camera_state, camera_motion_state = build_gray_state_vector(
+                env,
+                target_v,
+                R,
+                exposure,
+                gain,
+                args.no_odom,
+                args.include_camera_state_in_obs,
+            )
+        else:
+            state, local_v, camera_state, camera_motion_state = build_state_vector(
+                env,
+                target_v,
+                R,
+                power,
+                exposure,
+                gain,
+                args.no_odom,
+                args.include_camera_state_in_obs,
+            )
         _ = local_v
 
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h, cam_h = model(
-                state, h,
-                depth_obs=policy_depth_obs,
-                add_noise=True,
-                cam_hx=cam_h,
-                camera_state=camera_state,
-                camera_motion_state=camera_motion_state,
-            )
+            if is_gray:
+                act_raw, cam_params, h, cam_h = model(
+                    state,
+                    h,
+                    gray_obs=policy_gray_obs,
+                    add_noise=False,
+                    cam_hx=cam_h,
+                    camera_state=camera_state,
+                    camera_motion_state=camera_motion_state,
+                )
+            else:
+                act_raw, cam_params, h, cam_h = model(
+                    state,
+                    h,
+                    depth_obs=policy_depth_obs,
+                    add_noise=True,
+                    cam_hx=cam_h,
+                    camera_state=camera_state,
+                    camera_motion_state=camera_motion_state,
+                )
         act_raw = act_raw.float()
         cam_params = cam_params.float()
         if getattr(args, 'train_flight_only', False):
             cam_params = cam_params.detach()
             cam_h = cam_h.detach()
 
-        render_power, render_exposure, render_gain = power, exposure, gain
         act = decode_action_direct(act_raw, R, env, B, args.max_acc_cmd)
-        power, exposure, gain, cam_hist_entry = update_camera_params(cam_params, power, exposure, gain, env)
+
+        if is_gray:
+            render_exposure, render_gain = exposure, gain
+            exposure, gain, cam_hist_entry = update_gray_camera_params(
+                cam_params,
+                exposure,
+                gain,
+                env,
+            )
+            render_power = None
+        else:
+            render_power, render_exposure, render_gain = power, exposure, gain
+            power, exposure, gain, cam_hist_entry = update_camera_params(
+                cam_params,
+                power,
+                exposure,
+                gain,
+                env,
+            )
+
         act_buffer.append(act)
 
         p_history.append(env.p)
@@ -266,13 +368,20 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         vec_history.append(vec_now)
         act_history.append(act)
         cam_history.append(cam_hist_entry)
-        power_history.append(render_power)
+        if render_power is not None:
+            power_history.append(render_power)
         exposure_history.append(render_exposure)
         gain_history.append(render_gain)
         speed_history.append(env.v.norm(2, -1))
-        fill_history.append(depth_fill)
+        if not is_gray:
+            fill_history.append(depth_fill)
 
-        if should_vis and args.vis_student and (t % max(args.vis_every_steps, 1) == 0):
+        if (
+            should_vis
+            and args.vis_student
+            and not is_gray
+            and (t % max(args.vis_every_steps, 1) == 0)
+        ):
             j = int(min(max(args.vis_env_idx, 0), B - 1))
             scene_debug = env.export_last_diff_depth_debug(j)
             vis.log_step(
@@ -281,7 +390,11 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 pos=env.p[j].detach().cpu().numpy(),
                 target=env.p_target[j].detach().cpu().numpy(),
                 depth=depth_obs[j].detach().cpu().numpy(),
-                cam=(float(render_power[j].detach().cpu()), float(render_exposure[j].detach().cpu()), float(render_gain[j].detach().cpu())),
+                cam=(
+                    float(render_power[j].detach().cpu()),
+                    float(render_exposure[j].detach().cpu()),
+                    float(render_gain[j].detach().cpu()),
+                ),
                 scalars=scene_debug.get('scalars', {}),
                 raw_depth_img=scene_debug.get('images', {}).get('raw_depth_map'),
                 quality_img=scene_debug.get('images', {}).get('quality_map'),
@@ -309,9 +422,11 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         'gain_history': gain_history,
         'speed_history': speed_history,
         'fill_history': fill_history,
+        'saturation_history': saturation_history,
+        'dark_history': dark_history,
+        'blur_history': blur_history,
         'act_buffer': act_buffer,
     }
-
 
 def _loss_from_rollout(rollout, env, args):
     p_history = torch.stack(rollout['p_history'])
