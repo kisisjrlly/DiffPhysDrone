@@ -1,11 +1,10 @@
-"""Minimal losses for the active-sensing simulation branch."""
+"""Losses for task-driven grayscale active sensing."""
+
 import torch
 import torch.nn.functional as F
 
-from rollout_ops import diff_depth_exposure_to_time
 
-
-def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int = 12):
+def velocity_tracking_loss(v_hist, tv_hist, win=12):
     if v_hist.shape[0] <= win:
         return torch.zeros((), device=v_hist.device, dtype=v_hist.dtype)
     v_cum = v_hist.cumsum(0)
@@ -18,12 +17,21 @@ def velocity_tracking_loss(v_hist: torch.Tensor, tv_hist: torch.Tensor, win: int
     return F.smooth_l1_loss(delta_v, torch.zeros_like(delta_v))
 
 
-def barrier(x: torch.Tensor, v_to_pt):
+def barrier(x, v_to_pt):
     return (v_to_pt * (1 - x).relu().clamp(max=5.0).pow(2)).mean()
 
 
-def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
-                           margin, prev_act_tail, win=12):
+def compute_physics_losses(
+    v_chunk,
+    tv_chunk,
+    act_chunk,
+    vec_chunk,
+    p_chunk,
+    margin,
+    prev_act_tail,
+    win=12,
+):
+    _ = p_chunk
     loss_v = velocity_tracking_loss(v_chunk, tv_chunk, win=win)
     act_for_smooth = torch.cat([prev_act_tail[None], act_chunk], 0)
     jerk = act_for_smooth.diff(1, 0).mul(15)
@@ -32,117 +40,52 @@ def compute_physics_losses(v_chunk, tv_chunk, act_chunk, vec_chunk, p_chunk,
 
     dist = torch.norm(vec_chunk + 1e-6, 2, -1) - margin
     with torch.no_grad():
-        # dist shape is [T, lookahead_substep, B].  The derivative is along
-        # the short p + v * dt lookahead samples, not along rollout time.
         v_to = (-torch.diff(dist, 1, 1) * 135).clamp_min(1)
     dist_next = dist[:, 1:]
     loss_avoid = barrier(dist_next, v_to)
     loss_collide = F.softplus(dist_next.clamp(min=-3.0).mul(-32)).mul(v_to).mean()
     return {
-        'loss_v': loss_v,
-        'loss_d_acc': loss_d_acc,
-        'loss_d_jerk': loss_d_jerk,
-        'loss_avoid': loss_avoid,
-        'loss_collide': loss_collide,
+        "loss_v": loss_v,
+        "loss_d_acc": loss_d_acc,
+        "loss_d_jerk": loss_d_jerk,
+        "loss_avoid": loss_avoid,
+        "loss_collide": loss_collide,
     }
 
 
-def _infer_loss_device(*items):
-    for item in items:
-        if isinstance(item, torch.Tensor):
-            return item.device
-    return torch.device('cpu')
-
-
-def compute_camera_losses(cam_hist, power_seq, exposure_seq, gain_seq, speed_seq,
-                          fill_rate_seq=None, min_fill_rate=0.0,
-                          camera_semantics=None, power_baseline: float = 0.5,
-                          cam_initial=None):
-    device = _infer_loss_device(
-        cam_hist, power_seq, exposure_seq, gain_seq, speed_seq, fill_rate_seq, cam_initial)
-    result = {
-        'loss_cam_smooth': torch.zeros((), device=device),
-        'loss_diff_depth_power': torch.zeros((), device=device),
-        'loss_diff_depth_blur': torch.zeros((), device=device),
-        'loss_diff_depth_noise': torch.zeros((), device=device),
-        'loss_diff_depth_fill': torch.zeros((), device=device),
-    }
-    if cam_hist is not None:
-        cam_for_smooth = cam_hist
-        if cam_initial is not None:
-            init = cam_initial.to(device=cam_hist.device, dtype=cam_hist.dtype)
-            if init.ndim == cam_hist.ndim - 1:
-                init = init.unsqueeze(0)
-            cam_for_smooth = torch.cat([init.detach(), cam_hist], dim=0)
-        if cam_for_smooth.shape[0] > 1:
-            result['loss_cam_smooth'] = cam_for_smooth.diff(1, 0).pow(2).mean()
-    if power_seq is not None:
-        result['loss_diff_depth_power'] = F.relu(power_seq - float(power_baseline)).pow(2).mean()
-    if exposure_seq is not None and speed_seq is not None:
-        exp_phys = diff_depth_exposure_to_time(
-            exposure_seq,
-            camera_semantics=camera_semantics,
-        )
-        result['loss_diff_depth_blur'] = (speed_seq * exp_phys).pow(2).mean()
-    if gain_seq is not None:
-        result['loss_diff_depth_noise'] = gain_seq.pow(2).mean()
-    if fill_rate_seq is not None:
-        fill_gap = F.relu(float(min_fill_rate) - fill_rate_seq)
-        result['loss_diff_depth_fill'] = fill_gap.pow(2).mean()
-    return result
-
-
-def compute_gray_camera_losses(cam_hist, cam_initial=None):
-    """Camera loss for the grayscale main method.
-
-    Deliberately contains only actuator smoothness.  Image-quality proxies are
-    diagnostics, not supervision, so the main camera policy is driven by the
-    downstream navigation objective.
-    """
-    device = _infer_loss_device(cam_hist, cam_initial)
-    result = {
-        'loss_cam_smooth': torch.zeros((), device=device),
-        'loss_diff_depth_power': torch.zeros((), device=device),
-        'loss_diff_depth_blur': torch.zeros((), device=device),
-        'loss_diff_depth_noise': torch.zeros((), device=device),
-        'loss_diff_depth_fill': torch.zeros((), device=device),
-    }
+def compute_camera_losses(cam_hist, cam_initial=None):
     if cam_hist is None:
-        return result
-    cam_for_smooth = cam_hist
+        device = cam_initial.device if isinstance(cam_initial, torch.Tensor) else torch.device("cpu")
+        return {"loss_cam_smooth": torch.zeros((), device=device)}
+    seq = cam_hist
     if cam_initial is not None:
-        init = cam_initial.to(device=cam_hist.device, dtype=cam_hist.dtype)
-        if init.ndim == cam_hist.ndim - 1:
+        init = cam_initial.to(device=seq.device, dtype=seq.dtype)
+        if init.ndim == seq.ndim - 1:
             init = init.unsqueeze(0)
-        cam_for_smooth = torch.cat([init.detach(), cam_hist], dim=0)
-    if cam_for_smooth.shape[0] > 1:
-        result['loss_cam_smooth'] = cam_for_smooth.diff(1, 0).pow(2).mean()
-    return result
+        seq = torch.cat([init.detach(), seq], dim=0)
+    smooth = (
+        seq.diff(1, 0).pow(2).mean()
+        if seq.shape[0] > 1
+        else torch.zeros((), device=seq.device, dtype=seq.dtype)
+    )
+    return {"loss_cam_smooth": smooth}
 
 
 def aggregate_loss(physics_losses, camera_losses, args):
     loss = (
-        args.coef_v * physics_losses['loss_v']
-        + args.coef_obj_avoidance * physics_losses['loss_avoid']
-        + args.coef_d_acc * physics_losses['loss_d_acc']
-        + args.coef_d_jerk * physics_losses['loss_d_jerk']
-        + args.coef_collide * physics_losses['loss_collide']
-        + args.coef_cam_smooth * camera_losses['loss_cam_smooth']
-        + args.coef_diff_depth_power * camera_losses['loss_diff_depth_power']
-        + args.coef_diff_depth_blur * camera_losses['loss_diff_depth_blur']
-        + args.coef_diff_depth_noise * camera_losses['loss_diff_depth_noise']
-        + args.coef_diff_depth_fill * camera_losses['loss_diff_depth_fill']
+        args.coef_v * physics_losses["loss_v"]
+        + args.coef_obj_avoidance * physics_losses["loss_avoid"]
+        + args.coef_d_acc * physics_losses["loss_d_acc"]
+        + args.coef_d_jerk * physics_losses["loss_d_jerk"]
+        + args.coef_collide * physics_losses["loss_collide"]
+        + args.coef_cam_smooth * camera_losses["loss_cam_smooth"]
     )
-    all_losses = {
-        'loss_v': physics_losses['loss_v'],
-        'loss_d_acc': physics_losses['loss_d_acc'],
-        'loss_d_jerk': physics_losses['loss_d_jerk'],
-        'loss_obj_avoidance': physics_losses['loss_avoid'],
-        'loss_collide': physics_losses['loss_collide'],
-        'loss_cam_smooth': camera_losses['loss_cam_smooth'],
-        'loss_diff_depth_power': camera_losses['loss_diff_depth_power'],
-        'loss_diff_depth_blur': camera_losses['loss_diff_depth_blur'],
-        'loss_diff_depth_noise': camera_losses['loss_diff_depth_noise'],
-        'loss_diff_depth_fill': camera_losses['loss_diff_depth_fill'],
+    terms = {
+        "loss_v": physics_losses["loss_v"],
+        "loss_d_acc": physics_losses["loss_d_acc"],
+        "loss_d_jerk": physics_losses["loss_d_jerk"],
+        "loss_obj_avoidance": physics_losses["loss_avoid"],
+        "loss_collide": physics_losses["loss_collide"],
+        "loss_cam_smooth": camera_losses["loss_cam_smooth"],
     }
-    return loss, all_losses
+    return loss, terms
