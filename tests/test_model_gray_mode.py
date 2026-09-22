@@ -3,12 +3,11 @@ import torch
 from model import Model
 
 
-def test_gray_model_uses_two_camera_dimensions():
+def test_model_uses_two_camera_dimensions():
     model = Model(
         dim_obs=10,
         dim_action=3,
         include_camera_state_in_obs=True,
-        sensor_type="gray",
         gray_nn_width=16,
         gray_nn_height=12,
     )
@@ -35,12 +34,8 @@ def test_gray_model_uses_two_camera_dimensions():
     assert torch.all((cam >= 0.0) & (cam <= 1.0))
 
 
-def test_gray_single_frame_is_duplicated_and_resized():
-    model = Model(
-        sensor_type="gray",
-        gray_nn_width=10,
-        gray_nn_height=8,
-    )
+def test_single_frame_is_duplicated_and_resized():
+    model = Model(gray_nn_width=10, gray_nn_height=8)
     frame = torch.rand(2, 20, 30)
     x = model.preprocess_gray_input(frame)
     assert x.shape == (2, 2, 8, 10)
@@ -49,8 +44,19 @@ def test_gray_single_frame_is_duplicated_and_resized():
     assert float(x.max()) <= 1.0
 
 
-def test_legacy_depth_mode_keeps_three_camera_dimensions():
-    model = Model(sensor_type="diff_depth")
-    assert model.camera_action_dim == 3
-    assert model.cam_state_proj.in_features == 3
-    assert model.fc_cam.out_features == 3
+def test_freeze_modes_select_expected_parameter_groups():
+    model = Model()
+    frozen_camera = model.freeze_camera_for_flight_only()
+    assert frozen_camera
+    assert all(
+        (not p.requires_grad) if model._is_camera_parameter(name) else p.requires_grad
+        for name, p in model.named_parameters()
+    )
+
+    model = Model()
+    frozen_flight = model.freeze_flight_for_camera_only()
+    assert frozen_flight
+    assert all(
+        p.requires_grad if model._is_camera_parameter(name) else (not p.requires_grad)
+        for name, p in model.named_parameters()
+    )
