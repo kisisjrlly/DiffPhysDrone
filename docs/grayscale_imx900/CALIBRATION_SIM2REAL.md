@@ -92,10 +92,13 @@ hyperparameters.
 
 ~~~json
 "exposure": {
+  "mapping": "linear | lut",
   "min_us": ...,
   "max_us": ...,
   "reference_us": ...,
   "step_us": ...,
+  "lut_x": ...,
+  "lut_us": ...,
   "signal_scale": ...
 }
 ~~~
@@ -106,7 +109,12 @@ Fit/record:
 - real command step;
 - a convenient reference exposure;
 - signal scale connecting normalized simulator irradiance to observed camera
-  response.
+  response;
+- normalized policy-action -> effective exposure mapping.
+
+Use `linear` only when the deployed driver/camera response is adequately
+represented by a linear command-to-time mapping. Otherwise use the measured
+piecewise-differentiable LUT.
 
 ### Gain
 
@@ -132,8 +140,11 @@ represented by a simple law.
 "noise": {
   "shot_alpha": ...,
   "shot_beta": ...,
+  "read_mapping": "power | lut",
   "read_std_base": ...,
-  "read_gain_exponent": ...
+  "read_gain_exponent": ...,
+  "read_lut_gain": ...,
+  "read_lut_std": ...
 }
 ~~~
 
@@ -160,9 +171,21 @@ with a measured curve/LUT rather than adding scene-dependent heuristics.
 "black_level": ...,
 "saturation_level": ...,
 "quantization_bits": ...,
+"response": {
+  "mapping": "linear | lut",
+  "lut_x": ...,
+  "lut_y": ...
+},
 "motion_blur": {"scale": ...},
-"actuator": {"command_delay_frames": ...}
+"actuator": {
+  "command_delay_frames": ...,
+  "command_delay_jitter_frames": ...
+}
 ~~~
+
+Keep `response.mapping=linear` for RAW/linear capture. Use the response LUT
+only if a fixed nonlinear ISP/capture response cannot be disabled and is part
+of the real deployed pipeline.
 
 ---
 
@@ -397,12 +420,14 @@ Measure:
 - frame-count delay;
 - whether metadata reports effective settings.
 
-Store the nominal frame delay as:
+Store:
 
-`actuator.command_delay_frames`.
+- median/nominal delay as `actuator.command_delay_frames`;
+- measured frame-domain timing spread as
+  `actuator.command_delay_jitter_frames`.
 
-The current profile stores this value even though the full measured actuator
-queue should only be enabled once hardware behavior is known.
+The rollout samples one effective integer delay per episode when jitter is
+non-zero. This timing model is separate from policy-command smoothing.
 
 ---
 
