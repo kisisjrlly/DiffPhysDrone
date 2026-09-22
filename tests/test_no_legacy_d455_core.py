@@ -46,3 +46,10 @@ def test_grayscale_branch_exposes_geometry_not_depth_camera_api():
     assert "render_depth_kernel" not in kernel
     assert "trace_ray_device(" not in kernel
     assert "trace_ray_with_normal_device(" in kernel
+
+
+def test_superseded_generic_camera_files_are_absent():
+    assert not Path("sensors/differentiable_gray_camera.py").exists()
+    assert not Path("sensors/gray_camera_semantics.py").exists()
+    assert Path("sensors/imx900_camera.py").exists()
+    assert Path("sensors/imx900_calibration.py").exists()
