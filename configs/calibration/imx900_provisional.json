@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "profile_name": "e-con e-CAM37M_CUONX / Sony IMX900 provisional",
+  "calibrated": false,
+  "source": "Unmeasured placeholder values for software development only. Replace from real camera characterization before sim-to-real claims.",
+  "exposure": {
+    "min_us": 100.0,
+    "max_us": 8000.0,
+    "reference_us": 1000.0,
+    "step_us": 0.0,
+    "signal_scale": 1.0
+  },
+  "gain": {
+    "mapping": "log",
+    "min_factor": 1.0,
+    "max_factor": 8.0,
+    "step_factor": 0.0,
+    "lut_x": null,
+    "lut_factor": null
+  },
+  "noise": {
+    "shot_alpha": 0.015,
+    "shot_beta": 0.0,
+    "read_std_base": 0.005,
+    "read_gain_exponent": 1.0
+  },
+  "black_level": 0.0,
+  "saturation_level": 1.0,
+  "quantization_bits": 0,
+  "motion_blur": {
+    "scale": 0.08
+  },
+  "actuator": {
+    "command_delay_frames": 0
+  }
+}
