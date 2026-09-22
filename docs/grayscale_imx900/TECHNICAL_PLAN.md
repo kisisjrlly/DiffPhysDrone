@@ -1,448 +1,667 @@
-# Technical Plan — Differentiable Grayscale Active Sensing on IMX900
+# Technical Plan — IMX900-Calibrated Differentiable Camera Control for UAV Navigation
 
-## 0. Objective
+## 0. Research objective
 
-Replace the D455-inspired active-depth line with a simpler, physically interpretable, deployable problem:
+This branch studies whether a closed-loop navigation objective can directly use
+camera-model gradients to choose useful exposure and gain online.
 
-> Learn a camera-control policy that adjusts exposure and gain so that a monocular grayscale navigation policy performs better under changing illumination and motion, using gradients through a differentiable image-formation model.
+The target system is:
 
-The scientific target is not “make prettier images.” It is:
+[
+u_t = pi_f(I_t, s_t),
+qquad
+c_{t+1} = pi_c(I_t, s_t, c_t),
+qquad
+c_t = [E_t, G_t].
+]
 
-\[
-\min_{\theta_f,\theta_c}\;\mathbb{E}\left[L_{nav}\right]
-\]
+The image is produced by
 
-with
+[
+I_t =
+mathcal C_{IMX900}
+left(
+I_t^{ideal},
+E_t,
+G_t,
+m_t;
+Theta_{calib}
+ight).
+]
 
-\[
-u_t = \pi_f(I_t,s_t;\theta_f),\qquad
-c_{t+1}=\pi_c(I_t,s_t,c_t;\theta_c),\qquad
-c_t=[T_t,G_t],
-\]
+The main gradient of interest is
 
-and
-
-\[
-I_t=\mathcal{C}_{\phi}(I_t^{ideal},T_t,G_t,\xi_t,m_t),
-\]
-
-where \(\mathcal C_\phi\) is differentiable with respect to camera parameters.
-
-The key gradient is:
-
-\[
-\frac{\partial L_{nav}}{\partial \theta_c}
+[
+rac{partial L_{nav}}{partial 	heta_c}
 =
-\frac{\partial L_{nav}}{\partial I_t}
-\frac{\partial I_t}{\partial (T_t,G_t)}
-\frac{\partial (T_t,G_t)}{\partial \theta_c}.
-\]
+rac{partial L_{nav}}{partial I_t}
+rac{partial I_t}{partial (E_t,G_t)}
+rac{partial (E_t,G_t)}{partial 	heta_c}.
+]
 
-## 1. What remains from DiffPhysDrone
+Geometry does not need to be differentiable for the primary claim.
 
-Keep:
+---
 
-- CUDA rigid-body/quadrotor dynamics.
-- Collision checking and obstacle geometry.
-- State generation and target-relative observations.
-- BPTT rollout/training infrastructure where compatible.
-- Current recurrent flight-policy structure as a starting point.
-- Current camera-policy branch concept.
-- Rerun/W&B evaluation infrastructure.
-- Real-flight PX4/MAVROS/UART architecture.
+## 1. Design decision after open-source review
 
-Replace:
+The runtime implementation remains project-owned and lightweight.
 
-- D455 `power/exposure/gain` semantics.
-- `render_diff_depth`.
-- depth health/fill/hole losses as camera objectives.
-- scene-specific `glare/specular/dark` depth heuristics.
-- depth preprocessing `near/far` channels.
-- D455 teacher/relabel pipeline as a required mechanism.
+### End2endImaging
 
-## 2. Rendering architecture
+Use as the reference for:
 
-### 2.1 Ideal grayscale renderer
+- sensor-specific configuration;
+- shot/read noise decomposition;
+- black level;
+- bit depth;
+- sensor/ISP modularization.
 
-The existing CUDA ray tracer already computes ray intersections and contains a helper that can return hit normals. Reuse that geometry.
+Do not import its `MonoSensor` unchanged because it does not provide the
+required online exposure actuator, its inspected noise path fixes analog gain
+to 1.0, and its hard round/clip behavior is not sufficient for our camera-
+action gradients.
 
-Target output:
+### JOCA
 
-\[
-I^{ideal}\in[0,1]^{B\times H\times W}.
-\]
+Use as the reference for:
 
-Version 1 should use deliberately simple appearance:
+- normalized exposure/gain camera actions;
+- task-driven adaptive camera control;
+- camera-specific noise calibration;
+- motion-blur/exposure interaction;
+- camera-state feedback to the camera controller;
+- derivative-free correction as an optional comparison.
 
-\[
-I^{ideal}(x)=\rho(x)\,[L_a + L_d\max(0,n(x)^Tl)]
-\]
+Do not use JOCA-style search correction in the main method because that would
+confound the full-vs-detached sensor-gradient experiment.
 
-with:
+### DeepLens
 
-- ambient term \(L_a\),
-- one directional or area-light approximation \(L_d\),
-- hit normal \(n\),
-- object albedo/texture \(\rho\).
+Do not put full differentiable optics in the v1 runtime loop.
 
-Add texture because monocular navigation through uniformly colored geometry is unnecessarily ambiguous. Prefer procedural textures initially:
+Use DeepLens later only if real-camera validation shows that lens PSF,
+distortion, vignetting, or defocus materially dominate the sim-to-real gap.
 
-- checkerboard,
-- stripe/noise texture,
-- randomized low-frequency texture,
-- material albedo randomized per obstacle.
+Detailed evidence:
+[OPEN_SOURCE_CAMERA_MODEL_REVIEW.md](OPEN_SOURCE_CAMERA_MODEL_REVIEW.md).
 
-Do not start with physically based path tracing. The research variable is camera control, not photorealism.
+---
 
-### 2.2 Differentiable camera model
+## 2. Software architecture
 
-Create a pure-PyTorch module, provisionally:
+### 2.1 Geometry stage
 
-`sensors/differentiable_gray_camera.py`
+CUDA returns:
 
-API concept:
+- ray-hit distance;
+- exact surface normal.
 
-~~~python
-image, aux = camera(
-    irradiance=ideal_gray,
-    exposure01=exposure01,
-    gain01=gain01,
-    motion=motion_state,
-    noise_sample=noise_sample,
-)
+These values are internal appearance-rendering quantities.
+
+They must never become policy observations.
+
+### 2.2 Ideal grayscale appearance
+
+`render/ideal_gray.py` computes a simple appearance model:
+
+[
+I^{ideal}(x)
+=
+ho(x)
+left[
+L_a + L_dmax(0,n(x)^Tl)
+ight].
+]
+
+Version 1 intentionally uses:
+
+- Lambertian diffuse lighting;
+- ambient light;
+- procedural texture;
+- nominal/dark/bright illumination;
+- bright-to-dark and dark-to-bright transitions.
+
+The research variable is active camera control, not photorealistic rendering.
+
+### 2.3 IMX900 calibration profile
+
+All physical camera coefficients belong in one file, currently:
+
+`configs/calibration/imx900_provisional.json`.
+
+The profile is loaded by:
+
+`sensors/imx900_calibration.py`.
+
+The provisional profile is explicitly:
+
+~~~json
+"calibrated": false
 ~~~
 
-Physical mappings must be centralized:
+and is only a development placeholder.
 
-~~~text
-exposure01 -> exposure_us
-gain01     -> physical gain / dB / sensor control units
-~~~
+A future fitted profile must contain the measured e-con/IMX900 camera behavior.
 
-Never scatter these mappings across trainer/environment/model.
+### 2.4 IMX900 differentiable surrogate
 
-#### Exposure integration
+The runtime sensor model is:
 
-A minimal linear response:
+`sensors/imx900_camera.py::IMX900DifferentiableCamera`.
 
-\[
-q = k_e\,T\,E_{ideal}
-\]
+It is not claimed to be a firmware-exact or transistor-level digital twin.
 
-where \(T\) is physical exposure time.
+Its role is to reproduce the task-relevant response of the real camera while
+remaining useful for gradients with respect to exposure/gain.
 
-#### Shot noise
+---
 
-Use a differentiable reparameterized approximation:
+## 3. Camera model
 
-\[
-q_s = q + \sqrt{\max(q,\epsilon)}\,\sigma_s\,\epsilon_s,\qquad
-\epsilon_s\sim\mathcal{N}(0,1).
-\]
+### 3.1 Exposure mapping
 
-For strict deterministic gradient tests, supply fixed \(\epsilon_s\).
+The camera policy produces normalized
 
-#### Read noise
+[
+ein[0,1].
+]
 
-\[
-q_r=q_s+\sigma_r(G)\epsilon_r.
-\]
+The calibration profile maps it to exposure time:
 
-The gain-dependent read-noise curve is calibrated from real data rather than assumed.
+[
+T=T(e).
+]
 
-#### Gain
+The development profile currently uses a linear range, but the real min/max and
+step must come from the driver/camera.
 
-\[
-q_g=g(G)\,q_r.
-\]
+Exposure command quantization may be modeled with a straight-through estimator
+once the real step is known.
 
-Use a monotonic calibrated mapping. If the driver reports gain in dB, preserve an explicit conversion layer rather than treating the normalized command as linear gain.
+### 3.2 Gain mapping
 
-#### Saturation
+The policy produces
 
-Real evaluation can use hard clipping. Training needs a gradient-friendly approximation near saturation.
+[
+gin[0,1].
+]
 
-Options, in preferred order:
+The calibration layer supports:
 
-1. straight-through estimator around hard clipping;
-2. calibrated smooth shoulder;
-3. soft clipping only during early training, hard/ST later.
+- linear mapping;
+- logarithmic mapping;
+- piecewise measured LUT.
 
-Do not allow a soft saturation function to make heavily overexposed pixels unrealistically informative.
+The LUT option is preferred if real driver sweeps show that camera control units
+do not map cleanly to a simple analytical gain curve.
 
-#### Quantization
+### 3.3 Exposure integration / signal response
 
-Train with either:
+The current surrogate computes:
 
-- no explicit quantization in v1,
-- uniform noise approximation,
-- or straight-through rounding.
+[
+q
+=
+s_E I_{ideal}
+rac{T}{T_{ref}},
+]
 
-Evaluate with the true selected output bit-depth when available.
+where (s_E) is a fitted response scale that connects normalized renderer
+irradiance to the sensor-model signal scale.
 
-### 2.3 Motion blur
+Then:
 
-Motion blur is essential. Without it, the trivial optimum can become “maximum exposure.”
+[
+S=Gq.
+]
 
-Version 1 uses a differentiable approximate blur strength driven by a detached
-image-motion proxy (m \approx \|v\| / Z_{char}), where (Z_{char}) is a
-robust characteristic scene depth computed from internal ray-hit geometry.
+### 3.4 Shot noise
 
-Then use:
+Following the modeling structure used in End2endImaging, the shot-noise term is
+parameterized by alpha/beta:
 
-\[
-b=\mathrm{clip}(k_b T\,m,0,1)
-\]
+[
+sigma_{shot}
+=
+G
+left(
+alphasqrt{q+epsilon}
++
+eta
+ight).
+]
 
-where \(m\) is derived from translational/angular motion. Then
+The coefficients must be fitted from IMX900 data.
 
-\[
-I_{blur}=(1-b)I+b\,K(I)
-\]
+### 3.5 Read noise
 
-for a small blur operator \(K\).
+The compact v1 read-noise model is:
 
-Version 2 should integrate multiple pose samples across the exposure interval. That is more physically meaningful, but do not block v1 on it.
+[
+sigma_{read}
+=
+sigma_{r0}G^{p_r}.
+]
 
-### 2.4 Illumination domain randomization
+This is deliberately low-parameter.
 
-The active-camera policy needs scenarios where a fixed exposure/gain is suboptimal.
+If measured data require a more complex gain-dependent curve, replace it with a
+calibrated LUT rather than adding arbitrary scene-specific terms.
 
-At minimum randomize:
+### 3.6 Reparameterized stochastic sensor
 
-- global illumination intensity,
-- gate/background contrast,
-- bright-to-dark transition,
-- dark-to-bright transition,
-- directional lighting,
-- optional local bright source,
-- motion/speed.
+Training uses:
 
-Avoid reviving the old hand-coded three-class D455 scene semantics as the primary design. Lighting variation should arise from rendered appearance parameters.
+[
+S_n
+=
+S
++
+sigma_{shot}epsilon_s
++
+sigma_{read}epsilon_r,
+]
 
-## 3. Policy architecture
+with fixed noise tensors available for deterministic gradient tests.
 
-### 3.1 Visual input
+This preserves a usable gradient path while retaining stochastic sensor
+variation.
 
-Preserve the existing 2-channel CNN stem initially:
+### 3.7 Black level and full scale
 
-\[
+Before normalized output:
+
+[
+x=S_n+B.
+]
+
+Then:
+
+[
+x_n=rac{x}{S_{max}},
+]
+
+where (B) and (S_{max}) come from calibration.
+
+### 3.8 Saturation
+
+Forward realism and training gradients have different requirements.
+
+Supported modes:
+
+- `hard`: evaluation/debug;
+- `ste`: hard forward with identity-style backward;
+- `soft`: smooth shoulder near saturation.
+
+The main training configuration currently prefers a smooth saturation shoulder
+so that strongly exposed images do not pretend to retain fully linear
+gradients.
+
+### 3.9 Quantization
+
+If the measured capture path is RAW10:
+
+[
+N=2^{10}-1.
+]
+
+For RAW12:
+
+[
+N=2^{12}-1.
+]
+
+Forward:
+
+[
+I_q=rac{operatorname{round}(NI)}{N}.
+]
+
+Training backward uses STE.
+
+Bit depth is stored in the calibration profile.
+
+### 3.10 Motion blur
+
+Long exposure must have a cost, otherwise maximum exposure becomes a trivial
+solution.
+
+The current lightweight proxy uses:
+
+[
+m
+approx
+rac{|v|}{Z_{char}},
+]
+
+where (Z_{char}) is a detached robust internal scene-distance statistic.
+
+Blur strength:
+
+[
+b
+=
+1-exp
+left(
+-k_b
+rac{T}{T_{ref}}
+m
+ight).
+]
+
+The current spatial blur kernel is a surrogate. The coefficient (k_b) must
+be measured from the real system.
+
+Future higher-fidelity option:
+
+- temporal multi-pose integration across the exposure interval.
+
+Do not adopt it until v1 demonstrates the scientific effect.
+
+---
+
+## 4. What is physical vs what is a surrogate
+
+### Real-camera calibrated fields
+
+The measured IMX900 profile should provide:
+
+- exposure min/max/step;
+- exposure response scale;
+- gain mapping/LUT;
+- shot alpha/beta;
+- read noise vs gain;
+- black level;
+- full-scale/saturation level;
+- RAW bit depth;
+- motion-blur coefficient;
+- command delay in frames/time.
+
+### Training/modeling choices
+
+Do not present these as IMX900 specifications:
+
+- blur kernel size;
+- smooth-saturation beta;
+- motion-proxy depth floor;
+- training image resolution;
+- environment lighting distribution;
+- camera smoothness loss;
+- policy architecture.
+
+---
+
+## 5. Policy architecture
+
+### 5.1 Visual input
+
+Use:
+
+[
 X_t=[I_t,I_{t-1}].
-\]
+]
 
-This is deliberate:
+Reasons:
 
-- minimal architecture churn;
-- temporal luminance change is directly observable;
-- looming/motion cues are available;
-- blur is easier to infer than from a single frame.
+- preserves the existing two-channel visual stem;
+- exposes temporal brightness changes;
+- supplies looming/motion cues;
+- helps infer blur changes.
 
-Normalize calibrated sensor output consistently, preferably to \([-1,1]\) after black-level handling.
+### 5.2 Flight branch
 
-### 3.2 Flight policy
+The flight branch receives visual features and navigation state.
 
-Keep the current recurrent state-fusion design first. Do not simultaneously redesign the flight policy and sensor model unless grayscale flight fails for a clearly architectural reason.
+For the main causal experiment it must **not directly receive**
+exposure/gain.
 
-### 3.3 Camera policy
+Otherwise camera actions could influence the flight network without passing
+through image formation.
 
-Change camera output/state from 3-D to 2-D:
+### 5.3 Camera branch
 
-~~~text
-old: power, exposure, gain
-new: exposure, gain
-~~~
+The camera branch may receive:
 
-The camera branch should see:
+- current/previous image features;
+- current exposure/gain;
+- local velocity/attitude features.
 
-- current/previous image features,
-- current exposure/gain,
-- local velocity/attitude cues.
+Conditioning on previous camera state is consistent with the adaptive camera-
+control design observed in JOCA.
 
-It should not need privileged illumination labels.
+The camera output is exactly:
 
-For the main causal experiment, the **flight branch must not directly observe
-exposure/gain**. Otherwise navigation loss can bypass image formation through a
-camera-state shortcut. The camera branch may observe its own actuator state,
-while camera influence on flight must pass through pixels.
+[
+[E,G].
+]
 
-### 3.4 Camera update dynamics
+No projector power exists in this branch.
 
-The real sensor cannot be treated as an infinitely fast continuous actuator.
+---
 
-Model:
+## 6. Actuator model
 
-- parameter quantization,
-- command latency,
-- minimum hold duration if measured,
-- optional first-order lag,
-- slew-rate limits.
+Sensor physics and camera actuation are distinct.
 
-Do not guess these values permanently. First implement configurable placeholders, then replace with measurements from the real IMX900 stack.
+The real system will have:
 
-## 4. Training plan
+- finite command range;
+- command step;
+- command-to-effective-frame delay;
+- possible driver buffering;
+- update-rate limits.
 
-### Stage 0 — gradient unit test
+The calibration schema already stores command-delay metadata.
 
-Before navigation:
+Current EMA camera updates are a training/control smoothing mechanism, not a
+measured IMX900 actuator law.
 
-- fixed synthetic irradiance image;
-- vary exposure/gain;
-- compare PyTorch autograd with finite differences;
-- check gradient signs in dark, nominal, and near-saturation regions.
+After hardware characterization:
 
-Pass criterion: gradients are finite, stable, and directionally sensible.
+1. measure command latency;
+2. distinguish requested from effective settings;
+3. implement delay/quantization explicitly;
+4. keep any remaining EMA only if it is an intentional policy regularizer.
 
-### Stage 1 — grayscale flight only
+---
 
-Camera fixed at a nominal setting. Train only the flight policy.
+## 7. Training stages
 
-Goal: prove that monocular grayscale navigation itself works.
+### Stage A — camera gradient unit tests
 
-Do not train camera control until this stage is reliable.
+Verify:
 
-### Stage 2 — camera policy with frozen flight policy
+- exposure autograd vs finite difference;
+- gain autograd vs finite difference;
+- measured LUT mapping remains piecewise differentiable;
+- noise reproducibility with fixed random tensors;
+- saturation gradient behavior;
+- quantization STE.
 
-Freeze the trained flight policy.
+### Stage B — fixed grayscale navigation
 
-Train the camera policy through the differentiable camera model.
+Use nominal fixed exposure/gain.
 
-This is the cleanest causal experiment because the flight policy cannot co-adapt to hide a broken camera-control mechanism.
+Compare:
 
-### Stage 3 — detached control
+- real grayscale input;
+- zero-image/blind input.
 
-Use the exact same camera-policy architecture and camera model but break the parameter-to-image gradient path.
+Do not train active camera control until grayscale navigation beats the blind
+control.
 
-This is the key ablation.
+### Stage C — stress environment
 
-Preferred implementation:
+Introduce:
 
-~~~python
-exposure_for_sensor = exposure if use_sensor_grad else exposure.detach()
-gain_for_sensor = gain if use_sensor_grad else gain.detach()
-~~~
+- dark;
+- bright;
+- dark-to-bright;
+- bright-to-dark;
+- fast close gate approach.
 
-Do not detach the whole image tensor if that changes unrelated training behavior.
+Verify that no single fixed camera setting dominates all conditions.
 
-### Stage 4 — joint fine-tuning
-
-Only after Stage 2 clearly works:
-
-- unfreeze selected flight layers,
-- use a lower LR,
-- retain the camera smoothness/actuator constraints.
-
-Joint fine-tuning is an optimization enhancement, not evidence for the core claim.
-
-## 5. Losses
-
-Keep the camera objective as task-driven as possible.
-
-Primary:
-
-\[
-L=L_{nav}+\lambda_{\Delta c}L_{\Delta c}+\lambda_{bounds}L_{bounds}.
-\]
-
-Where:
-
-- \(L_{nav}\): goal/collision/trajectory/smooth-flight losses already justified by the navigation task;
-- \(L_{\Delta c}\): camera switching/slew regularizer;
-- \(L_{bounds}\): only if needed for safe numerical behavior.
-
-Avoid a large hand-designed image-quality loss in the main method. It would blur the causal claim.
-
-Image-quality metrics may be logged for analysis:
-
-- saturation fraction,
-- underexposure fraction,
-- gradient magnitude,
-- image entropy,
-- temporal blur proxy,
-- SNR proxy.
-
-They should not silently become the main supervision.
-
-## 6. Baselines
+### Stage D — non-task-gradient baselines
 
 Required:
 
-1. Fixed nominal exposure/gain.
-2. Random-static exposure/gain.
-3. Classical auto exposure.
-4. Learned camera policy with detached sensor gradient.
-5. Differentiable camera policy.
-6. Oracle local grid/search for analysis only.
+- fixed nominal;
+- random-static;
+- mean AE;
+- gradient AE.
 
-Recommended classical AE baselines:
+### Stage E — primary causal camera experiment
 
-- mean-intensity target;
-- gradient-based exposure selection;
-- optionally percentile-based brightness control.
+Start from the same successful frozen flight checkpoint.
 
-Use existing active-exposure literature implementations where licensing/integration permits, or faithfully reproduce the published rule with explicit attribution.
+Compare:
 
-## 7. Evaluation metrics
+1. learned-detached;
+2. learned-differentiable.
+
+Everything except the sensor gradient must match.
+
+This is the core experiment.
+
+### Stage F — optional additional baseline
+
+Only after Stage E is understood, add a JOCA-style derivative-free/local-search
+camera correction as a separate method.
+
+Do not use it as hidden supervision in the main result.
+
+### Stage G — joint fine-tuning
+
+Optional.
+
+Report the simpler frozen-flight experiment even if joint fine-tuning improves
+absolute performance.
+
+---
+
+## 8. Losses
+
+Primary objective:
+
+[
+L
+=
+L_{nav}
++
+lambda_{Delta c}L_{Delta c}.
+]
+
+Do not make handcrafted image-quality loss the main camera supervision.
+
+Image metrics such as:
+
+- saturation fraction;
+- dark fraction;
+- entropy;
+- gradient magnitude;
+- blur proxy;
+- SNR proxy;
+
+are diagnostics unless explicitly evaluated as an ablation.
+
+---
+
+## 9. Evaluation
 
 Navigation:
 
 - success rate;
 - collision rate;
 - time to goal;
-- minimum obstacle clearance;
+- minimum clearance;
 - trajectory efficiency;
-- control smoothness.
+- flight smoothness.
 
 Camera:
 
-- exposure/gain trajectories;
-- update frequency;
-- saturation ratio;
-- dark-pixel ratio;
-- image-gradient statistics;
-- estimated/real blur width;
-- camera-command latency;
-- frame age at policy inference.
+- exposure trajectory;
+- gain trajectory;
+- saturation/dark fractions;
+- image-motion proxy;
+- blur strength;
+- noise estimate;
+- command/effective latency.
 
-Causal/diagnostic:
+Causal:
 
-- difference between differentiable and detached under identical seeds;
-- gradient norm from navigation loss to exposure/gain;
-- correlation between speed and selected exposure;
-- response around illumination transitions;
-- success conditioned on illumination and speed.
+- full vs detached under matched seeds;
+- navigation-loss gradient norm reaching exposure/gain;
+- exposure vs speed/scene-depth relation;
+- reaction around illumination transitions.
 
-## 8. Real deployment
+Sim-to-real:
 
-Runtime frequency targets are not fixed until measured. The system should support:
+- real vs simulated intensity response;
+- noise variance vs mean;
+- real vs simulated saturation;
+- real vs simulated blur;
+- real vs simulated command latency.
 
-- camera streaming asynchronously;
-- timestamped frames;
-- camera-parameter commands with timestamps;
-- policy inference on latest valid frame;
-- PX4 control independently at the required control rate;
-- logging of requested and, when available, effective exposure/gain.
+---
 
-Do not assume every command applies on the next frame. Measure command-to-effective-frame latency.
+## 10. DeepLens decision gate
 
-## 9. Failure criteria
+Do not add DeepLens merely for completeness.
 
-Stop and diagnose before scaling complexity if any of the following occurs:
+Consider it only if held-out real IMX900 imagery shows a meaningful residual
+error due to:
 
-- fixed-camera grayscale navigation does not work;
-- autograd and finite-difference camera gradients disagree;
-- different exposure/gain commands do not measurably alter real images;
-- camera command latency is too large/variable for the planned policy rate;
-- differentiable and detached methods are indistinguishable even in deliberately constructed illumination transitions;
-- the learned policy always saturates exposure/gain at one bound.
+- PSF;
+- distortion;
+- vignetting;
+- defocus.
 
-## 10. Out-of-scope for v1
+If required:
 
-- RGB white balance/color pipeline;
-- full physically based ray tracing;
-- differentiating geometry/pose through the renderer;
-- modeling all IMX900 ISP internals;
-- HDR multi-exposure fusion;
-- event cameras;
-- active illumination;
-- D455 depth as a policy input;
-- simultaneously learning optics.
+1. characterize the lens;
+2. use DeepLens offline;
+3. fit a compact differentiable PSF/distortion/vignetting surrogate;
+4. use that surrogate in the training loop.
+
+---
+
+## 11. Failure criteria
+
+Stop and diagnose before increasing model complexity if:
+
+- grayscale navigation does not beat the blind baseline;
+- autograd disagrees with finite differences;
+- exposure/gain have weak real image effect;
+- one fixed setting dominates every stress condition;
+- learned camera actions saturate at bounds;
+- full and detached are indistinguishable in deliberately constructed
+  illumination/motion conflicts;
+- calibrated simulator curves disagree strongly on held-out real data.
+
+---
+
+## 12. Final intended real system
+
+~~~text
+e-con e-CAM37M_CUONX / IMX900
+       |
+       | MIPI CSI-2
+       v
+Jetson Orin NX
+       |
+       +--> timestamped monochrome frame
+       |
+       +--> camera policy --> exposure/gain command
+       |
+       +--> flight policy --> MAVROS / PX4 --> NxtPX4 v2
+~~~
+
+The simulation and real system should share the same conceptual camera action:
+
+[
+[E,G].
+]
+
+Only the simulator uses the differentiable surrogate.
