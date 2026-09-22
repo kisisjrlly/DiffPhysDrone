@@ -70,3 +70,36 @@ def test_camera_visual_warm_start_copies_trained_flight_stem():
     model.initialize_camera_visual_from_flight()
     for flight, camera in zip(model.stem.parameters(), model.cam_stem.parameters()):
         torch.testing.assert_close(flight, camera)
+
+
+def test_flight_policy_has_no_direct_camera_state_shortcut_by_default():
+    torch.manual_seed(0)
+    model = Model(
+        dim_obs=10,
+        dim_action=3,
+        include_camera_state_in_obs=False,
+        gray_nn_width=16,
+        gray_nn_height=12,
+    )
+    batch = 3
+    state = torch.randn(batch, 10)
+    gray = torch.rand(batch, 2, 24, 32)
+    motion = torch.zeros(batch, 6)
+
+    act_a, cam_a, _, _ = model(
+        state,
+        gray_obs=gray,
+        camera_state=torch.zeros(batch, 2),
+        camera_motion_state=motion,
+    )
+    act_b, cam_b, _, _ = model(
+        state,
+        gray_obs=gray,
+        camera_state=torch.ones(batch, 2),
+        camera_motion_state=motion,
+    )
+
+    # Flight can only feel camera actions through future images. The dedicated
+    # camera branch is still allowed to condition on its current actuator state.
+    torch.testing.assert_close(act_a, act_b)
+    assert not torch.allclose(cam_a, cam_b)
