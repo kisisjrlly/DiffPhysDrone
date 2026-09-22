@@ -49,7 +49,7 @@ class Env:
         ellipsoid_c=0.0,
         camera_control_mode="learned",
         sensor_grad_mode="full",
-        camera_ema_alpha=0.7,
+        camera_smoothing_alpha=0.7,
         fixed_camera_exposure=0.35,
         fixed_camera_gain=0.15,
         fixed_random_exposure_min=0.10,
@@ -98,7 +98,7 @@ class Env:
 
         self.camera_control_mode = str(camera_control_mode).lower()
         self.sensor_grad_mode = str(sensor_grad_mode).lower()
-        self.camera_ema_alpha = float(camera_ema_alpha)
+        self.camera_smoothing_alpha = float(camera_smoothing_alpha)
         self.fixed_camera_exposure = float(fixed_camera_exposure)
         self.fixed_camera_gain = float(fixed_camera_gain)
         self.fixed_random_exposure_range = (
