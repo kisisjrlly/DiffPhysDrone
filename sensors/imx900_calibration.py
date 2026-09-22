@@ -143,6 +143,10 @@ class IMX900Calibration:
                 x_max=1.0,
                 positive_y=True,
             )
+            if abs(float(self.exposure_lut_us[0]) - self.exposure_us_min) > 1e-6:
+                raise ValueError("exposure LUT first value must equal exposure_us_min")
+            if abs(float(self.exposure_lut_us[-1]) - self.exposure_us_max) > 1e-6:
+                raise ValueError("exposure LUT last value must equal exposure_us_max")
 
         if self.gain_factor_min <= 0 or self.gain_factor_max < self.gain_factor_min:
             raise ValueError("invalid gain factor range")
@@ -173,6 +177,10 @@ class IMX900Calibration:
                 name="read-noise",
                 positive_y=True,
             )
+            if float(self.read_noise_lut_gain[0]) > self.gain_factor_min:
+                raise ValueError("read-noise LUT must cover gain_factor_min")
+            if float(self.read_noise_lut_gain[-1]) < self.gain_factor_max:
+                raise ValueError("read-noise LUT must cover gain_factor_max")
 
         if self.saturation_level <= 0:
             raise ValueError("saturation_level must be > 0")
@@ -190,6 +198,8 @@ class IMX900Calibration:
             )
             if any(b < a for a, b in zip(self.response_lut_y, self.response_lut_y[1:])):
                 raise ValueError("response LUT must be monotonic non-decreasing")
+            if any(float(v) < 0.0 or float(v) > 1.0 for v in self.response_lut_y):
+                raise ValueError("response LUT y values must remain in [0,1]")
 
         if self.blur_scale < 0:
             raise ValueError("blur_scale must be >= 0")
