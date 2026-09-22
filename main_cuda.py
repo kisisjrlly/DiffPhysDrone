@@ -2,6 +2,7 @@
 
 import faulthandler
 import os
+import shutil
 import time
 
 import torch
@@ -13,6 +14,7 @@ import wandb
 from config import parse_args, print_runtime_mode
 from model import Model
 from rerun_vis import RerunVis
+from sensors.imx900_calibration import IMX900Calibration
 from train_utils import build_env, estimate_optimizer_steps
 from trainer import train
 
@@ -62,6 +64,13 @@ def main():
     checkpoint_dir = os.path.join("checkpoint", time.strftime("%Y-%m-%d-%H-%M-%S"))
     os.makedirs(checkpoint_dir, exist_ok=True)
 
+    calibration = IMX900Calibration.from_json(args.imx900_calibration)
+    calibration_snapshot = os.path.join(
+        checkpoint_dir,
+        "imx900_calibration.json",
+    )
+    shutil.copy2(args.imx900_calibration, calibration_snapshot)
+
     wandb.init(
         project="diff-simulation",
         name=run_name,
@@ -73,12 +82,16 @@ def main():
     wandb.save("src/*.cu")
     wandb.save("src/*.cpp")
     wandb.save("configs/*.args")
+    wandb.save(args.imx900_calibration)
     wandb.save("*.sh")
 
     print("\n" + "=" * 30 + " Configuration " + "=" * 30)
     for key, value in vars(args).items():
         print(f"{key:<30}: {value}")
     print(f"{'checkpoint_dir':<30}: {checkpoint_dir}")
+    print(f"{'camera_profile':<30}: {calibration.profile_name}")
+    print(f"{'camera_profile_calibrated':<30}: {calibration.calibrated}")
+    print(f"{'camera_profile_snapshot':<30}: {calibration_snapshot}")
     print("=" * 75 + "\n")
     print_runtime_mode(args)
 
