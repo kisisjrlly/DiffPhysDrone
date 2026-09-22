@@ -1,8 +1,9 @@
-"""Ideal monochrome scene irradiance built on generic geometric ray depth.
+"""Ideal monochrome irradiance from generic ray-hit geometry.
 
-Geometry is intentionally detached by default. Differentiability for active
-sensing is provided by the downstream grayscale camera model with respect to
-exposure and gain.
+The CUDA geometry stage provides both ray-hit distance and exact surface normal.
+This module applies material texture and lighting only. Geometry is detached by
+default; active-sensing differentiability lives in the downstream grayscale
+camera model with respect to exposure and gain.
 """
 
 from typing import Dict, Optional, Tuple, Union
@@ -29,25 +30,6 @@ def _camera_rays(R: torch.Tensor, height: int, width: int, fov_x_half_tan: float
     return fwd - fu[None, :, None, None] * up - fv[None, None, :, None] * left
 
 
-def _central_difference(points: torch.Tensor, dim: int) -> torch.Tensor:
-    if dim == 1:
-        p = F.pad(points.permute(0, 3, 1, 2), (0, 0, 1, 1), mode="replicate")
-        return (0.5 * (p[:, :, 2:, :] - p[:, :, :-2, :])).permute(0, 2, 3, 1)
-    if dim == 2:
-        p = F.pad(points.permute(0, 3, 1, 2), (1, 1, 0, 0), mode="replicate")
-        return (0.5 * (p[:, :, :, 2:] - p[:, :, :, :-2])).permute(0, 2, 3, 1)
-    raise ValueError("dim must be 1 or 2")
-
-
-def _neighbor_depth_jump(depth: torch.Tensor) -> torch.Tensor:
-    d = depth[:, None]
-    row = F.pad(d, (0, 0, 1, 1), mode="replicate")
-    col = F.pad(d, (1, 1, 0, 0), mode="replicate")
-    jump_row = 0.5 * (row[:, :, 2:, :] - row[:, :, :-2, :]).abs()
-    jump_col = 0.5 * (col[:, :, :, 2:] - col[:, :, :, :-2]).abs()
-    return torch.maximum(jump_row[:, 0], jump_col[:, 0])
-
-
 def _batch_scalar(value: ScalarLike, ref: torch.Tensor) -> torch.Tensor:
     x = torch.as_tensor(value, device=ref.device, dtype=ref.dtype)
     if x.ndim == 0:
@@ -61,8 +43,8 @@ def render_ideal_grayscale(
     depth: torch.Tensor,
     R: torch.Tensor,
     pos: torch.Tensor,
+    normals: torch.Tensor,
     *,
-    normals: Optional[torch.Tensor] = None,
     fov_x_half_tan: float = 0.82,
     ambient: ScalarLike = 0.25,
     diffuse: ScalarLike = 0.75,
@@ -72,7 +54,6 @@ def render_ideal_grayscale(
     texture_scale: float = 5.0,
     background_intensity: ScalarLike = 0.08,
     background_depth_threshold: float = 99.0,
-    normal_depth_jump: float = 0.35,
     irradiance_max: float = 4.0,
     detach_geometry: bool = True,
     return_aux: bool = False,
@@ -91,37 +72,27 @@ def render_ideal_grayscale(
         raise ValueError("pos must have shape [B, 3]")
     if not torch.is_floating_point(depth):
         raise TypeError("depth must be floating point")
-    if normals is not None:
-        if normals.shape != (depth.shape[0], depth.shape[1], depth.shape[2], 3):
-            raise ValueError("normals must have shape [B,H,W,3]")
-        if not torch.is_floating_point(normals):
-            raise TypeError("normals must be floating point")
+    if normals.shape != (depth.shape[0], depth.shape[1], depth.shape[2], 3):
+        raise ValueError("normals must have shape [B,H,W,3]")
+    if not torch.is_floating_point(normals):
+        raise TypeError("normals must be floating point")
 
     if detach_geometry:
-        depth, R, pos = depth.detach(), R.detach(), pos.detach()
-        if normals is not None:
-            normals = normals.detach()
+        depth, R, pos, normals = (
+            depth.detach(),
+            R.detach(),
+            pos.detach(),
+            normals.detach(),
+        )
 
     _, H, W = depth.shape
     rays = _camera_rays(R.to(depth), H, W, fov_x_half_tan)
     points = pos.to(depth)[:, None, None, :] + depth[..., None] * rays
 
     view_to_camera = F.normalize(-rays, p=2, dim=-1, eps=1e-6)
-    if normals is None:
-        d_row = _central_difference(points, 1)
-        d_col = _central_difference(points, 2)
-        normal = F.normalize(torch.cross(d_col, d_row, dim=-1), p=2, dim=-1, eps=1e-6)
-        jump = _neighbor_depth_jump(depth)
-        normal = torch.where(
-            (jump > float(normal_depth_jump))[..., None],
-            view_to_camera,
-            normal,
-        )
-    else:
-        normal_norm = torch.linalg.vector_norm(normals, dim=-1, keepdim=True)
-        normal = F.normalize(normals, p=2, dim=-1, eps=1e-6)
-        normal = torch.where(normal_norm > 1e-6, normal, view_to_camera)
-        jump = torch.zeros_like(depth)
+    normal_norm = torch.linalg.vector_norm(normals, dim=-1, keepdim=True)
+    normal = F.normalize(normals, p=2, dim=-1, eps=1e-6)
+    normal = torch.where(normal_norm > 1e-6, normal, view_to_camera)
 
     # Keep lighting two-sided with respect to the viewing surface convention:
     # orient the normal toward the camera before Lambertian evaluation.
@@ -163,6 +134,5 @@ def render_ideal_grayscale(
         "normals": normal,
         "albedo": albedo,
         "ndotl": ndotl,
-        "depth_jump": jump,
         "irradiance_mean": gray.flatten(1).mean(1),
     }
