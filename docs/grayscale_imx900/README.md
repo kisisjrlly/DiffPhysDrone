@@ -1,6 +1,6 @@
 # Grayscale Active Sensing / IMX900 Transition
 
-> Status: **Phase 1 implementation started**. Grayscale camera semantics, a differentiable exposure/gain sensor model, configuration skeleton, and gradient unit tests are present. The grayscale renderer and navigation/training path are not wired yet.
+> Status: **grayscale fixed-camera integration is now present in code**. Camera semantics, differentiable exposure/gain image formation, ideal grayscale appearance rendering, 2-channel grayscale policy input, 2-D exposure/gain camera state, and a fixed-camera training path are implemented. The integrated CUDA environment still needs to be smoke-tested on the local `mappo-mpc` installation before long training runs.
 >
 > Branch: `active-sensing-grayscale-imx900`
 >
@@ -153,27 +153,53 @@ The old three-dimensional camera state and output (`power/exposure/gain`) must l
 
 ## 8. Current branch state
 
-Implemented in the first code stage:
+Implemented:
 
-- `config.py` now has a non-default `sensor_type=gray` configuration skeleton plus grayscale image/camera-model parameters;
-- `sensors/gray_camera_semantics.py` centralizes normalized exposure/gain semantics;
-- `sensors/differentiable_gray_camera.py` implements exposure integration, gain, reparameterized shot/read noise, saturation, optional STE quantization, and an exposure/motion-dependent blur approximation;
-- `tests/test_differentiable_gray_camera.py` checks finite-difference agreement for exposure/gain gradients, saturation, blur behavior, deterministic noise injection, semantics clamping, and construction from config fields.
+- `config.py`: `sensor_type=gray` plus grayscale image/camera-model parameters; legacy D455-specific camera-quality coefficients are forced to zero in gray mode.
+- `sensors/gray_camera_semantics.py`: normalized exposure/gain semantics with provisional physical ranges.
+- `sensors/differentiable_gray_camera.py`: exposure integration, gain, reparameterized shot/read noise, saturation, optional STE quantization, and exposure/motion-dependent blur.
+- `render/ideal_gray.py`: ideal grayscale appearance reconstructed from the existing CUDA geometric depth using hit points, approximate normals, Lambertian lighting, and procedural texture. Geometry is detached by default.
+- `env_cuda.py::render_gray_ideal()`: non-invasive bridge from the existing CUDA depth renderer to the new grayscale appearance renderer.
+- `model.py`: `sensor_type=gray` reuses the 2-channel CNN as `[current_gray, previous_gray]`; camera state/action becomes 2-D `[exposure, gain]`.
+- `rollout_ops.py` / `trainer.py`: grayscale sensor rendering, matched full-vs-detached exposure/gain gradient switch, gray state construction, camera update, diagnostics, and fixed-camera grayscale rollout.
+- `configs/gray_gate_fixed.args`: first fixed-camera grayscale navigation baseline.
+- `tools/test_gray_env_render.py`: local CUDA smoke test that saves ideal and sensor grayscale frames.
+- unit tests cover camera gradients/effects, ideal renderer behavior, gray model dimensions/preprocessing, and gray rollout helpers.
 
-The camera unit tests passed in the implementation sandbox:
+Pure PyTorch camera/renderer tests were exercised during development; the integrated `Env -> quadsim_cuda.render_depth -> render_gray_ideal -> DifferentiableGrayCamera` path cannot be fully validated through the GitHub connector and must be run on the local CUDA environment.
+
+### Required local gate before long training
+
+From the repository root:
 
 ~~~bash
-python -m pytest -q tests/test_differentiable_gray_camera.py
-# 8 passed
+conda activate mappo-mpc
+git checkout active-sensing-grayscale-imx900
+git pull
+python -m pytest -q \
+  tests/test_differentiable_gray_camera.py \
+  tests/test_ideal_gray_renderer.py \
+  tests/test_model_gray_mode.py \
+  tests/test_gray_rollout_helpers.py
+python tools/test_gray_env_render.py
 ~~~
 
-Still intentionally not implemented:
+Inspect the saved images under `logs/gray_smoke/`. The gate/slit and textured surfaces should be visually distinguishable and the sensor image should respond sensibly to exposure/gain.
 
-- ideal grayscale scene rendering;
-- conversion of policy input from depth to `[current_gray, previous_gray]`;
-- 2-D camera-policy action/state integration;
-- fixed-camera grayscale flight training;
-- detached-vs-differentiable navigation experiments;
-- IMX900 runtime node and real-camera calibration.
+Only after that smoke gate passes should the first training run start:
 
-The legacy executable path therefore still follows differentiable depth by default. No training result should be reported as a grayscale result until the later acceptance gates in [CODEX_IMPLEMENTATION_GUIDE.md](CODEX_IMPLEMENTATION_GUIDE.md) pass.
+~~~bash
+TASK=gray_gate_fixed LOG_TO_FILE=1 bash run.sh
+~~~
+
+Still pending:
+
+- validate and tune the ideal grayscale appearance on the actual CUDA environment;
+- demonstrate reliable fixed-camera grayscale navigation;
+- construct illumination transitions where no one fixed exposure dominates;
+- add classical AE baselines;
+- train learned-detached vs differentiable camera control;
+- implement grayscale evaluation/visualization polish;
+- IMX900 runtime driver wrapper and physical calibration.
+
+No training result should be reported as a grayscale result until these gates pass.
