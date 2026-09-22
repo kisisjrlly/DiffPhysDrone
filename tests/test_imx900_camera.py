@@ -261,3 +261,59 @@ def test_builder_rejects_provisional_profile_when_required(tmp_path):
         assert "calibrated=false" in str(exc)
     else:
         raise AssertionError("provisional profile should be rejected")
+
+
+def test_exposure_lut_is_piecewise_differentiable():
+    profile = _profile(
+        schema_version=2,
+        exposure_mapping="lut",
+        exposure_lut_x=[0.0, 0.5, 1.0],
+        exposure_lut_us=[100.0, 400.0, 1000.0],
+    )
+    x = torch.tensor([0.25, 0.75], requires_grad=True)
+    y = profile.exposure_to_us(x)
+    torch.testing.assert_close(y, torch.tensor([250.0, 700.0]))
+    y.sum().backward()
+    assert torch.all(x.grad > 0)
+
+
+def test_read_noise_lut_tracks_measured_gain_curve():
+    profile = _profile(
+        schema_version=2,
+        read_noise_mapping="lut",
+        read_noise_lut_gain=[1.0, 2.0, 4.0],
+        read_noise_lut_std=[0.002, 0.003, 0.006],
+        gain_factor_max=4.0,
+    )
+    gain = torch.tensor([1.5, 3.0], requires_grad=True)
+    std = profile.read_noise_std(gain)
+    torch.testing.assert_close(std, torch.tensor([0.0025, 0.0045]))
+    std.sum().backward()
+    assert torch.all(gain.grad > 0)
+
+
+def test_optional_response_lut_is_monotonic_and_differentiable():
+    profile = _profile(
+        schema_version=2,
+        response_mapping="lut",
+        response_lut_x=[0.0, 0.5, 1.0],
+        response_lut_y=[0.0, 0.7, 1.0],
+    )
+    x = torch.tensor([0.25, 0.75], requires_grad=True)
+    y = profile.apply_response(x)
+    torch.testing.assert_close(y, torch.tensor([0.35, 0.85]))
+    y.sum().backward()
+    assert torch.all(x.grad > 0)
+
+
+def test_schema1_profile_remains_loadable():
+    data = {
+        "schema_version": 1,
+        "exposure": {"min_us": 100.0, "max_us": 1000.0, "reference_us": 500.0},
+        "gain": {"mapping": "linear", "min_factor": 1.0, "max_factor": 2.0},
+        "noise": {"shot_alpha": 0.01, "read_std_base": 0.002},
+    }
+    profile = IMX900Calibration.from_dict(data)
+    assert profile.exposure_mapping == "linear"
+    assert profile.read_noise_mapping == "power"
+    assert profile.response_mapping == "linear"
