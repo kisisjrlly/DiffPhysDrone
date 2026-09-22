@@ -184,7 +184,11 @@ Evaluate with the true selected output bit-depth when available.
 
 Motion blur is essential. Without it, the trivial optimum can become “maximum exposure.”
 
-Version 1 may use a differentiable approximate blur strength:
+Version 1 uses a differentiable approximate blur strength driven by a detached
+image-motion proxy (m \approx \|v\| / Z_{char}), where (Z_{char}) is a
+robust characteristic scene depth computed from internal ray-hit geometry.
+
+Then use:
 
 \[
 b=\mathrm{clip}(k_b T\,m,0,1)
@@ -252,9 +256,14 @@ The camera branch should see:
 
 - current/previous image features,
 - current exposure/gain,
-- local velocity/angular-motion cues.
+- local velocity/attitude cues.
 
 It should not need privileged illumination labels.
+
+For the main causal experiment, the **flight branch must not directly observe
+exposure/gain**. Otherwise navigation loss can bypass image formation through a
+camera-state shortcut. The camera branch may observe its own actuator state,
+while camera influence on flight must pass through pixels.
 
 ### 3.4 Camera update dynamics
 
