@@ -456,7 +456,9 @@ The calibration schema stores command-delay metadata, and the rollout already
 implements a frame-delay queue driven by `command_delay_frames`.
 
 The separate `camera_smoothing_alpha` parameter is a policy-command
-regularizer, not a measured IMX900 actuator law.
+regularizer, not a measured IMX900 actuator law. Main experiment configs set it
+to 0.0; temporal smoothness is handled explicitly by `coef_cam_smooth` unless
+an ablation intentionally enables command smoothing.
 
 After hardware characterization:
 
