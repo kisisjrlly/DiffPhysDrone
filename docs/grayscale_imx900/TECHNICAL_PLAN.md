@@ -53,11 +53,11 @@ Keep:
 
 Replace:
 
-- D455 \`power/exposure/gain\` semantics.
-- \`render_diff_depth\`.
+- D455 `power/exposure/gain` semantics.
+- `render_diff_depth`.
 - depth health/fill/hole losses as camera objectives.
-- scene-specific \`glare/specular/dark\` depth heuristics.
-- depth preprocessing \`near/far\` channels.
+- scene-specific `glare/specular/dark` depth heuristics.
+- depth preprocessing `near/far` channels.
 - D455 teacher/relabel pipeline as a required mechanism.
 
 ## 2. Rendering architecture
@@ -98,7 +98,7 @@ Do not start with physically based path tracing. The research variable is camera
 
 Create a pure-PyTorch module, provisionally:
 
-\`sensors/differentiable_gray_camera.py\`
+`sensors/differentiable_gray_camera.py`
 
 API concept:
 
