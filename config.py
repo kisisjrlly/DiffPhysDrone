@@ -387,7 +387,7 @@ def print_runtime_mode(args):
             f'gain_factor={args.gray_gain_factor_min}..{args.gray_gain_factor_max}, '
             f'saturation={args.gray_saturation_mode}'
         )
-        print('gray_pipeline_status       : config/model skeleton only; renderer/training not wired yet')
+        print('gray_pipeline_status       : fixed-camera grayscale training path wired; validate with smoke test before long runs')
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
