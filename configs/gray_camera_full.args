@@ -33,7 +33,7 @@
 --simple_back_wall_x_min 2.0
 --simple_back_wall_x_max 2.85
 
---include_camera_state_in_obs
+--no-include_camera_state_in_obs
 --max_acc_cmd 2.2
 
 --gray_nominal_ambient 0.18
