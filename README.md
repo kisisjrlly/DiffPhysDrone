@@ -27,11 +27,13 @@ Target real camera:
 CUDA geometry / ray intersections
         |
         v
-generic geometric ray depth (internal only)
+generic ray-hit geometry (internal only)
+  - hit distance
+  - exact surface normal
         |
         v
 ideal grayscale irradiance
-  - geometry-derived normals
+  - exact hit normals
   - Lambertian illumination
   - procedural texture
   - nominal/dark/bright/transitions
@@ -53,9 +55,9 @@ DifferentiableGrayCamera
         +----> recurrent camera policy -> exposure/gain
 ```
 
-The retained `quadsim_cuda.render_depth()` is **not a depth-camera model**.
-It is only the generic GPU ray-intersection primitive used to reconstruct scene
-geometry for grayscale rendering.
+The branch exposes only `quadsim_cuda.render_geometry()` for appearance
+geometry. Its internal hit distance and surface normals are renderer inputs,
+not sensor observations, and are never fed to the policy.
 
 ## What was removed from this branch
 
