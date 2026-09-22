@@ -1,212 +1,219 @@
 # Related Work and Open-Source Survey
 
-> Purpose: give future Codex/developers the research context and prevent unsupported novelty claims.
+> Last updated: 2026-09-22.
+>
+> This file defines the scientific positioning of the grayscale/IMX900 line.
+> Detailed code-level adoption decisions are in
+> [OPEN_SOURCE_CAMERA_MODEL_REVIEW.md](OPEN_SOURCE_CAMERA_MODEL_REVIEW.md).
 
-## 1. Differentiable imaging / sensor models
-
-### End2endImaging
+## 1. End2endImaging — sensor-physics reference
 
 Repository:
+
 https://github.com/vccimaging/End2endImaging
 
-Useful component:
+Relevant implementation:
+
 `end2end_imaging/sensor/mono_sensor.py`
 
-Why it matters:
+Observed repository license:
 
-- PyTorch sensor abstraction;
+Apache-2.0.
+
+The public `MonoSensor` provides a useful organization for:
+
 - monochrome response;
-- read-noise and shot-noise model;
-- black level;
 - bit depth;
-- gamma/ISP blocks;
-- intended for differentiable end-to-end imaging research.
+- black level;
+- read noise;
+- shot noise with alpha/beta parameters;
+- ISO-dependent noise scaling;
+- optional spectral response;
+- ISP blocks.
 
-Important limitation for DiffPhysDrone:
+Its code is **not** used unchanged here because the current public
+implementation:
 
-- it is not a pre-calibrated IMX900 digital twin;
-- its current `MonoSensor` does not directly provide the exact online exposure/gain actuator model required here;
-- hard `round` / `clip` operations in realistic forward simulation are not sufficient by themselves for stable task-gradient camera control.
+- does not expose the exact online exposure-time actuator required by this
+  project;
+- explicitly fixes analog gain to 1.0 in the inspected noise code;
+- uses hard rounding/clipping in realistic forward simulation;
+- contains numerical defaults that are not IMX900 measurements.
 
-Use it as a structural/reference implementation, not as ground-truth IMX900 behavior.
+DiffPhysDrone therefore adopts the structural idea—sensor-specific
+configuration + compact noise model—but fits its own IMX900 profile.
 
-### Differentiable rendering frameworks
+## 2. DeepLens — optional optics fidelity
 
-Potential references:
+Repository:
 
-- Mitsuba 3 / Dr.Jit: https://www.mitsuba-renderer.org/
-- redner: https://github.com/BachiLi/redner
-- nvdiffrast: https://github.com/NVlabs/nvdiffrast
-- PyTorch3D: https://github.com/facebookresearch/pytorch3d
-- Kornia: https://github.com/kornia/kornia
+https://github.com/vccimaging/DeepLens
 
-For this project, a heavy differentiable renderer is not required in v1 because the main gradient of interest is with respect to camera parameters, not scene geometry.
+Observed repository license:
 
-## 2. Active exposure control for robotics
+Apache-2.0.
+
+At the time of review, its package metadata described `deeplens-core` 2.5.4,
+Python >=3.12,<3.13, and PyTorch 2.10.0.
+
+DeepLens is relevant for:
+
+- geometric differentiable optics;
+- PSF/MTF;
+- distortion;
+- spatially varying aberrations;
+- depth-dependent defocus;
+- neural PSF surrogates;
+- end-to-end optics/algorithm co-design.
+
+The fixed lens is not an online control variable in the v1 UAV experiment.
+Therefore DeepLens is deliberately excluded from every-frame BPTT.
+
+If real-camera validation later identifies lens blur/distortion/vignetting as a
+dominant sim-to-real error, DeepLens can be used offline to generate/fix a
+lightweight lens surrogate.
+
+## 3. JOCA — closest task-driven camera-control prior work
+
+Repository:
+
+https://github.com/RoboticImaging/JOCA
+
+Paper:
+
+Task-Driven Joint Optimisation of Camera Hardware and Adaptive Camera Control
+Algorithms, WACV 2026.
+
+The inspected CARLA implementation directly supports the relevance of JOCA to
+this project:
+
+- a neural controller predicts normalized exposure/gain;
+- normalized values are mapped to physical camera ranges;
+- images are rescaled according to exposure/gain ratios;
+- gain-dependent shot/read noise is added;
+- motion blur is coupled to exposure through CARLA camera settings;
+- previous camera parameters are fed back into the adaptive controller.
+
+The source comments identify the noise coefficients as Basler DaA1280 camera
+characteristics. This is important evidence for our own design principle:
+camera-model coefficients should come from a specific real camera.
+
+The public joint-training code also implements genetic-algorithm perturbation
+correction around predicted camera settings. JOCA uses this to handle
+non-differentiable imaging effects.
+
+### Consequence for this project
+
+We must not claim:
+
+- first task-driven exposure control;
+- first differentiable task-driven camera setting optimization;
+- first learned adaptive exposure/gain controller.
+
+The main contribution must instead be grounded in the closed-loop aerial
+navigation setting, real IMX900 calibration, onboard deployment, and a matched
+full-vs-detached sensor-gradient experiment.
+
+### Why JOCA-style search is not the main method
+
+The central scientific question here is whether the sensor gradient itself
+improves navigation. A search/teacher correction inside the main training loop
+would confound that test.
+
+JOCA-style derivative-free correction is therefore reserved for an optional
+separate baseline/fallback.
+
+### Licensing note
+
+A root `LICENSE` file was not found through the GitHub repository contents
+API during the review. Do not vendor/copy JOCA implementation code into this
+repository unless licensing is clarified. Reimplement experimental baselines
+from the paper/observable algorithmic description and cite the source.
+
+## 4. TaCOS and task-specific camera co-design
+
+TaCOS, WACV 2025, is an important precursor on simulation-based task-specific
+camera optimization.
+
+It reinforces the conclusion that generic camera/task co-design is not a novel
+claim by itself. It belongs in the final related-work chain alongside JOCA.
+
+## 5. Robotics exposure-control baselines
 
 ### Active Exposure Control for Robust Visual Odometry in HDR Environments
 
 Project:
+
 https://github.com/uzh-rpg/active_camera_exposure_control
 
-This line of work is important as a classical/robotics baseline. It demonstrates that exposure control matters for downstream geometric vision and provides exposure-selection strategies based on image statistics/gradients.
+Relevant as a classical robotics baseline for:
 
-Implication for our novelty:
-“camera exposure matters for robotics” is not novel.
+- fixed exposure;
+- mean/brightness-driven control;
+- gradient-based exposure selection;
+- HDR/VO-motivated camera control.
+
+This supports the baseline distinction:
+
+[
+	ext{image-quality-driven AE}
+
+eq
+	ext{navigation-task-driven camera control}.
+]
 
 ### Noise-Aware Camera Exposure Control
 
 Project:
+
 https://github.com/UkcheolShin/Noise-AwareCameraExposureControl
 
-Relevant ideas:
+Relevant for:
 
 - joint exposure/gain control;
 - noise-aware image-quality reasoning;
-- real-camera data and calibration-oriented evaluation.
+- real-camera parameter sweeps;
+- calibration-oriented evaluation.
 
-Use as a reference for:
-- gain/exposure action definition;
-- real-camera sweep protocol;
-- classical learned image-quality-based controller baseline.
-
-### Reinforcement-learning exposure control
+### RL exposure control
 
 Project:
+
 https://github.com/shuyanguni/drl_exposure_ctrl
 
-Relevant because exposure can be learned without analytical camera gradients.
+Relevant because camera settings can also be learned without analytical
+sensor gradients. A learned controller alone is not sufficient evidence for
+our claim.
 
-Implication:
-A learned camera policy alone is not the contribution. The differentiable sensor-gradient path and downstream closed-loop navigation experiment must be isolated.
+## 6. Camera calibration / sensor characterization
 
-## 3. Direct task-driven camera control: important novelty boundary
+Important concepts for the real IMX900 work:
 
-### JOCA — Task-Driven Joint Optimisation of Camera Hardware and Adaptive Camera Control Algorithms
-
-Paper:
-https://openaccess.thecvf.com/content/WACV2026/html/Yan_JOCA_Task-Driven_Joint_Optimisation_of_Camera_Hardware_and_Adaptive_Camera_WACV_2026_paper.html
-
-Authors: Chengyang Yan, Mitch Bryson, Donald G. Dansereau. WACV 2026.
-
-JOCA is the closest known prior work found in the 2026 literature search. It jointly optimizes fixed camera hardware parameters, an adaptive camera-control network, and downstream perception. Its experiments explicitly include dynamic exposure/gain, low light, and motion blur; it introduces DF-Grad to handle non-differentiable image effects.
-
-This changes the novelty boundary substantially. DiffPhysDrone should not present generic “task-driven differentiable exposure/gain control” as new.
-
-### TaCOS — Task-Specific Camera Optimization with Simulation
-
-Paper:
-https://openaccess.thecvf.com/content/WACV2025/html/Yan_TaCOS_Task-Specific_Camera_Optimization_with_Simulation_WACV_2025_paper.html
-
-TaCOS (WACV 2025) is another important precursor on simulation-based task-specific camera co-design. It focuses on camera design rather than the exact closed-loop UAV problem here, but it belongs in the final related-work chain.
-
-Therefore this project must **not** claim:
-
-- first differentiable task-driven camera control;
-- first downstream-task optimization of exposure/gain;
-- first adaptive camera settings via differentiable image formation.
-
-A defensible project-specific contribution should instead center on some combination of:
-
-1. closed-loop **aerial navigation** rather than static/per-frame vision;
-2. camera action affecting future observations while flight dynamics evolve;
-3. a real-camera-calibrated monochrome IMX900 model;
-4. onboard deployment on a small quadrotor;
-5. controlled differentiable-vs-detached causal ablation in navigation;
-6. exposure/SNR versus motion-blur trade-off under drone motion.
-
-Before manuscript submission, re-run a literature search because this area is moving quickly.
-
-## 4. Camera exposure and visual localization/SLAM
-
-Also survey before writing the final paper:
-
-- exposure control for visual odometry/SLAM;
-- HDR-aware camera control;
-- photometric calibration and camera response estimation;
-- auto-exposure for robotics;
-- active vision sensor-parameter selection.
-
-These are necessary to correctly position the navigation contribution.
-
-## 5. Real-camera image formation / noise calibration
-
-Useful concepts/keywords:
-
-- photon transfer curve (PTC);
+- photon transfer curve;
 - temporal dark noise;
-- conversion gain;
-- read noise;
-- shot noise;
 - black level;
-- full-well/saturation;
-- EMVA 1288;
-- camera response function;
-- motion transfer function / edge spread for blur.
+- shot noise;
+- read noise;
+- gain response;
+- full scale/saturation;
+- raw bit depth;
+- parameter step size;
+- command-to-effective-frame latency;
+- motion blur / edge spread;
+- EMVA 1288 terminology.
 
-The real-camera calibration in this project should be described as sensor characterization, not as a complete CMOS device simulation.
+The project should describe its real-camera work as **task-relevant sensor
+characterization and differentiable surrogate fitting**, not as a transistor-
+level CMOS simulation.
 
-## 6. Hardware references
+## 7. Current novelty statement
 
-### e-con Systems e-CAM37M_CUONX
+Internal working statement:
 
-Official product page:
-https://www.e-consystems.com/nvidia-cameras/jetson-orin-nx-cameras/sony-imx900-global-shutter-monochrome-camera.asp
+> We study real-camera-calibrated differentiable exposure/gain control for
+> closed-loop monocular quadrotor navigation, isolate the value of the sensor
+> gradient through a matched full-vs-detached experiment, and target onboard
+> deployment with an e-con/Sony IMX900 monochrome global-shutter camera.
 
-Relevant advertised properties to verify against the exact purchased SKU and driver release:
-
-- Sony IMX900;
-- monochrome;
-- global shutter;
-- MIPI CSI-2;
-- Jetson Orin NX / Orin Nano support;
-- exposure/gain controls;
-- RAW output modes;
-- Linux/V4L2 integration.
-
-Do not hard-code numerical ranges until the exact hardware/driver reports them.
-
-### Sony IMX900
-
-Use Sony Semiconductor official documentation/product pages for sensor-level specifications where available.
-
-Do not infer camera-module behavior solely from the bare sensor datasheet; the e-con module and driver define the actual usable control interface.
-
-### DAMIAO DM-ORIN NX V2.X carrier
-
-Critical facts from the user's hardware manual:
-
-- target carrier for Jetson Orin NX/Nano;
-- 39.2 g;
-- 12–28 V input, explicitly supports 6S;
-- two 22-pin 0.5-mm FPC CIS connectors;
-- camera circuitry described as matching the original/reference arrangement;
-- MIPI data lanes, camera I2C, MCLK, PWDN and 3.3 V are exposed.
-
-Compatibility with e-con's exact camera cable/DT overlay still needs confirmation.
-
-## 7. What to borrow vs what not to borrow
-
-Borrow:
-
-- MonoSensor structure/noise terminology from End2endImaging;
-- exposure-control baselines from UZH;
-- calibration ideas from noise-aware camera-control work;
-- task-driven differentiable optimization framing from recent JOCA-like work, with proper attribution;
-- standard PTC/noise characterization practice.
-
-Do not blindly copy:
-
-- arbitrary noise coefficients from another camera;
-- RGB ISP assumptions for a monochrome sensor;
-- exposure/gain ranges from unrelated sensors;
-- an external renderer if the current CUDA renderer is sufficient;
-- task losses that turn the method into image-quality optimization rather than navigation optimization.
-
-## 8. Novelty statement to use internally
-
-A safe internal working hypothesis is:
-
-> We study real-camera-calibrated differentiable exposure/gain control for closed-loop monocular quadrotor navigation, and isolate the value of the sensor gradient through a matched differentiable-vs-detached experiment before deploying the policy on an IMX900-based onboard camera.
-
-This is a hypothesis/positioning statement, not a final novelty claim. Revalidate against literature before submission.
+This is not a final novelty claim. Re-run the literature search immediately
+before manuscript submission.
