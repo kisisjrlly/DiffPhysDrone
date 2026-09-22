@@ -229,7 +229,8 @@ Do not edit model source to insert measured coefficients.
 
 Current code now separates:
 
-- `camera_smoothing_alpha`: policy-command smoothing;
+- `camera_smoothing_alpha`: optional policy-command smoothing, 0.0 in the
+  main experiment configs;
 - `command_delay_frames`: calibration-driven effective-command delay.
 
 The rollout uses a command queue for the measured frame delay. The provisional
