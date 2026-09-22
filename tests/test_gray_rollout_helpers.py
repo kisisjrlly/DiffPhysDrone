@@ -6,8 +6,8 @@ from rollout_ops import (
     render_gray_sensor,
     update_camera_params,
 )
-from sensors.differentiable_gray_camera import DifferentiableGrayCamera
-from sensors.gray_camera_semantics import GrayCameraSemantics
+from sensors.imx900_calibration import IMX900Calibration
+from sensors.imx900_camera import IMX900DifferentiableCamera
 
 
 class _DummyEnv:
@@ -26,15 +26,18 @@ class _DummyEnv:
         self.R = torch.eye(3).repeat(batch, 1, 1)
         self.margin = torch.ones(batch)
         self.max_speed = torch.tensor(2.0)
-        self.gray_camera = DifferentiableGrayCamera(
-            GrayCameraSemantics(
+        self.gray_camera = IMX900DifferentiableCamera(
+            IMX900Calibration(
+                profile_name="rollout-test",
+                calibrated=True,
+                source="unit test",
                 exposure_us_min=100.0,
                 exposure_us_max=1000.0,
                 exposure_reference_us=1000.0,
                 gain_factor_min=1.0,
                 gain_factor_max=2.0,
-            ),
-            blur_scale=0.0,
+                blur_scale=0.0,
+            )
         )
 
     def render_gray_ideal(self, return_aux=False):
