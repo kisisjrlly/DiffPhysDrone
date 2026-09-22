@@ -4,16 +4,13 @@
 >
 > Do not attempt all stages in one change. Make small, testable commits.
 
-## Phase 0 — protect the old result
+## Phase 0 — protect the old result ✅ COMPLETE
 
-Before modifying executable code:
+The legacy D455 implementation is preserved in
+`active-sensing-4f-tools-2b-core`. The current branch is intentionally
+grayscale-only; do not restore a compatibility switch.
 
-- keep `active-sensing-4f-tools-2b-core` untouched;
-- work only on `active-sensing-grayscale-imx900` or descendants;
-- do not delete legacy D455 code until grayscale functionality has replacements and tests;
-- tag/record the current branch head.
-
-## Phase 1 — configuration and semantics only ✅ IMPLEMENTED
+## Phase 1 — configuration and semantics only ✅ IMPLEMENTED / CLEANED
 
 Add a camera-mode abstraction without changing behavior.
 
@@ -37,9 +34,9 @@ Create a single camera semantics class for normalized<->physical conversion.
 
 Acceptance:
 
-- old depth configs still parse/run;
-- gray config parses;
-- no silent reuse of D455 `power` semantics.
+- grayscale configs parse;
+- camera action is exactly exposure/gain;
+- no D455 power or depth-sensor semantics remain in executable core code.
 
 ## Phase 2 — ideal grayscale renderer ✅ CODE PRESENT / CUDA SMOKE PENDING
 
@@ -350,25 +347,38 @@ Create automated tests for:
 
 ## Current handoff point
 
-The code now reaches the first end-to-end **fixed-camera grayscale navigation** gate.
+The executable branch has now been cleaned to grayscale-only. The immediate
+task is **validation, not another architectural rewrite**.
 
-Before changing the learning problem further, run locally:
+Run:
 
-~~~bash
+```bash
 conda activate mappo-mpc
+pip install -e src
+
 python -m pytest -q \
   tests/test_differentiable_gray_camera.py \
   tests/test_ideal_gray_renderer.py \
   tests/test_model_gray_mode.py \
   tests/test_gray_rollout_helpers.py
+
 python tools/test_gray_env_render.py
-TASK=gray_gate_fixed LOG_TO_FILE=1 bash run.sh
-~~~
+TASK=gray_gate_fixed bash run.sh
+TASK=gray_gate_blind bash run.sh
+```
 
-Do not proceed to learned exposure/gain until:
+Go/no-go criteria:
 
-1. the smoke renderer produces meaningful textured grayscale images;
-2. the fixed-camera policy learns navigation significantly better than a blind/zero-image control;
-3. exposure/gain changes produce the intended brightness/noise/blur trade-offs.
+1. CUDA extension rebuild succeeds with no references to removed D455 symbols.
+2. All grayscale unit tests pass.
+3. Smoke images show useful slit/texture cues in nominal, dark, and bright scenes.
+4. Fixed-gray navigation materially outperforms the zero-image control.
 
-If these pass, the next development unit is Phase 7: illumination/motion benchmark construction, followed by classical AE baselines and then the matched learned-detached vs differentiable experiment.
+Only after all four pass should Codex implement/tune classical AE baselines and
+run the mixed-illumination camera-learning experiment.
+
+For camera learning, use the same successful flight checkpoint for
+`gray_camera_full` and `gray_camera_detached`. The flight network should be
+frozen via `--train_camera_only`; gradients must still propagate through the
+frozen flight computation to image pixels and then, only in the full condition,
+through the camera model to exposure/gain.
