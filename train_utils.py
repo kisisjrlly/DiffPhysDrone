@@ -20,6 +20,9 @@ class MetricSmoother:
         'cam/power_mean',
         'cam/exposure_mean',
         'cam/gain_mean',
+        'cam/saturation_fraction',
+        'cam/dark_fraction',
+        'cam/blur_strength',
         'iter_per_sec',
         'sim_fps',
     }
