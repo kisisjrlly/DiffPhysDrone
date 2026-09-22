@@ -1,6 +1,6 @@
 # Grayscale Active Sensing / IMX900 Transition
 
-> Status: design frozen for implementation planning; grayscale code has **not** been implemented yet.
+> Status: **Phase 1 implementation started**. Grayscale camera semantics, a differentiable exposure/gain sensor model, configuration skeleton, and gradient unit tests are present. The grayscale renderer and navigation/training path are not wired yet.
 >
 > Branch: `active-sensing-grayscale-imx900`
 >
@@ -153,9 +153,27 @@ The old three-dimensional camera state and output (`power/exposure/gain`) must l
 
 ## 8. Current branch state
 
-At branch creation time:
+Implemented in the first code stage:
 
-- the executable code still follows the old differentiable-depth pipeline;
-- `README.md`, `TODO.md`, and old paper material may describe the depth line;
-- the new documents in this directory define the intended replacement;
-- no training result should be reported as a grayscale result until the implementation acceptance tests in [CODEX_IMPLEMENTATION_GUIDE.md](CODEX_IMPLEMENTATION_GUIDE.md) pass.
+- `config.py` now has a non-default `sensor_type=gray` configuration skeleton plus grayscale image/camera-model parameters;
+- `sensors/gray_camera_semantics.py` centralizes normalized exposure/gain semantics;
+- `sensors/differentiable_gray_camera.py` implements exposure integration, gain, reparameterized shot/read noise, saturation, optional STE quantization, and an exposure/motion-dependent blur approximation;
+- `tests/test_differentiable_gray_camera.py` checks finite-difference agreement for exposure/gain gradients, saturation, blur behavior, deterministic noise injection, semantics clamping, and construction from config fields.
+
+The camera unit tests passed in the implementation sandbox:
+
+~~~bash
+python -m pytest -q tests/test_differentiable_gray_camera.py
+# 8 passed
+~~~
+
+Still intentionally not implemented:
+
+- ideal grayscale scene rendering;
+- conversion of policy input from depth to `[current_gray, previous_gray]`;
+- 2-D camera-policy action/state integration;
+- fixed-camera grayscale flight training;
+- detached-vs-differentiable navigation experiments;
+- IMX900 runtime node and real-camera calibration.
+
+The legacy executable path therefore still follows differentiable depth by default. No training result should be reported as a grayscale result until the later acceptance gates in [CODEX_IMPLEMENTATION_GUIDE.md](CODEX_IMPLEMENTATION_GUIDE.md) pass.
