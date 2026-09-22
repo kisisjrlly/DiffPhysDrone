@@ -208,3 +208,56 @@ def test_profile_json_and_builder(tmp_path):
     assert camera.calibration.quantization_bits == 10
     assert camera.calibration.command_delay_frames == 1
     assert camera.blur_kernel_size == 3
+
+
+def test_builder_rejects_provisional_profile_when_required(tmp_path):
+    data = {
+        "schema_version": 1,
+        "profile_name": "provisional-test",
+        "calibrated": False,
+        "source": "unit test",
+        "exposure": {
+            "min_us": 100.0,
+            "max_us": 1000.0,
+            "reference_us": 500.0,
+            "step_us": 0.0,
+            "signal_scale": 1.0
+        },
+        "gain": {
+            "mapping": "log",
+            "min_factor": 1.0,
+            "max_factor": 2.0,
+            "step_factor": 0.0,
+            "lut_x": None,
+            "lut_factor": None
+        },
+        "noise": {
+            "shot_alpha": 0.01,
+            "shot_beta": 0.0,
+            "read_std_base": 0.002,
+            "read_gain_exponent": 1.0
+        },
+        "black_level": 0.0,
+        "saturation_level": 1.0,
+        "quantization_bits": 0,
+        "motion_blur": {"scale": 0.0},
+        "actuator": {"command_delay_frames": 0}
+    }
+    path = tmp_path / "provisional.json"
+    path.write_text(json.dumps(data))
+
+    args = SimpleNamespace(
+        imx900_calibration=str(path),
+        require_calibrated_imx900=True,
+        gray_blur_kernel_size=3,
+        gray_dark_threshold=0.04,
+        gray_saturation_mode="soft",
+        gray_soft_clip_beta=8.0,
+    )
+
+    try:
+        build_from_args(args)
+    except ValueError as exc:
+        assert "calibrated=false" in str(exc)
+    else:
+        raise AssertionError("provisional profile should be rejected")
