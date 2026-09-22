@@ -89,6 +89,10 @@ def main():
         assert sensor.shape == ideal.shape
         assert torch.isfinite(ideal).all()
         assert torch.isfinite(sensor).all()
+        assert render_aux["geometry_normals"].shape == (
+            cli.batch_size, args.gray_height, args.gray_width, 3
+        )
+        assert torch.isfinite(render_aux["geometry_normals"]).all()
 
         for idx in range(min(cli.batch_size, 4)):
             prefix = f"{scenario}_{idx:02d}"
@@ -99,7 +103,8 @@ def main():
             f"[{scenario}] light={float(render_aux['light_scale'].mean()):.3f} "
             f"ideal_mean={float(ideal.mean()):.3f} sensor_mean={float(sensor.mean()):.3f} "
             f"sat={float(camera_aux['saturation_fraction'].mean()):.3f} "
-            f"dark={float(camera_aux['dark_fraction'].mean()):.3f}"
+            f"dark={float(camera_aux['dark_fraction'].mean()):.3f} "
+            f"normal_norm={float(torch.linalg.vector_norm(render_aux['geometry_normals'], dim=-1).mean()):.3f}"
         )
 
     print("gray smoke test: PASS")
