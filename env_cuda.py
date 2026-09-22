@@ -49,7 +49,7 @@ class Env:
         ellipsoid_c=0.0,
         camera_control_mode="learned",
         sensor_grad_mode="full",
-        camera_smoothing_alpha=0.7,
+        camera_smoothing_alpha=0.0,
         fixed_camera_exposure=0.35,
         fixed_camera_gain=0.15,
         fixed_random_exposure_min=0.10,
