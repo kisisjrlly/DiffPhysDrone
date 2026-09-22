@@ -13,7 +13,7 @@ Before modifying executable code:
 - do not delete legacy D455 code until grayscale functionality has replacements and tests;
 - tag/record the current branch head.
 
-## Phase 1 — configuration and semantics only
+## Phase 1 — configuration and semantics only ✅ IMPLEMENTED
 
 Add a camera-mode abstraction without changing behavior.
 
@@ -41,7 +41,7 @@ Acceptance:
 - gray config parses;
 - no silent reuse of D455 `power` semantics.
 
-## Phase 2 — ideal grayscale renderer
+## Phase 2 — ideal grayscale renderer ← NEXT
 
 Add a CUDA/PyTorch entry point that returns ideal grayscale appearance.
 
@@ -348,14 +348,13 @@ Create automated tests for:
 9. Log enough state to reproduce any paper figure.
 10. Every stage should have a small acceptance test before proceeding.
 
-## First Codex task recommendation
+## Current handoff point
 
-The first implementation PR should contain only:
+Phase 1 is now implemented on `active-sensing-grayscale-imx900`:
 
 - gray config/semantics skeleton;
-- `DifferentiableGrayCamera` with synthetic input;
-- finite-difference gradient tests;
-- no renderer changes;
-- no training changes.
+- `DifferentiableGrayCamera`;
+- finite-difference exposure/gain gradient tests;
+- sensor-effect tests.
 
-This isolates the most important mathematical component before touching the full navigation pipeline.
+The next implementation task is **Phase 2 only**: add the ideal grayscale renderer while keeping training/model integration unchanged. Because Phase 2 touches CUDA geometry code, compile/reinstall the extension in the `mappo-mpc` environment and add deterministic rendering tests before proceeding to Phase 4.
