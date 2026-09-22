@@ -44,8 +44,9 @@ def _print_cuda_failure_summary(args, device, exc: Exception):
     )
     print(
         f"[diag] config: batch_size={args.batch_size}, timesteps={args.timesteps}, "
-        f"depth_hw={args.depth_height}x{args.depth_width}, amp={args.amp}, "
-        f"scenarios={args.scenarios}"
+        f"sensor_type={args.sensor_type}, "
+        f"sensor_hw={(args.gray_height, args.gray_width) if args.sensor_type == 'gray' else (args.depth_height, args.depth_width)}, "
+        f"amp={args.amp}, scenarios={args.scenarios}"
     )
     print(
         "[diag] minimal branch uses full-BPTT direct-action training. "
@@ -64,7 +65,12 @@ def main():
         torch.backends.cudnn.allow_tf32 = True
 
     # ── 3. WandB + checkpoint dir ────────────────────────────────────────
-    mode_tag = f"cam-{args.camera_control_mode}_grad-{args.sensor_grad_mode}_depth-{args.policy_depth_mode}"
+    mode_tag = (
+        f"sensor-{args.sensor_type}_cam-{args.camera_control_mode}_"
+        f"grad-{args.sensor_grad_mode}"
+    )
+    if args.sensor_type == 'diff_depth':
+        mode_tag += f"_depth-{args.policy_depth_mode}"
     run_name = f"{mode_tag}_{time.strftime('%Y%m%d_%H%M%S')}"
     ckpt_timestamp = time.strftime('%Y-%m-%d-%H-%M-%S')
     checkpoint_dir = os.path.join('checkpoint', ckpt_timestamp)
@@ -103,6 +109,9 @@ def main():
         depth_use_pipeline=args.depth_use_pipeline,
         depth_min_valid=args.depth_min_valid,
         depth_max_range=args.depth_max_range,
+        sensor_type=args.sensor_type,
+        gray_nn_width=args.gray_nn_width,
+        gray_nn_height=args.gray_nn_height,
     ).to(device)
 
     use_amp = bool(args.amp and device.type == 'cuda')
