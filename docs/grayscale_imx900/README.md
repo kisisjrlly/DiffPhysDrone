@@ -52,12 +52,16 @@ split has been replaced by:
 The runtime model implements:
 
 - exposure integration;
+- calibrated exposure mapping, including optional piecewise LUT;
 - calibrated gain mapping, including optional piecewise LUT;
 - End2endImaging-inspired shot/read-noise decomposition;
+- power-law or measured-LUT read noise;
 - black level;
 - saturation/full-scale normalization;
+- optional fixed response LUT for unavoidable ISP behavior;
 - optional quantization with STE;
-- exposure-dependent motion blur.
+- exposure-dependent motion blur;
+- calibration-driven command delay and delay jitter.
 
 The numerical coefficients are loaded from the profile, not duplicated across
 experiment configs.
@@ -83,15 +87,17 @@ full-vs-detached experiment.
 The profile fields that must eventually come from the real e-con/IMX900 stack
 include:
 
-- exposure range/step and response scale;
+- exposure range/step and action->microseconds mapping/LUT;
+- exposure response scale;
 - gain mapping/LUT;
 - shot noise alpha/beta;
-- read noise vs gain;
+- read noise vs gain (power fit or measured LUT);
 - black level;
 - saturation/full scale;
 - RAW bit depth;
+- fixed response curve if the deployed path is unavoidably nonlinear;
 - motion-blur coefficient;
-- command-to-effective-frame latency.
+- command-to-effective-frame latency and jitter.
 
 The following remain surrogate/training choices:
 
