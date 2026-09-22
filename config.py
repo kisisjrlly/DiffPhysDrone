@@ -90,7 +90,7 @@ def build_parser():
     p.add_argument("--sensor_grad_mode", choices=["full", "detached"], default="full")
     p.add_argument("--train_flight_only", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--train_camera_only", default=False, action=argparse.BooleanOptionalAction)
-    p.add_argument("--camera_ema_alpha", type=float, default=0.7)
+    p.add_argument("--camera_smoothing_alpha", type=float, default=0.7)
     p.add_argument("--fixed_camera_exposure", type=float, default=0.35)
     p.add_argument("--fixed_camera_gain", type=float, default=0.15)
     p.add_argument("--fixed_random_exposure_min", type=float, default=0.10)
@@ -215,8 +215,8 @@ def validate_args(args):
         raise ValueError("--gray_transition_width must be > 0")
     if args.gray_light_jitter < 0:
         raise ValueError("--gray_light_jitter must be >= 0")
-    if not (0.0 <= args.camera_ema_alpha < 1.0):
-        raise ValueError("--camera_ema_alpha must be in [0,1)")
+    if not (0.0 <= args.camera_smoothing_alpha < 1.0):
+        raise ValueError("--camera_smoothing_alpha must be in [0,1)")
     for name in (
         "fixed_camera_exposure",
         "fixed_camera_gain",
