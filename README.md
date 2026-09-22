@@ -55,12 +55,15 @@ ideal grayscale irradiance
         v
 IMX900DifferentiableCamera
   ^     |
+  |     | exposure mapping / measured LUT
   |     | exposure integration
-  |     | gain mapping / LUT
-  |     | shot + read noise
+  |     | gain mapping / measured LUT
+  |     | shot + read noise / measured read-noise LUT
   |     | saturation surrogate
+  |     | optional measured response LUT
   |     | STE quantization
   |     | exposure/motion blur
+  |     | calibrated command delay + jitter
   |
 IMX900Calibration JSON
         |
@@ -162,6 +165,7 @@ Read in this order:
 6. [CALIBRATION_SIM2REAL.md](docs/grayscale_imx900/CALIBRATION_SIM2REAL.md)
 7. [CODEX_IMPLEMENTATION_GUIDE.md](docs/grayscale_imx900/CODEX_IMPLEMENTATION_GUIDE.md)
 
-The real IMX900 exposure/gain mapping, noise, saturation, quantization, blur,
-and command latency remain provisional until the purchased e-con camera stack
-is characterized.
+The real IMX900 exposure/gain mappings, read/shot noise, black level,
+saturation, quantization, optional fixed response curve, blur, and
+command-latency distribution remain provisional until the purchased e-con
+camera stack is characterized.
