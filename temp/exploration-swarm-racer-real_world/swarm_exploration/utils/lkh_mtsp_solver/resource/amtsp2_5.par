@@ -1,0 +1,7 @@
+SPECIAL
+PROBLEM_FILE = /home/bourne/ws_swarm_exp/gcs_real/src/exploration-swarm-racer/swarm_exploration/utils/lkh_mtsp_solver/resource/amtsp2_5.atsp
+SALESMEN = 1
+MTSP_OBJECTIVE = MINSUM
+RUNS = 1
+TRACE_LEVEL = 0
+TOUR_FILE = /home/bourne/ws_swarm_exp/gcs_real/src/exploration-swarm-racer/swarm_exploration/utils/lkh_mtsp_solver/resource/amtsp2_5.tour

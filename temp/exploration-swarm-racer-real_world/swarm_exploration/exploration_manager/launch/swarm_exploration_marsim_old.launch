@@ -1,0 +1,217 @@
+<?xml version="1.0" ?>
+<launch>
+  <!-- size of map, change the size in x, y, z according to your application -->
+<!--   <arg name="map_size_x" value="35.0"/> -->
+<!--   <arg name="map_size_y" value="35.0"/> -->
+<!--   <arg name="map_size_z" value=" 3.5"/> -->
+  <arg name="map_size_x" value="35.0"/>
+  <arg name="map_size_y" value="35.0"/>
+  <arg name="map_size_z" value="3.5"/>
+
+  <!-- Global odom prefix -->
+  <arg name="odom_prefix" value="/state_ukf/odom" />
+  <arg name="drone_num" value="5" />
+
+  <arg name="use_gpu_" value="true"/>
+  <arg name="global_cloud_topic" value="/map_generator/global_cloud"/>
+
+  <!-- <arg name="map_name" value="$(find map_generator)/resource/small_forest01cutoff.pcd"/> -->
+  <!-- <arg name="map_name" value="$(find generates_pcds)/pcd/exploration_pillar2.pcd"/>
+  <arg name="map_name" value="$(find generates_pcds)/pcd/exploration_pillar2.pcd"/> -->
+  <arg name="map_name" value="$(find generates_pcds)/pcd/office.pcd"/>
+  <!-- <arg name="map_name" value="$(find generates_pcds)/pcd/yixianyongshi.pcd"/> -->
+
+  <arg name="downsample_resolution" value="0.05"/>
+  <arg name="use_uav_extra_model" value = "1"/>
+    <!-- Map generation -->
+  <!-- <node pkg ="map_generator" name ="map_pub" type ="map_pub" output = "screen" args="$(find map_generator)/resource/office.pcd">    
+  </node> -->
+   <node pkg="map_generator" name="map_pub" type="map_pub" output="screen"
+         args="$(arg map_name)">
+        <param name="add_boundary" value="0"/>
+        <param name="is_bridge" value="0"/>
+        <param name="downsample_res" value="0.1"/>
+        <param name="map_offset_x" value="0.0"/>
+        <param name="map_offset_y" value="0.0"/>
+        <param name="map_offset_z" value="0.0"/>
+   </node>
+   <group if="$(arg use_gpu_)">
+       <node pkg="map_generator" name="map_pub1" type="map_pub" output="screen"
+               args="$(arg map_name)">
+               <param name="downsample_res" value="0.1"/>
+               <param name="map_offset_x" value="0.0"/>
+               <param name="map_offset_y" value="0.0"/>
+               <param name="map_offset_z" value="0.0"/>
+       </node>
+   </group>
+   <group unless="$(arg use_gpu_)">
+       <node pkg="map_generator" name="map_pub2" type="map_pub" output="screen"
+               args="$(arg map_name)">
+               <param name="downsample_res" value="$(arg downsample_resolution)"/>
+               <param name="map_offset_x" value="0.0"/>
+               <param name="map_offset_y" value="0.0"/>
+               <param name="map_offset_z" value="0.0"/>
+       </node>
+   </group>
+
+<!--   <include file="$(find exploration_manager)/launch/rviz_1.launch"> -->
+<!--   </include> -->
+
+<include file="$(find exploration_manager)/launch/single_drone_exploration_Marsim.xml">
+    <arg name="drone_id" value="1"/>
+    <arg name="init_x"   value="0"/>
+    <arg name="init_y"   value="0"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+    <arg name="use_gpu_" value="$(arg use_gpu_)"/>
+    <arg name="map_name" value="$(arg map_name)"/>
+    <arg name="downsample_resolution" value="$(arg downsample_resolution)"/>
+    <arg name="use_uav_extra_model" value="$(arg use_uav_extra_model)"/>
+    <arg name="sensor_type" value="D435i"/>
+  </include>
+
+  <include file="$(find exploration_manager)/launch/single_drone_exploration_Marsim.xml">
+    <arg name="drone_id" value="2"/>
+    <arg name="init_x"   value="-1"/>
+    <arg name="init_y"   value="1"/>
+    <arg name="init_z"   value="1"/>
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+    <arg name="use_gpu_" value="$(arg use_gpu_)"/>
+    <arg name="map_name" value="$(arg map_name)"/>
+    <arg name="downsample_resolution" value="$(arg downsample_resolution)"/>
+    <arg name="use_uav_extra_model" value="$(arg use_uav_extra_model)"/>
+    <arg name="sensor_type" value="D435i"/>
+  </include>
+
+   <include file="$(find exploration_manager)/launch/single_drone_exploration_Marsim.xml"> 
+     <arg name="drone_id" value="3"/> 
+     <arg name="init_x"   value="-1"/> 
+     <arg name="init_y"   value="0"/> 
+     <arg name="init_z"   value="1"/>  
+     <arg name="map_size_x" value="$(arg map_size_x)"/> 
+     <arg name="map_size_y" value="$(arg map_size_y)"/> 
+     <arg name="map_size_z" value="$(arg map_size_z)"/> 
+     <arg name="odom_prefix" value="$(arg odom_prefix)"/> 
+     <arg name="drone_num" value="$(arg drone_num)"/> 
+     <arg name="simulation" default="true"/> 
+     <arg name="use_gpu_" value="$(arg use_gpu_)"/>
+     <arg name="map_name" value="$(arg map_name)"/>
+     <arg name="downsample_resolution" value="$(arg downsample_resolution)"/>
+     <arg name="use_uav_extra_model" value="$(arg use_uav_extra_model)"/>
+     <arg name="sensor_type" value="mid360"/>
+   </include> 
+
+   <include file="$(find exploration_manager)/launch/single_drone_exploration_Marsim.xml"> 
+     <arg name="drone_id" value="4"/> 
+     <arg name="init_x"   value="0"/> 
+     <arg name="init_y"   value="1"/> 
+     <arg name="init_z"   value="1"/>  
+     <arg name="map_size_x" value="$(arg map_size_x)"/> 
+     <arg name="map_size_y" value="$(arg map_size_y)"/> 
+     <arg name="map_size_z" value="$(arg map_size_z)"/> 
+     <arg name="odom_prefix" value="$(arg odom_prefix)"/> 
+     <arg name="drone_num" value="$(arg drone_num)"/> 
+     <arg name="simulation" default="true"/> 
+     <arg name="use_gpu_" value="$(arg use_gpu_)"/>
+     <arg name="map_name" value="$(arg map_name)"/>
+     <arg name="downsample_resolution" value="$(arg downsample_resolution)"/>
+     <arg name="use_uav_extra_model" value="$(arg use_uav_extra_model)"/>
+     <arg name="sensor_type" value="mid360"/>
+   </include> 
+
+
+  <include file="$(find exploration_manager)/launch/single_drone_exploration_Marsim.xml">
+    <arg name="drone_id" value="5"/>
+    <arg name="init_x"   value="-1"/>
+    <arg name="init_y"   value="-1"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+    <arg name="use_gpu_" value="$(arg use_gpu_)"/>
+    <arg name="map_name" value="$(arg map_name)"/>
+    <arg name="downsample_resolution" value="$(arg downsample_resolution)"/>
+    <arg name="use_uav_extra_model" value="$(arg use_uav_extra_model)"/>
+    <arg name="sensor_type" value="mid360"/>
+  </include>
+  
+
+  <!-- <include file="$(find exploration_manager)/launch/single_drone_exploration_Marsim.xml">
+    <arg name="drone_id" value="6"/>
+    <arg name="init_x"   value="0"/>
+    <arg name="init_y"   value="-2"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+  </include>  -->
+
+  <!-- <include file="$(find exploration_manager)/launch/single_drone_exploration.xml">
+    <arg name="drone_id" value="7"/>
+    <arg name="init_x"   value="-1"/>
+    <arg name="init_y"   value="1"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+  </include>
+
+  <include file="$(find exploration_manager)/launch/single_drone_exploration.xml">
+    <arg name="drone_id" value="8"/>
+    <arg name="init_x"   value="-1"/>
+    <arg name="init_y"   value="0"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+  </include>
+
+  <include file="$(find exploration_manager)/launch/single_drone_exploration.xml">
+    <arg name="drone_id" value="9"/>
+    <arg name="init_x"   value="-1"/>
+    <arg name="init_y"   value="-1"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+  </include> -->
+
+  <!-- <include file="$(find exploration_manager)/launch/single_drone_exploration.xml">
+    <arg name="drone_id" value="10"/>
+    <arg name="init_x"   value="0"/>
+    <arg name="init_y"   value="-5.0"/>
+    <arg name="init_z"   value="1"/> 
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="odom_prefix" value="$(arg odom_prefix)"/>
+    <arg name="drone_num" value="$(arg drone_num)"/>
+    <arg name="simulation" default="true"/>
+  </include> -->
+
+</launch>

@@ -1,0 +1,6 @@
+SPECIAL
+PROBLEM_FILE = /home/bourne/ws_swarm_exp/gcs_real/src/exploration-swarm-racer/swarm_exploration/utils/lkh_mtsp_solver/resource/amtsp3_3.atsp
+TRACE_LEVEL = 1
+SEED = 0
+RUNS = 1
+TOUR_FILE = /home/bourne/ws_swarm_exp/gcs_real/src/exploration-swarm-racer/swarm_exploration/utils/lkh_mtsp_solver/resource/amtsp3_3.tour

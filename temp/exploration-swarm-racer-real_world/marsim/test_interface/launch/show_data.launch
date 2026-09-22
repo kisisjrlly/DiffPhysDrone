@@ -1,0 +1,41 @@
+<launch>
+
+    <arg name="drone_id" value="0"/>
+
+    <arg name="global_cloud_topic" value="/map_generator/global_cloud"/>
+    <arg name="odom_topic" value="/lidar_slam/odom"/>
+
+    <arg name="map_name" value="/home/jackykong/Downloads/demap_d435iscene_size2_001.pcd"/>
+    <arg name="downsample_resolution" value="0.1"/>
+
+   <node pkg="map_generator" name="map_pub" type="map_pub" output="screen"
+         args="$(arg map_name)">
+        <param name="add_boundary" value="0"/>
+        <param name="is_bridge" value="0"/>
+        <param name="downsample_res" value="0.1"/>         
+        <param name="map_offset_x" value="0.0"/>   
+        <param name="map_offset_y" value="0.0"/>   
+        <param name="map_offset_z" value="0.0"/>   
+   </node>
+
+    <node pkg="odom_visualization" name="quad$(arg drone_id)_odom_visualization" type="odom_visualization"
+          output="screen">
+        <remap from="~odom" to="/quad_$(arg drone_id)/$(arg odom_topic)"/>
+        <remap from="~cmd" to="/quad_$(arg drone_id)/pos_cmd"/>
+        <param name="color/a" value="1.0"/>
+        <param name="color/r" value="0.0"/>
+        <param name="color/g" value="1.0"/>
+        <param name="color/b" value="1.0"/>
+        <param name="covariance_scale" value="100.0"/>
+        <param name="robot_scale" value="1.0"/>
+        <param name="quadrotor_name" value="quad$(arg drone_id)"/>
+        <param name="drone_id" value="$(arg drone_id)"/>
+        <param name="mesh_resource" value="package://odom_visualization/meshes/yunque.dae"/>
+    </node>
+
+
+   <node name="rvizvisualisation" pkg="rviz" type="rviz" output="screen"
+   args="-d $(find test_interface)/config/traj.rviz" />
+
+
+</launch>

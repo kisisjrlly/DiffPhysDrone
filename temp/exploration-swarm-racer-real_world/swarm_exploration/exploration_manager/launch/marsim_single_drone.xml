@@ -1,0 +1,32 @@
+<launch>
+    <arg name="drone_id" default="1"/>
+    <arg name="drone_num" default="4"/> <!-- to determine salesman number, etc -->
+    <arg name="init_x" default="0"/>
+    <arg name="init_y" default="0"/>
+    <arg name="init_z" default="0"/>
+    <arg name="init_yaw" default="0.0"/>
+    <arg name="use_gpu_" default="false"/>
+    <arg name="map_name" default="$(find map_generator)/resource/small_forest01cutoff.pcd"/>
+    <arg name="downsample_resolution" default="0.1"/>
+    <arg name="use_uav_extra_model" default = "1"/>
+
+    <!-- lcm communication -->
+    <!-- <include file="$(find inf_uwb_ros)/launch/uwb_node_sim.launch" if="$(arg simulation)">
+    <arg name="self_id" value="$(arg drone_id)"/>
+    </include> -->
+    <include file="$(find test_interface)/launch/single_drone_racer_project.xml">
+        <arg name="drone_id" value="$(arg drone_id)"/>
+        <arg name="uav_num_" value="$(arg drone_num)"/>
+        <arg name="sensor_type" value="mid360"/>
+        <arg name="init_x_" value="$(arg init_x)"/>
+        <arg name="init_y_" value="$(arg init_y)"/>
+        <arg name="init_z_" value="$(arg init_z)"/>
+        <arg name="init_yaw" value="$(arg init_yaw)"/>
+        <arg name="map_name_" value="$(arg map_name)"/>
+        <arg name="downsample_resolution_" value="$(arg downsample_resolution)"/>
+        <arg name="odom_topic" value="lidar_slam/odom"/>
+        <arg name="use_gpu" value="$(arg use_gpu_)"/>
+        <arg name="use_uav_extra_model_" value="$(arg use_uav_extra_model)"/>
+    </include>
+
+</launch>

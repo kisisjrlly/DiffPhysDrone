@@ -1,0 +1,4 @@
+<launch>
+	<node type="vins_node" pkg="vins" name="vins_fusion" args="/home/zuzu/Workspace/Robotics/VIO/vins_fusion/src/VINS-Fusion/config/px4/euroc_stereo_imu_config.yaml" output="screen"/>
+	<include file="$(find vins)/launch/vins_rviz.launch"/>
+</launch> 

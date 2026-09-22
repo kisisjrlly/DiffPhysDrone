@@ -1,0 +1,5 @@
+<launch>
+
+ <node pkg="generates_pcds" name="generates_pcds_node1" type="generates_pcds_node" output="screen" />
+
+</launch>

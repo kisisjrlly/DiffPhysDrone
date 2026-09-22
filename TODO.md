@@ -203,3 +203,835 @@
 - `reset curriculum`
 
 然后先跑 `glare only`。只要单场景都学不会，就不要继续三场景。当前最关键的问题不是再调一点 loss，而是把学习问题从“太晚、太耦合、太连续”改成“早看到、可分类、可优化”。
+
+
+有，而且我检索下来发现：**你这个方向其实已经有一条非常清晰的“前人路线”可以借鉴**。尤其有两个项目/论文和你现在 DiffPhysDrone 的问题高度相关：**SAPIEN + SimSense**，以及 ICCV 2021 的 **Physics-Based Differentiable Depth Sensor Simulation (DDS)**。
+
+更重要的是，我刚刚也读取了你 `active-sensing-4f-tools-2b-core` 分支里的 `env_cuda.py` 和 `autograd_ops.py`。结合你当前代码，我现在反而觉得你**没有必要把整个 Isaac Sim / D455 渲染器改成可微**。你的任务可以简单很多。
+
+### 先说结论
+
+如果让我现在替你选技术路线，我会选：
+
+> **SAPIEN/SimSense 当“真实感教师模型” + DDS 的 soft stereo 思路 + 你现有 DiffPhysDrone 的 CUDA/PyTorch 框架。**
+
+而不是继续手工写现在 `glare/specular/dark` 那一大坨经验公式，也不是直接去魔改 Isaac Sim。
+
+你目前的核心目标实际上只需要：
+
+$$
+\boxed{
+\frac{\partial D_{\text{obs}}}
+{\partial (P,E,G)}
+}
+$$
+
+也就是：
+
+> projector power / exposure / gain 改变后，最终观测深度怎么变。
+
+你**不一定需要**
+
+$$
+\frac{\partial D}{\partial \text{geometry}}
+$$
+
+更不需要把整个四旋翼世界、光线追踪器、Isaac Sim 都放进 PyTorch autograd。
+
+而你自己的代码实际上已经在这么干了：`ActiveSensingSensorFunction` 的注释就明确写了，输入是已经渲染好的 raw depth + scene mask，backward **只返回 power/exposure/gain 的梯度，geometry depth 故意不回传梯度**。所以你现在真正缺的不是“一个完全可微的世界模拟器”，而是一个**可信的、通用的、参数驱动的 sensor model**。
+
+---
+
+## 1. 最值得你研究：SAPIEN + SimSense
+
+这个我认为和你的 D455 方向**最接近**。
+
+SAPIEN 有一套专门针对**主动双目深度相机**的 realistic depth pipeline。对应论文是：
+
+**Close the Optical Sensing Domain Gap by Physics-Grounded Active Stereo Sensor Simulation**
+
+它做的流程基本就是：
+
+$$
+\text{IR projector}
+\rightarrow
+\text{ray-traced IR}
+\rightarrow
+\text{left/right IR images}
+\rightarrow
+\text{IR noise}
+\rightarrow
+\text{stereo matching}
+\rightarrow
+\text{depth}
+$$
+
+而且论文明确考虑了：
+
+* 物体材质；
+* IR 投影图案；
+* specular / transparent material；
+* 光线传播；
+* IR camera noise；
+* stereo matching；
+* 深度 invalid hole。
+
+这已经比你现在手工定义的 `glare/specular/dark mask` 更接近“真正的传感器形成过程”。([arxiv.org][1])
+
+它的立体匹配部分单独开源成了 **SimSense**。SimSense 接收左右 IR 图，然后走：
+
+`IR noise → rectification → Census transform → stereo matching → uniqueness test → LR consistency → median filter → disparity → depth`
+
+而且 README 直接拿 **RealSense D435** 真机深度和 SimSense 输出做对照。它使用类似 SGM/SGBM 的 GPU 实现，README 给出的 848×480 benchmark 在 RTX 2080 Ti 上可以达到几十到两百 FPS。([GitHub][2])
+
+项目：
+
+[SimSense GitHub](https://github.com/angli66/simsense?utm_source=chatgpt.com)
+
+[SAPIEN GitHub](https://github.com/haosulab/SAPIEN?utm_source=chatgpt.com)
+
+这对于你非常有价值。
+
+但注意：
+
+**SimSense 本身不是可微的。**
+
+因为它内部存在很多东西：
+
+```text
+Census / Hamming
+argmin
+uniqueness threshold
+left-right check
+median filter
+invalid decision
+```
+
+这些天然就是离散操作。
+
+所以我的建议不是：
+
+> 把 SimSense CUDA 一行一行改成 backward。
+
+而是：
+
+> **拿 SimSense 的 forward pipeline 当物理参考，把其中真正与你的 camera action 有关系的部分做成 differentiable approximation。**
+
+这就会简单很多。
+
+---
+
+## 2. 更关键：其实已经有人做过“可微深度传感器”
+
+这个工作和你的问题几乎正面撞上了：
+
+**Benjamin Planche & Rajat Vikram Singh, Physics-Based Differentiable Depth Sensor Simulation, ICCV 2021**
+
+它简称可以叫 DDS。
+
+论文明确提出了：
+
+> end-to-end differentiable simulation pipeline for realistic depth scans
+
+整个 pipeline 可以对**sensor parameters 和 scene parameters 求导**。([CVF Open Access][3])
+
+它的结构基本是：
+
+```text
+3D geometry
+     ↓
+differentiable ray tracing
+     ↓
+projected structured-light image
+     ↓
+sensor noise
+     ↓
+differentiable stereo matching
+     ↓
+depth
+```
+
+而且 supplemental 给出了很重要的实现细节：
+
+* PyTorch
+* `redner`
+* differentiable ray tracing
+* differentiable block matching
+* **softargmax**
+* sensor intrinsic/extrinsic/baseline 都可以是参数。
+
+他们甚至给出了诸如：
+
+```text
+baseline = 75 mm
+block size = 9 px
+softargmax temperature β = 15
+subpixel refinement = 2
+```
+
+这样的实现参数。([CVF Open Access][4])
+
+这里最值得你借鉴的不是 ray tracer，而是：
+
+> **把传统 stereo 的 argmin 换成 softargmin。**
+
+传统方法：
+
+$$
+d=\arg\min_d C(d)
+$$
+
+不可微。
+
+改成：
+
+$$
+p(d)
+=
+\frac{\exp(-\beta C(d))}
+{\sum_j\exp(-\beta C(j))}
+$$
+
+然后：
+
+$$
+\hat d
+=
+\sum_d d\,p(d)
+$$
+
+就可以反向传播。
+
+最后：
+
+$$
+Z=\frac{fB}{\hat d+\epsilon}
+$$
+
+于是：
+
+$$
+P,E,G
+\rightarrow I_L,I_R
+\rightarrow C(d)
+\rightarrow \hat d
+\rightarrow Z
+$$
+
+整条链就是可微的。
+
+**这个思路非常适合你。**
+
+---
+
+## 3. Isaac Sim 的 D455：有，而且官方直接提供
+
+你刚才猜得没错。
+
+最新 Isaac Sim 官方文档直接提供：
+
+**RealSense D455 digital twin**
+
+资产为类似：
+
+`Realsense/D455/rsd455.usd`
+
+包括：
+
+* 左 IR camera
+* 右 IR camera
+* RGB camera
+* IMU
+* 相机间真实几何位置
+* focal length
+* aperture
+* FOV 等。
+
+([Isaac Sim 文档][5])
+
+但是这里有一个**非常非常重要的坑**。
+
+Isaac Sim 官方自己明确说：
+
+> `Camera_Pseudo_Depth` 只是 depth firmware 输出的替代物。
+
+它**没有真的跑 D455 的 stereo matching algorithm**。
+
+实际做的是：
+
+```text
+场景
+ ↓
+直接获得真实几何深度
+ ↓
+Pseudo Depth
+```
+
+而不是：
+
+```text
+IR projector
+ ↓
+left IR
+right IR
+ ↓
+stereo matching
+ ↓
+D455 depth
+```
+
+官方甚至明确说明：“如果真正从 stereo 重建并使用 RealSense 相同算法，才会产生包括 artifacts 在内的相同结果。”([Isaac Sim 文档][6])
+
+所以：
+
+### Isaac Sim D455 很适合做
+
+```text
+camera geometry
+baseline
+extrinsics
+intrinsics
+ROS interface
+RGB/IR cameras
+sensor placement
+```
+
+但**不适合直接拿来证明你的 active sensing gradient**。
+
+新版本 Omniverse 其实还有一个更有意思的 generic depth sensor，它会：
+
+```text
+scene depth
+→ disparity
+→ stereo reprojection
+→ occlusion holes
+→ disparity noise
+```
+
+比 `Pseudo Depth` 更真实，但依然不是 D455 firmware，也不是 PyTorch autograd pipeline。([NVIDIA Docs][7])
+
+---
+
+## 4. 如果不用深度相机，RGB/灰度相机反而更容易
+
+如果你的目标真的是：
+
+> 先证明“可微感知能够改善导航”
+
+那普通 grayscale camera 是最容易搞的。
+
+例如仿真输出一个干净灰度图：
+
+$$
+I_{\rm clean}
+$$
+
+你的 camera action 是：
+
+$$
+a=(E,G)
+$$
+
+也就是：
+
+* exposure
+* gain
+
+然后定义：
+
+$$
+I_{\rm sensor}
+=
+\operatorname{clip}
+\left(
+G\cdot E\cdot I_{\rm clean}
++
+n(E,G)
+\right)
+$$
+
+其中噪声可以用 reparameterization：
+
+$$
+n=\sigma(E,G)\epsilon,\qquad
+\epsilon\sim\mathcal N(0,1)
+$$
+
+全部 PyTorch 写。
+
+于是：
+
+```text
+exposure/gain
+      ↓
+brightness / saturation / noise
+      ↓
+grayscale image
+      ↓
+navigation network
+      ↓
+navigation loss
+```
+
+反向传播：
+
+```text
+navigation loss
+       ↓
+policy
+       ↓
+pixels
+       ↓
+exposure/gain
+```
+
+这一套实现难度大概只有你现在 D455 模型的 **1/10**。
+
+而 Kornia 里的大量图像操作本身都是 PyTorch differentiable operation，包括滤波、warp、颜色变换等。([Kornia][8])
+
+真机也很好做：
+
+```text
+USB/global-shutter camera
+    ↓
+manual exposure/gain
+    ↓
+navigation
+```
+
+所以如果只是 first proof-of-concept，我甚至会考虑它。
+
+不过从你的论文连续性来看，我还是更倾向继续 D455。
+
+---
+
+# 5. 我认为你现在真正应该采用的方案
+
+我看完你现在这版代码以后，最大的感受是：
+
+你现在的 `_sensor_reference()` 已经开始变成一个**人为设计的 expert system** 了。
+
+比如里面现在实际上有：
+
+```python
+active_signal
+passive_signal
+ambient_ir
+motion
+washout
+noise_proxy
+snr
+```
+
+然后 glare 又有：
+
+```python
+overexp
+gain_sat
+gain_exposure_sat
+rescue
+rescue_window
+joint_sat
+under_power
+```
+
+specular 又有：
+
+```python
+power_quad
+power_knee
+exposure_quad
+exposure_bloom
+gain_quad
+gain_bloom
+spec_safe
+...
+```
+
+dark 又有：
+
+```python
+exposure_lift
+gain_lift
+projector_lift
+dark_rescue
+...
+```
+
+最后再：
+
+```text
+sigmoid
+threshold
+straight-through estimator
+false depth
+edge drift
+body dropout
+...
+```
+
+这个模型当然可以调到 work。
+
+但是论文审稿人很容易问：
+
+> 为什么这些系数是 0.38、0.74、0.22、0.26？
+
+> 为什么 glare 是这个 sigmoid？
+
+> 为什么 specular 是另一个 sigmoid？
+
+> 这些现象是 RealSense D455 的真实响应吗？
+
+这是你当前路线最大的隐患。
+
+---
+
+# 6. 我会把你的 sensor model 改成下面这样
+
+保留你现在的：
+
+```text
+quadrotor simulator
+      ↓
+raw geometric depth
+```
+
+**这里完全不用改。**
+
+然后增加一个：
+
+```text
+Differentiable Active Stereo Sensor
+```
+
+输入：
+
+$$
+D_{\rm gt},P,E,G
+$$
+
+输出：
+
+$$
+D_{\rm sensor},Q
+$$
+
+内部第一版甚至不用真正渲染左右 IR。
+
+可以做成：
+
+```text
+raw depth
+   ↓
+compute geometry features
+   ├── distance
+   ├── depth edge
+   ├── incidence proxy
+   └── material / illumination feature
+          ↓
+sensor response network
+(P,E,G,features)
+          ↓
+σ_depth
+p_valid
+bias
+false-depth probability
+          ↓
+soft sensor depth
+```
+
+也就是：
+
+$$
+\sigma=f_\theta(D,\nabla D,P,E,G,m)
+$$
+
+$$
+p_{\rm valid}
+=
+f_\theta(D,\nabla D,P,E,G,m)
+$$
+
+$$
+b
+=
+f_\theta(D,\nabla D,P,E,G,m)
+$$
+
+再：
+
+$$
+D_{\rm obs}
+=
+p_{\rm valid}
+(D+b+\sigma\epsilon)
+$$
+
+全部 PyTorch。
+
+---
+
+## 关键来了：\(f_\theta\) 从哪来？
+
+不是手填。
+
+### 用三种数据监督它：
+
+第一来源：
+
+**真实 D455**
+
+```text
+真实场景
+P,E,G sweep
+↓
+记录 IR-left
+IR-right
+depth
+```
+
+第二来源：
+
+**SAPIEN + SimSense**
+
+```text
+virtual scene
+↓
+ray-traced active IR
+↓
+SimSense
+↓
+depth
+```
+
+第三来源：
+
+**ideal simulator**
+
+用于获得：
+
+```text
+ground-truth depth
+geometry
+surface normal
+material ID
+```
+
+于是你实际上是在学：
+
+$$
+f_\theta:
+(D_{gt},P,E,G,\text{scene})
+\rightarrow D_{D455}
+$$
+
+这个网络本身就是天然可微的。
+
+这样就不需要把 RealSense firmware 可微化。
+
+---
+
+# 7. 如果你想更加“物理”，就使用 DDS 路线
+
+第二版可以升级成：
+
+```text
+                projector power P
+                       ↓
+IR pattern × P
+                       ↓
+            differentiable renderer
+              ↙                ↘
+          left IR             right IR
+             ↓                   ↓
+      exposure + gain      exposure + gain
+              ↘               ↙
+                 cost volume
+                      ↓
+                 softargmin
+                      ↓
+                  disparity
+                      ↓
+                 fB / disparity
+                      ↓
+                    depth
+```
+
+这里可以直接借 DDS。
+
+而且对你的课题来说有一个很漂亮的梯度：
+
+$$
+\frac{\partial L_{\rm nav}}{\partial P}
+=
+\frac{\partial L_{\rm nav}}{\partial D}
+\frac{\partial D}{\partial d}
+\frac{\partial d}{\partial C}
+\frac{\partial C}{\partial I_{L,R}}
+\frac{\partial I_{L,R}}{\partial P}
+$$
+
+同理：
+
+$$
+\frac{\partial L_{\rm nav}}{\partial E},
+\quad
+\frac{\partial L_{\rm nav}}{\partial G}
+$$
+
+这才真正是你标题里所说的：
+
+> **differentiable sensing for navigation**
+
+而不是“我人工设计了一个 quality function，然后对 quality function 求梯度”。
+
+这两者的论文说服力差很多。
+
+---
+
+# 8. 几个项目放在一起看
+
+| 项目                      |   真实感 | D455相关 |    可微 | 我建议的用途                         |
+| ----------------------- | ----: | -----: | ----: | ------------------------------ |
+| Isaac Sim D455          |     中 |  ★★★★★ |     ✗ | D455几何、标定、ROS接口                |
+| Gazebo RealSense        |     低 |    ★★★ |     ✗ | ROS接口测试                        |
+| Habitat + Redwood Noise |     中 |      ★ |     ✗ | 简单 depth noise baseline        |
+| SimKinect               |     中 |      ✗ | 部分容易改 | 最简单 depth noise baseline       |
+| **SAPIEN + SimSense**   | **高** |   ★★★★ |     ✗ | **forward teacher / 仿真真值**     |
+| **DDS ICCV 2021**       | **高** | 主动深度相机 | **✓** | **可微算法设计蓝本**                   |
+| redner                  |     高 |     通用 | **✓** | differentiable light transport |
+| Mitsuba 3               |    很高 |     通用 | **✓** | 更物理的最终版本                       |
+| nvdiffrast              |     中 |     通用 | **✓** | 快速可微几何渲染                       |
+| PyTorch3D               |     中 |     通用 | **✓** | 快速 prototype                   |
+
+SAPIEN 那篇论文自己也指出，DDS 是此前直接进行 end-to-end differentiable depth simulation 的工作。([arXiv][1])
+
+---
+
+# 9. 对你这个项目，我现在最推荐的不是“SAPIEN 替换 DiffPhysDrone”
+
+而是：
+
+```text
+                    ┌──────────────┐
+                    │   SAPIEN     │
+                    │ + SimSense   │
+                    └──────┬───────┘
+                           │
+                    realistic samples
+                           │
+Real D455 ────────────────→│
+                           ↓
+              ┌────────────────────────┐
+              │ differentiable sensor │
+              │       surrogate        │
+              └───────────┬────────────┘
+                          │
+                          ↓
+raw geometric depth → sensor model → observed depth
+                          ↑
+                       P,E,G
+                          ↑
+                    camera policy
+                          ↑
+                     navigation
+```
+
+也就是说：
+
+### 飞行仿真
+
+继续用你现在的 DiffPhysDrone。
+
+### 几何深度
+
+继续用你现在 CUDA renderer。
+
+### 相机响应
+
+把现在 `_sensor_reference()` 那个越来越复杂的手工模型逐渐替换掉。
+
+### ground truth
+
+用：
+
+```text
+SAPIEN / SimSense
++
+real D455 sweep
+```
+
+### 可微结构
+
+借：
+
+```text
+DDS
+```
+
+这样你的工程量会骤降。
+
+---
+
+## 我甚至觉得，这可能比你之前那条路线更适合重新组织论文
+
+你论文的核心就可以变得非常干净：
+
+$$
+\boxed{
+\text{task loss}
+\rightarrow
+\text{navigation}
+\rightarrow
+\text{depth}
+\rightarrow
+\text{camera parameters}
+}
+$$
+
+然后做三个实验：
+
+```text
+Fixed
+Learned + no sensor gradient
+Learned + sensor gradient
+```
+
+区别真正只在：
+
+```python
+# ours
+depth = differentiable_sensor(raw_depth, camera_params)
+
+# no-diff
+depth = differentiable_sensor(
+    raw_depth,
+    camera_params.detach()
+)
+```
+
+这样如果 ours 赢了，
+
+你的核心因果关系就真的非常清楚了。
+
+---
+
+而且还有一个非常重要的好消息：**你完全不需要一开始就复现 D455 的全部 ASIC / firmware。** RealSense 自己公开的资料也说明 D400 系列本质上是双目视差 + IR texture projector，投影器在低纹理/困难照明条件下用于增加可匹配纹理。([GitHub][9])
+
+所以对你来说，一个：
+
+**IR projector + stereo + softargmin**
+
+的“D455-like differentiable active stereo camera”，已经有非常充分的合理性。
+
+如果让我继续推进，我下一步最想做的是：**直接结合你现在这个 GitHub 分支，给你设计 `DiffPhysDrone Sensor V2` 的代码架构**——具体到应该删除/保留 `env_cuda.py` 哪些部分，新建哪些 `.py/.cu` 文件，以及先做一个 **64×48 可微双目主动深度相机**，让 Codex 能直接照着实现。这个现在已经可以设计得很具体了。
+
+[1]: https://arxiv.org/abs/2201.11924 "Close the Optical Sensing Domain Gap by Physics-Grounded Active Stereo Sensor Simulation"
+[2]: https://github.com/angli66/simsense "GitHub - angli66/simsense: A Real-Time Depth Sensor Simulator with GPU Acceleration · GitHub"
+[3]: https://openaccess.thecvf.com/content/ICCV2021/html/Planche_Physics-Based_Differentiable_Depth_Sensor_Simulation_ICCV_2021_paper.html?utm_source=chatgpt.com "ICCV 2021 Open Access Repository"
+[4]: https://openaccess.thecvf.com/content/ICCV2021/supplemental/Planche_Physics-Based_Differentiable_Depth_ICCV_2021_supplemental.pdf?utm_source=chatgpt.com "Physics-based Differentiable Depth Sensor Simulation"
+[5]: https://docs.isaacsim.omniverse.nvidia.com/latest/sensors/isaacsim_sensors_camera.html?utm_source=chatgpt.com "Camera Sensors — Isaac Sim Documentation"
+[6]: https://docs.isaacsim.omniverse.nvidia.com/latest/sensors/isaacsim_sensors_camera.html "Camera Sensors — Isaac Sim Documentation"
+[7]: https://docs.omniverse.nvidia.com/kit/docs/omni.sensors.nv.camera/1.0.0/index.html?utm_source=chatgpt.com "Omniverse Camera Extension — Omniverse Kit"
+[8]: https://kornia.readthedocs.io/en/latest/get-started/differentiability.html?utm_source=chatgpt.com "Differentiability — Kornia"
+[9]: https://github.com/realsenseai/librealsense/blob/master/doc/depth-from-stereo.md?utm_source=chatgpt.com "librealsense/doc/depth-from-stereo.md at master · realsenseai/librealsense · GitHub"
