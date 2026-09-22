@@ -43,6 +43,15 @@ def build_parser():
     parser.add_argument('--policy_depth_mode', type=str, default='depth', choices=['depth', 'zero'])
     parser.add_argument('--diff_sensor_impl', nargs='*', default=['diff_depth=cuda'])
 
+    # Sensor transition switch. The executable gray pipeline is intentionally
+    # introduced in stages; default stays on the legacy depth path.
+    parser.add_argument('--sensor_type', type=str, default='diff_depth',
+                        choices=['diff_depth', 'gray'])
+    parser.add_argument('--gray_width', type=int, default=64)
+    parser.add_argument('--gray_height', type=int, default=48)
+    parser.add_argument('--gray_nn_width', type=int, default=32)
+    parser.add_argument('--gray_nn_height', type=int, default=24)
+
     parser.add_argument('--scenarios', nargs='*', default=list(SUPPORTED_SCENARIOS))
     parser.add_argument('--sun_glare_eval_slot', type=str, default=None)
     parser.add_argument('--random_rotation', default=False, action=argparse.BooleanOptionalAction)
@@ -119,6 +128,27 @@ def build_parser():
     parser.add_argument('--cam_iso_gain_scale', type=float, default=0.8)
     parser.add_argument('--cam_iso_gain_gamma', type=float, default=0.6)
     parser.add_argument('--cam_shot_noise_base', type=float, default=0.01)
+
+    # Grayscale camera model. Numerical defaults are provisional simulation
+    # values only; replace them with IMX900/e-con measurements after bring-up.
+    parser.add_argument('--gray_exposure_us_min', type=float, default=100.0)
+    parser.add_argument('--gray_exposure_us_max', type=float, default=8000.0)
+    parser.add_argument('--gray_exposure_reference_us', type=float, default=1000.0)
+    parser.add_argument('--gray_gain_factor_min', type=float, default=1.0)
+    parser.add_argument('--gray_gain_factor_max', type=float, default=8.0)
+    parser.add_argument('--gray_shot_noise_scale', type=float, default=0.015)
+    parser.add_argument('--gray_read_noise_std', type=float, default=0.005)
+    parser.add_argument('--gray_read_noise_gain_scale', type=float, default=0.35)
+    parser.add_argument('--gray_black_level', type=float, default=0.0)
+    parser.add_argument('--gray_blur_scale', type=float, default=1.0)
+    parser.add_argument('--gray_blur_kernel_size', type=int, default=5)
+    parser.add_argument('--gray_dark_threshold', type=float, default=0.05)
+    parser.add_argument('--gray_saturation_mode', type=str, default='ste',
+                        choices=['ste', 'hard', 'soft'])
+    parser.add_argument('--gray_soft_clip_beta', type=float, default=6.0)
+    parser.add_argument('--gray_quantization_bits', type=int, default=0)
+    parser.add_argument('--gray_enable_noise', default=True,
+                        action=argparse.BooleanOptionalAction)
 
     parser.add_argument('--ellipsoid_collision', default=False, action='store_true')
     parser.add_argument('--drone_a', type=float, default=0.15)
@@ -207,6 +237,32 @@ def set_global_seed(seed: int, deterministic: bool = True):
 def validate_args(args):
     if args.depth_width < 1 or args.depth_height < 1:
         raise ValueError('--depth_width/--depth_height must be >= 1')
+    if args.gray_width < 1 or args.gray_height < 1:
+        raise ValueError('--gray_width/--gray_height must be >= 1')
+    if args.gray_nn_width < 1 or args.gray_nn_height < 1:
+        raise ValueError('--gray_nn_width/--gray_nn_height must be >= 1')
+    if args.gray_exposure_us_min <= 0:
+        raise ValueError('--gray_exposure_us_min must be > 0')
+    if args.gray_exposure_us_max <= args.gray_exposure_us_min:
+        raise ValueError('--gray_exposure_us_max must be > --gray_exposure_us_min')
+    if args.gray_exposure_reference_us <= 0:
+        raise ValueError('--gray_exposure_reference_us must be > 0')
+    if args.gray_gain_factor_min <= 0:
+        raise ValueError('--gray_gain_factor_min must be > 0')
+    if args.gray_gain_factor_max < args.gray_gain_factor_min:
+        raise ValueError('--gray_gain_factor_max must be >= --gray_gain_factor_min')
+    if args.gray_shot_noise_scale < 0 or args.gray_read_noise_std < 0:
+        raise ValueError('--gray_shot_noise_scale/--gray_read_noise_std must be >= 0')
+    if args.gray_read_noise_gain_scale < 0 or args.gray_blur_scale < 0:
+        raise ValueError('--gray_read_noise_gain_scale/--gray_blur_scale must be >= 0')
+    if args.gray_blur_kernel_size < 1 or args.gray_blur_kernel_size % 2 == 0:
+        raise ValueError('--gray_blur_kernel_size must be a positive odd integer')
+    if not (0.0 <= args.gray_dark_threshold <= 1.0):
+        raise ValueError('--gray_dark_threshold must be in [0, 1]')
+    if args.gray_soft_clip_beta <= 0:
+        raise ValueError('--gray_soft_clip_beta must be > 0')
+    if args.gray_quantization_bits < 0:
+        raise ValueError('--gray_quantization_bits must be >= 0')
     if args.depth_max_range <= args.depth_min_valid:
         raise ValueError('--depth_max_range must be > --depth_min_valid')
     if args.loss_v_window < 1:
@@ -307,8 +363,19 @@ def print_runtime_mode(args):
     print('=' * 30 + ' Runtime Mode ' + '=' * 30)
     print('policy_head                : action_head')
     print('exec_control               : direct_action')
+    print(f"sensor_type               : {args.sensor_type}")
     print(f"diff_sensor_impl          : {args.diff_sensor_impl}")
     print(f"policy_depth_mode         : {args.policy_depth_mode}")
+    if args.sensor_type == 'gray':
+        print(
+            'gray_camera               : '
+            f'{args.gray_width}x{args.gray_height} -> '
+            f'{args.gray_nn_width}x{args.gray_nn_height}, '
+            f'exposure_us={args.gray_exposure_us_min}..{args.gray_exposure_us_max}, '
+            f'gain_factor={args.gray_gain_factor_min}..{args.gray_gain_factor_max}, '
+            f'saturation={args.gray_saturation_mode}'
+        )
+        print('gray_pipeline_status       : config/model skeleton only; renderer/training not wired yet')
     print(f"scenarios                 : {args.scenarios}")
     print(f"sun_glare_eval_slot       : {args.sun_glare_eval_slot}")
     print(f"random_rotation           : {args.random_rotation} (max_deg={args.random_rotation_max_deg})")
