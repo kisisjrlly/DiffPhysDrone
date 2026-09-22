@@ -3,20 +3,19 @@ import torch
 from render.ideal_gray import render_ideal_grayscale
 
 
-def _plane_inputs(height=16, width=20, depth_value=2.0):
-    depth = torch.full((1, height, width), depth_value)
-    R = torch.eye(3).unsqueeze(0)
-    pos = torch.zeros((1, 3))
+def _plane_inputs(height=16, width=20, depth_value=2.0, batch=1):
+    depth = torch.full((batch, height, width), depth_value)
+    R = torch.eye(3).unsqueeze(0).repeat(batch, 1, 1)
+    pos = torch.zeros((batch, 3))
     return depth, R, pos
 
 
-def test_shape_range_and_finite_values():
+def test_shape_and_finite_nonnegative_irradiance():
     depth, R, pos = _plane_inputs()
     gray, aux = render_ideal_grayscale(depth, R, pos, return_aux=True)
     assert gray.shape == (1, 1, 16, 20)
     assert torch.isfinite(gray).all()
     assert float(gray.min()) >= 0.0
-    assert float(gray.max()) <= 1.0
     assert aux["normals"].shape == (1, 16, 20, 3)
 
 
@@ -35,27 +34,38 @@ def test_front_parallel_plane_has_expected_lambertian_level():
     )
     center = gray[0, 0, 4:-4, 4:-4].mean()
     torch.testing.assert_close(center, torch.tensor(0.5), atol=2e-3, rtol=2e-3)
-    center_normal = aux["normals"][0, 8, 10]
-    assert center_normal[0] < -0.99
+    assert aux["normals"][0, 8, 10, 0] < -0.99
 
 
 def test_procedural_texture_creates_monocular_spatial_cues():
     depth, R, pos = _plane_inputs(height=24, width=32)
     plain, _ = render_ideal_grayscale(
-        depth,
-        R,
-        pos,
+        depth, R, pos,
         light_direction=(-1.0, 0.0, 0.0),
         texture_strength=0.0,
     )
     textured, _ = render_ideal_grayscale(
-        depth,
-        R,
-        pos,
+        depth, R, pos,
         light_direction=(-1.0, 0.0, 0.0),
         texture_strength=0.7,
     )
     assert textured.var() > plain.var() + 1e-5
+
+
+def test_batched_bright_illumination_can_exceed_one_before_camera():
+    depth, R, pos = _plane_inputs(batch=2)
+    gray, _ = render_ideal_grayscale(
+        depth,
+        R,
+        pos,
+        ambient=torch.tensor([0.1, 1.0]),
+        diffuse=torch.tensor([0.2, 2.0]),
+        light_direction=(-1.0, 0.0, 0.0),
+        base_albedo=0.8,
+        texture_strength=0.0,
+    )
+    assert gray[1].mean() > gray[0].mean()
+    assert float(gray[1].max()) > 1.0
 
 
 def test_background_depth_uses_background_intensity():
