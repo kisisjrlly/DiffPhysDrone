@@ -36,7 +36,13 @@ def test_legacy_d455_executable_symbols_are_absent():
             assert symbol not in text, f"{symbol!r} unexpectedly found in {path}"
 
 
-def test_generic_geometry_depth_is_still_available():
+def test_grayscale_branch_exposes_geometry_not_depth_camera_api():
     cpp = Path("src/quadsim.cpp").read_text()
-    assert 'm.def("render_depth"' in cpp
+    kernel = Path("src/quadsim_kernel.cu").read_text()
+    assert 'm.def("render_geometry"' in cpp
+    assert 'm.def("render_depth"' not in cpp
     assert "render_diff_depth" not in cpp
+    assert "active_sensing_sensor" not in cpp
+    assert "render_depth_kernel" not in kernel
+    assert "trace_ray_device(" not in kernel
+    assert "trace_ray_with_normal_device(" in kernel
