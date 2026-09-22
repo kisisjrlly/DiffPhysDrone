@@ -38,11 +38,13 @@ Acceptance:
 - camera action is exactly exposure/gain;
 - no D455 power or depth-sensor semantics remain in executable core code.
 
-## Phase 2 — ideal grayscale renderer ✅ CODE PRESENT / CUDA SMOKE PENDING
+## Phase 2 — ideal grayscale renderer ✅ IMPLEMENTED / CUDA REBUILD+SMOKE PENDING
 
 Add a CUDA/PyTorch entry point that returns ideal grayscale appearance.
 
-Reuse existing ray intersection and surface-normal code.
+Use the generic CUDA ray tracer to return ray-hit distance and exact hit
+normals in one pass. Do not reintroduce a depth-camera API or estimate normals
+from a depth observation.
 
 Initial scene appearance:
 
@@ -369,7 +371,7 @@ TASK=gray_gate_blind bash run.sh
 
 Go/no-go criteria:
 
-1. CUDA extension rebuild succeeds with no references to removed D455 symbols.
+1. CUDA extension rebuild succeeds with only `render_geometry` exposed for appearance geometry and no references to removed D455/depth-camera symbols.
 2. All grayscale unit tests pass.
 3. Smoke images show useful slit/texture cues in nominal, dark, and bright scenes.
 4. Fixed-gray navigation materially outperforms the zero-image control.
