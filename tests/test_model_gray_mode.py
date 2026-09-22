@@ -60,3 +60,13 @@ def test_freeze_modes_select_expected_parameter_groups():
         p.requires_grad if model._is_camera_parameter(name) else (not p.requires_grad)
         for name, p in model.named_parameters()
     )
+
+
+def test_camera_visual_warm_start_copies_trained_flight_stem():
+    model = Model()
+    with torch.no_grad():
+        for param in model.stem.parameters():
+            param.add_(0.123)
+    model.initialize_camera_visual_from_flight()
+    for flight, camera in zip(model.stem.parameters(), model.cam_stem.parameters()):
+        torch.testing.assert_close(flight, camera)
