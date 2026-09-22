@@ -225,20 +225,24 @@ Output one measured JSON profile.
 
 Do not edit model source to insert measured coefficients.
 
-## Phase 10 — actuator model ⬜ HARDWARE PENDING
+## Phase 10 — actuator model 🟡 DELAY STRUCTURE IMPLEMENTED / HARDWARE VALUES PENDING
 
-The current EMA is a policy/control smoothing mechanism, not a measured camera
-actuator model.
+Current code now separates:
 
-After latency characterization:
+- `camera_smoothing_alpha`: policy-command smoothing;
+- `command_delay_frames`: calibration-driven effective-command delay.
 
-- separate requested from effective settings;
-- implement real step/quantization;
-- add command-delay queue;
+The rollout uses a command queue for the measured frame delay. The provisional
+profile sets this to zero.
+
+After hardware characterization:
+
+- replace the zero delay with the measured value;
+- set real exposure/gain command steps;
 - add measured jitter if material;
-- preserve timestamps/metadata.
+- preserve requested/effective settings and timestamps in the real camera node.
 
-The calibration profile already has fields for command steps and nominal delay.
+Do not reinterpret policy smoothing as hardware latency.
 
 ## Phase 11 — optional optics refinement ⬜ ONLY IF NEEDED
 
