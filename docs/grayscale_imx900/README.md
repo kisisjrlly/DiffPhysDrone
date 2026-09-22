@@ -145,3 +145,27 @@ motion blur coefficient, and command dynamics are simulation placeholders.
 
 They must be replaced/calibrated from the real e-con IMX900 hardware before
 sim-to-real claims.
+
+
+## 9. Causal experiment guardrails
+
+The main full-vs-detached experiment must not give the flight policy direct
+access to exposure/gain. Therefore `include_camera_state_in_obs` defaults to
+false and all main grayscale configs explicitly use
+`--no-include_camera_state_in_obs`.
+
+The camera controller still receives current exposure/gain through its dedicated
+camera-state branch. This preserves actuator awareness while ensuring the flight
+policy can benefit from camera actions only through the resulting images.
+
+Motion blur now uses a detached task-relevant proxy
+
+[
+m \approx \|v\| / Z_{char},
+]
+
+where `Z_char` is the median valid geometric ray-hit distance. This internal
+geometry quantity is used only inside image formation; it is never exposed to
+the policy. The approximation makes long exposure more costly when the vehicle
+moves quickly near the gate, creating the intended low-light versus blur
+trade-off.
