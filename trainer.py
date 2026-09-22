@@ -185,16 +185,24 @@ def _log_episode_history_plots(rollout, args, iter_idx, env=None):
         if fig_p_local is not None:
             log_payload['episode_history/position_xyz_local'] = wandb.Image(fig_p_local, caption=meta_title)
         log_payload.update(meta_scalars)
-        if power_hist is not None and exposure_hist is not None and gain_hist is not None:
-            cam = torch.stack([
-                power_hist[:, j].detach().cpu(),
-                exposure_hist[:, j].detach().cpu(),
-                gain_hist[:, j].detach().cpu(),
-            ], -1)
+        if exposure_hist is not None and gain_hist is not None:
+            if power_hist is not None:
+                cam = torch.stack([
+                    power_hist[:, j].detach().cpu(),
+                    exposure_hist[:, j].detach().cpu(),
+                    gain_hist[:, j].detach().cpu(),
+                ], -1)
+                labels = ('power', 'exposure', 'gain')
+            else:
+                cam = torch.stack([
+                    exposure_hist[:, j].detach().cpu(),
+                    gain_hist[:, j].detach().cpu(),
+                ], -1)
+                labels = ('exposure', 'gain')
             fig_cam = _plot_xyz(
                 cam,
                 'episode camera params',
-                labels=('power', 'exposure', 'gain'),
+                labels=labels,
                 ylabel='0..1',
                 subtitle=meta_title,
             )
@@ -446,18 +454,24 @@ def _loss_from_rollout(rollout, env, args):
         prev_act_tail,
         win=args.loss_v_window,
     )
-    camera_losses = compute_camera_losses(
-        _stack_or_none(rollout['cam_history']),
-        _stack_or_none(rollout['power_history']),
-        _stack_or_none(rollout['exposure_history']),
-        _stack_or_none(rollout['gain_history']),
-        _stack_or_none(rollout['speed_history']),
-        _stack_or_none(rollout['fill_history']),
-        min_fill_rate=args.diff_depth_min_fill_rate,
-        camera_semantics=env.cam_sem,
-        power_baseline=args.cam_power_baseline,
-        cam_initial=rollout['camera_initial'],
-    )
+    if str(getattr(args, 'sensor_type', 'diff_depth')).lower() == 'gray':
+        camera_losses = compute_gray_camera_losses(
+            _stack_or_none(rollout['cam_history']),
+            cam_initial=rollout['camera_initial'],
+        )
+    else:
+        camera_losses = compute_camera_losses(
+            _stack_or_none(rollout['cam_history']),
+            _stack_or_none(rollout['power_history']),
+            _stack_or_none(rollout['exposure_history']),
+            _stack_or_none(rollout['gain_history']),
+            _stack_or_none(rollout['speed_history']),
+            _stack_or_none(rollout['fill_history']),
+            min_fill_rate=args.diff_depth_min_fill_rate,
+            camera_semantics=env.cam_sem,
+            power_baseline=args.cam_power_baseline,
+            cam_initial=rollout['camera_initial'],
+        )
     loss, loss_terms = aggregate_loss(physics_losses, camera_losses, args)
     clearance = torch.norm(vec_history + 1e-6, 2, -1)
     return loss, loss_terms, p_history, clearance
@@ -515,8 +529,17 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
 
         success_rate, collision_rate, final_goal_dist = _compute_success_collision(
             p_history.detach(), clearance.detach(), env_train, args)
-        cam_stats = compute_camera_param_stats(
-            rollout['power_history'], rollout['exposure_history'], rollout['gain_history'])
+        if str(getattr(args, 'sensor_type', 'diff_depth')).lower() == 'gray':
+            cam_stats = compute_gray_camera_param_stats(
+                rollout['exposure_history'],
+                rollout['gain_history'],
+            )
+        else:
+            cam_stats = compute_camera_param_stats(
+                rollout['power_history'],
+                rollout['exposure_history'],
+                rollout['gain_history'],
+            )
         iter_time = time.time() - iter_tic
         iter_per_sec = 1.0 / max(iter_time, 1e-6)
         sim_fps = iter_per_sec * args.timesteps * B
@@ -532,6 +555,19 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         }
         log.update(_build_loss_contrib_metrics(loss_terms, args))
         log.update({f'cam/{k}': v for k, v in cam_stats.items()})
+        if str(getattr(args, 'sensor_type', 'diff_depth')).lower() == 'gray':
+            if rollout['saturation_history']:
+                log['cam/saturation_fraction'] = float(
+                    torch.stack(rollout['saturation_history']).detach().mean()
+                )
+            if rollout['dark_history']:
+                log['cam/dark_fraction'] = float(
+                    torch.stack(rollout['dark_history']).detach().mean()
+                )
+            if rollout['blur_history']:
+                log['cam/blur_strength'] = float(
+                    torch.stack(rollout['blur_history']).detach().mean()
+                )
         smoother.add(log)
         should_log_episode_history = (
             not args.wandb_disabled
