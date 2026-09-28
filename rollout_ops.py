@@ -112,8 +112,13 @@ def init_camera_params(env, B, device):
         exposure = torch.empty((B,), device=device).uniform_(e_lo, e_hi)
         gain = torch.empty((B,), device=device).uniform_(g_lo, g_hi)
     else:
-        exposure = torch.full((B,), 0.5, device=device)
-        gain = torch.full((B,), 0.5, device=device)
+        # Learned control starts from the configured nominal operating point.
+        # Starting at 0.5/0.5 heavily saturates the provisional camera model
+        # before the recurrent controller has observed its first usable frame.
+        exposure = torch.full(
+            (B,), float(env.fixed_camera_exposure), device=device
+        )
+        gain = torch.full((B,), float(env.fixed_camera_gain), device=device)
 
     # Camera actuator state is episode-local. The measured delay comes from the
     # selected IMX900 calibration profile. The provisional profile uses zero.

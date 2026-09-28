@@ -1,6 +1,7 @@
 """DiffPhysDrone grayscale/IMX900 training entry point."""
 
 import faulthandler
+import json
 import os
 import shutil
 import time
@@ -45,6 +46,8 @@ def _print_cuda_failure_summary(args, device, exc):
 
 def main():
     args = parse_args()
+    if args.train_camera_only and not args.resume:
+        raise ValueError("camera-only training requires --resume with a validated flight checkpoint")
     device = torch.device("cuda")
     if not torch.cuda.is_available():
         raise RuntimeError("training requires CUDA")
@@ -63,6 +66,8 @@ def main():
     run_name = f"{mode_tag}_{time.strftime('%Y%m%d_%H%M%S')}"
     checkpoint_dir = os.path.join("checkpoint", time.strftime("%Y-%m-%d-%H-%M-%S"))
     os.makedirs(checkpoint_dir, exist_ok=True)
+    with open(os.path.join(checkpoint_dir, "args.json"), "w") as handle:
+        json.dump(vars(args), handle, indent=2)
 
     calibration = IMX900Calibration.from_json(args.imx900_calibration)
     calibration_snapshot = os.path.join(
@@ -118,6 +123,10 @@ def main():
         )
     elif args.train_camera_only:
         model.initialize_camera_visual_from_flight()
+        model.initialize_camera_output(
+            args.fixed_camera_exposure,
+            args.fixed_camera_gain,
+        )
         frozen = model.freeze_flight_for_camera_only()
         print(
             f"[info] train_camera_only: frozen_tensors={len(frozen)} "

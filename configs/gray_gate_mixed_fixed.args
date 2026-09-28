@@ -54,8 +54,8 @@
 --gray_soft_clip_beta 12.0
 --gray_enable_noise
 
---fixed_camera_exposure 0.35
---fixed_camera_gain 0.15
+--fixed_camera_exposure 0.10
+--fixed_camera_gain 0.00
 --fixed_random_exposure_min 0.10
 --fixed_random_exposure_max 0.90
 --fixed_random_gain_min 0.02

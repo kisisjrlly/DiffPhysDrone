@@ -77,6 +77,13 @@ def test_camera_init_and_update_shapes():
     assert hist.shape == (3, 2)
 
 
+def test_learned_camera_starts_from_configured_nominal_setting():
+    env = _DummyEnv(batch=2)
+    exposure, gain = init_camera_params(env, 2, torch.device("cpu"))
+    torch.testing.assert_close(exposure, torch.full((2,), env.fixed_camera_exposure))
+    torch.testing.assert_close(gain, torch.full((2,), env.fixed_camera_gain))
+
+
 def test_state_vector_adds_two_camera_values():
     env = _DummyEnv(batch=2)
     target_v = torch.ones(2, 3)
@@ -198,3 +205,16 @@ def test_command_delay_jitter_is_sampled_per_episode():
     )
     init_camera_params(env, 1, torch.device("cpu"))
     assert 1 <= env._camera_effective_delay_frames <= 3
+
+
+def test_sensor_ablation_preserves_forward_pixels_with_same_noise():
+    env = _DummyEnv(batch=1)
+    env.gray_enable_noise = True
+    exposure = torch.tensor([0.4], requires_grad=True)
+    gain = torch.tensor([0.3], requires_grad=True)
+    torch.manual_seed(123)
+    full, _ = render_gray_sensor(env, exposure, gain, differentiable=True)
+    torch.manual_seed(123)
+    detached, _ = render_gray_sensor(env, exposure, gain, differentiable=False)
+    torch.testing.assert_close(full, detached, rtol=0, atol=0)
+    assert full.requires_grad and not detached.requires_grad

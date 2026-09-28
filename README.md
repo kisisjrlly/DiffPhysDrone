@@ -141,6 +141,26 @@ TASK=gray_gate_mixed_fixed bash run.sh
 Only when fixed grayscale navigation clearly outperforms the blind baseline
 should learned camera control be interpreted.
 
+Use the paired vision gate after both training runs complete (pass actual
+checkpoint paths):
+
+```bash
+python tools/evaluate_gray_vision_gate.py \
+  --gray_checkpoint checkpoint/GRAY_RUN/final.pth \
+  --blind_checkpoint checkpoint/BLIND_RUN/final.pth \
+  --episodes 100 --seed 10000 --out_dir logs/vision_gate_run
+python tools/verify_gray_navigation_gradient.py
+```
+
+The evaluator compares grayscale, that same policy with zeroed pixels, and an
+independently trained blind policy. It uses one environment per episode and
+paired random streams. Confidence intervals describe evaluation episodes for
+these checkpoints; multiple training seeds are still required for a research
+claim. Generic `eval.py` also requires `--batch_size 1`.
+
+See [the September 24 review](docs/grayscale_imx900/REVIEW_2026_09_24.md)
+for corrections to the legacy-branch claims, nominal exposure, and evaluation.
+
 Then compare, from the same successful frozen flight checkpoint:
 
 - fixed nominal;

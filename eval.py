@@ -75,6 +75,12 @@ def _min_clearance_from_vec(vec_now, env):
 
 
 def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_trace=False):
+    if env.batch_size != 1:
+        raise ValueError("run_one_episode requires batch_size=1 for independent termination")
+    # Independent episode and stage streams keep comparisons paired even when
+    # a method terminates early or consumes extra random camera samples.
+    episode_seed = int(args.seed) + int(ep_idx)
+    set_global_seed(episode_seed, args.deterministic)
     B = env.batch_size
     use_amp = bool(args.amp and device.type == "cuda")
     env.reset(scene_name=scene_name)
@@ -100,7 +106,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
     trace_rows = []
 
     log_vis = bool(
-        vis.enabled
+        vis is not None and vis.enabled
         and (args.vis_episode_idx < 0 or int(ep_idx) == int(args.vis_episode_idx))
     )
     vis_phase = f"episodes/ep_{ep_idx:03d}/student" if log_vis else "student"
@@ -125,6 +131,7 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
     final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
 
     for t in range(args.timesteps):
+        set_global_seed((episode_seed * 1000003 + 3 * t + 1) % (2**32), args.deterministic)
         ctl_dt = normalvariate(
             1.0 / args.base_control_freq,
             0.1 / args.base_control_freq,
@@ -132,11 +139,15 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
 
         vec_now = env.find_vec_to_nearest_pt()
         clearance = _min_clearance_from_vec(vec_now, env)
+        min_clearance_hist.append(clearance.detach())
         goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
         collided |= clearance <= float(args.collision_clearance)
         reached |= goal_dist < 0.35
         if bool(collided.any()):
             stop_reason = "collision"
+            break
+        if bool(reached.all()):
+            stop_reason = "goal"
             break
 
         gray, aux = render_gray_sensor(
@@ -200,7 +211,6 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
         )
         act_buffer.append(act)
 
-        min_clearance_hist.append(clearance.detach())
         speed_hist.append(env.v.norm(2, -1).detach())
         exposure_hist.append(render_exposure.detach())
         gain_hist.append(render_gain.detach())
@@ -267,19 +277,25 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
                 depth_hw=(int(env.height), int(env.width)),
             )
 
+        set_global_seed((episode_seed * 1000003 + 3 * t + 2) % (2**32), args.deterministic)
         env.run(act_buffer[t], ctl_dt, target_v_raw)
         final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
         after_clearance = _min_clearance_from_vec(env.find_vec_to_nearest_pt(), env)
+        min_clearance_hist.append(after_clearance)
         collided |= after_clearance <= float(args.collision_clearance)
         reached |= final_goal_dist < 0.35
         if bool(collided.any()):
             stop_reason = "collision"
+            break
+        if bool(reached.all()):
+            stop_reason = "goal"
             break
 
     success = reached & (~collided)
     cam_stats = compute_camera_param_stats(exposure_hist, gain_hist)
     calibration = getattr(env, "imx900_calibration", None)
     row = {
+        "episode_seed": episode_seed,
         "scenario": scene_name,
         "camera_profile": getattr(calibration, "profile_name", ""),
         "camera_profile_calibrated": bool(getattr(calibration, "calibrated", False)),
@@ -305,6 +321,8 @@ def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_t
 
 def main():
     args = parse_eval_args()
+    if args.batch_size != 1:
+        raise ValueError("evaluation requires --batch_size 1: batched early stopping censors other episodes")
     print_runtime_mode(args)
     if not args.resume:
         raise ValueError("eval requires --resume")

@@ -147,6 +147,13 @@ class Model(nn.Module):
         """Warm-start camera visual features from a trained flight stem."""
         self.cam_stem.load_state_dict(self.stem.state_dict())
 
+    def initialize_camera_output(self, exposure, gain):
+        """Initialize the learned controller at a usable camera setting."""
+        target = self.fc_cam.bias.new_tensor([exposure, gain]).clamp(1e-4, 1.0 - 1e-4)
+        with torch.no_grad():
+            self.fc_cam.weight.zero_()
+            self.fc_cam.bias.copy_(torch.logit(target))
+
     def freeze_camera_for_flight_only(self):
         frozen = []
         for name, param in self.named_parameters():

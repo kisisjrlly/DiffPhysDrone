@@ -1,6 +1,8 @@
 """Full-BPTT trainer for grayscale task-driven camera control."""
 
 from random import normalvariate
+import json
+from pathlib import Path
 import time
 
 import torch
@@ -317,7 +319,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
 
         optim.zero_grad(set_to_none=True)
         cam_grad_norm = 0.0
-        if torch.isfinite(loss):
+        if torch.isfinite(loss) and loss.requires_grad:
             if use_amp:
                 scaler.scale(loss).backward()
                 scaler.unscale_(optim)
@@ -331,7 +333,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 optim.step()
             sched.step()
-        else:
+        elif not torch.isfinite(loss):
             print(f"[warn] non-finite loss at iter {i}; optimizer step skipped")
         if device.type == "cuda":
             torch.cuda.synchronize()
@@ -370,6 +372,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 log[f"cam/{key}"] = float(torch.stack(history).detach().mean())
 
         smoother.add(log)
+        with (Path(checkpoint_dir) / "metrics.jsonl").open("a") as handle:
+            handle.write(json.dumps(dict(iteration=i + 1, **log)) + "\n")
         if args.vis_enable:
             vis.log_train_scalars(
                 {k: v for k, v in log.items() if k in {
@@ -379,3 +383,5 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             )
         periodic_tail_ops(i, checkpoint_dir, model, smoother)
         pbar.set_description_str(f"loss: {float(loss.detach()):.3f}")
+    smoother.flush(args.num_iters)
+    torch.save(model.state_dict(), str(Path(checkpoint_dir) / "final.pth"))

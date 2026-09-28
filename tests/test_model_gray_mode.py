@@ -72,6 +72,19 @@ def test_camera_visual_warm_start_copies_trained_flight_stem():
         torch.testing.assert_close(flight, camera)
 
 
+def test_camera_output_initializes_to_configured_operating_point():
+    model = Model()
+    model.initialize_camera_output(0.10, 0.02)
+    hidden = torch.randn(5, model.cam_hidden_dim)
+    output = torch.sigmoid(model.fc_cam(hidden))
+    torch.testing.assert_close(
+        output,
+        torch.tensor([[0.10, 0.02]]).expand_as(output),
+        rtol=1e-5,
+        atol=1e-6,
+    )
+
+
 def test_flight_policy_has_no_direct_camera_state_shortcut_by_default():
     torch.manual_seed(0)
     model = Model(

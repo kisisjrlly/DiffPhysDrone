@@ -77,3 +77,12 @@ def test_main_configs_do_not_use_unmeasured_camera_smoothing():
             f"{path} should keep policy smoothing disabled; use coef_cam_smooth "
             "or a measured actuator profile instead"
         )
+
+
+def test_fixed_and_blind_configs_only_differ_in_pixels():
+    parser = build_parser()
+    gray = vars(parser.parse_args(_tokens(Path('configs/gray_gate_fixed.args'))))
+    blind = vars(parser.parse_args(_tokens(Path('configs/gray_gate_blind.args'))))
+    assert gray.pop('policy_gray_mode') == 'gray'
+    assert blind.pop('policy_gray_mode') == 'zero'
+    assert gray == blind

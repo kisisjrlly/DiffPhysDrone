@@ -1,4 +1,5 @@
 *.pth
+checkpoint/
 *.so
 src/quadsim_cuda.egg-info/
 runs
