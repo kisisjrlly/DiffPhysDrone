@@ -22,13 +22,15 @@ Use the mixed-light mean-AE flight checkpoint with paired episode seeds:
   tools/evaluate_fixed_response_surface.py \
   --resume checkpoint/2026-09-24-11-35-14/final.pth \
   --out_dir logs/imx900_review/fixed_response_surface \
-  --episodes_per_scenario 25 \
+  --episodes_per_scenario 5 \
   --scenarios dark bright dark_to_bright bright_to_dark
 ```
 
-The output contains `episodes.csv`, `summary.json`, and a calibration snapshot.
-The summary reports mean-best, worst-case-best, per-scenario results, and
-episode-bootstrap intervals. The simulator profile remains provisional.
+This is the tuning scan. Select candidates from its `summary.json`, then run
+an independent held-out evaluation with a new seed and a larger episode count,
+for example `--episodes_per_scenario 100 --seed 60000 --exposures 0.0
+--gains 0.8`. The output contains `episodes.csv`, `summary.json`, and a
+calibration snapshot. The simulator profile remains provisional.
 
 ## Matched causal runs
 
