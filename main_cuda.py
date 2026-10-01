@@ -1,6 +1,7 @@
 """DiffPhysDrone grayscale/IMX900 training entry point."""
 
 import faulthandler
+import hashlib
 import json
 import os
 import shutil
@@ -44,6 +45,16 @@ def _print_cuda_failure_summary(args, device, exc):
     )
 
 
+def _parameter_hash(model, camera):
+    digest = hashlib.sha256()
+    for name, param in model.named_parameters():
+        if model._is_camera_parameter(name) != camera:
+            continue
+        digest.update(name.encode())
+        digest.update(param.detach().cpu().contiguous().numpy().tobytes())
+    return digest.hexdigest()
+
+
 def main():
     args = parse_args()
     if args.train_camera_only and not args.resume:
@@ -64,7 +75,7 @@ def main():
         mode_tag += "_flightonly"
 
     run_name = f"{mode_tag}_{time.strftime('%Y%m%d_%H%M%S')}"
-    checkpoint_dir = os.path.join("checkpoint", time.strftime("%Y-%m-%d-%H-%M-%S"))
+    checkpoint_dir = args.checkpoint_dir or os.path.join("checkpoint", time.strftime("%Y-%m-%d-%H-%M-%S"))
     os.makedirs(checkpoint_dir, exist_ok=True)
     with open(os.path.join(checkpoint_dir, "args.json"), "w") as handle:
         json.dump(vars(args), handle, indent=2)
@@ -113,7 +124,10 @@ def main():
     if args.resume:
         print(f"[info] loading checkpoint: {args.resume}")
         state_dict = torch.load(args.resume, map_location=device)
-        model.load_state_dict(state_dict, strict=True)
+        if args.train_camera_only:
+            model.load_flight_state_dict(state_dict)
+        else:
+            model.load_state_dict(state_dict, strict=True)
 
     if args.train_flight_only:
         frozen = model.freeze_camera_for_flight_only()
@@ -122,8 +136,8 @@ def main():
             f"sample={', '.join(frozen[:12])}"
         )
     elif args.train_camera_only:
-        model.initialize_camera_visual_from_flight()
-        model.initialize_camera_output(
+        model.reset_camera_parameters_from_seed(
+            args.seed,
             args.fixed_camera_exposure,
             args.fixed_camera_gain,
         )
@@ -132,6 +146,15 @@ def main():
             f"[info] train_camera_only: frozen_tensors={len(frozen)} "
             f"sample={', '.join(frozen[:12])}"
         )
+
+    with open(os.path.join(checkpoint_dir, "initialization_manifest.json"), "w") as handle:
+        json.dump({
+            "seed": int(args.seed),
+            "resume": args.resume,
+            "mode": mode_tag,
+            "flight_parameter_sha256": _parameter_hash(model, camera=False),
+            "camera_parameter_sha256": _parameter_hash(model, camera=True),
+        }, handle, indent=2)
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     if not trainable:

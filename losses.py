@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 
 
-def velocity_tracking_loss(v_hist, tv_hist, win=12):
+def velocity_tracking_loss(v_hist, tv_hist, win=12, valid_mask=None):
     if v_hist.shape[0] <= win:
         return torch.zeros((), device=v_hist.device, dtype=v_hist.dtype)
     v_cum = v_hist.cumsum(0)
@@ -14,11 +14,21 @@ def velocity_tracking_loss(v_hist, tv_hist, win=12):
     if m <= 0:
         return torch.zeros((), device=v_hist.device, dtype=v_hist.dtype)
     delta_v = torch.norm(v_avg[:m] - tv_ref[:m], 2, -1)
-    return F.smooth_l1_loss(delta_v, torch.zeros_like(delta_v))
+    if valid_mask is None:
+        return F.smooth_l1_loss(delta_v, torch.zeros_like(delta_v))
+    valid = valid_mask[win:win + m].clone()
+    valid[:-1] &= valid_mask[:m - 1]
+    weights = valid.to(delta_v.dtype)
+    denom = weights.sum().clamp_min(1.0)
+    return F.smooth_l1_loss(delta_v, torch.zeros_like(delta_v), reduction="none").mul(weights).sum() / denom
 
 
-def barrier(x, v_to_pt):
-    return (v_to_pt * (1 - x).relu().clamp(max=5.0).pow(2)).mean()
+def barrier(x, v_to_pt, valid_mask=None):
+    value = v_to_pt * (1 - x).relu().clamp(max=5.0).pow(2)
+    if valid_mask is None:
+        return value.mean()
+    weights = valid_mask.to(value.dtype)
+    return value.mul(weights).sum() / weights.sum().clamp_min(1.0)
 
 
 def compute_physics_losses(
@@ -30,20 +40,35 @@ def compute_physics_losses(
     margin,
     prev_act_tail,
     win=12,
+    valid_mask=None,
 ):
     _ = p_chunk
-    loss_v = velocity_tracking_loss(v_chunk, tv_chunk, win=win)
+    loss_v = velocity_tracking_loss(v_chunk, tv_chunk, win=win, valid_mask=valid_mask)
     act_for_smooth = torch.cat([prev_act_tail[None], act_chunk], 0)
     jerk = act_for_smooth.diff(1, 0).mul(15)
-    loss_d_acc = act_chunk.pow(2).sum(-1).mean()
-    loss_d_jerk = jerk.pow(2).sum(-1).mean()
+    action_weights = valid_mask.to(act_chunk.dtype) if valid_mask is not None else None
+    if action_weights is None:
+        loss_d_acc = act_chunk.pow(2).sum(-1).mean()
+        loss_d_jerk = jerk.pow(2).sum(-1).mean()
+    else:
+        denom = action_weights.sum().clamp_min(1.0)
+        loss_d_acc = act_chunk.pow(2).sum(-1).mul(action_weights).sum() / denom
+        jerk_valid = torch.cat([valid_mask[:1], valid_mask[1:] & valid_mask[:-1]], 0)
+        jerk_weights = jerk_valid.to(jerk.dtype)
+        loss_d_jerk = jerk.pow(2).sum(-1).mul(jerk_weights).sum() / jerk_weights.sum().clamp_min(1.0)
 
     dist = torch.norm(vec_chunk + 1e-6, 2, -1) - margin
     with torch.no_grad():
-        v_to = (-torch.diff(dist, 1, 1) * 135).clamp_min(1)
-    dist_next = dist[:, 1:]
-    loss_avoid = barrier(dist_next, v_to)
-    loss_collide = F.softplus(dist_next.clamp(min=-3.0).mul(-32)).mul(v_to).mean()
+        v_to = (-torch.diff(dist, 1, 0) * 135).clamp_min(1)
+    dist_next = dist[1:]
+    transition_mask = None if valid_mask is None else valid_mask[:-1]
+    loss_avoid = barrier(dist_next, v_to, valid_mask=transition_mask)
+    collide = F.softplus(dist_next.clamp(min=-3.0).mul(-32)).mul(v_to)
+    if valid_mask is not None:
+        weights = transition_mask.to(collide.dtype)
+        loss_collide = collide.mul(weights).sum() / weights.sum().clamp_min(1.0)
+    else:
+        loss_collide = collide.mean()
     return {
         "loss_v": loss_v,
         "loss_d_acc": loss_d_acc,

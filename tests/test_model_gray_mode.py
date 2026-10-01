@@ -85,6 +85,27 @@ def test_camera_output_initializes_to_configured_operating_point():
     )
 
 
+def test_camera_seed_reset_preserves_flight_and_changes_camera():
+    model = Model()
+    flight_before = {
+        n: p.detach().clone() for n, p in model.named_parameters()
+        if not model._is_camera_parameter(n)
+    }
+    other = Model()
+    model.reset_camera_parameters_from_seed(101, 0.10, 0.02)
+    other.reset_camera_parameters_from_seed(202, 0.10, 0.02)
+    for name, param in model.named_parameters():
+        if not model._is_camera_parameter(name):
+            torch.testing.assert_close(param, flight_before[name])
+    params_a = dict(model.named_parameters())
+    params_b = dict(other.named_parameters())
+    assert any(
+        not torch.equal(params_a[name], params_b[name])
+        for name in params_a
+        if model._is_camera_parameter(name) and not name.startswith("cam_stem.")
+    )
+
+
 def test_flight_policy_has_no_direct_camera_state_shortcut_by_default():
     torch.manual_seed(0)
     model = Model(

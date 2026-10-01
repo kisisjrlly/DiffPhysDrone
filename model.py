@@ -154,6 +154,45 @@ class Model(nn.Module):
             self.fc_cam.weight.zero_()
             self.fc_cam.bias.copy_(torch.logit(target))
 
+    def load_flight_state_dict(self, state_dict):
+        """Load only flight-policy weights from a joint checkpoint."""
+        own = self.state_dict()
+        flight = {
+            name: value for name, value in state_dict.items()
+            if name in own and not self._is_camera_parameter(name)
+        }
+        expected = [name for name in own if not self._is_camera_parameter(name)]
+        missing = [name for name in expected if name not in flight]
+        if missing:
+            raise RuntimeError(f"flight checkpoint is missing parameters: {missing[:8]}")
+        self.load_state_dict(flight, strict=False)
+
+    def reset_camera_parameters_from_seed(self, seed, exposure, gain):
+        """Freshly initialize the camera branch while preserving flight weights."""
+        device = next(self.parameters()).device
+        kwargs = dict(
+            dim_obs=self.v_proj.in_features - (2 if self.include_camera_state_in_obs else 0),
+            dim_action=self.fc.out_features,
+            include_camera_state_in_obs=self.include_camera_state_in_obs,
+            use_policy_intent=self.use_policy_intent,
+            intent_dim=self.intent_dim,
+            gray_nn_width=self.gray_nn_width,
+            gray_nn_height=self.gray_nn_height,
+        )
+        devices = [device.index] if device.type == "cuda" and device.index is not None else []
+        with torch.random.fork_rng(devices=devices):
+            torch.manual_seed(int(seed))
+            fresh = type(self)(**kwargs).to(device)
+        current = self.state_dict()
+        fresh_state = fresh.state_dict()
+        with torch.no_grad():
+            for name in current:
+                # cam_stem is intentionally warm-started from the trained flight stem.
+                if self._is_camera_parameter(name) and not name.startswith("cam_stem."):
+                    current[name].copy_(fresh_state[name])
+            self.cam_stem.load_state_dict(self.stem.state_dict())
+            self.initialize_camera_output(exposure, gain)
+
     def freeze_camera_for_flight_only(self):
         frozen = []
         for name, param in self.named_parameters():

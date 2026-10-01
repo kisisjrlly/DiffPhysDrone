@@ -34,9 +34,24 @@ def _stack_or_none(values):
     return torch.stack(values)
 
 
+def _nearest_vec_per_batch(vec, batch_size):
+    """Reduce renderer collision vectors to one nearest vector per batch item."""
+    if vec.ndim == 2 and vec.shape[0] == batch_size:
+        return vec
+    if vec.ndim == 2 and vec.shape[1] == batch_size:
+        return vec.transpose(0, 1)
+    if vec.ndim < 3:
+        raise ValueError(f"unexpected collision-vector shape {tuple(vec.shape)}")
+    candidates = vec.reshape(-1, batch_size, vec.shape[-1])
+    norms = candidates.norm(2, -1)
+    idx = norms.argmin(0)
+    batch = torch.arange(batch_size, device=vec.device)
+    return candidates[idx, batch]
+
+
 def _compute_success_collision(p_history, clearance, env, args):
     collision = torch.any(
-        clearance.flatten(0, 1) <= float(args.collision_clearance),
+        clearance <= float(args.collision_clearance),
         dim=0,
     )
     final_dist = torch.norm(env.p_target - p_history[-1], dim=-1)
@@ -95,6 +110,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     exposure_history, gain_history = [], []
     saturation_history, dark_history, blur_history, light_history = [], [], [], []
     motion_proxy_history, char_depth_history = [], []
+    post_p_history, post_vec_history, valid_history = [], [], []
+    alive = torch.ones(B, dtype=torch.bool, device=device)
 
     sensor_differentiable = args.sensor_grad_mode == "full"
 
@@ -129,7 +146,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 value = value.flatten(1).mean(1) if value.ndim > 1 else value
                 history.append(value)
 
-        vec_now = env.find_vec_to_nearest_pt()
+        vec_now = _nearest_vec_per_batch(env.find_vec_to_nearest_pt(), B)
         target_v_raw = env.p_target - env.p.detach()
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
@@ -186,6 +203,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         )
         act_buffer.append(act)
 
+        valid_history.append(alive.clone())
         p_history.append(env.p)
         v_history.append(env.v)
         target_v_history.append(target_v)
@@ -225,8 +243,22 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
 
         env.run(act_buffer[t], ctl_dt, target_v_raw)
 
+        # Terminal state belongs to the action just taken. Keep it in the
+        # rollout so the final collision/goal is visible to both loss and
+        # metrics, while masking all subsequent samples in this episode.
+        post_vec = _nearest_vec_per_batch(env.find_vec_to_nearest_pt(), B)
+        post_p_history.append(env.p)
+        post_vec_history.append(post_vec)
+        post_clearance = torch.norm(post_vec + 1e-6, 2, -1)
+        collided = post_clearance <= float(args.collision_clearance)
+        reached = torch.norm(env.p_target - env.p, dim=-1) < 0.35
+        alive = alive & ~(collided | reached)
+
     return {
         "p_history": p_history,
+        "post_p_history": post_p_history,
+        "post_vec_history": post_vec_history,
+        "valid_history": valid_history,
         "v_history": v_history,
         "target_v_history": target_v_history,
         "vec_history": vec_history,
@@ -246,10 +278,10 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
 
 
 def _loss_from_rollout(rollout, env, args):
-    p_history = torch.stack(rollout["p_history"])
+    p_history = torch.stack(rollout["post_p_history"])
     v_history = torch.stack(rollout["v_history"])
     target_v_history = torch.stack(rollout["target_v_history"])
-    vec_history = torch.stack(rollout["vec_history"])
+    vec_history = torch.stack(rollout["post_vec_history"])
     act_history = torch.stack(rollout["act_history"])
 
     physics_losses = compute_physics_losses(
@@ -261,6 +293,7 @@ def _loss_from_rollout(rollout, env, args):
         env.margin,
         rollout["act_buffer"][1],
         win=args.loss_v_window,
+        valid_mask=torch.stack(rollout["valid_history"]),
     )
     camera_losses = compute_camera_losses(
         _stack_or_none(rollout["cam_history"]),

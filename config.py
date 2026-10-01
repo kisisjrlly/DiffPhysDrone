@@ -20,6 +20,7 @@ SUPPORTED_SCENARIOS = (
 def build_parser():
     p = argparse.ArgumentParser()
     p.add_argument("--resume", default=None)
+    p.add_argument("--checkpoint_dir", default=None)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_iters", type=int, default=5000)
     p.add_argument("--seed", type=int, default=42)
