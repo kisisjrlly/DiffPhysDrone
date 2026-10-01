@@ -43,8 +43,8 @@ def main():
     parser.set_defaults(batch_size=1)
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--episodes_per_scenario", type=int, default=25)
-    parser.add_argument("--exposures", default="0,.05,.10,.15,.20,.25,.30,.35,.40")
-    parser.add_argument("--gains", default="0,.05,.10,.15,.20,.25,.30")
+    parser.add_argument("--exposures", default="0,.10,.20,.30,.40,.50,.60,.70,.80,.90,1.0")
+    parser.add_argument("--gains", default="0,.10,.20,.30,.40,.50,.60,.70,.80,.90,1.0")
     args = parser.parse_args()
     cli_resume = args.resume
     cli_seed = args.seed
