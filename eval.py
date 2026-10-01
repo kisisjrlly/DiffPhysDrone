@@ -1,7 +1,9 @@
 """Evaluation entry point for grayscale/IMX900 active sensing."""
 
 import csv
+import json
 import os
+from pathlib import Path
 from random import normalvariate
 
 import torch
@@ -28,6 +30,22 @@ from rollout_ops import (
 from train_utils import build_env
 
 
+def load_checkpoint_training_args(args):
+    """Restore the exact training environment associated with a checkpoint."""
+    if not args.resume:
+        return args
+    checkpoint_dir = Path(args.resume).resolve().parent
+    args_path = checkpoint_dir / "args.json"
+    if args_path.is_file():
+        training = json.loads(args_path.read_text())
+        for key, value in training.items():
+            setattr(args, key, value)
+    snapshot = checkpoint_dir / "imx900_calibration.json"
+    if snapshot.is_file():
+        args.imx900_calibration = str(snapshot)
+    return args
+
+
 def parse_eval_args():
     parser = build_parser()
     parser.add_argument("--eval_episodes", type=int, default=10)
@@ -35,6 +53,19 @@ def parse_eval_args():
     parser.add_argument("--eval_trace_csv", type=str, default=None)
     parser.add_argument("--eval_episode_csv", type=str, default=None)
     args = parser.parse_args()
+    eval_overrides = {
+        "resume": args.resume,
+        "batch_size": args.batch_size,
+        "seed": args.seed,
+        "scenarios": list(args.scenarios),
+        "eval_episodes": args.eval_episodes,
+        "vis_episode_idx": args.vis_episode_idx,
+        "eval_trace_csv": args.eval_trace_csv,
+        "eval_episode_csv": args.eval_episode_csv,
+    }
+    load_checkpoint_training_args(args)
+    for key, value in eval_overrides.items():
+        setattr(args, key, value)
     args.scenarios = parse_scenarios(args.scenarios)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
@@ -74,12 +105,15 @@ def _min_clearance_from_vec(vec_now, env):
     return dist.reshape(-1, batch).min(dim=0).values
 
 
-def run_one_episode(ep_idx, scene_name, args, model, env, vis, device, collect_trace=False):
+def run_one_episode(
+    ep_idx, scene_name, args, model, env, vis, device,
+    collect_trace=False, episode_seed=None,
+):
     if env.batch_size != 1:
         raise ValueError("run_one_episode requires batch_size=1 for independent termination")
     # Independent episode and stage streams keep comparisons paired even when
     # a method terminates early or consumes extra random camera samples.
-    episode_seed = int(args.seed) + int(ep_idx)
+    episode_seed = int(args.seed) + int(ep_idx) if episode_seed is None else int(episode_seed)
     set_global_seed(episode_seed, args.deterministic)
     B = env.batch_size
     use_amp = bool(args.amp and device.type == "cuda")

@@ -18,3 +18,16 @@ def test_physics_losses_accept_terminal_mask_and_post_action_clearance():
     )
     assert all(torch.isfinite(value) for value in losses.values())
     assert losses["loss_collide"].item() > 0.0
+
+
+def test_collision_loss_pairs_action_with_same_step_post_state():
+    pre = torch.tensor([[[2.0, 0.0, 0.0]], [[2.0, 0.0, 0.0]]])
+    post = torch.tensor([[[0.0001, 0.0, 0.0]], [[2.0, 0.0, 0.0]]])
+    zeros = torch.zeros_like(pre)
+    losses = compute_physics_losses(
+        zeros, zeros, zeros, pre, zeros, torch.ones(1), torch.zeros(1, 3),
+        valid_mask=torch.ones(2, 1, dtype=torch.bool),
+        post_vec_chunk=post,
+        win=1,
+    )
+    assert losses["loss_collide"].item() > 0.0

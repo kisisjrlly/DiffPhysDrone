@@ -49,13 +49,20 @@ def _nearest_vec_per_batch(vec, batch_size):
     return candidates[idx, batch]
 
 
-def _compute_success_collision(p_history, clearance, env, args):
-    collision = torch.any(
-        clearance <= float(args.collision_clearance),
-        dim=0,
-    )
-    final_dist = torch.norm(env.p_target - p_history[-1], dim=-1)
-    reached = final_dist < 0.35
+def _compute_success_collision(p_history, clearance, env, args, rollout=None):
+    if rollout is not None and "terminal_collision" in rollout:
+        collision = rollout["terminal_collision"]
+        reached = rollout["terminal_reached"]
+        terminal_dist = torch.norm(env.p_target - rollout["terminal_position"], dim=-1)
+        final_dist = torch.where(
+            rollout["terminal_step"] >= 0,
+            terminal_dist,
+            torch.norm(env.p_target - p_history[-1], dim=-1),
+        )
+    else:
+        collision = torch.any(clearance <= float(args.collision_clearance), dim=0)
+        final_dist = torch.norm(env.p_target - p_history[-1], dim=-1)
+        reached = final_dist < 0.35
     success = reached & (~collision)
     return success.float().mean(), collision.float().mean(), final_dist.mean()
 
@@ -112,6 +119,10 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     motion_proxy_history, char_depth_history = [], []
     post_p_history, post_vec_history, valid_history = [], [], []
     alive = torch.ones(B, dtype=torch.bool, device=device)
+    terminal_collision = torch.zeros(B, dtype=torch.bool, device=device)
+    terminal_reached = torch.zeros(B, dtype=torch.bool, device=device)
+    terminal_step = torch.full((B,), -1, dtype=torch.long, device=device)
+    terminal_position = torch.zeros(B, 3, dtype=env.p.dtype, device=device)
 
     sensor_differentiable = args.sensor_grad_mode == "full"
 
@@ -252,13 +263,26 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         post_clearance = torch.norm(post_vec + 1e-6, 2, -1)
         collided = post_clearance <= float(args.collision_clearance)
         reached = torch.norm(env.p_target - env.p, dim=-1) < 0.35
-        alive = alive & ~(collided | reached)
+        first_collision = alive & collided
+        first_reached = alive & (~collided) & reached
+        first_terminal = first_collision | first_reached
+        terminal_collision |= first_collision
+        terminal_reached |= first_reached
+        terminal_step = torch.where(
+            first_terminal, torch.full_like(terminal_step, t), terminal_step
+        )
+        terminal_position = torch.where(first_terminal[:, None], env.p, terminal_position)
+        alive = alive & ~first_terminal
 
     return {
         "p_history": p_history,
         "post_p_history": post_p_history,
         "post_vec_history": post_vec_history,
         "valid_history": valid_history,
+        "terminal_collision": terminal_collision,
+        "terminal_reached": terminal_reached,
+        "terminal_step": terminal_step,
+        "terminal_position": terminal_position,
         "v_history": v_history,
         "target_v_history": target_v_history,
         "vec_history": vec_history,
@@ -281,7 +305,8 @@ def _loss_from_rollout(rollout, env, args):
     p_history = torch.stack(rollout["post_p_history"])
     v_history = torch.stack(rollout["v_history"])
     target_v_history = torch.stack(rollout["target_v_history"])
-    vec_history = torch.stack(rollout["post_vec_history"])
+    vec_history = torch.stack(rollout["vec_history"])
+    post_vec_history = torch.stack(rollout["post_vec_history"])
     act_history = torch.stack(rollout["act_history"])
 
     physics_losses = compute_physics_losses(
@@ -294,13 +319,15 @@ def _loss_from_rollout(rollout, env, args):
         rollout["act_buffer"][1],
         win=args.loss_v_window,
         valid_mask=torch.stack(rollout["valid_history"]),
+        post_vec_chunk=post_vec_history,
     )
     camera_losses = compute_camera_losses(
         _stack_or_none(rollout["cam_history"]),
         cam_initial=rollout["camera_initial"],
+        valid_mask=torch.stack(rollout["valid_history"]),
     )
     loss, terms = aggregate_loss(physics_losses, camera_losses, args)
-    clearance = torch.norm(vec_history + 1e-6, 2, -1)
+    clearance = torch.norm(post_vec_history + 1e-6, 2, -1)
     return loss, terms, p_history, clearance
 
 
@@ -376,6 +403,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             clearance.detach(),
             env_train,
             args,
+            rollout=rollout,
         )
         cam_stats = compute_camera_param_stats(
             rollout["exposure_history"],

@@ -14,7 +14,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from config import build_parser, parse_scenarios, set_global_seed, validate_args
-from eval import run_one_episode
+from eval import load_checkpoint_training_args, run_one_episode
 from model import Model
 from rerun_vis import RerunVis
 from train_utils import build_env
@@ -46,6 +46,14 @@ def main():
     parser.add_argument("--exposures", default="0,.05,.10,.15,.20,.25,.30,.35,.40")
     parser.add_argument("--gains", default="0,.05,.10,.15,.20,.25,.30")
     args = parser.parse_args()
+    cli_resume = args.resume
+    cli_seed = args.seed
+    cli_scenarios = list(args.scenarios)
+    load_checkpoint_training_args(args)
+    args.resume = cli_resume
+    args.seed = cli_seed
+    args.scenarios = cli_scenarios
+    args.batch_size = 1
     args.scenarios = parse_scenarios(args.scenarios)
     set_global_seed(args.seed, args.deterministic)
     validate_args(args)
@@ -73,17 +81,27 @@ def main():
     vis = RerunVis(enabled=False, app_id="DiffPhysDrone-ResponseSurface", spawn=False, show_aabb=False)
 
     rows = []
-    ep_idx = 0
+    # The same (scenario, local episode) seed is reused for every E/G setting.
+    episode_seeds = {
+        (scenario, local_idx): int(args.seed) + scenario_idx * args.episodes_per_scenario + local_idx
+        for scenario_idx, scenario in enumerate(args.scenarios)
+        for local_idx in range(args.episodes_per_scenario)
+    }
     for exposure in exposures:
         for gain in gains:
+            env.fixed_camera_exposure = exposure
+            env.fixed_camera_gain = gain
             args.fixed_camera_exposure = exposure
             args.fixed_camera_gain = gain
             for scenario in args.scenarios:
-                for _ in range(args.episodes_per_scenario):
-                    row, _ = run_one_episode(ep_idx, scenario, args, model, env, vis, device)
+                for local_idx in range(args.episodes_per_scenario):
+                    ep_idx = episode_seeds[(scenario, local_idx)] - int(args.seed)
+                    row, _ = run_one_episode(
+                        ep_idx, scenario, args, model, env, vis, device,
+                        episode_seed=episode_seeds[(scenario, local_idx)],
+                    )
                     row.update({"exposure_setting": exposure, "gain_setting": gain})
                     rows.append(row)
-                    ep_idx += 1
 
     with (out_dir / "episodes.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
@@ -127,7 +145,7 @@ def main():
         "episodes_per_scenario": args.episodes_per_scenario,
         "exposures": exposures,
         "gains": gains,
-        "episode_seed_rule": "seed + episode_index",
+        "episode_seed_rule": "seed + scenario_index * episodes_per_scenario + local_episode_index",
         "best_mean": summaries[0],
         "best_worst_case": max(summaries, key=lambda x: x["worst_case_success_rate"]),
         "settings": summaries,

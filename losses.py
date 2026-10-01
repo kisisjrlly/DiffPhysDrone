@@ -41,6 +41,7 @@ def compute_physics_losses(
     prev_act_tail,
     win=12,
     valid_mask=None,
+    post_vec_chunk=None,
 ):
     _ = p_chunk
     loss_v = velocity_tracking_loss(v_chunk, tv_chunk, win=win, valid_mask=valid_mask)
@@ -57,13 +58,20 @@ def compute_physics_losses(
         jerk_weights = jerk_valid.to(jerk.dtype)
         loss_d_jerk = jerk.pow(2).sum(-1).mul(jerk_weights).sum() / jerk_weights.sum().clamp_min(1.0)
 
-    dist = torch.norm(vec_chunk + 1e-6, 2, -1) - margin
+    if post_vec_chunk is None:
+        pre_vec = vec_chunk[:-1]
+        post_vec = vec_chunk[1:]
+        transition_mask = None if valid_mask is None else valid_mask[:-1]
+    else:
+        pre_vec = vec_chunk
+        post_vec = post_vec_chunk
+        transition_mask = valid_mask
+    dist_pre = torch.norm(pre_vec + 1e-6, 2, -1) - margin
+    dist_post = torch.norm(post_vec + 1e-6, 2, -1) - margin
     with torch.no_grad():
-        v_to = (-torch.diff(dist, 1, 0) * 135).clamp_min(1)
-    dist_next = dist[1:]
-    transition_mask = None if valid_mask is None else valid_mask[:-1]
-    loss_avoid = barrier(dist_next, v_to, valid_mask=transition_mask)
-    collide = F.softplus(dist_next.clamp(min=-3.0).mul(-32)).mul(v_to)
+        v_to = ((dist_pre - dist_post) * 135).clamp_min(1)
+    loss_avoid = barrier(dist_post, v_to, valid_mask=transition_mask)
+    collide = F.softplus(dist_post.clamp(min=-3.0).mul(-32)).mul(v_to)
     if valid_mask is not None:
         weights = transition_mask.to(collide.dtype)
         loss_collide = collide.mul(weights).sum() / weights.sum().clamp_min(1.0)
@@ -78,7 +86,7 @@ def compute_physics_losses(
     }
 
 
-def compute_camera_losses(cam_hist, cam_initial=None):
+def compute_camera_losses(cam_hist, cam_initial=None, valid_mask=None):
     if cam_hist is None:
         device = cam_initial.device if isinstance(cam_initial, torch.Tensor) else torch.device("cpu")
         return {"loss_cam_smooth": torch.zeros((), device=device)}
@@ -88,11 +96,13 @@ def compute_camera_losses(cam_hist, cam_initial=None):
         if init.ndim == seq.ndim - 1:
             init = init.unsqueeze(0)
         seq = torch.cat([init.detach(), seq], dim=0)
-    smooth = (
-        seq.diff(1, 0).pow(2).mean()
-        if seq.shape[0] > 1
-        else torch.zeros((), device=seq.device, dtype=seq.dtype)
-    )
+    values = seq.diff(1, 0).pow(2).mean(-1)
+    if valid_mask is not None:
+        weights = valid_mask.to(values.dtype)
+        values = values.mul(weights)
+        smooth = values.sum() / weights.sum().clamp_min(1.0)
+    else:
+        smooth = values.mean() if values.numel() else torch.zeros((), device=seq.device, dtype=seq.dtype)
     return {"loss_cam_smooth": smooth}
 
 
