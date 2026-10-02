@@ -45,3 +45,19 @@ pairs, evaluates each checkpoint, and writes an experiment manifest:
 ```
 
 The driver is a one-shot experiment command; it does not create a scheduler.
+
+After a run has completed, regenerate the audit manifest without retraining:
+
+```bash
+/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python \
+  tools/run_full_detached_seeds.py \
+  --flight_checkpoint checkpoint/2026-09-24-11-35-14/final.pth \
+  --out_dir logs/imx900_full_detached_5seeds \
+  --summary_only
+```
+
+The summary records checkpoint and calibration hashes, initialization hashes,
+Git revision, paired episode seed ranges, per-scenario success rates, and
+bootstrap intervals. A second evaluation with a new episode seed base should
+write to a separate directory so that the primary paired results remain
+immutable.
