@@ -19,6 +19,12 @@ See:
 - `docs/grayscale_imx900/HARDWARE_IMX900.md`
 - `docs/grayscale_imx900/CALIBRATION_SIM2REAL.md`
 
+`imx900_camera.py` now provides the explicit shadow-mode adapter contract and
+JSONL frame metadata writer. It accepts an injected target-specific frame
+backend and deliberately records effective exposure/gain as unavailable unless
+the driver supplies them. It does not enable autonomous camera writes or claim
+hardware compatibility.
+
 ## Planned runtime interface
 
 The future wrapper should provide explicit operations equivalent to:
