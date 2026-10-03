@@ -92,10 +92,10 @@ def make_variant_checkpoint(source_checkpoint, variant_dir, spec, method):
         exposure = calibration.setdefault("exposure", {})
         minimum = float(exposure.get("min_us", 100.0))
         maximum = float(exposure.get("max_us", 8000.0))
-        reference = minimum + (maximum - minimum) * 0.5
-        half_range = (maximum - minimum) * float(spec["exposure_range_scale"]) * 0.5
-        exposure["min_us"] = reference - half_range
-        exposure["max_us"] = reference + half_range
+        exposure["min_us"] = minimum
+        exposure["max_us"] = minimum + (maximum - minimum) * float(spec["exposure_range_scale"])
+        if exposure["max_us"] <= exposure["min_us"]:
+            raise ValueError("exposure mapping perturbation must preserve a positive range")
     if "exposure_range_offset_us" in spec:
         exposure = calibration.setdefault("exposure", {})
         offset = float(spec["exposure_range_offset_us"])
@@ -158,12 +158,11 @@ def main():
     parser.add_argument("--checkpoint_root", required=True)
     parser.add_argument("--flight_checkpoint", required=True)
     parser.add_argument("--out_dir", required=True)
-    parser.add_argument("--variants", default="nominal,hard_saturation,ste_saturation,blur_half,blur_onehalf,noise_half,noise_std_double,control_step_delay_1,control_step_delay_2,exposure_scale_low,exposure_scale_high,gain_linear,gain_log_perturb")
+    parser.add_argument("--variants", default="nominal,hard_saturation,noise_std_double,control_step_delay_1,control_step_delay_2,exposure_mapping_slope_low,exposure_mapping_slope_high,exposure_mapping_offset")
     parser.add_argument("--training_seeds", default="101")
     parser.add_argument("--methods", default="full,detached,fixed")
     parser.add_argument("--eval_seed", type=int, default=61000)
     parser.add_argument("--episodes_per_scenario", type=int, default=25)
-    parser.add_argument("--control_frequency_hz", type=float, default=15.0)
     parser.add_argument("--scenarios", nargs="+", default=list(SCENARIOS))
     args = parser.parse_args()
     root = Path(args.out_dir)
@@ -171,6 +170,18 @@ def main():
     seeds = [int(value) for value in args.training_seeds.split(",") if value.strip()]
     variants = [value.strip() for value in args.variants.split(",") if value.strip()]
     methods = [value.strip() for value in args.methods.split(",") if value.strip()]
+    frequencies = set()
+    for seed in seeds:
+        for method in methods:
+            source = Path(args.flight_checkpoint) if method == "fixed" else Path(args.checkpoint_root) / f"seed_{seed}" / method / "final.pth"
+            args_path = source.parent / "args.json"
+            if args_path.is_file():
+                config = json.loads(args_path.read_text())
+                if "base_control_freq" in config:
+                    frequencies.add(float(config["base_control_freq"]))
+    if len(frequencies) > 1:
+        raise ValueError(f"mismatched checkpoint control frequencies: {sorted(frequencies)}")
+    control_frequency_hz = next(iter(frequencies), 15.0)
     episodes = int(args.episodes_per_scenario) * len(args.scenarios)
     records = []
     row_cache = {}
@@ -277,7 +288,11 @@ def main():
         "scenarios": args.scenarios,
         "eval_seed": int(args.eval_seed),
         "episodes_per_scenario": int(args.episodes_per_scenario),
-        "control_frequency_hz": float(args.control_frequency_hz),
+        "control_frequency_hz": control_frequency_hz,
+        "delay_milliseconds": {
+            variant: round(spec.get("command_delay_frames", 0) * 1000.0 / control_frequency_hz, 3)
+            for variant in variants
+        },
         "delay_semantics": "command delay in control steps; convert to milliseconds using control_frequency_hz",
         "noise_semantics": "noise_std_scale multiplies configured standard-deviation coefficients",
         "git": git_metadata(),
