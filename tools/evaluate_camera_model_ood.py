@@ -14,7 +14,6 @@ import shutil
 import subprocess
 import sys
 import random
-import subprocess
 from pathlib import Path
 
 
@@ -37,11 +36,14 @@ def variant_spec(name):
         "blur_half": {"blur_scale": 0.5},
         "blur_onehalf": {"blur_scale": 1.5},
         "noise_half": {"noise_scale": 0.5},
-        "noise_double": {"noise_scale": 2.0},
-        "delay_1": {"command_delay_frames": 1},
-        "delay_2": {"command_delay_frames": 2},
+        "noise_std_double": {"noise_scale": 2.0},
+        "control_step_delay_1": {"command_delay_frames": 1},
+        "control_step_delay_2": {"command_delay_frames": 2},
         "exposure_scale_low": {"signal_scale": 0.9},
         "exposure_scale_high": {"signal_scale": 1.1},
+        "exposure_mapping_slope_low": {"exposure_range_scale": 0.9},
+        "exposure_mapping_slope_high": {"exposure_range_scale": 1.1},
+        "exposure_mapping_offset": {"exposure_range_offset_us": 250.0},
         "gain_linear": {"gain_mapping": "linear"},
         "gain_log_perturb": {"gain_factor_max_scale": 1.1},
     }
@@ -86,6 +88,19 @@ def make_variant_checkpoint(source_checkpoint, variant_dir, spec, method):
     if "signal_scale" in spec:
         exposure = calibration.setdefault("exposure", {})
         exposure["signal_scale"] = float(exposure.get("signal_scale", 1.0)) * float(spec["signal_scale"])
+    if "exposure_range_scale" in spec:
+        exposure = calibration.setdefault("exposure", {})
+        minimum = float(exposure.get("min_us", 100.0))
+        maximum = float(exposure.get("max_us", 8000.0))
+        reference = minimum + (maximum - minimum) * 0.5
+        half_range = (maximum - minimum) * float(spec["exposure_range_scale"]) * 0.5
+        exposure["min_us"] = reference - half_range
+        exposure["max_us"] = reference + half_range
+    if "exposure_range_offset_us" in spec:
+        exposure = calibration.setdefault("exposure", {})
+        offset = float(spec["exposure_range_offset_us"])
+        exposure["min_us"] = float(exposure.get("min_us", 100.0)) + offset
+        exposure["max_us"] = float(exposure.get("max_us", 8000.0)) + offset
     if "gain_mapping" in spec:
         calibration.setdefault("gain", {})["mapping"] = spec["gain_mapping"]
     if "gain_factor_max_scale" in spec:
@@ -143,11 +158,12 @@ def main():
     parser.add_argument("--checkpoint_root", required=True)
     parser.add_argument("--flight_checkpoint", required=True)
     parser.add_argument("--out_dir", required=True)
-    parser.add_argument("--variants", default="nominal,hard_saturation,ste_saturation,blur_half,blur_onehalf,noise_half,noise_double,delay_1,delay_2,exposure_scale_low,exposure_scale_high,gain_linear,gain_log_perturb")
+    parser.add_argument("--variants", default="nominal,hard_saturation,ste_saturation,blur_half,blur_onehalf,noise_half,noise_std_double,control_step_delay_1,control_step_delay_2,exposure_scale_low,exposure_scale_high,gain_linear,gain_log_perturb")
     parser.add_argument("--training_seeds", default="101")
     parser.add_argument("--methods", default="full,detached,fixed")
     parser.add_argument("--eval_seed", type=int, default=61000)
     parser.add_argument("--episodes_per_scenario", type=int, default=25)
+    parser.add_argument("--control_frequency_hz", type=float, default=15.0)
     parser.add_argument("--scenarios", nargs="+", default=list(SCENARIOS))
     args = parser.parse_args()
     root = Path(args.out_dir)
@@ -222,6 +238,37 @@ def main():
                     for scenario, values in by_scenario.items()
                 },
             })
+    variant_nominal = {}
+    for variant in variants:
+        for seed in seeds:
+            for method in methods:
+                if (variant, seed, method) not in row_cache:
+                    continue
+                if variant == "nominal":
+                    variant_nominal[(seed, method)] = row_cache[(variant, seed, method)]
+    variant_deltas = []
+    for variant in variants:
+        if variant == "nominal":
+            continue
+        for seed in seeds:
+            for method in methods:
+                nominal = variant_nominal.get((seed, method))
+                current = row_cache.get((variant, seed, method))
+                if nominal is None or current is None:
+                    continue
+                nominal_keys = [(row["episode_seed"], row["scenario"]) for row in nominal]
+                current_keys = [(row["episode_seed"], row["scenario"]) for row in current]
+                if nominal_keys != current_keys:
+                    raise RuntimeError(f"paired OOD nominal seeds differ: {variant}/seed_{seed}/{method}")
+                deltas = [float(row["success_rate"]) - float(base["success_rate"])
+                          for row, base in zip(current, nominal)]
+                variant_deltas.append({
+                    "variant": variant,
+                    "seed": seed,
+                    "method": method,
+                    "variant_minus_nominal": sum(deltas) / len(deltas),
+                    "paired_bootstrap_95_ci": bootstrap_ci(deltas, 93000 + seed),
+                })
     manifest = {
         "scope": "camera-model OOD evaluation of frozen checkpoints",
         "variants": variants,
@@ -230,10 +277,14 @@ def main():
         "scenarios": args.scenarios,
         "eval_seed": int(args.eval_seed),
         "episodes_per_scenario": int(args.episodes_per_scenario),
+        "control_frequency_hz": float(args.control_frequency_hz),
+        "delay_semantics": "command delay in control steps; convert to milliseconds using control_frequency_hz",
+        "noise_semantics": "noise_std_scale multiplies configured standard-deviation coefficients",
         "git": git_metadata(),
         "calibration_profiles_are_measured": False,
         "runs": records,
         "full_detached_comparisons": comparisons,
+        "variant_vs_nominal_comparisons": variant_deltas,
     }
     (root / "ood_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))

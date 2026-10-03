@@ -1,8 +1,10 @@
+import time
+
 from tools.realflight.imx900_camera import Imx900Camera
 
 
 class Backend:
-    last_timestamp = 123.5
+    last_timestamp = None
 
     def read(self):
         return True, Frame()
@@ -22,11 +24,13 @@ def test_adapter_records_requested_and_unknown_effective_values():
     camera.set_gain(2.0)
     frame, record = camera.grab_frame_with_timestamp()
     assert frame == [[1, 2], [3, 4]]
-    assert commands == [("exposure_us", 2500.0), ("gain", 2.0)]
-    assert record.camera_timestamp == 123.5
+    assert commands == [("exposure_us", 2500.0), ("gain", 0.0),
+                        ("exposure_us", 2500.0), ("gain", 2.0)]
+    assert record.camera_timestamp is None
     assert record.requested_exposure_us == 2500.0
     assert record.effective_exposure_us is None
     assert record.width == 2 and record.height == 2
+    assert record.timestamp_source == "unavailable"
 
 
 def test_effective_settings_are_only_reported_from_driver_callback():
@@ -36,3 +40,15 @@ def test_effective_settings_are_only_reported_from_driver_callback():
     _, record = camera.grab_frame_with_timestamp()
     assert record.effective_exposure_us == 2400.0
     assert record.effective_gain == 1.9
+
+
+def test_receive_timestamp_is_after_blocking_read():
+    class SlowBackend(Backend):
+        def read(self):
+            time.sleep(0.01)
+            return super().read()
+
+    camera = Imx900Camera(SlowBackend())
+    before = time.monotonic_ns()
+    _, record = camera.grab_frame_with_timestamp()
+    assert record.jetson_receive_monotonic_ns >= before + 9_000_000
