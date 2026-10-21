@@ -24,6 +24,9 @@ except ModuleNotFoundError:
 from autograd_ops import run
 from render.ideal_gray import render_ideal_grayscale
 from utils import g_decay
+from render.pose import dynamics_step, update_attitude
+from render.box_scene import box_clearance, swept_box_collision
+from render.intent_scene import build_intent_gates, render_exposure
 
 
 class Env:
@@ -81,12 +84,22 @@ class Env:
         gray_texture_strength=0.35,
         gray_texture_scale=5.0,
         gray_motion_depth_floor=0.35,
+        scene_layout="single_wall_slit",
+        observation_grad_mode="detached",
+        gray_temporal_samples=1,
+        intent_gate_spacing=2.4,
+        flight_max_speed=1.15,
     ):
         self.device = device
         self.batch_size = int(batch_size)
         self.width = int(width)
         self.height = int(height)
         self.grad_decay = float(grad_decay)
+        self.scene_layout = str(scene_layout)
+        self.observation_grad_mode = str(observation_grad_mode)
+        self.gray_temporal_samples = int(gray_temporal_samples)
+        self.intent_gate_spacing = float(intent_gate_spacing)
+        self.last_control_dt = 1 / 15
         self.fov_x_half_tan = float(fov_x_half_tan)
         self._fov_x_half_tan = float(fov_x_half_tan)
         self.cam_angle = float(cam_angle)
@@ -154,7 +167,7 @@ class Env:
         self.sub_div = torch.linspace(0, 1.0 / 15.0, 10, device=device).reshape(-1, 1, 1)
         self.flow = torch.empty((self.batch_size, 0, self.height, self.width), device=device)
 
-        self.fixed_max_speed = 1.15
+        self.fixed_max_speed = float(flight_max_speed)
         self.fixed_drone_radius = 0.12
         self.fixed_margin = 0.00
         self.fixed_pitch_ctl_delay = 12.0
@@ -182,6 +195,8 @@ class Env:
             return [name] * int(B)
         if self.eval_mode or len(self.scenarios) <= 1:
             return [random.choice(self.scenarios)] * int(B)
+        if self.scene_layout == "intent_gates" and B < len(self.scenarios):
+            return random.sample(self.scenarios, int(B))
         names = [self.scenarios[i % len(self.scenarios)] for i in range(int(B))]
         random.shuffle(names)
         return names
@@ -250,6 +265,7 @@ class Env:
 
     def reset(self, scene_name=None):
         B, device = self.batch_size, self.device
+        self.last_control_dt = float(getattr(self, "control_period_s", 1 / 15))
         self.current_scene_names = self._choose_scene_names(B, scene_name=scene_name)
         self.current_scene_name = (
             self.current_scene_names[0]
@@ -280,6 +296,8 @@ class Env:
             self._build_wall_slit_voxel_layout(y, w, bx)
             for y, w, bx in zip(self.slit_center_y, self.slit_half_y, self.back_wall_x)
         ])
+        if self.scene_layout == "intent_gates":
+            build_intent_gates(self)
 
         start_local = torch.stack([
             torch.full((B,), self.simple_start_x, device=device),
@@ -321,9 +339,8 @@ class Env:
 
         R0 = torch.zeros((B, 3, 3), device=device)
         v_dir = F.normalize(self.p_target - self.p, 2, -1)
-        self.R = quadsim_cuda.update_state_vec(
-            R0, self.act, v_dir, torch.zeros_like(self.yaw_ctl_delay), 5
-        )
+        attitude_fn = update_attitude if self.scene_layout == "intent_gates" else quadsim_cuda.update_state_vec
+        self.R = attitude_fn(R0, self.act, v_dir, torch.zeros_like(self.yaw_ctl_delay), 5)
         self.R_old = self.R.clone()
         self.p_old = self.p.clone()
 
@@ -349,6 +366,15 @@ class Env:
 
     def get_scene_effects_for_env(self, env_idx=0):
         idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        if self.scene_layout == "intent_gates":
+            return {
+                "geometry_kind": "intent_gates", "illumination_scenario": self.current_scene_names[idx],
+                "gate_x": self.gate_x.detach().cpu().tolist(),
+                "gate_centers_y": self.gate_centers_y[idx].detach().cpu().tolist(),
+                "gate_half_widths": self.gate_half_widths[idx].detach().cpu().tolist(),
+                "gate_surface_illumination": self.gate_lights[idx].detach().cpu().tolist(),
+                "world_fixed_lighting": True, "goal_independent_of_apertures": True,
+            }
         p_local = torch.bmm(self.R_scene_T, self.p[:, :, None])[:, :, 0]
         scale = self._scenario_light_scale(p_local[:, 0])
         return {
@@ -361,6 +387,9 @@ class Env:
         }
 
     def render_gray_ideal(self, *, return_aux=False, **renderer_kwargs):
+        if self.scene_layout == "intent_gates":
+            initial = torch.zeros(self.batch_size, device=self.p.device, dtype=self.p.dtype)
+            return render_exposure(self, initial, return_aux=return_aux)
         B = self.batch_size
         render_R = torch.bmm(self.R_scene_T, self.R @ self.R_cam).contiguous()
         render_p = torch.bmm(self.R_scene_T, self.p[:, :, None])[:, :, 0].contiguous()
@@ -410,6 +439,11 @@ class Env:
         return gray, aux
 
     def find_vec_to_nearest_pt(self):
+        if self.scene_layout == "intent_gates":
+            # Keep the legacy vector interface; signed clearance is separately
+            # used by the joint trainer so penetrations retain useful gradients.
+            clearance = self.signed_clearance().clamp_min(0)
+            return torch.stack([clearance, clearance * 0, clearance * 0], -1)
         p_world = self.p + self.v * self.sub_div
         p = torch.matmul(
             self.R_scene_T.unsqueeze(0),
@@ -501,7 +535,8 @@ class Env:
             + torch.randn_like(self.dg) * 0.2 * math.sqrt(ctl_dt / 4)
         )
         self.p_old = self.p
-        self.act, self.p, self.v, self.a = run(
+        dynamics_fn = dynamics_step if self.scene_layout == "intent_gates" else run
+        self.act, self.p, self.v, self.a = dynamics_fn(
             self.R,
             self.dg,
             self.z_drag_coef,
@@ -521,7 +556,27 @@ class Env:
         self.R_old = self.R.clone()
         if v_pred is None:
             v_pred = self.p_target - self.p
-        self.R = quadsim_cuda.update_state_vec(self.R, self.act, v_pred, alpha, 5)
+        attitude_fn = update_attitude if self.scene_layout == "intent_gates" else quadsim_cuda.update_state_vec
+        self.R = attitude_fn(self.R, self.act, v_pred, alpha, 5)
+        self.last_control_dt = float(ctl_dt)
+
+    def signed_clearance(self):
+        position = (self.R_scene_T @ self.p[:, :, None]).squeeze(-1)
+        return box_clearance(position[None], self.voxels, self.drone_radius)[0]
+
+    def collision_since_last_step(self):
+        start = (self.R_scene_T @ self.p_old[:, :, None]).squeeze(-1)
+        end = (self.R_scene_T @ self.p[:, :, None]).squeeze(-1)
+        return swept_box_collision(start, end, self.voxels, self.drone_radius)
+
+    def transition_clearance(self):
+        start = (self.R_scene_T @ self.p_old[:, :, None]).squeeze(-1)
+        end = (self.R_scene_T @ self.p[:, :, None]).squeeze(-1)
+        fractions = torch.linspace(0, 1, 17, device=self.p.device, dtype=self.p.dtype)
+        points = start[None] + fractions[:, None, None] * (end - start)[None]
+        clearance = box_clearance(points, self.voxels, self.drone_radius).amin(0)
+        swept = swept_box_collision(start, end, self.voxels, self.drone_radius)
+        return torch.where(swept, clearance.clamp_max(0), clearance)
 
     def save_state(self):
         return {

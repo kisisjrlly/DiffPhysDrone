@@ -1,6 +1,12 @@
 """Training helpers for the grayscale active-sensing branch."""
 
 import os
+import hashlib
+import json
+import subprocess
+import shutil
+import sys
+from pathlib import Path
 from collections import defaultdict
 
 import torch
@@ -28,7 +34,7 @@ class MetricSmoother:
         "iter_per_sec",
         "sim_fps",
     }
-    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/")
+    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/")
 
     def __init__(self, args):
         self._q = defaultdict(list)
@@ -106,8 +112,65 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         gray_texture_strength=args.gray_texture_strength,
         gray_texture_scale=args.gray_texture_scale,
         gray_motion_depth_floor=args.gray_motion_depth_floor,
+        scene_layout=args.scene_layout,
+        observation_grad_mode=args.observation_grad_mode,
+        gray_temporal_samples=args.gray_temporal_samples,
+        intent_gate_spacing=args.intent_gate_spacing,
+        flight_max_speed=args.flight_max_speed,
     )
     env.gray_camera = build_imx900_camera(args).to(device)
     env.imx900_calibration = env.gray_camera.calibration
     env.gray_enable_noise = bool(args.gray_enable_noise)
+    env.control_period_s = 1 / args.base_control_freq
+    if args.scene_layout == "intent_gates":
+        period_us = 1e6 / args.base_control_freq
+        if env.imx900_calibration.exposure_us_max > period_us:
+            raise ValueError("maximum exposure exceeds the simulated frame period")
     return env
+
+
+def write_run_provenance(directory, args):
+    """Bind a development run to the actual dirty source and calibration."""
+    root = Path(__file__).resolve().parent
+    out = Path(directory)
+    out.mkdir(parents=True, exist_ok=True)
+    def git(*arguments):
+        return subprocess.check_output(["git", *arguments], cwd=root, text=True).strip()
+    paths = [*root.glob("*.py")]
+    for folder, patterns in {
+        "render": ["*.py"], "sensors": ["*.py"], "controllers": ["*.py"],
+        "tools": ["*.py"], "configs": ["*.args", "calibration/*.json"],
+    }.items():
+        for pattern in patterns:
+            paths.extend((root / folder).glob(pattern))
+    snapshot = out / "source_snapshot"
+    for path in paths:
+        target = snapshot / path.relative_to(root)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+    calibration = build_imx900_camera(args).calibration
+    shutil.copy2(args.imx900_calibration, out / "calibration_snapshot.json")
+    limitations = []
+    if not calibration.calibrated:
+        limitations.append("provisional sensor profile")
+    if args.scene_layout == "intent_gates":
+        limitations.extend(["piecewise hard visibility gradients", "constant twist during exposure"])
+    manifest = {
+        "git_revision": git("rev-parse", "HEAD"), "git_status": git("status", "--porcelain"),
+        "source_sha256": {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)},
+        "calibration_sha256": hashlib.sha256(Path(args.imx900_calibration).read_bytes()).hexdigest(),
+        "calibrated": calibration.calibrated,
+        "source_snapshot": "source_snapshot/",
+        "configuration": vars(args),
+        "runtime": {"python": sys.version.split()[0], "torch": torch.__version__,
+                    "cuda": torch.version.cuda,
+                    "tf32_matmul": torch.backends.cuda.matmul.allow_tf32,
+                    "deterministic_requested": args.deterministic,
+                    "deterministic_algorithms_enabled": torch.are_deterministic_algorithms_enabled()},
+        "scene_layout": args.scene_layout, "policy_arch": args.policy_arch,
+        "observation_grad_mode": args.observation_grad_mode,
+        "camera_delay_unit": "control_steps", "frame_period_s": 1 / args.base_control_freq,
+        "temporal_integration_samples": args.gray_temporal_samples,
+        "limitations": limitations,
+    }
+    (out / "provenance.json").write_text(json.dumps(manifest, indent=2) + "\n")

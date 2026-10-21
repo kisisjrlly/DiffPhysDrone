@@ -7,9 +7,14 @@ import torch.nn.functional as F
 def render_gray_sensor(env, exposure, gain, differentiable=True):
     if not hasattr(env, "gray_camera"):
         raise RuntimeError("env.gray_camera is not configured")
-    ideal, render_aux = env.render_gray_ideal(return_aux=True)
     sensor_exposure = exposure if differentiable else exposure.detach()
     sensor_gain = gain if differentiable else gain.detach()
+    temporal = getattr(env, "scene_layout", "single_wall_slit") == "intent_gates"
+    if temporal:
+        from render.intent_scene import render_exposure
+        ideal, render_aux = render_exposure(env, sensor_exposure, return_aux=True)
+    else:
+        ideal, render_aux = env.render_gray_ideal(return_aux=True)
 
     # Approximate image-motion magnitude. Translational optical flow grows
     # roughly with speed / scene depth, so the same vehicle speed should blur
@@ -40,11 +45,15 @@ def render_gray_sensor(env, exposure, gain, differentiable=True):
         ideal,
         sensor_exposure,
         sensor_gain,
-        motion=motion,
+        motion=None if temporal else motion,
         enable_noise=bool(getattr(env, "gray_enable_noise", True)),
     )
     aux = dict(render_aux or {})
     aux.update(camera_aux or {})
+    if temporal:
+        # Integration already accounts for translation, angular motion and
+        # exposure duration. Do not apply the legacy box blur a second time.
+        aux["blur_strength"] = render_aux["temporal_blur_mae"][:, None, None, None]
     aux["ideal_gray"] = ideal.detach()
     aux["motion_proxy"] = motion.detach()
     aux["characteristic_depth"] = char_depth.detach()
@@ -85,6 +94,22 @@ def build_state_vector(env, target_v, R, exposure, gain, no_odom, include_camera
         -1,
     )
     return state, local_v, camera_state, camera_motion_state
+
+
+def policy_forward(model, state, hx, env, **kwargs):
+    """Supply only the camera head with known command-queue/time information."""
+    if getattr(model, "uses_camera_timeline", False):
+        applied = (kwargs["camera_state"] + 1) * .5
+        requested = getattr(env, "_camera_requested_state", applied)
+        queue = getattr(env, "_camera_command_queue", [])
+        pending = queue[0] if queue else applied
+        period = float(getattr(env, "control_period_s", 1 / 15))
+        # A zero-length queue still affects the next, rather than current, frame.
+        times = state.new_tensor([(_camera_delay_frames(env) + 1) * period, period])
+        timeline = torch.cat([requested * 2 - 1, pending * 2 - 1,
+                              times[None].expand(state.shape[0], -1)], -1)
+        kwargs["camera_timeline"] = timeline
+    return model(state, hx, **kwargs)
 
 
 def compute_target_velocity(target_v_raw, env):

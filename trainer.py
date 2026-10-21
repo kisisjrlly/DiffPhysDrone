@@ -24,6 +24,7 @@ from rollout_ops import (
     init_camera_params,
     update_camera_params,
     compute_camera_param_stats,
+    policy_forward,
 )
 from train_utils import MetricSmoother, periodic_tail_ops
 
@@ -75,6 +76,7 @@ def _build_loss_contrib_metrics(loss_terms, args):
         ("d_acc", "loss_d_acc", args.coef_d_acc),
         ("d_jerk", "loss_d_jerk", args.coef_d_jerk),
         ("cam_smooth", "loss_cam_smooth", args.coef_cam_smooth),
+        ("terminal_goal", "loss_terminal_goal", getattr(args, "coef_terminal_goal", 0.0)),
     ]
     contrib = {}
     for name, key, coef in specs:
@@ -104,6 +106,12 @@ def _camera_grad_norm(model):
     return 0.0 if total is None else float(total.sqrt().cpu())
 
 
+def _flight_grad_norm(model):
+    return sum(float(p.grad.detach().square().sum())
+               for name, p in model.named_parameters()
+               if p.grad is not None and not model._is_camera_parameter(name)) ** 0.5
+
+
 def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     h = None
     cam_h = None
@@ -118,6 +126,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     saturation_history, dark_history, blur_history, light_history = [], [], [], []
     motion_proxy_history, char_depth_history = [], []
     post_p_history, post_vec_history, valid_history = [], [], []
+    post_clearance_history = []
+    angular_speed_history = []
     alive = torch.ones(B, dtype=torch.bool, device=device)
     terminal_collision = torch.zeros(B, dtype=torch.bool, device=device)
     terminal_reached = torch.zeros(B, dtype=torch.bool, device=device)
@@ -129,7 +139,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     for t in range(args.timesteps):
         ctl_dt = normalvariate(
             1.0 / args.base_control_freq,
-            0.1 / args.base_control_freq,
+            getattr(args, "control_dt_jitter", 0.1) / args.base_control_freq,
         )
 
         gray_frame, gray_aux = render_gray_sensor(
@@ -143,6 +153,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         policy_gray = torch.cat([gray_frame, prev_gray], dim=1)
         policy_gray = select_policy_gray_obs(policy_gray, args.policy_gray_mode)
         prev_gray = gray_frame
+        if "angular_speed_rad_s" in gray_aux:
+            angular_speed_history.append(gray_aux["angular_speed_rad_s"])
 
         for key, history in (
             ("saturation_fraction", saturation_history),
@@ -172,9 +184,11 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         )
 
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h, cam_h = model(
+            act_raw, cam_params, h, cam_h = policy_forward(
+                model,
                 state,
                 h,
+                env,
                 gray_obs=policy_gray,
                 add_noise=False,
                 cam_hx=cam_h,
@@ -261,6 +275,9 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         post_p_history.append(env.p)
         post_vec_history.append(post_vec)
         post_clearance = torch.norm(post_vec + 1e-6, 2, -1)
+        if getattr(env, "scene_layout", "single_wall_slit") == "intent_gates":
+            post_clearance = env.transition_clearance()
+            post_clearance_history.append(post_clearance)
         collided = post_clearance <= float(args.collision_clearance)
         reached = torch.norm(env.p_target - env.p, dim=-1) < 0.35
         first_collision = alive & collided
@@ -278,6 +295,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         "p_history": p_history,
         "post_p_history": post_p_history,
         "post_vec_history": post_vec_history,
+        "post_clearance_history": post_clearance_history,
+        "angular_speed_history": angular_speed_history,
         "valid_history": valid_history,
         "terminal_collision": terminal_collision,
         "terminal_reached": terminal_reached,
@@ -320,6 +339,7 @@ def _loss_from_rollout(rollout, env, args):
         win=args.loss_v_window,
         valid_mask=torch.stack(rollout["valid_history"]),
         post_vec_chunk=post_vec_history,
+        post_clearance_chunk=_stack_or_none(rollout.get("post_clearance_history")),
     )
     camera_losses = compute_camera_losses(
         _stack_or_none(rollout["cam_history"]),
@@ -327,7 +347,15 @@ def _loss_from_rollout(rollout, env, args):
         valid_mask=torch.stack(rollout["valid_history"]),
     )
     loss, terms = aggregate_loss(physics_losses, camera_losses, args)
+    if float(getattr(args, "coef_terminal_goal", 0.0)):
+        terminal = torch.where((rollout["terminal_step"] >= 0)[:, None],
+                               rollout["terminal_position"], p_history[-1])
+        goal_loss = (terminal - env.p_target).norm(dim=-1).mean()
+        loss = loss + args.coef_terminal_goal * goal_loss
+        terms["loss_terminal_goal"] = goal_loss
     clearance = torch.norm(post_vec_history + 1e-6, 2, -1)
+    if rollout.get("post_clearance_history"):
+        clearance = torch.stack(rollout["post_clearance_history"])
     return loss, terms, p_history, clearance
 
 
@@ -379,18 +407,22 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
 
         optim.zero_grad(set_to_none=True)
         cam_grad_norm = 0.0
+        flight_grad_norm = 0.0
         if torch.isfinite(loss) and loss.requires_grad:
             if use_amp:
                 scaler.scale(loss).backward()
                 scaler.unscale_(optim)
                 cam_grad_norm = _camera_grad_norm(model)
+                flight_grad_norm = _flight_grad_norm(model)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                 scaler.step(optim)
                 scaler.update()
             else:
                 loss.backward()
                 cam_grad_norm = _camera_grad_norm(model)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+                flight_grad_norm = _flight_grad_norm(model)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0,
+                                              error_if_nonfinite=args.policy_arch == "intent_shared")
                 optim.step()
             sched.step()
         elif not torch.isfinite(loss):
@@ -418,9 +450,12 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             "iter_per_sec": 1.0 / max(dt, 1e-6),
             "sim_fps": args.timesteps * B / max(dt, 1e-6),
             "cam/grad_norm": cam_grad_norm,
+            "flight/grad_norm": flight_grad_norm,
         }
         log.update(_build_loss_contrib_metrics(loss_terms, args))
         log.update({f"cam/{k}": v for k, v in cam_stats.items()})
+        if rollout["angular_speed_history"]:
+            log["flight/angular_speed_rad_s"] = float(torch.stack(rollout["angular_speed_history"]).detach().mean())
         for key, history in (
             ("saturation_fraction", rollout["saturation_history"]),
             ("dark_fraction", rollout["dark_history"]),

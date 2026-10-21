@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "profile_name": "IMX900 intent benchmark provisional, assumed 1-control-step command delay",
+  "calibrated": false,
+  "source": "Unmeasured simulation assumption. Same radiometry as the frozen provisional profile; delay is an explicit benchmark stress condition, not measured hardware latency.",
+  "exposure": {
+    "mapping": "linear",
+    "min_us": 100,
+    "max_us": 8000,
+    "reference_us": 1000,
+    "step_us": 0,
+    "lut_x": null,
+    "lut_us": null,
+    "signal_scale": 1
+  },
+  "gain": {
+    "mapping": "log",
+    "min_factor": 1,
+    "max_factor": 8,
+    "step_factor": 0,
+    "lut_x": null,
+    "lut_factor": null
+  },
+  "noise": {
+    "shot_alpha": 0.015,
+    "shot_beta": 0,
+    "read_mapping": "power",
+    "read_std_base": 0.005,
+    "read_gain_exponent": 1,
+    "read_lut_gain": null,
+    "read_lut_std": null
+  },
+  "black_level": 0,
+  "saturation_level": 1,
+  "quantization_bits": 0,
+  "response": {
+    "mapping": "linear",
+    "lut_x": null,
+    "lut_y": null
+  },
+  "motion_blur": {
+    "scale": 0.08
+  },
+  "actuator": {
+    "command_delay_frames": 1,
+    "command_delay_jitter_frames": 0
+  }
+}

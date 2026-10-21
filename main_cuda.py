@@ -13,8 +13,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import wandb
 
-from config import parse_args, print_runtime_mode
-from model import Model
+from config import parse_args, print_runtime_mode, set_global_seed
+from intent_model import build_policy
 from rerun_vis import RerunVis
 from sensors.imx900_calibration import IMX900Calibration
 from train_utils import build_env, estimate_optimizer_steps
@@ -69,6 +69,8 @@ def main():
         f"gray_cam-{args.camera_control_mode}_"
         f"grad-{args.sensor_grad_mode}_vision-{args.policy_gray_mode}"
     )
+    if args.policy_arch != "legacy":
+        mode_tag += f"_{args.policy_arch}_intent-{args.camera_use_flight_intent}_obsgrad-{args.observation_grad_mode}"
     if args.train_camera_only:
         mode_tag += "_cameraonly"
     elif args.train_flight_only:
@@ -111,15 +113,13 @@ def main():
     print("=" * 75 + "\n")
     print_runtime_mode(args)
 
+    # Cloud logger setup must not perturb matched policy/environment RNGs.
+    set_global_seed(args.seed, args.deterministic)
     env_train = build_env(args.batch_size, args, device)
     obs_dim = 7 if args.no_odom else 10
-    model = Model(
-        obs_dim,
-        3,
-        include_camera_state_in_obs=args.include_camera_state_in_obs,
-        gray_nn_width=args.gray_nn_width,
-        gray_nn_height=args.gray_nn_height,
-    ).to(device)
+    model = build_policy(args, obs_dim).to(device)
+    if args.policy_arch == "intent_shared" and not args.resume:
+        model.initialize_camera_output(args.fixed_camera_exposure, args.fixed_camera_gain)
 
     if args.resume:
         print(f"[info] loading checkpoint: {args.resume}")
@@ -152,9 +152,14 @@ def main():
             "seed": int(args.seed),
             "resume": args.resume,
             "mode": mode_tag,
+            "policy_arch": args.policy_arch,
+            "camera_use_flight_intent": args.camera_use_flight_intent,
+            "observation_grad_mode": args.observation_grad_mode,
             "flight_parameter_sha256": _parameter_hash(model, camera=False),
             "camera_parameter_sha256": _parameter_hash(model, camera=True),
         }, handle, indent=2)
+    from train_utils import write_run_provenance
+    write_run_provenance(checkpoint_dir, args)
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     if not trainable:

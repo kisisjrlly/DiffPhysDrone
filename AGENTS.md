@@ -4,6 +4,11 @@
   `docs/grayscale_imx900/CODEX_IMPLEMENTATION_GUIDE.md` before changing the
   method. Legacy D455 branches are historical; do not choose a branch merely
   because its name contains "minimal" or merge legacy camera code here.
+- User-authorized joint-learning research is isolated on
+  `codex/imx900-intent-closed-loop`, based on `d989ad9`. Read
+  `docs/grayscale_imx900/INTENT_CLOSED_LOOP.md` for this method. The frozen
+  backbone protocol below still governs the historical full/detached study;
+  it is not a prohibition on the explicitly requested new joint architecture.
 - The verified local interpreter is
   `/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python` (PyTorch/CUDA).
   Check it before reporting missing dependencies from a system Python.

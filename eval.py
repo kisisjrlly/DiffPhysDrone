@@ -14,7 +14,7 @@ from controllers.auto_exposure import (
     gradient_auto_exposure_target,
     mean_auto_exposure_target,
 )
-from model import Model
+from intent_model import build_policy
 from rerun_vis import RerunVis
 from rollout_ops import (
     render_gray_sensor,
@@ -26,6 +26,7 @@ from rollout_ops import (
     init_camera_params,
     update_camera_params,
     compute_camera_param_stats,
+    policy_forward,
 )
 from train_utils import build_env
 
@@ -162,13 +163,14 @@ def run_one_episode(
         )
 
     stop_reason = "timeout"
+    elapsed_s = 0.0
     final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
 
     for t in range(args.timesteps):
         set_global_seed((episode_seed * 1000003 + 3 * t + 1) % (2**32), args.deterministic)
         ctl_dt = normalvariate(
             1.0 / args.base_control_freq,
-            0.1 / args.base_control_freq,
+            getattr(args, "control_dt_jitter", 0.1) / args.base_control_freq,
         )
 
         vec_now = env.find_vec_to_nearest_pt()
@@ -209,9 +211,11 @@ def run_one_episode(
             args.include_camera_state_in_obs,
         )
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h, cam_h = model(
+            act_raw, cam_params, h, cam_h = policy_forward(
+                model,
                 state,
                 h,
+                env,
                 gray_obs=policy_gray,
                 cam_hx=cam_h,
                 camera_state=camera_state,
@@ -313,8 +317,11 @@ def run_one_episode(
 
         set_global_seed((episode_seed * 1000003 + 3 * t + 2) % (2**32), args.deterministic)
         env.run(act_buffer[t], ctl_dt, target_v_raw)
+        elapsed_s += ctl_dt
         final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
         after_clearance = _min_clearance_from_vec(env.find_vec_to_nearest_pt(), env)
+        if getattr(env, "scene_layout", "single_wall_slit") == "intent_gates":
+            after_clearance = env.transition_clearance().detach()
         min_clearance_hist.append(after_clearance)
         collided |= after_clearance <= float(args.collision_clearance)
         reached |= final_goal_dist < 0.35
@@ -349,6 +356,8 @@ def run_one_episode(
         "characteristic_depth": float(torch.stack(char_depth_hist).mean().cpu()) if char_depth_hist else 0.0,
         "steps": len(speed_hist),
         "stop_reason": stop_reason,
+        "elapsed_s": elapsed_s,
+        "deadline_s": args.timesteps / args.base_control_freq,
     }
     return row, trace_rows
 
@@ -366,13 +375,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = build_env(args.batch_size, args, device, eval_mode=True)
     obs_dim = 7 if args.no_odom else 10
-    model = Model(
-        obs_dim,
-        3,
-        include_camera_state_in_obs=args.include_camera_state_in_obs,
-        gray_nn_width=args.gray_nn_width,
-        gray_nn_height=args.gray_nn_height,
-    ).to(device)
+    model = build_policy(args, obs_dim).to(device)
     model.load_state_dict(torch.load(args.resume, map_location=device), strict=True)
     model.eval()
 

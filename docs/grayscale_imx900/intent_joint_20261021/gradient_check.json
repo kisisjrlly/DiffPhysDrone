@@ -1,0 +1,40 @@
+{
+  "full": {
+    "navigation_loss": 17.056325912475586,
+    "camera_head_gradient_norm": 0.005734875026163217,
+    "first_flight_action_gradient": [
+      [
+        0.02348148822784424,
+        0.15851861238479614,
+        -0.023482609540224075
+      ]
+    ]
+  },
+  "motion_observation_cut": {
+    "navigation_loss": 17.056325912475586,
+    "camera_head_gradient_norm": 0.005734929263738706,
+    "first_flight_action_gradient": [
+      [
+        0.0234871506690979,
+        0.15850187838077545,
+        -0.02349913865327835
+      ]
+    ]
+  },
+  "camera_boundary_cut": {
+    "navigation_loss": 17.056325912475586,
+    "camera_head_gradient_norm": 0.0,
+    "first_flight_action_gradient": [
+      [
+        0.023481428623199463,
+        0.15851862728595734,
+        -0.023482579737901688
+      ]
+    ]
+  },
+  "motion_to_observation_gradient_contribution_norm": 2.4193008357542567e-05,
+  "forward_trajectories_identical": true,
+  "template_seed": 182,
+  "rollout_seed": 183,
+  "interpretation": "Gradient wiring only; camera-boundary-cut is not a trained RL baseline."
+}

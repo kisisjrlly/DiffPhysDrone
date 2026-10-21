@@ -6,6 +6,15 @@
 > third-party dependency without revisiting the design decision documented in
 > OPEN_SOURCE_CAMERA_MODEL_REVIEW.md.
 
+## Separate user-authorized research branch (2026-10-21)
+
+`codex/imx900-intent-closed-loop` develops an intent-conditioned shared-memory
+policy and observation-mediated motion gradients. Its contract and development
+evidence are in [INTENT_CLOSED_LOOP.md](INTENT_CLOSED_LOOP.md). This is a separate
+method, not a modification or re-interpretation of the frozen five-seed study.
+The frozen-flight restriction and "no architecture rewrite" handoff below apply
+to that original experiment. No legacy D455 code or results are merged here.
+
 ## Phase 0 — legacy separation ✅ COMPLETE
 
 - D455 executable sensor path removed from this branch.

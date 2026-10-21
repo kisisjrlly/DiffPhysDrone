@@ -27,6 +27,15 @@ def build_parser():
     p.add_argument("--deterministic", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--lr", type=float, default=5e-5)
     p.add_argument("--grad_decay", type=float, default=0.3)
+    p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
+    p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
+    p.add_argument("--intent_horizon_s", type=float, default=0.20)
+    p.add_argument("--scene_layout", choices=["single_wall_slit", "intent_gates"], default="single_wall_slit")
+    p.add_argument("--observation_grad_mode", choices=["full", "detached"], default="detached")
+    p.add_argument("--gray_temporal_samples", type=int, default=1)
+    p.add_argument("--intent_gate_spacing", type=float, default=2.4)
+    p.add_argument("--flight_max_speed", type=float, default=1.15)
+    p.add_argument("--control_dt_jitter", type=float, default=0.1)
     p.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction)
 
     p.add_argument("--coef_v", type=float, default=10.5)
@@ -36,6 +45,7 @@ def build_parser():
     p.add_argument("--coef_d_acc", type=float, default=0.1)
     p.add_argument("--coef_d_jerk", type=float, default=0.2)
     p.add_argument("--coef_cam_smooth", type=float, default=0.005)
+    p.add_argument("--coef_terminal_goal", type=float, default=0.0)
     p.add_argument("--collision_clearance", type=float, default=0.0011)
 
     p.add_argument("--fov_x_half_tan", type=float, default=0.82)
@@ -175,6 +185,31 @@ def set_global_seed(seed: int, deterministic: bool = True):
 
 
 def validate_args(args):
+    if args.base_control_freq <= 0 or args.max_acc_cmd <= 0:
+        raise ValueError("control frequency and acceleration bound must be positive")
+    if args.flight_max_speed <= 0 or args.intent_horizon_s <= 0:
+        raise ValueError("speed and intent horizon must be positive")
+    if not (0 <= args.control_dt_jitter <= 0.25):
+        raise ValueError("control_dt_jitter must be in [0,0.25]")
+    if args.gray_temporal_samples < 1 or args.gray_temporal_samples % 2 != 1:
+        raise ValueError("gray_temporal_samples must be a positive odd integer")
+    if args.scene_layout == "intent_gates":
+        if args.ellipsoid_collision:
+            raise ValueError("intent_gates currently supports the spherical body only")
+        if args.gray_temporal_samples < 3:
+            raise ValueError("intent_gates requires at least 3 temporal shutter samples")
+        if not (args.simple_start_x < args.simple_wall_x and
+                args.simple_wall_x + args.intent_gate_spacing < args.simple_goal_x):
+            raise ValueError("both intent gates must lie between start and goal")
+        if args.intent_gate_spacing <= 2 * 0.1 + 2 * 0.12:
+            raise ValueError("intent gates are too close for the vehicle")
+    elif args.observation_grad_mode == "full" or args.gray_temporal_samples != 1:
+        raise ValueError("pose gradients / temporal integration require scene_layout=intent_gates")
+    if args.policy_arch == "intent_shared":
+        if args.train_camera_only or args.include_camera_state_in_obs:
+            raise ValueError("intent_shared uses joint/shared-memory learning without a camera-state flight shortcut")
+        if args.intent_horizon_s < 2 / args.base_control_freq:
+            raise ValueError("intent horizon must cover the two-control-step flight command queue")
     if args.gray_width < 1 or args.gray_height < 1:
         raise ValueError("--gray_width/--gray_height must be >= 1")
     if args.gray_nn_width < 1 or args.gray_nn_height < 1:
@@ -204,6 +239,10 @@ def validate_args(args):
     if args.simple_slit_half_y_min is None:
         args.simple_slit_half_y_min = args.simple_slit_half_y
         args.simple_slit_half_y_max = args.simple_slit_half_y
+    if args.scene_layout == "intent_gates" and not (
+        0.12 < args.simple_slit_half_y_min <= args.simple_slit_half_y_max < 0.50
+    ):
+        raise ValueError("intent gate half widths must be > body radius and < minimum lateral offset (0.50m)")
     if args.simple_back_wall_x_min <= args.simple_wall_x:
         raise ValueError("--simple_back_wall_x_min must be behind the slit wall")
     if args.simple_back_wall_x_max < args.simple_back_wall_x_min:
@@ -250,6 +289,11 @@ def print_runtime_mode(args):
     print("sensor                    : grayscale / IMX900 target")
     print(f"camera_control_mode       : {args.camera_control_mode}")
     print(f"sensor_grad_mode          : {args.sensor_grad_mode}")
+    print(f"policy_arch               : {args.policy_arch}")
+    print(f"camera_use_flight_intent   : {args.camera_use_flight_intent}")
+    print(f"observation_grad_mode     : {args.observation_grad_mode}")
+    print(f"scene_layout              : {args.scene_layout}")
+    print(f"gray_temporal_samples     : {args.gray_temporal_samples}")
     print(f"policy_gray_mode          : {args.policy_gray_mode}")
     print(f"train_flight_only         : {args.train_flight_only}")
     print(f"train_camera_only         : {args.train_camera_only}")
@@ -267,7 +311,7 @@ def print_runtime_mode(args):
         f"transition_x={args.gray_transition_x}, width={args.gray_transition_width}"
     )
     print(
-        "environment               : single_wall_slit "
+        f"environment               : {args.scene_layout} "
         f"wall_x={args.simple_wall_x}, slit_y={args.simple_slit_center_y_min}.."
         f"{args.simple_slit_center_y_max}, slit_half_y={args.simple_slit_half_y_min}.."
         f"{args.simple_slit_half_y_max}"
