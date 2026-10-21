@@ -33,6 +33,10 @@ def build_parser():
     p.add_argument("--flight_exploration_std", type=float, default=0.,
                    help="Training-only correlated XY acceleration noise; zero keeps deterministic training unchanged.")
     p.add_argument("--flight_exploration_rho", type=float, default=.85)
+    p.add_argument("--flight_replay_dataset", default=None,
+                   help="Optional common flight observations for retaining post-measurement flight skills.")
+    p.add_argument("--flight_replay_weight", type=float, default=0.)
+    p.add_argument("--flight_replay_batch", type=int, default=4)
     p.add_argument("--grad_decay", type=float, default=0.3)
     p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
@@ -272,6 +276,12 @@ def validate_args(args):
         raise ValueError("invalid flight exploration parameters")
     if args.flight_exploration_std > 0 and args.policy_arch != "intent_shared":
         raise ValueError("flight exploration currently requires intent_shared")
+    if not np.isfinite(args.flight_replay_weight) or args.flight_replay_weight < 0 or args.flight_replay_batch < 1:
+        raise ValueError("invalid flight replay weight/batch")
+    if (args.flight_replay_weight > 0) != bool(args.flight_replay_dataset):
+        raise ValueError("flight replay requires both a dataset and positive weight")
+    if args.flight_replay_dataset and (args.policy_arch != "intent_shared" or not args.resume):
+        raise ValueError("flight replay requires intent_shared and a common resume checkpoint")
     if args.gray_width < 1 or args.gray_height < 1:
         raise ValueError("--gray_width/--gray_height must be >= 1")
     if args.gray_nn_width < 1 or args.gray_nn_height < 1:

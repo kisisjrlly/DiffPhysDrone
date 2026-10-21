@@ -78,6 +78,7 @@ def _build_loss_contrib_metrics(loss_terms, args):
         ("d_jerk", "loss_d_jerk", args.coef_d_jerk),
         ("cam_smooth", "loss_cam_smooth", args.coef_cam_smooth),
         ("terminal_goal", "loss_terminal_goal", getattr(args, "coef_terminal_goal", 0.0)),
+        ("flight_replay", "loss_flight_replay", getattr(args, "flight_replay_weight", 0.0)),
     ]
     contrib = {}
     for name, key, coef in specs:
@@ -372,6 +373,10 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
     _ = env_full
     use_amp = bool(args.amp and device.type == "cuda")
     smoother = MetricSmoother(args)
+    replay = None
+    if args.flight_replay_dataset:
+        from flight_replay import FlightReplayAnchor
+        replay = FlightReplayAnchor(model, args, device, checkpoint_dir)
     pbar = tqdm(range(args.num_iters), ncols=80)
 
     for i in pbar:
@@ -413,6 +418,12 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             env_train,
             args,
         )
+        if replay is not None:
+            anchor = replay.loss(model)
+            loss_terms["loss_flight_replay"] = anchor
+            loss = loss + args.flight_replay_weight * anchor
+            if (i + 1) % 25 == 0 or i + 1 == args.num_iters:
+                replay.save()
 
         optim.zero_grad(set_to_none=True)
         cam_grad_norm = 0.0

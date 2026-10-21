@@ -1,0 +1,70 @@
+{
+  "checkpoint_sha256": "b1fa7436da59db48c64d6d043ecda8909b269007f3d38db1f4e09535abf039ec",
+  "batch": 16,
+  "seed": 787301,
+  "prefix_steps": 12,
+  "prefix_seconds": 0.8,
+  "config": "configs/gray_joint_parallax_lookahead.args",
+  "gradient_decay": 0.3,
+  "limitation": "Frozen actor, diagnostic action perturbation only. Masked terminal events, detached controller targets and decayed dynamics gradients mean the autograd estimator is approximate, not an exact derivative of this hard stochastic rollout. No claim of learned sensing.",
+  "gradients": {
+    "full": {
+      "lateral_acceleration_offset": 0.0,
+      "loss": 16.246315002441406,
+      "success": 0.25,
+      "collision": 0.75,
+      "goal_distance": 2.8145649433135986,
+      "autograd": 1.3181954622268677
+    },
+    "detached": {
+      "lateral_acceleration_offset": 0.0,
+      "loss": 16.246315002441406,
+      "success": 0.25,
+      "collision": 0.75,
+      "goal_distance": 2.8145649433135986,
+      "autograd": 0.7412918210029602
+    }
+  },
+  "finite_difference": {
+    "0.1": {
+      "minus": {
+        "lateral_acceleration_offset": -0.1,
+        "loss": 14.600763320922852,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.5076544284820557,
+        "autograd": null
+      },
+      "plus": {
+        "lateral_acceleration_offset": 0.1,
+        "loss": 16.47064208984375,
+        "success": 0.3125,
+        "collision": 0.6875,
+        "goal_distance": 2.711717128753662,
+        "autograd": null
+      },
+      "central_slope": 9.349393844604492
+    },
+    "0.3": {
+      "minus": {
+        "lateral_acceleration_offset": -0.3,
+        "loss": 14.683065414428711,
+        "success": 0.1875,
+        "collision": 0.8125,
+        "goal_distance": 2.6936051845550537,
+        "autograd": null
+      },
+      "plus": {
+        "lateral_acceleration_offset": 0.3,
+        "loss": 17.09299659729004,
+        "success": 0.125,
+        "collision": 0.875,
+        "goal_distance": 3.2215123176574707,
+        "autograd": null
+      },
+      "central_slope": 4.016551971435547
+    }
+  },
+  "source": "parallax_early_action_gradient_source.py",
+  "source_sha256": "38f5f0ea8c72bf46c1c61fda0b6e34b797a71c53af86f06442493e2fcfde1a4a"
+}

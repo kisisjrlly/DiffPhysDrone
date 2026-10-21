@@ -273,6 +273,41 @@
       "success": 64,
       "n": 64
     },
-    "interpretation": "Same ambiguity and lateral blockage, more reaction time; privileged feasibility only."
+    "interpretation": "Same ambiguity and lateral blockage, more reaction time; privileged feasibility only.",
+    "common_imitation": {
+      "manifest": "parallax_lookahead_common_imitation.json",
+      "optimizer_steps": 800,
+      "training_wall_time_s": 82.22768160800479,
+      "success_rate": {
+        "gray": 0.325,
+        "zero": 0.0,
+        "gray_forced_probe": 0.8
+      },
+      "camera_parameters_unchanged": true,
+      "measurement_actions_supervised": false,
+      "camera_labels": false
+    },
+    "first_joint_pair": {
+      "manifest": "parallax_lookahead_pair.json",
+      "successes": {
+        "joint": 0.0,
+        "nondiff_sensing": 0.0
+      },
+      "matched_initialization": true,
+      "iterations": 100,
+      "batch_size": 4
+    }
+  },
+  "retention_diagnostic": {
+    "device": "cpu",
+    "seed_range": [
+      786000,
+      786039
+    ],
+    "same_external_initial_probe": true,
+    "common_actor_successes": 35,
+    "post_joint_actor_successes": 0,
+    "episodes": 40,
+    "interpretation": "Joint fine tuning destroyed previously available post-measurement flight ability; motivation to test replay retention, not proof of a successful fix."
   }
 }

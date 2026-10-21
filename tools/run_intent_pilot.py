@@ -7,6 +7,7 @@ import json
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,9 +76,12 @@ def main():
                "camera_lr_multiplier_override": cli.camera_lr_multiplier,
                "claim": "Checks train/eval integration only; does not establish learned coordination, superiority or real deployment readiness."}
     initials = []
+    anchors = []
+    sources = []
     device = torch.device("cuda")
     for variant in cli.variants:
         directory = out / variant
+        anchor = None
         directory.mkdir()
         command = [sys.executable, "main_cuda.py", *tokens,
                    "--num_iters", str(cli.iterations), "--batch_size", str(cli.batch_size),
@@ -90,9 +94,20 @@ def main():
             command.append("--wandb_disabled")
         (directory / "command.json").write_text(json.dumps(command, indent=2) + "\n")
         print(f"[pilot] training {variant}; log={directory / 'train.log'}", flush=True)
+        training_start = time.perf_counter()
         with (directory / "train.log").open("w") as log:
             subprocess.run(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
+        training_seconds = time.perf_counter() - training_start
+        provenance = json.loads((directory / "provenance.json").read_text())
+        sources.append(provenance["source_sha256"])
+        if any(value != sources[0] for value in sources[1:]):
+            raise RuntimeError("paired executed source snapshots differ; inspect provenance before interpreting this run")
         initial = json.loads((directory / "initialization_manifest.json").read_text())
+        if (directory / "flight_replay_manifest.json").exists():
+            anchor = json.loads((directory / "flight_replay_manifest.json").read_text())
+            anchors.append((anchor["dataset_sha256"], anchor["targets_sha256"]))
+            if len(set(anchors)) != 1:
+                raise RuntimeError("matched replay datasets/initial target actions differ")
         initials.append((initial["flight_parameter_sha256"], initial["camera_parameter_sha256"]))
         if len(set(initials)) != 1:
             raise RuntimeError("matched initialization hashes differ")
@@ -120,6 +135,9 @@ def main():
         (directory / "traces.json").write_text(json.dumps(traces) + "\n")
         method = {"checkpoint": str(checkpoint), "checkpoint_sha256": sha256(checkpoint),
                   "initialization": initial,
+                  "flight_replay": anchor,
+                  "training_process_wall_time_s": training_seconds,
+                  "generated_navigation_transitions": cli.iterations * cli.batch_size * args.timesteps,
                   "success_rate": float(np.mean([r["success_rate"] for r in rows])),
                   "collision_rate": float(np.mean([r["collision_rate"] for r in rows])),
                   "mean_elapsed_s": float(np.mean([r["elapsed_s"] for r in rows])),
@@ -133,6 +151,8 @@ def main():
         del env, model
         torch.cuda.empty_cache()
     summary["matched_initialization_verified"] = len(set(initials)) == 1
+    summary["matched_source_hashes_verified"] = all(value == sources[0] for value in sources)
+    summary["matched_replay_targets_verified"] = len(set(anchors)) == 1 if anchors else None
     if "joint" in summary["methods"]:
         reference = [r["success_rate"] for r in summary["methods"]["joint"]["episode_rows"]]
         summary["joint_minus_controls"] = {
