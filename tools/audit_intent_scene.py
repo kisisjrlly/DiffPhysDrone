@@ -58,7 +58,7 @@ def feasible_path(env):
 
 
 @torch.no_grad()
-def executed_dynamics_audit(template_env, args):
+def executed_dynamics_audit(template_env, args, *, local_points=None, durations=None):
     """Privileged waypoint tracker checks reachability in the actual dynamics.
 
     This is deliberately an oracle diagnostic, never actor supervision or a
@@ -67,18 +67,21 @@ def executed_dynamics_audit(template_env, args):
     env = copy.deepcopy(template_env)
     batch, dt = env.batch_size, 1 / args.base_control_freq
     z = env.p.new_full((batch,), env.simple_slit_center_z)
-    local_points = torch.stack([
-        torch.stack([z * 0 + env.simple_start_x, z * 0, z], -1),
-        torch.stack([z * 0 + env.gate_x[0], env.gate_centers_y[:, 0], z], -1),
-        torch.stack([z * 0 + env.gate_x[1], env.gate_centers_y[:, 1], z], -1),
-        torch.stack([z * 0 + env.simple_goal_x, z * 0, z], -1),
-    ], 1)
+    if local_points is None:
+        local_points = torch.stack([
+            torch.stack([z * 0 + env.simple_start_x, z * 0, z], -1),
+            torch.stack([z * 0 + env.gate_x[0], env.gate_centers_y[:, 0], z], -1),
+            torch.stack([z * 0 + env.gate_x[1], env.gate_centers_y[:, 1], z], -1),
+            torch.stack([z * 0 + env.simple_goal_x, z * 0, z], -1),
+        ], 1)
     points = (env.R_scene[:, None] @ local_points[..., None]).squeeze(-1)
-    durations = [2.2, 2.6, 2.2]
+    durations = [2.2, 2.6, 2.2] if durations is None else durations
+    if len(durations) != points.shape[1] - 1 or any(value <= 0 for value in durations):
+        raise ValueError("positive duration required for each waypoint segment")
 
     def reference(time):
         index = 0
-        while index < 2 and time > durations[index]:
+        while index < len(durations) - 1 and time > durations[index]:
             time -= durations[index]
             index += 1
         duration = durations[index]

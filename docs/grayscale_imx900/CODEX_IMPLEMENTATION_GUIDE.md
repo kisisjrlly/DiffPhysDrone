@@ -15,6 +15,13 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+The current joint-learning task is specified by
+[SPARSE_POLES_PROTOCOL.md](SPARSE_POLES_PROTOCOL.md), using three round poles.
+The double-gate scene is historical development evidence, not the default next
+training target. Check blind-route shortcuts and fixed-camera visual learning
+before camera-learning claims. Compare learning methods with an actual trained
+joint RL baseline; a camera-boundary gradient cut is only an ablation.
+
 ## Phase 0 — legacy separation ✅ COMPLETE
 
 - D455 executable sensor path removed from this branch.

@@ -1,0 +1,1380 @@
+{
+  "scene_layout": "sparse_poles",
+  "scene_seed": 721210,
+  "scene": {
+    "geometry_kind": "sparse_poles",
+    "illumination_scenario": "dark_to_bright",
+    "poles_x_y_radius": [
+      [
+        0.03552219271659851,
+        0.3864510655403137,
+        0.08129458874464035
+      ],
+      [
+        1.5247795581817627,
+        -0.1018226370215416,
+        0.09941914677619934
+      ],
+      [
+        2.9077024459838867,
+        -0.48913028836250305,
+        0.1152227371931076
+      ]
+    ],
+    "arena_half_width_m": 0.85,
+    "lateral_sampling": "stratified left/center/right; randomly permuted along x; continuous jitter",
+    "pole_height_scope": "floor to ceiling; no fly-over within arena",
+    "world_fixed_lighting": true,
+    "goal_independent_of_poles": true
+  },
+  "calibrated": false,
+  "actor_parameter_count": 200605,
+  "geometric_witness": {
+    "duration_s": 7.5305095656551995,
+    "min_clearance_m": 0.16414248943328857,
+    "max_reference_acceleration_component_m_s2": 2.9,
+    "privileged_diagnostic_only": true
+  },
+  "executed_privileged_witness": {
+    "success": [
+      true
+    ],
+    "collision": [
+      false
+    ],
+    "min_transition_clearance_m": [
+      0.1358182430267334
+    ],
+    "terminal_time_s": [
+      6.933333396911621
+    ],
+    "max_local_acceleration_command_m_s2": 3.5,
+    "local_trajectory": [
+      [
+        [
+          -2.0,
+          0.0,
+          1.5
+        ]
+      ],
+      [
+        [
+          -2.0,
+          0.0,
+          1.5
+        ]
+      ],
+      [
+        [
+          -1.9998362064361572,
+          -6.886180199217051e-05,
+          1.5000824928283691
+        ]
+      ],
+      [
+        [
+          -1.999660611152649,
+          -0.00037865492049604654,
+          1.5002517700195312
+        ]
+      ],
+      [
+        [
+          -1.9909838438034058,
+          -0.0009042064775712788,
+          1.5070950984954834
+        ]
+      ],
+      [
+        [
+          -1.9696928262710571,
+          -0.0014587048208341002,
+          1.516815423965454
+        ]
+      ],
+      [
+        [
+          -1.9343875646591187,
+          -0.00179984699934721,
+          1.5276933908462524
+        ]
+      ],
+      [
+        [
+          -1.8843294382095337,
+          -0.0019710040651261806,
+          1.5358202457427979
+        ]
+      ],
+      [
+        [
+          -1.8199272155761719,
+          -0.0017902024555951357,
+          1.5393623113632202
+        ]
+      ],
+      [
+        [
+          -1.7415446043014526,
+          -0.0014653505058959126,
+          1.538240671157837
+        ]
+      ],
+      [
+        [
+          -1.6498627662658691,
+          -0.0010056201135739684,
+          1.5358436107635498
+        ]
+      ],
+      [
+        [
+          -1.5463794469833374,
+          -0.0008229068480432034,
+          1.535046100616455
+        ]
+      ],
+      [
+        [
+          -1.4332938194274902,
+          -0.00098549691028893,
+          1.5381035804748535
+        ]
+      ],
+      [
+        [
+          -1.3133856058120728,
+          -0.0015342249535024166,
+          1.5443716049194336
+        ]
+      ],
+      [
+        [
+          -1.189512848854065,
+          -0.0022577813360840082,
+          1.5520483255386353
+        ]
+      ],
+      [
+        [
+          -1.0641833543777466,
+          -0.002944090636447072,
+          1.5584969520568848
+        ]
+      ],
+      [
+        [
+          -0.93939208984375,
+          -0.0034709994215518236,
+          1.5623178482055664
+        ]
+      ],
+      [
+        [
+          -0.8168100118637085,
+          -0.004003761801868677,
+          1.5630826950073242
+        ]
+      ],
+      [
+        [
+          -0.6981232166290283,
+          -0.0045766583643853664,
+          1.5620121955871582
+        ]
+      ],
+      [
+        [
+          -0.584919273853302,
+          -0.005358665715903044,
+          1.5605530738830566
+        ]
+      ],
+      [
+        [
+          -0.47888895869255066,
+          -0.006304512731730938,
+          1.5601210594177246
+        ]
+      ],
+      [
+        [
+          -0.3819054067134857,
+          -0.007336572278290987,
+          1.561234951019287
+        ]
+      ],
+      [
+        [
+          -0.29571738839149475,
+          -0.00841262936592102,
+          1.5633959770202637
+        ]
+      ],
+      [
+        [
+          -0.22153757512569427,
+          -0.009518284350633621,
+          1.5654213428497314
+        ]
+      ],
+      [
+        [
+          -0.15967057645320892,
+          -0.010728919878602028,
+          1.5660626888275146
+        ]
+      ],
+      [
+        [
+          -0.10959307849407196,
+          -0.012352286837995052,
+          1.5643211603164673
+        ]
+      ],
+      [
+        [
+          -0.07070539146661758,
+          -0.014243070967495441,
+          1.5611796379089355
+        ]
+      ],
+      [
+        [
+          -0.04173903912305832,
+          -0.016248496249318123,
+          1.557932734489441
+        ]
+      ],
+      [
+        [
+          -0.021276047453284264,
+          -0.018202677369117737,
+          1.556041955947876
+        ]
+      ],
+      [
+        [
+          -0.007152591831982136,
+          -0.01981733925640583,
+          1.5560232400894165
+        ]
+      ],
+      [
+        [
+          0.003425540868192911,
+          -0.021094951778650284,
+          1.558030128479004
+        ]
+      ],
+      [
+        [
+          0.014051604084670544,
+          -0.022220073267817497,
+          1.5619839429855347
+        ]
+      ],
+      [
+        [
+          0.029347240924835205,
+          -0.022714851424098015,
+          1.5676960945129395
+        ]
+      ],
+      [
+        [
+          0.05379774793982506,
+          -0.022122008726000786,
+          1.5739394426345825
+        ]
+      ],
+      [
+        [
+          0.09014403074979782,
+          -0.019487466663122177,
+          1.579150915145874
+        ]
+      ],
+      [
+        [
+          0.13873134553432465,
+          -0.014290040358901024,
+          1.581290602684021
+        ]
+      ],
+      [
+        [
+          0.1984628140926361,
+          -0.006180834490805864,
+          1.5800395011901855
+        ]
+      ],
+      [
+        [
+          0.2675820589065552,
+          0.004887484945356846,
+          1.577120065689087
+        ]
+      ],
+      [
+        [
+          0.344603031873703,
+          0.018547698855400085,
+          1.574318766593933
+        ]
+      ],
+      [
+        [
+          0.42837584018707275,
+          0.03433503210544586,
+          1.5726590156555176
+        ]
+      ],
+      [
+        [
+          0.5182859301567078,
+          0.051603108644485474,
+          1.571762204170227
+        ]
+      ],
+      [
+        [
+          0.6136861443519592,
+          0.06993728876113892,
+          1.5708143711090088
+        ]
+      ],
+      [
+        [
+          0.7135502696037292,
+          0.089211605489254,
+          1.5691328048706055
+        ]
+      ],
+      [
+        [
+          0.8159253597259521,
+          0.10933872312307358,
+          1.5669775009155273
+        ]
+      ],
+      [
+        [
+          0.9182471632957458,
+          0.13007505238056183,
+          1.565353274345398
+        ]
+      ],
+      [
+        [
+          1.0174368619918823,
+          0.15078838169574738,
+          1.565171480178833
+        ]
+      ],
+      [
+        [
+          1.1106188297271729,
+          0.17058010399341583,
+          1.5663560628890991
+        ]
+      ],
+      [
+        [
+          1.195496916770935,
+          0.18875855207443237,
+          1.568081021308899
+        ]
+      ],
+      [
+        [
+          1.2705423831939697,
+          0.20482498407363892,
+          1.5693501234054565
+        ]
+      ],
+      [
+        [
+          1.335195779800415,
+          0.21874266862869263,
+          1.5690529346466064
+        ]
+      ],
+      [
+        [
+          1.3890964984893799,
+          0.2307797521352768,
+          1.566819429397583
+        ]
+      ],
+      [
+        [
+          1.4322657585144043,
+          0.241156667470932,
+          1.5630319118499756
+        ]
+      ],
+      [
+        [
+          1.464742660522461,
+          0.2500745356082916,
+          1.5585640668869019
+        ]
+      ],
+      [
+        [
+          1.487026572227478,
+          0.25733110308647156,
+          1.5546698570251465
+        ]
+      ],
+      [
+        [
+          1.5001449584960938,
+          0.262454092502594,
+          1.5522633790969849
+        ]
+      ],
+      [
+        [
+          1.5064510107040405,
+          0.26548537611961365,
+          1.552093505859375
+        ]
+      ],
+      [
+        [
+          1.5092321634292603,
+          0.26693040132522583,
+          1.554494023323059
+        ]
+      ],
+      [
+        [
+          1.5135658979415894,
+          0.26769736409187317,
+          1.5597323179244995
+        ]
+      ],
+      [
+        [
+          1.5249916315078735,
+          0.2683030366897583,
+          1.5667816400527954
+        ]
+      ],
+      [
+        [
+          1.5480653047561646,
+          0.2687762677669525,
+          1.5739505290985107
+        ]
+      ],
+      [
+        [
+          1.584645390510559,
+          0.26836127042770386,
+          1.578445315361023
+        ]
+      ],
+      [
+        [
+          1.6340934038162231,
+          0.2662106156349182,
+          1.5785346031188965
+        ]
+      ],
+      [
+        [
+          1.694669246673584,
+          0.2617546617984772,
+          1.5754344463348389
+        ]
+      ],
+      [
+        [
+          1.764175295829773,
+          0.2549508512020111,
+          1.571529746055603
+        ]
+      ],
+      [
+        [
+          1.8408104181289673,
+          0.2462780773639679,
+          1.568612813949585
+        ]
+      ],
+      [
+        [
+          1.9235674142837524,
+          0.23655572533607483,
+          1.5671151876449585
+        ]
+      ],
+      [
+        [
+          2.0118823051452637,
+          0.22656750679016113,
+          1.5663838386535645
+        ]
+      ],
+      [
+        [
+          2.1050472259521484,
+          0.21690037846565247,
+          1.5652281045913696
+        ]
+      ],
+      [
+        [
+          2.2018356323242188,
+          0.20770734548568726,
+          1.563101053237915
+        ]
+      ],
+      [
+        [
+          2.3002185821533203,
+          0.19876538217067719,
+          1.5606492757797241
+        ]
+      ],
+      [
+        [
+          2.397167205810547,
+          0.18987756967544556,
+          1.5588432550430298
+        ]
+      ],
+      [
+        [
+          2.489179849624634,
+          0.1808299869298935,
+          1.5585359334945679
+        ]
+      ],
+      [
+        [
+          2.573343515396118,
+          0.17157834768295288,
+          1.559815764427185
+        ]
+      ],
+      [
+        [
+          2.6474857330322266,
+          0.16276921331882477,
+          1.5614484548568726
+        ]
+      ],
+      [
+        [
+          2.7106592655181885,
+          0.15493285655975342,
+          1.5619091987609863
+        ]
+      ],
+      [
+        [
+          2.7629034519195557,
+          0.14875109493732452,
+          1.5597773790359497
+        ]
+      ],
+      [
+        [
+          2.804614305496216,
+          0.14433753490447998,
+          1.5546692609786987
+        ]
+      ],
+      [
+        [
+          2.8363196849823,
+          0.1413959115743637,
+          1.5478633642196655
+        ]
+      ],
+      [
+        [
+          2.8584516048431396,
+          0.139204740524292,
+          1.5414683818817139
+        ]
+      ],
+      [
+        [
+          2.871835470199585,
+          0.1371641308069229,
+          1.5372501611709595
+        ]
+      ],
+      [
+        [
+          2.8782830238342285,
+          0.13493984937667847,
+          1.5361554622650146
+        ]
+      ],
+      [
+        [
+          2.881247043609619,
+          0.1323770135641098,
+          1.5384235382080078
+        ]
+      ],
+      [
+        [
+          2.885737895965576,
+          0.1294201910495758,
+          1.543824553489685
+        ]
+      ],
+      [
+        [
+          2.8971238136291504,
+          0.12623196840286255,
+          1.5508941411972046
+        ]
+      ],
+      [
+        [
+          2.9191999435424805,
+          0.12304109334945679,
+          1.5574616193771362
+        ]
+      ],
+      [
+        [
+          2.953155755996704,
+          0.11966690421104431,
+          1.560702919960022
+        ]
+      ],
+      [
+        [
+          2.998215675354004,
+          0.11603455990552902,
+          1.5592262744903564
+        ]
+      ],
+      [
+        [
+          3.053109645843506,
+          0.11200053244829178,
+          1.5547024011611938
+        ]
+      ],
+      [
+        [
+          3.1168689727783203,
+          0.10720165818929672,
+          1.5491790771484375
+        ]
+      ],
+      [
+        [
+          3.189481019973755,
+          0.10153301805257797,
+          1.5443772077560425
+        ]
+      ],
+      [
+        [
+          3.2717671394348145,
+          0.09501677006483078,
+          1.5414832830429077
+        ]
+      ],
+      [
+        [
+          3.3646128177642822,
+          0.0877864807844162,
+          1.5404495000839233
+        ]
+      ],
+      [
+        [
+          3.4680633544921875,
+          0.08015916496515274,
+          1.5398348569869995
+        ]
+      ],
+      [
+        [
+          3.581005573272705,
+          0.07244855165481567,
+          1.5383641719818115
+        ]
+      ],
+      [
+        [
+          3.7017691135406494,
+          0.06490007042884827,
+          1.5361231565475464
+        ]
+      ],
+      [
+        [
+          3.827523708343506,
+          0.057537227869033813,
+          1.5339347124099731
+        ]
+      ],
+      [
+        [
+          3.955650568008423,
+          0.05033113434910774,
+          1.5324681997299194
+        ]
+      ],
+      [
+        [
+          4.083654403686523,
+          0.043220750987529755,
+          1.5320286750793457
+        ]
+      ],
+      [
+        [
+          4.209732532501221,
+          0.03614705801010132,
+          1.531795859336853
+        ]
+      ],
+      [
+        [
+          4.3326826095581055,
+          0.029055079445242882,
+          1.5310513973236084
+        ]
+      ],
+      [
+        [
+          4.451632022857666,
+          0.022021694108843803,
+          1.5289311408996582
+        ]
+      ],
+      [
+        [
+          4.565606117248535,
+          0.015364250168204308,
+          1.5258896350860596
+        ]
+      ],
+      [
+        [
+          4.67331075668335,
+          0.009511508978903294,
+          1.5228439569473267
+        ]
+      ],
+      [
+        [
+          4.772815704345703,
+          0.004847615025937557,
+          1.5206730365753174
+        ]
+      ],
+      [
+        [
+          4.862061500549316,
+          0.001329919439740479,
+          1.5197633504867554
+        ]
+      ],
+      [
+        [
+          4.939399242401123,
+          -0.0013534410391002893,
+          1.5198330879211426
+        ]
+      ],
+      [
+        [
+          5.004107475280762,
+          -0.0035626019816845655,
+          1.519774317741394
+        ]
+      ],
+      [
+        [
+          5.056578159332275,
+          -0.005322614684700966,
+          1.5182157754898071
+        ]
+      ],
+      [
+        [
+          5.097729206085205,
+          -0.0065611968748271465,
+          1.5149348974227905
+        ]
+      ],
+      [
+        [
+          5.12905740737915,
+          -0.00693548982962966,
+          1.5106613636016846
+        ]
+      ],
+      [
+        [
+          5.151854991912842,
+          -0.006549593526870012,
+          1.5067416429519653
+        ]
+      ],
+      [
+        [
+          5.167636394500732,
+          -0.00550197483971715,
+          1.504065990447998
+        ]
+      ],
+      [
+        [
+          5.177954196929932,
+          -0.004156582523137331,
+          1.503125548362732
+        ]
+      ],
+      [
+        [
+          5.185348987579346,
+          -0.002906724577769637,
+          1.5038822889328003
+        ]
+      ],
+      [
+        [
+          5.192524433135986,
+          -0.0019658957608044147,
+          1.505802035331726
+        ]
+      ],
+      [
+        [
+          5.200814247131348,
+          -0.001393914339132607,
+          1.5069271326065063
+        ]
+      ],
+      [
+        [
+          5.20997953414917,
+          -0.000963019032496959,
+          1.5057395696640015
+        ]
+      ],
+      [
+        [
+          5.2184648513793945,
+          -0.0005410430021584034,
+          1.5028258562088013
+        ]
+      ],
+      [
+        [
+          5.224618434906006,
+          0.00025930290576070547,
+          1.4993269443511963
+        ]
+      ],
+      [
+        [
+          5.227438926696777,
+          0.0014480259269475937,
+          1.4960724115371704
+        ]
+      ],
+      [
+        [
+          5.22738790512085,
+          0.0030324577819556,
+          1.4934706687927246
+        ]
+      ]
+    ],
+    "privileged_oracle": true,
+    "used_for_training": false
+  },
+  "independent_feasibility_checks": [
+    {
+      "duration_s": 7.532030853778085,
+      "min_clearance_m": 0.14481937885284424,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721220,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.14922994375228882
+    },
+    {
+      "duration_s": 7.545816430997664,
+      "min_clearance_m": 0.14239883422851562,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721221,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.12045852094888687
+    },
+    {
+      "duration_s": 7.531489986254466,
+      "min_clearance_m": 0.14994511008262634,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721222,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.1620684266090393
+    },
+    {
+      "duration_s": 7.520700456008469,
+      "min_clearance_m": 0.1641221046447754,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721223,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.15294033288955688
+    },
+    {
+      "duration_s": 7.544206175606885,
+      "min_clearance_m": 0.18173128366470337,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721224,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.15958094596862793
+    },
+    {
+      "duration_s": 7.544062046844344,
+      "min_clearance_m": 0.14441946148872375,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721225,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.1066991463303566
+    },
+    {
+      "duration_s": 7.551324763749905,
+      "min_clearance_m": 0.14396286010742188,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721226,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.17971599102020264
+    },
+    {
+      "duration_s": 7.54410884943774,
+      "min_clearance_m": 0.14104598760604858,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721227,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.08125510066747665
+    },
+    {
+      "duration_s": 7.535216693847763,
+      "min_clearance_m": 0.15672898292541504,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721228,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.12487641721963882
+    },
+    {
+      "duration_s": 7.534357195763825,
+      "min_clearance_m": 0.17926794290542603,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721229,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.17622804641723633
+    },
+    {
+      "duration_s": 7.538103769082859,
+      "min_clearance_m": 0.14625334739685059,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721230,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.146226704120636
+    },
+    {
+      "duration_s": 7.550882198649216,
+      "min_clearance_m": 0.1511925756931305,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721231,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.11516768485307693
+    },
+    {
+      "duration_s": 7.560129552634036,
+      "min_clearance_m": 0.1858176589012146,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721232,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.17668703198432922
+    },
+    {
+      "duration_s": 7.532199835994138,
+      "min_clearance_m": 0.16332581639289856,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721233,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.1592806875705719
+    },
+    {
+      "duration_s": 7.540563225733278,
+      "min_clearance_m": 0.15746036171913147,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721234,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.13830623030662537
+    },
+    {
+      "duration_s": 7.534052665966188,
+      "min_clearance_m": 0.15685588121414185,
+      "max_reference_acceleration_component_m_s2": 2.9,
+      "privileged_diagnostic_only": true,
+      "seed": 721235,
+      "success": true,
+      "collision": false,
+      "executed_min_clearance_m": 0.14725565910339355
+    }
+  ],
+  "blind_fixed_path_screen": {
+    "layout_seed": 721211,
+    "layouts": 2048,
+    "paths": [
+      {
+        "fixed_lateral_lane_m": -0.72,
+        "geometrically_collision_free_fraction": 0.58349609375,
+        "path_length_m": 7.675718378528769
+      },
+      {
+        "fixed_lateral_lane_m": -0.6839999999999999,
+        "geometrically_collision_free_fraction": 0.4384765625,
+        "path_length_m": 7.633798992440585
+      },
+      {
+        "fixed_lateral_lane_m": -0.648,
+        "geometrically_collision_free_fraction": 0.2841796875,
+        "path_length_m": 7.593299365258509
+      },
+      {
+        "fixed_lateral_lane_m": -0.612,
+        "geometrically_collision_free_fraction": 0.13232421875,
+        "path_length_m": 7.5542958599831636
+      },
+      {
+        "fixed_lateral_lane_m": -0.576,
+        "geometrically_collision_free_fraction": 0.00927734375,
+        "path_length_m": 7.516867759138715
+      },
+      {
+        "fixed_lateral_lane_m": -0.54,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.481097012928771
+      },
+      {
+        "fixed_lateral_lane_m": -0.504,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.447067892082662
+      },
+      {
+        "fixed_lateral_lane_m": -0.46799999999999997,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.414866531757038
+      },
+      {
+        "fixed_lateral_lane_m": -0.432,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.384580353827521
+      },
+      {
+        "fixed_lateral_lane_m": -0.396,
+        "geometrically_collision_free_fraction": 0.00146484375,
+        "path_length_m": 7.3562973571341885
+      },
+      {
+        "fixed_lateral_lane_m": -0.36,
+        "geometrically_collision_free_fraction": 0.078125,
+        "path_length_m": 7.330105269047718
+      },
+      {
+        "fixed_lateral_lane_m": -0.324,
+        "geometrically_collision_free_fraction": 0.21533203125,
+        "path_length_m": 7.306090557355192
+      },
+      {
+        "fixed_lateral_lane_m": -0.28800000000000003,
+        "geometrically_collision_free_fraction": 0.30322265625,
+        "path_length_m": 7.284337309047046
+      },
+      {
+        "fixed_lateral_lane_m": -0.252,
+        "geometrically_collision_free_fraction": 0.33447265625,
+        "path_length_m": 7.2649259920164235
+      },
+      {
+        "fixed_lateral_lane_m": -0.21599999999999997,
+        "geometrically_collision_free_fraction": 0.33203125,
+        "path_length_m": 7.247932126546046
+      },
+      {
+        "fixed_lateral_lane_m": -0.18000000000000005,
+        "geometrically_collision_free_fraction": 0.2880859375,
+        "path_length_m": 7.233424904969402
+      },
+      {
+        "fixed_lateral_lane_m": -0.14400000000000002,
+        "geometrically_collision_free_fraction": 0.18701171875,
+        "path_length_m": 7.2214658088897155
+      },
+      {
+        "fixed_lateral_lane_m": -0.10799999999999998,
+        "geometrically_collision_free_fraction": 0.0478515625,
+        "path_length_m": 7.212107282362951
+      },
+      {
+        "fixed_lateral_lane_m": -0.07200000000000006,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.205391524929634
+      },
+      {
+        "fixed_lateral_lane_m": -0.03600000000000003,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.201349468906808
+      },
+      {
+        "fixed_lateral_lane_m": 0.0,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.2
+      },
+      {
+        "fixed_lateral_lane_m": 0.03599999999999992,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.201349468906808
+      },
+      {
+        "fixed_lateral_lane_m": 0.07199999999999995,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.205391524929634
+      },
+      {
+        "fixed_lateral_lane_m": 0.10799999999999998,
+        "geometrically_collision_free_fraction": 0.03564453125,
+        "path_length_m": 7.212107282362951
+      },
+      {
+        "fixed_lateral_lane_m": 0.1439999999999999,
+        "geometrically_collision_free_fraction": 0.17529296875,
+        "path_length_m": 7.2214658088897155
+      },
+      {
+        "fixed_lateral_lane_m": 0.17999999999999994,
+        "geometrically_collision_free_fraction": 0.2802734375,
+        "path_length_m": 7.233424904969402
+      },
+      {
+        "fixed_lateral_lane_m": 0.21599999999999997,
+        "geometrically_collision_free_fraction": 0.3212890625,
+        "path_length_m": 7.247932126546046
+      },
+      {
+        "fixed_lateral_lane_m": 0.252,
+        "geometrically_collision_free_fraction": 0.33154296875,
+        "path_length_m": 7.2649259920164235
+      },
+      {
+        "fixed_lateral_lane_m": 0.28800000000000003,
+        "geometrically_collision_free_fraction": 0.3076171875,
+        "path_length_m": 7.284337309047046
+      },
+      {
+        "fixed_lateral_lane_m": 0.32399999999999984,
+        "geometrically_collision_free_fraction": 0.21630859375,
+        "path_length_m": 7.306090557355192
+      },
+      {
+        "fixed_lateral_lane_m": 0.3599999999999999,
+        "geometrically_collision_free_fraction": 0.08447265625,
+        "path_length_m": 7.330105269047718
+      },
+      {
+        "fixed_lateral_lane_m": 0.3959999999999999,
+        "geometrically_collision_free_fraction": 0.0009765625,
+        "path_length_m": 7.3562973571341885
+      },
+      {
+        "fixed_lateral_lane_m": 0.43199999999999994,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.384580353827521
+      },
+      {
+        "fixed_lateral_lane_m": 0.46799999999999997,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.414866531757038
+      },
+      {
+        "fixed_lateral_lane_m": 0.504,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.447067892082662
+      },
+      {
+        "fixed_lateral_lane_m": 0.54,
+        "geometrically_collision_free_fraction": 0.0,
+        "path_length_m": 7.481097012928771
+      },
+      {
+        "fixed_lateral_lane_m": 0.5759999999999998,
+        "geometrically_collision_free_fraction": 0.01220703125,
+        "path_length_m": 7.516867759138715
+      },
+      {
+        "fixed_lateral_lane_m": 0.6119999999999999,
+        "geometrically_collision_free_fraction": 0.13037109375,
+        "path_length_m": 7.5542958599831636
+      },
+      {
+        "fixed_lateral_lane_m": 0.6479999999999999,
+        "geometrically_collision_free_fraction": 0.2822265625,
+        "path_length_m": 7.593299365258509
+      },
+      {
+        "fixed_lateral_lane_m": 0.6839999999999999,
+        "geometrically_collision_free_fraction": 0.42919921875,
+        "path_length_m": 7.633798992440585
+      },
+      {
+        "fixed_lateral_lane_m": 0.72,
+        "geometrically_collision_free_fraction": 0.57421875,
+        "path_length_m": 7.675718378528769
+      }
+    ],
+    "interpretation": "Optimistic fixed-path geometry screen; no dynamics, not a learned blind benchmark."
+  },
+  "observation_audit": {
+    "pose": [
+      -2.0,
+      0.0,
+      1.5
+    ],
+    "alternative_pole_y_m": [
+      -0.1,
+      0.1
+    ],
+    "figure_camera_images": "single noisy frames at policy resolution; not noise-averaged images",
+    "gain01": 0.05,
+    "independent_noise_samples_per_condition": 128,
+    "policy_resolution_wh": [
+      48,
+      36
+    ],
+    "diameter_policy_pixels_at_2m": [
+      2.3414634146341466,
+      3.5121951219512195
+    ],
+    "noise_seed": 721213,
+    "rows": [
+      {
+        "scenario": "dark",
+        "exposure01": 0.02,
+        "exposure_us": 258.0,
+        "pole_position_signal_over_noise_in_roi": 0.36435502767562866,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "dark",
+        "exposure01": 0.08,
+        "exposure_us": 732.0,
+        "pole_position_signal_over_noise_in_roi": 1.0859333276748657,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "dark",
+        "exposure01": 0.25,
+        "exposure_us": 2075.0,
+        "pole_position_signal_over_noise_in_roi": 2.9987080097198486,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "dark",
+        "exposure01": 0.6,
+        "exposure_us": 4840.0,
+        "pole_position_signal_over_noise_in_roi": 6.323789119720459,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "dark",
+        "exposure01": 0.95,
+        "exposure_us": 7605.0,
+        "pole_position_signal_over_noise_in_roi": 9.238421440124512,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "bright",
+        "exposure01": 0.02,
+        "exposure_us": 258.0,
+        "pole_position_signal_over_noise_in_roi": 16.526958465576172,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "bright",
+        "exposure01": 0.08,
+        "exposure_us": 732.0,
+        "pole_position_signal_over_noise_in_roi": 32.93941116333008,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "bright",
+        "exposure01": 0.25,
+        "exposure_us": 2075.0,
+        "pole_position_signal_over_noise_in_roi": 43.82126998901367,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "bright",
+        "exposure01": 0.6,
+        "exposure_us": 4840.0,
+        "pole_position_signal_over_noise_in_roi": 0.8675283789634705,
+        "roi_policy_pixels": 216
+      },
+      {
+        "scenario": "bright",
+        "exposure01": 0.95,
+        "exposure_us": 7605.0,
+        "pole_position_signal_over_noise_in_roi": 0.0,
+        "roi_policy_pixels": 216
+      }
+    ],
+    "temporal_sample_convergence": {
+      "3_vs_17_irradiance_mae": 3.4508695534896106e-05,
+      "9_vs_17_irradiance_mae": 1.2150805559940636e-05
+    },
+    "nominal_yaw_blur_pixels_at_max_exposure": 0.7024390243902439,
+    "interpretation": "Local pixel discriminability, not learned obstacle detection or navigation."
+  },
+  "claim": "Scene implementation and diagnostic feasibility only; learned coordination and algorithm superiority untested."
+}

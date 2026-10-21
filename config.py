@@ -7,6 +7,8 @@ import random
 import numpy as np
 import torch
 
+from render.scene_types import DIFFERENTIABLE_SCENES
+
 
 SUPPORTED_SCENARIOS = (
     "nominal",
@@ -30,10 +32,18 @@ def build_parser():
     p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
     p.add_argument("--intent_horizon_s", type=float, default=0.20)
-    p.add_argument("--scene_layout", choices=["single_wall_slit", "intent_gates"], default="single_wall_slit")
+    p.add_argument("--scene_layout", choices=["single_wall_slit", *DIFFERENTIABLE_SCENES], default="single_wall_slit")
     p.add_argument("--observation_grad_mode", choices=["full", "detached"], default="detached")
     p.add_argument("--gray_temporal_samples", type=int, default=1)
     p.add_argument("--intent_gate_spacing", type=float, default=2.4)
+    p.add_argument("--pole_count", type=int, default=3)
+    p.add_argument("--pole_radius_min", type=float, default=0.08)
+    p.add_argument("--pole_radius_max", type=float, default=0.12)
+    p.add_argument("--pole_spacing", type=float, default=1.5)
+    p.add_argument("--pole_x_jitter", type=float, default=0.15)
+    p.add_argument("--pole_lateral_range", type=float, default=0.48)
+    p.add_argument("--pole_lateral_jitter", type=float, default=0.12)
+    p.add_argument("--pole_arena_half_width", type=float, default=0.85)
     p.add_argument("--flight_max_speed", type=float, default=1.15)
     p.add_argument("--control_dt_jitter", type=float, default=0.1)
     p.add_argument("--amp", default=True, action=argparse.BooleanOptionalAction)
@@ -193,18 +203,32 @@ def validate_args(args):
         raise ValueError("control_dt_jitter must be in [0,0.25]")
     if args.gray_temporal_samples < 1 or args.gray_temporal_samples % 2 != 1:
         raise ValueError("gray_temporal_samples must be a positive odd integer")
-    if args.scene_layout == "intent_gates":
+    if args.scene_layout in DIFFERENTIABLE_SCENES:
         if args.ellipsoid_collision:
-            raise ValueError("intent_gates currently supports the spherical body only")
+            raise ValueError("differentiable scenes currently support the spherical body only")
         if args.gray_temporal_samples < 3:
-            raise ValueError("intent_gates requires at least 3 temporal shutter samples")
+            raise ValueError("differentiable scenes require at least 3 temporal shutter samples")
+    elif args.observation_grad_mode == "full" or args.gray_temporal_samples != 1:
+        raise ValueError("pose gradients / temporal integration require a differentiable scene")
+    if args.scene_layout == "intent_gates":
         if not (args.simple_start_x < args.simple_wall_x and
                 args.simple_wall_x + args.intent_gate_spacing < args.simple_goal_x):
             raise ValueError("both intent gates must lie between start and goal")
         if args.intent_gate_spacing <= 2 * 0.1 + 2 * 0.12:
             raise ValueError("intent gates are too close for the vehicle")
-    elif args.observation_grad_mode == "full" or args.gray_temporal_samples != 1:
-        raise ValueError("pose gradients / temporal integration require scene_layout=intent_gates")
+    if args.scene_layout == "sparse_poles":
+        if not 1 <= args.pole_count <= 5:
+            raise ValueError("pole_count must be between 1 and 5")
+        if not 0 < args.pole_radius_min <= args.pole_radius_max:
+            raise ValueError("invalid pole radius range")
+        if args.pole_x_jitter < 0 or args.pole_spacing - 2 * args.pole_x_jitter <= 2 * (args.pole_radius_max + .12):
+            raise ValueError("pole spacing must leave room for the body")
+        if not (0 < args.pole_lateral_range and args.pole_lateral_jitter >= 0 and
+                args.pole_lateral_range + args.pole_lateral_jitter + args.pole_radius_max < args.pole_arena_half_width):
+            raise ValueError("invalid pole lateral range / arena width")
+        if not (args.simple_start_x + 1 < args.simple_wall_x - args.pole_x_jitter and
+                args.simple_wall_x + (args.pole_count - 1) * args.pole_spacing + args.pole_x_jitter < args.simple_goal_x - 1):
+            raise ValueError("poles must lie at least 1m from start and goal")
     if args.policy_arch == "intent_shared":
         if args.train_camera_only or args.include_camera_state_in_obs:
             raise ValueError("intent_shared uses joint/shared-memory learning without a camera-state flight shortcut")

@@ -3,13 +3,15 @@
 import torch
 import torch.nn.functional as F
 
+from render.scene_types import DIFFERENTIABLE_SCENES
+
 
 def render_gray_sensor(env, exposure, gain, differentiable=True):
     if not hasattr(env, "gray_camera"):
         raise RuntimeError("env.gray_camera is not configured")
     sensor_exposure = exposure if differentiable else exposure.detach()
     sensor_gain = gain if differentiable else gain.detach()
-    temporal = getattr(env, "scene_layout", "single_wall_slit") == "intent_gates"
+    temporal = getattr(env, "scene_layout", "single_wall_slit") in DIFFERENTIABLE_SCENES
     if temporal:
         from render.intent_scene import render_exposure
         ideal, render_aux = render_exposure(env, sensor_exposure, return_aux=True)

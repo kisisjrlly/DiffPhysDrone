@@ -1,0 +1,18 @@
+{
+  "joint": {
+    "optimizer_steps": 8,
+    "batch_size": 2,
+    "rollout_steps": 120,
+    "generated_transitions_including_masked_tail": 1920,
+    "sum_iteration_wall_time_s": 32.03652906417847,
+    "includes_logger_setup_and_evaluation": false
+  },
+  "fixed": {
+    "optimizer_steps": 8,
+    "batch_size": 2,
+    "rollout_steps": 120,
+    "generated_transitions_including_masked_tail": 1920,
+    "sum_iteration_wall_time_s": 31.823216915130615,
+    "includes_logger_setup_and_evaluation": false
+  }
+}

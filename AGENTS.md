@@ -9,6 +9,10 @@
   `docs/grayscale_imx900/INTENT_CLOSED_LOOP.md` for this method. The frozen
   backbone protocol below still governs the historical full/detached study;
   it is not a prohibition on the explicitly requested new joint architecture.
+- The primary joint-learning candidate is now `sparse_poles`, documented in
+  `docs/grayscale_imx900/SPARSE_POLES_PROTOCOL.md`. Keep the failed double-gate
+  pilot as historical evidence. Do not treat a gradient cut as an RL baseline
+  or claim method superiority before matched, trained method comparisons.
 - The verified local interpreter is
   `/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python` (PyTorch/CUDA).
   Check it before reporting missing dependencies from a system Python.

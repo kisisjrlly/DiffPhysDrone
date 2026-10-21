@@ -1,5 +1,13 @@
 # Flight-intent-conditioned closed-loop joint learning
 
+> Primary-scene update (2026-10-21): use the
+> [sparse-pole protocol](SPARSE_POLES_PROTOCOL.md) for further development.
+> The two-aperture task below is retained as historical development evidence,
+> including its failed learned-policy pilot. Do not keep training that task as
+> the default or cite its feasibility witness as learned navigation. The new
+> task uses the same actor and sensing/dynamics paths, with three round poles.
+> A competitive joint RL baseline remains to be implemented.
+
 Development branch: `codex/imx900-intent-closed-loop`, based on `d989ad9`
 of `active-sensing-grayscale-imx900`. Date: 2026-10-21.
 

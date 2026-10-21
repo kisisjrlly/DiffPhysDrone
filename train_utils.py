@@ -14,6 +14,7 @@ import wandb
 
 from env_cuda import Env
 from sensors.imx900_camera import build_from_args as build_imx900_camera
+from render.scene_types import DIFFERENTIABLE_SCENES
 
 
 class MetricSmoother:
@@ -117,12 +118,20 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         gray_temporal_samples=args.gray_temporal_samples,
         intent_gate_spacing=args.intent_gate_spacing,
         flight_max_speed=args.flight_max_speed,
+        pole_count=args.pole_count,
+        pole_radius_min=args.pole_radius_min,
+        pole_radius_max=args.pole_radius_max,
+        pole_spacing=args.pole_spacing,
+        pole_x_jitter=args.pole_x_jitter,
+        pole_lateral_range=args.pole_lateral_range,
+        pole_lateral_jitter=args.pole_lateral_jitter,
+        pole_arena_half_width=args.pole_arena_half_width,
     )
     env.gray_camera = build_imx900_camera(args).to(device)
     env.imx900_calibration = env.gray_camera.calibration
     env.gray_enable_noise = bool(args.gray_enable_noise)
     env.control_period_s = 1 / args.base_control_freq
-    if args.scene_layout == "intent_gates":
+    if args.scene_layout in DIFFERENTIABLE_SCENES:
         period_us = 1e6 / args.base_control_freq
         if env.imx900_calibration.exposure_us_max > period_us:
             raise ValueError("maximum exposure exceeds the simulated frame period")
@@ -153,7 +162,7 @@ def write_run_provenance(directory, args):
     limitations = []
     if not calibration.calibrated:
         limitations.append("provisional sensor profile")
-    if args.scene_layout == "intent_gates":
+    if args.scene_layout in DIFFERENTIABLE_SCENES:
         limitations.extend(["piecewise hard visibility gradients", "constant twist during exposure"])
     manifest = {
         "git_revision": git("rev-parse", "HEAD"), "git_status": git("status", "--porcelain"),

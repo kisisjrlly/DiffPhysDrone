@@ -11,6 +11,7 @@ from torch.utils.checkpoint import checkpoint
 from .box_scene import trace_boxes
 from .ideal_gray import render_ideal_grayscale
 from .pose import body_angular_velocity, rotation_exp
+from .pole_scene import trace_pole_scene, surface_light_scale
 
 
 def build_intent_gates(env, *, centers=None, half_widths=None):
@@ -73,8 +74,11 @@ def build_intent_gates(env, *, centers=None, half_widths=None):
     env.surface_lights = torch.tensor(surface_lights, device=device, dtype=torch.float32)
 
 
-def render_boxes_irradiance(env, position, rotation):
-    depth, normals, ids = trace_boxes(env.voxels, rotation, position, env.height, env.width, env._fov_x_half_tan)
+def render_scene_irradiance(env, position, rotation):
+    if env.scene_layout == "sparse_poles":
+        depth, normals, ids = trace_pole_scene(env, position, rotation)
+    else:
+        depth, normals, ids = trace_boxes(env.voxels, rotation, position, env.height, env.width, env._fov_x_half_tan)
     image, aux = render_ideal_grayscale(
         depth, rotation, position, normals,
         fov_x_half_tan=env._fov_x_half_tan,
@@ -83,11 +87,18 @@ def render_boxes_irradiance(env, position, rotation):
         texture_strength=env.gray_texture_strength, texture_scale=env.gray_texture_scale,
         detach_geometry=False, return_aux=True,
     )
-    light = env.surface_lights.gather(1, ids.flatten(1)).reshape_as(depth)
+    if env.scene_layout == "sparse_poles":
+        light = surface_light_scale(env, aux["points"])
+    else:
+        light = env.surface_lights.gather(1, ids.flatten(1)).reshape_as(depth)
     image = image * light[:, None] * env.gray_light_factor[:, None, None, None]
     aux.update(geometry_depth=depth.detach(), geometry_normals=normals.detach(),
                light_scale=light.mean(dim=(1, 2)) * env.gray_light_factor)
     return image, aux
+
+
+# Historical name used by the gate-only audit.
+render_boxes_irradiance = render_scene_irradiance
 
 
 def render_exposure(env, exposure01, *, return_aux=False):
@@ -105,7 +116,7 @@ def render_exposure(env, exposure01, *, return_aux=False):
         position, velocity, rotation, omega = (value.detach() for value in (position, velocity, rotation, omega))
     camera_rotation = rotation @ env.R_cam
     with torch.no_grad():
-        sharp, aux = render_boxes_irradiance(env, position, camera_rotation)
+        sharp, aux = render_scene_irradiance(env, position, camera_rotation)
     samples = env.gray_temporal_samples
     if samples > 1:
         duration = env.gray_camera.calibration.exposure_to_us(exposure01) * 1e-6
@@ -115,7 +126,7 @@ def render_exposure(env, exposure01, *, return_aux=False):
             sample_p = position + velocity * offset[:, None]
             sample_R = rotation @ rotation_exp(omega * offset[:, None]) @ env.R_cam
             def image_at(p, r):
-                return render_boxes_irradiance(env, p, r)[0]
+                return render_scene_irradiance(env, p, r)[0]
             if torch.is_grad_enabled() and (sample_p.requires_grad or sample_R.requires_grad):
                 sample = checkpoint(image_at, sample_p, sample_R, use_reentrant=False)
             else:
@@ -123,7 +134,7 @@ def render_exposure(env, exposure01, *, return_aux=False):
             accumulated = accumulated + sample / samples
         image = accumulated
     else:
-        image, aux = render_boxes_irradiance(env, position, camera_rotation)
+        image, aux = render_scene_irradiance(env, position, camera_rotation)
     aux["temporal_blur_mae"] = (image.detach() - sharp).abs().mean(dim=(1, 2, 3))
     aux["angular_speed_rad_s"] = omega.norm(dim=-1)
     aux["temporal_samples"] = samples

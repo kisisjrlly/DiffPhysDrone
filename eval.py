@@ -29,6 +29,7 @@ from rollout_ops import (
     policy_forward,
 )
 from train_utils import build_env
+from render.scene_types import DIFFERENTIABLE_SCENES
 
 
 def load_checkpoint_training_args(args):
@@ -320,7 +321,7 @@ def run_one_episode(
         elapsed_s += ctl_dt
         final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()
         after_clearance = _min_clearance_from_vec(env.find_vec_to_nearest_pt(), env)
-        if getattr(env, "scene_layout", "single_wall_slit") == "intent_gates":
+        if getattr(env, "scene_layout", "single_wall_slit") in DIFFERENTIABLE_SCENES:
             after_clearance = env.transition_clearance().detach()
         min_clearance_hist.append(after_clearance)
         collided |= after_clearance <= float(args.collision_clearance)

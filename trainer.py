@@ -27,6 +27,7 @@ from rollout_ops import (
     policy_forward,
 )
 from train_utils import MetricSmoother, periodic_tail_ops
+from render.scene_types import DIFFERENTIABLE_SCENES
 
 
 def _stack_or_none(values):
@@ -275,7 +276,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         post_p_history.append(env.p)
         post_vec_history.append(post_vec)
         post_clearance = torch.norm(post_vec + 1e-6, 2, -1)
-        if getattr(env, "scene_layout", "single_wall_slit") == "intent_gates":
+        if getattr(env, "scene_layout", "single_wall_slit") in DIFFERENTIABLE_SCENES:
             post_clearance = env.transition_clearance()
             post_clearance_history.append(post_clearance)
         collided = post_clearance <= float(args.collision_clearance)

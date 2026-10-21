@@ -20,9 +20,9 @@ from train_utils import build_env, write_run_provenance
 from trainer import _rollout, _loss_from_rollout
 
 
-def verify(device="cuda"):
+def verify(device="cuda", config="configs/gray_joint_intent.args"):
     device = torch.device(device)
-    args = load_intent_args(batch_size=1, timesteps=24, loss_v_window=4,
+    args = load_intent_args(config, batch_size=1, timesteps=24, loss_v_window=4,
                             gray_width=32, gray_height=24, gray_nn_width=24,
                             gray_nn_height=18, coef_cam_smooth=0.0)
     set_global_seed(182)
@@ -70,9 +70,10 @@ def verify(device="cuda"):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--config", default="configs/gray_joint_intent.args")
     parser.add_argument("--out_dir", default="logs/intent_joint/gradient_check")
     cli = parser.parse_args()
-    result, args = verify(cli.device)
+    result, args = verify(cli.device, cli.config)
     out = Path(cli.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "gradient_check.json").write_text(json.dumps(result, indent=2) + "\n")

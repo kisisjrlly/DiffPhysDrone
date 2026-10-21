@@ -27,6 +27,8 @@ from utils import g_decay
 from render.pose import dynamics_step, update_attitude
 from render.box_scene import box_clearance, swept_box_collision
 from render.intent_scene import build_intent_gates, render_exposure
+from render.pole_scene import build_sparse_poles, cylinder_clearance, swept_cylinder_clearance
+from render.scene_types import DIFFERENTIABLE_SCENES
 
 
 class Env:
@@ -89,6 +91,14 @@ class Env:
         gray_temporal_samples=1,
         intent_gate_spacing=2.4,
         flight_max_speed=1.15,
+        pole_count=3,
+        pole_radius_min=0.08,
+        pole_radius_max=0.12,
+        pole_spacing=1.5,
+        pole_x_jitter=0.15,
+        pole_lateral_range=0.48,
+        pole_lateral_jitter=0.12,
+        pole_arena_half_width=0.85,
     ):
         self.device = device
         self.batch_size = int(batch_size)
@@ -99,6 +109,12 @@ class Env:
         self.observation_grad_mode = str(observation_grad_mode)
         self.gray_temporal_samples = int(gray_temporal_samples)
         self.intent_gate_spacing = float(intent_gate_spacing)
+        self.pole_count = int(pole_count)
+        self.pole_radius_min, self.pole_radius_max = float(pole_radius_min), float(pole_radius_max)
+        self.pole_spacing, self.pole_x_jitter = float(pole_spacing), float(pole_x_jitter)
+        self.pole_lateral_range = float(pole_lateral_range)
+        self.pole_lateral_jitter = float(pole_lateral_jitter)
+        self.pole_arena_half_width = float(pole_arena_half_width)
         self.last_control_dt = 1 / 15
         self.fov_x_half_tan = float(fov_x_half_tan)
         self._fov_x_half_tan = float(fov_x_half_tan)
@@ -195,7 +211,7 @@ class Env:
             return [name] * int(B)
         if self.eval_mode or len(self.scenarios) <= 1:
             return [random.choice(self.scenarios)] * int(B)
-        if self.scene_layout == "intent_gates" and B < len(self.scenarios):
+        if self.scene_layout in DIFFERENTIABLE_SCENES and B < len(self.scenarios):
             return random.sample(self.scenarios, int(B))
         names = [self.scenarios[i % len(self.scenarios)] for i in range(int(B))]
         random.shuffle(names)
@@ -331,6 +347,8 @@ class Env:
         self.balls = torch.empty((B, 0, 4), device=device)
         self.cyl = torch.empty((B, 0, 3), device=device)
         self.cyl_h = torch.empty((B, 0, 3), device=device)
+        if self.scene_layout == "sparse_poles":
+            build_sparse_poles(self)
         self.v = torch.zeros((B, 3), device=device)
         self.v_wind = torch.randn((B, 3), device=device) * self.v_wind_w * self.fixed_wind_scale
         self.act = torch.zeros((B, 3), device=device)
@@ -339,7 +357,7 @@ class Env:
 
         R0 = torch.zeros((B, 3, 3), device=device)
         v_dir = F.normalize(self.p_target - self.p, 2, -1)
-        attitude_fn = update_attitude if self.scene_layout == "intent_gates" else quadsim_cuda.update_state_vec
+        attitude_fn = update_attitude if self.scene_layout in DIFFERENTIABLE_SCENES else quadsim_cuda.update_state_vec
         self.R = attitude_fn(R0, self.act, v_dir, torch.zeros_like(self.yaw_ctl_delay), 5)
         self.R_old = self.R.clone()
         self.p_old = self.p.clone()
@@ -366,6 +384,15 @@ class Env:
 
     def get_scene_effects_for_env(self, env_idx=0):
         idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        if self.scene_layout == "sparse_poles":
+            return {
+                "geometry_kind": "sparse_poles", "illumination_scenario": self.current_scene_names[idx],
+                "poles_x_y_radius": self.cyl[idx].detach().cpu().tolist(),
+                "arena_half_width_m": self.pole_arena_half_width,
+                "lateral_sampling": "stratified left/center/right; randomly permuted along x; continuous jitter",
+                "pole_height_scope": "floor to ceiling; no fly-over within arena",
+                "world_fixed_lighting": True, "goal_independent_of_poles": True,
+            }
         if self.scene_layout == "intent_gates":
             return {
                 "geometry_kind": "intent_gates", "illumination_scenario": self.current_scene_names[idx],
@@ -387,7 +414,7 @@ class Env:
         }
 
     def render_gray_ideal(self, *, return_aux=False, **renderer_kwargs):
-        if self.scene_layout == "intent_gates":
+        if self.scene_layout in DIFFERENTIABLE_SCENES:
             initial = torch.zeros(self.batch_size, device=self.p.device, dtype=self.p.dtype)
             return render_exposure(self, initial, return_aux=return_aux)
         B = self.batch_size
@@ -439,7 +466,7 @@ class Env:
         return gray, aux
 
     def find_vec_to_nearest_pt(self):
-        if self.scene_layout == "intent_gates":
+        if self.scene_layout in DIFFERENTIABLE_SCENES:
             # Keep the legacy vector interface; signed clearance is separately
             # used by the joint trainer so penetrations retain useful gradients.
             clearance = self.signed_clearance().clamp_min(0)
@@ -535,7 +562,7 @@ class Env:
             + torch.randn_like(self.dg) * 0.2 * math.sqrt(ctl_dt / 4)
         )
         self.p_old = self.p
-        dynamics_fn = dynamics_step if self.scene_layout == "intent_gates" else run
+        dynamics_fn = dynamics_step if self.scene_layout in DIFFERENTIABLE_SCENES else run
         self.act, self.p, self.v, self.a = dynamics_fn(
             self.R,
             self.dg,
@@ -556,18 +583,24 @@ class Env:
         self.R_old = self.R.clone()
         if v_pred is None:
             v_pred = self.p_target - self.p
-        attitude_fn = update_attitude if self.scene_layout == "intent_gates" else quadsim_cuda.update_state_vec
+        attitude_fn = update_attitude if self.scene_layout in DIFFERENTIABLE_SCENES else quadsim_cuda.update_state_vec
         self.R = attitude_fn(self.R, self.act, v_pred, alpha, 5)
         self.last_control_dt = float(ctl_dt)
 
     def signed_clearance(self):
         position = (self.R_scene_T @ self.p[:, :, None]).squeeze(-1)
-        return box_clearance(position[None], self.voxels, self.drone_radius)[0]
+        clearance = box_clearance(position[None], self.voxels, self.drone_radius)[0]
+        if self.scene_layout == "sparse_poles":
+            clearance = torch.minimum(clearance, cylinder_clearance(position[None], self.cyl, self.drone_radius)[0])
+        return clearance
 
     def collision_since_last_step(self):
         start = (self.R_scene_T @ self.p_old[:, :, None]).squeeze(-1)
         end = (self.R_scene_T @ self.p[:, :, None]).squeeze(-1)
-        return swept_box_collision(start, end, self.voxels, self.drone_radius)
+        collision = swept_box_collision(start, end, self.voxels, self.drone_radius)
+        if self.scene_layout == "sparse_poles":
+            collision = collision | (swept_cylinder_clearance(start, end, self.cyl, self.drone_radius) <= 0)
+        return collision
 
     def transition_clearance(self):
         start = (self.R_scene_T @ self.p_old[:, :, None]).squeeze(-1)
@@ -576,7 +609,10 @@ class Env:
         points = start[None] + fractions[:, None, None] * (end - start)[None]
         clearance = box_clearance(points, self.voxels, self.drone_radius).amin(0)
         swept = swept_box_collision(start, end, self.voxels, self.drone_radius)
-        return torch.where(swept, clearance.clamp_max(0), clearance)
+        clearance = torch.where(swept, clearance.clamp_max(0), clearance)
+        if self.scene_layout == "sparse_poles":
+            clearance = torch.minimum(clearance, swept_cylinder_clearance(start, end, self.cyl, self.drone_radius))
+        return clearance
 
     def save_state(self):
         return {
