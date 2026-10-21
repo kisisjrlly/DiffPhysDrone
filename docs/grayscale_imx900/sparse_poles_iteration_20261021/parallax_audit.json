@@ -1,0 +1,47 @@
+{
+  "status": "audit-only candidate; not yet a training scene",
+  "calibrated": false,
+  "definition": {
+    "near_depth_m": 1.0,
+    "far_depth_m": 1.8,
+    "depth_jitter_m": 0.05,
+    "bearing_y_over_depth": 0.1,
+    "radius_over_depth": 0.06,
+    "arena_half_width_m": 0.38,
+    "uniform_albedo": true
+  },
+  "image_audit": {
+    "initial": {
+      "policy_image_mae": 2.2045612979582074e-07,
+      "policy_image_max": 3.4570693969726562e-06,
+      "different_policy_pixels_over_1e3": 0
+    },
+    "sideways_12cm": {
+      "policy_image_mae": 0.0390155091881752,
+      "policy_image_max": 0.29077792167663574,
+      "different_policy_pixels_over_1e3": 432
+    },
+    "forward_15cm": {
+      "policy_image_mae": 0.004396024625748396,
+      "policy_image_max": 0.05171892046928406,
+      "different_policy_pixels_over_1e3": 360
+    }
+  },
+  "feasibility": {
+    "episodes": 64,
+    "successes": 64,
+    "collisions": 0,
+    "timeouts": 0,
+    "min_clearance_m": 0.019395194947719574,
+    "max_reference_duration_s": 5.977020263671875,
+    "planned_clearance_m": 0.06,
+    "privileged_tracker": true
+  },
+  "image_audit_limit": "No image noise; static views at specified poses. Not an executed sensing maneuver.",
+  "initial_no_common_safe_lane": {
+    "center_allowed_abs_y_m": 0.26,
+    "minimum_union_obstacle_extent_abs_y_m": 0.272,
+    "reason": "At the shared near-pole plane the two mirrored body-expanded obstacles cover every permitted lateral center position."
+  },
+  "claim": "Initial optical ambiguity and geometric/dynamic feasibility only; not learned coordination."
+}

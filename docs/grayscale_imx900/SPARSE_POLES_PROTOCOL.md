@@ -1,5 +1,10 @@
 # Sparse-pole sensing–flight benchmark
 
+> Current development results and the new selectable two-pole ambiguity task:
+> [2026-10-21 iteration](SPARSE_POLES_ITERATION_2026_10_21.md). The three-pole
+> task below remains the basic navigation curriculum and historical protocol.
+> Its short matched pilots have not established a sensing-gradient advantage.
+
 ## Scientific question
 
 Can learning through image formation and dynamics produce useful coordination
@@ -80,59 +85,45 @@ disocclusion derivatives. Calibration remains `calibrated: false`.
 
 ## Fair comparison contract
 
-Primary learning-method comparison:
+Current user-authorized comparison (2026-10-21): **full sensing gradients vs
+nondifferentiable sensing only**. Do not expand this development task to PPO,
+AE or further training-seed campaigns. This is a causal gradient comparison,
+not proof of superiority over other learning algorithms.
 
-| Method | Camera and flight learning signal | Deployed actor |
+| Condition | Forward rollout | Backward learning signal |
 | --- | --- | --- |
-| Joint differentiable | Same task objective through image formation and dynamics | Shared grayscale CNN + GRU + flight and intent-conditioned camera heads |
-| Joint recurrent RL (e.g. PPO) | Task reward for both camera and flight; simulator graph detached | Exactly the same actor, inputs, heads and parameter count |
-| Flight learning + conventional AE | Task-trained flight, disclosed image-statistic AE | Same flight network; report unused camera parameters separately |
-| Flight learning + best validation-selected fixed E/G | Task-trained flight, fixed camera | Same flight network; no test-set E/G selection |
-| Blind | Independently trained, grayscale forced to zero | Same actor parameters; no obstacle map, depth or light labels |
+| `joint` | Same grayscale, dynamics, flight and camera commands | Task loss through image formation and dynamics |
+| `nondiff_sensing` | Identical at matched initialization | Cut both E/G→image and pose/motion→image; retain dynamics and ordinary policy-weight gradients |
 
-The recurrent RL learner is **not implemented yet**. Existing
-`camera_gradient_cut` receives no useful camera task-gradient estimator and is
-only a causal ablation. It must never be relabeled PPO, model-free RL or a
-competitive joint-learning baseline. Add no-intent and motion→image cuts as
-separate ablations after basic navigation works.
+Use the same 200,605-parameter actor, initial checkpoint/hashes, optimizer,
+training seed, layouts, image noise, action bounds, queues and evaluation seeds.
+Both flight and camera heads remain trainable. Under this particular cut the
+camera-specific head has no navigation-gradient estimator; it can still receive
+the disclosed smoothness regularizer. Report this limitation plainly. Do not
+call it reinforcement learning or a competitive derivative-free learner.
+The older camera-only and motion-only cuts remain diagnostic tools.
 
-For the two primary learners, fix and save:
+Count generated transitions (including masked tails), optimizer steps, render
+samples, GPU time and memory. Shared warm-start demonstrations and their
+collection/training costs are also resources; disclose them for both conditions.
+An equal number of updates does not itself imply equal elapsed compute.
 
-1. The exact actor (200,605 parameters with current odometry configuration),
-   matched initial state hash, observations, image size, action bounds,
-   actuator queues, recurrent history, task distribution and paired evaluation
-   seeds. A training-only critic must use the same permitted observations;
-   document its extra parameters/memory/compute. Exploration parameters are
-   training resources too and cannot silently enlarge the deployed actor.
-2. A common per-episode navigation objective and terminal convention. Both may
-   use internal geometry for training losses/rewards; neither actor may observe
-   it. Specify how dense RL rewards sum to that objective, including temporal
-   window losses, normalization, action smoothness and terminal cost. Changing
-   reward shaping is a method/protocol change, not an invisible convenience.
-3. A simulator-transition budget, counting every generated frame including
-   masked tail steps, warm starts, demonstrations and discarded trials. Count
-   RL minibatch/epoch updates and differentiable rollout/optimizer steps.
-4. GPU wall time, peak memory, hardware, numeric precision and actual render
-   evaluations (temporal samples and backward recomputation included). Equal
-   transitions and equal wall time are distinct comparisons. Report both
-   learning curves; run separate budgets rather than claiming that identical
-   iteration counts equal identical compute.
-5. Equal validation/tuning resources. Optimizer/hyperparameters may differ by
-   learner, but candidate trials and their cost must be recorded. An identical
-   learning rate is not evidence of a well-tuned baseline.
-
-If a bright fixed-camera warm start is needed, all methods receive the same
-actor checkpoint and the pretraining cost is included. It may teach flight
-navigation, not search-selected exposure/gain targets. Keep a from-scratch
-comparison to distinguish pretraining from joint-learning gains. Do not freeze
-the flight policy in the final joint comparison.
+A common **flight-only imitation warm start** is now being tested because
+from-scratch flight learning has not yet solved this scene. The teacher uses
+internal geometry to generate bounded acceleration labels; the actor receives
+only ordinary grayscale/motion/goal inputs. There are **no camera targets** and
+the camera-specific parameters are frozen during pretraining. Both comparison
+conditions must receive exactly the same warm checkpoint. Preserve the failed
+from-scratch runs and report this change in learning protocol. Final joint
+training unfreezes flight and camera and uses the navigation objective.
 
 ## Development and evaluation order
 
 1. **Scene audit:** matched rendering/collision, independent dynamically
    feasible routes, policy-resolution pole visibility, noise/saturation
    response, temporal integration convergence, and blind-route shortcut screen.
-   Privileged trackers are diagnostics, never demonstrations of learned flight.
+   Privileged trackers establish feasibility, never learned flight. A separately
+   disclosed use for common flight imitation is allowed; count those demonstrations.
 2. **Basic learning gate:** one pole, uniform nominal light, fixed camera is
    only a flight/avoidance sanity check: a fixed detour can solve it. Then use
    three poles with the same settings. Compare a trained grayscale policy with
@@ -144,9 +135,9 @@ the flight policy in the final joint comparison.
    evaluation is 100 unseen layouts per light scenario (400 paired episodes).
    Do not reuse audit seeds as the final test set. Avoid large multi-seed runs
    until there is a nontrivial working comparison.
-4. **Matched learning methods:** implement/check recurrent RL, train both
-   camera and flight under the common objective, then compare sample and time
-   learning curves with the strong AE/fixed controls.
+4. **Matched sensing-gradient conditions:** train `joint` and
+   `nondiff_sensing` from the common checkpoint under the same task objective.
+   Compare actual navigation and flight behavior at matched resource budgets.
 5. **Coordination evidence:** plot future turn, requested/applied E/G,
    observation timestamps, angular speed, pole localization/visibility, speed,
    clearance and outcome. On matched light/layout states, vary the upcoming
@@ -182,7 +173,9 @@ These are engineering/development checks, not algorithm-comparison results.
   masking and no geometry leak through the goal/state.
 - The main privileged tracker reaches the goal within the deadline, and all
   **16 independent feasibility layouts** pass the actual dynamics/queue check.
-  This is not a learned policy and is never used as actor supervision.
+  This audit result is not a learned policy. The later common flight-only
+  imitation protocol explicitly reuses the planner; those datasets and costs
+  are recorded separately, without E/G targets.
 - On 2048 random layouts and 41 fixed lateral lanes, the best optimistic
   geometry-only lane clears **58.35%** of layouts. This does not bound all blind
   controllers or replace independent blind training.
@@ -201,9 +194,10 @@ These are engineering/development checks, not algorithm-comparison results.
   and takes about 32 s of iteration time; W&B is configured online. Both score
   **0/8 success, 7/8 collisions, 1/8 timeout**. This is an integration test,
   not a failed full-budget experiment or a working visual-navigation result.
-- No competitive recurrent RL learner, full-budget visual-navigation gate,
-  camera-learning advantage or bidirectional coordination has been established
-  on this new scene. Those remain the next empirical steps.
+- No working visual-navigation gate, camera-learning advantage or bidirectional
+  coordination has been established on this new scene. The current next step is
+  the shared flight warm start followed by the matched sensing-gradient pair;
+  competitive RL implementation is outside the current user-authorized scope.
 
 ![Scene and exposure audit; the trajectory is a privileged diagnostic, not learned flight](sparse_poles_20261021/scene_audit_preview.jpg)
 

@@ -110,6 +110,8 @@ def _min_clearance_from_vec(vec_now, env):
 def run_one_episode(
     ep_idx, scene_name, args, model, env, vis, device,
     collect_trace=False, episode_seed=None,
+    sensor_renderer=None,
+    action_override=None,
 ):
     if env.batch_size != 1:
         raise ValueError("run_one_episode requires batch_size=1 for independent termination")
@@ -187,7 +189,7 @@ def run_one_episode(
             stop_reason = "goal"
             break
 
-        gray, aux = render_gray_sensor(
+        gray, aux = (render_gray_sensor if sensor_renderer is None else sensor_renderer)(
             env,
             exposure,
             gain,
@@ -223,6 +225,10 @@ def run_one_episode(
                 camera_motion_state=camera_motion_state,
             )
 
+        proposed_act_raw = act_raw
+        action_overridden = False
+        if action_override is not None:
+            act_raw, action_overridden = action_override(t, env, act_raw)
         act = decode_action_direct(
             act_raw.float(),
             R,
@@ -287,6 +293,19 @@ def run_one_episode(
                 "characteristic_depth": float(aux["characteristic_depth"][0].cpu()),
                 "goal_dist": float(goal_dist[0].cpu()),
                 "clearance": float(clearance[0].cpu()),
+                "time_s": elapsed_s,
+                "speed_m_s": float(env.v[0].norm().cpu()),
+                "angular_speed_rad_s": float(aux.get("angular_speed_rad_s", env.p.new_zeros(B))[0].cpu()),
+                "exposure_us": float(env.gray_camera.calibration.exposure_to_us(render_exposure)[0].cpu()),
+                "requested_exposure": float(env._camera_requested_state[0, 0].cpu()),
+                "requested_gain": float(env._camera_requested_state[0, 1].cpu()),
+                "acc_cmd_forward": float(act_raw[0, 0].cpu()),
+                "acc_cmd_lateral": float(act_raw[0, 1].cpu()),
+                "acc_cmd_vertical": float(act_raw[0, 2].cpu()),
+                "policy_acc_cmd_forward": float(proposed_act_raw[0, 0].cpu()),
+                "policy_acc_cmd_lateral": float(proposed_act_raw[0, 1].cpu()),
+                "policy_acc_cmd_vertical": float(proposed_act_raw[0, 2].cpu()),
+                "external_action_override": bool(action_overridden),
             })
 
         if log_vis and t % max(args.vis_every_steps, 1) == 0:

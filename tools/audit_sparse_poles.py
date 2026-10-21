@@ -31,7 +31,7 @@ from tools.intent_common import load_intent_args
 from train_utils import build_env, write_run_provenance
 
 
-def plan_diagnostic_path(env):
+def plan_diagnostic_path(env, clearance_margin=.14):
     """Shortest safe polyline over a small lateral lattice; privileged audit."""
     poles = env.cyl[0].cpu().numpy()
     stages = [np.array([[env.simple_start_x, 0.]])]
@@ -50,7 +50,7 @@ def plan_diagnostic_path(env):
                 fraction = np.clip(((poles[:, :2] - a) * delta).sum(1) / (delta @ delta), 0, 1)
                 nearest = a + fraction[:, None] * delta
                 gap = np.linalg.norm(nearest - poles[:, :2], axis=1) - poles[:, 2] - env.drone_radius
-                if gap.min() >= .14:
+                if gap.min() >= clearance_margin:
                     options.append((cost + np.linalg.norm(delta), route + [point]))
             if options:
                 cost, route = min(options, key=lambda pair: pair[0])

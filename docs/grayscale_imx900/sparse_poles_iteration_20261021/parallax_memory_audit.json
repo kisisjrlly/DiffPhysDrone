@@ -1,0 +1,45 @@
+{
+  "purpose": "Frozen actor observability diagnostic; no policy training",
+  "collection": {
+    "episodes": 384,
+    "steps_per_episode": 24,
+    "generated_transitions": 9216,
+    "sensor_rendered_frames": 18432,
+    "motion_independent_of_hidden_order": true,
+    "probe_amplitude_range_m": [
+      0.08,
+      0.16
+    ],
+    "probe_duration_s": 1.6,
+    "maximum_command_component": 2.5142812728881836,
+    "min_clearance_m": 0.0818559005856514,
+    "camera_settings_fixed": [
+      0.08,
+      0.05
+    ],
+    "collection_seed": 785000
+  },
+  "train_samples": 256,
+  "holdout_samples": 128,
+  "results": {
+    "initial": {
+      "training_accuracy": 0.6171875,
+      "holdout_accuracy": 0.484375,
+      "training_only_readout_parameters": 129
+    },
+    "moving_view": {
+      "training_accuracy": 0.99609375,
+      "holdout_accuracy": 0.984375,
+      "training_only_readout_parameters": 129
+    },
+    "frozen_view": {
+      "training_accuracy": 0.625,
+      "holdout_accuracy": 0.46875,
+      "training_only_readout_parameters": 129
+    }
+  },
+  "checkpoint_sha256": "63031c4e7cdfb935874598d4246c28204c90ce106cb569cec7cc80c8bfb33056",
+  "actor_parameters_unchanged": true,
+  "camera_or_flight_action_labels": false,
+  "limitation": "Linear decodability is not evidence that the existing action head uses depth or learns a measurement maneuver."
+}

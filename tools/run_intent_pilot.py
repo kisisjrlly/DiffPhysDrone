@@ -26,6 +26,7 @@ VARIANTS = {
     "no_intent": ["--no-camera_use_flight_intent"],
     "motion_gradient_cut": ["--observation_grad_mode", "detached"],
     "camera_gradient_cut": ["--sensor_grad_mode", "detached"],
+    "nondiff_sensing": ["--sensor_grad_mode", "detached", "--observation_grad_mode", "detached"],
     "blind": ["--policy_gray_mode", "zero"],
     "fixed": ["--camera_control_mode", "fixed"],
     "mean_ae": ["--camera_control_mode", "mean_ae"],
@@ -52,6 +53,8 @@ def main():
     parser.add_argument("--iterations", type=int, default=20)
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--training_seed", type=int, default=101)
+    parser.add_argument("--resume", help="Common actor checkpoint supplied unchanged to every condition.")
+    parser.add_argument("--camera_lr_multiplier", type=float)
     parser.add_argument("--eval_seed", type=int, default=721000)
     parser.add_argument("--eval_episodes", type=int, default=8)
     parser.add_argument("--wandb_disabled", action="store_true", help="Online logging is enabled unless explicitly disabled.")
@@ -67,6 +70,9 @@ def main():
                "iterations": cli.iterations, "batch_size": cli.batch_size,
                "evaluation_episode_seeds": list(range(cli.eval_seed, cli.eval_seed + cli.eval_episodes)),
                "calibrated": False, "methods": {},
+               "common_checkpoint": str(Path(cli.resume).resolve()) if cli.resume else None,
+               "common_checkpoint_sha256": sha256(cli.resume) if cli.resume else None,
+               "camera_lr_multiplier_override": cli.camera_lr_multiplier,
                "claim": "Checks train/eval integration only; does not establish learned coordination, superiority or real deployment readiness."}
     initials = []
     device = torch.device("cuda")
@@ -76,6 +82,10 @@ def main():
         command = [sys.executable, "main_cuda.py", *tokens,
                    "--num_iters", str(cli.iterations), "--batch_size", str(cli.batch_size),
                    "--seed", str(cli.training_seed), "--checkpoint_dir", str(directory), *VARIANTS[variant]]
+        if cli.resume:
+            command.extend(["--resume", str(Path(cli.resume).resolve())])
+        if cli.camera_lr_multiplier is not None:
+            command.extend(["--camera_lr_multiplier", str(cli.camera_lr_multiplier)])
         if cli.wandb_disabled:
             command.append("--wandb_disabled")
         (directory / "command.json").write_text(json.dumps(command, indent=2) + "\n")

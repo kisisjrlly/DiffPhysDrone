@@ -126,6 +126,12 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         pole_lateral_range=args.pole_lateral_range,
         pole_lateral_jitter=args.pole_lateral_jitter,
         pole_arena_half_width=args.pole_arena_half_width,
+        pole_layout=args.pole_layout,
+        pole_pair_near_depth=args.pole_pair_near_depth,
+        pole_pair_far_depth=args.pole_pair_far_depth,
+        pole_pair_depth_jitter=args.pole_pair_depth_jitter,
+        pole_pair_bearing=args.pole_pair_bearing,
+        pole_pair_angular_radius=args.pole_pair_angular_radius,
     )
     env.gray_camera = build_imx900_camera(args).to(device)
     env.imx900_calibration = env.gray_camera.calibration

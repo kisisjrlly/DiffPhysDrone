@@ -1,0 +1,120 @@
+{
+  "full": {
+    "navigation_loss": 12.096988677978516,
+    "camera_head_gradient_norm": 2.1848855018615723,
+    "flight_parameter_gradient_norm": 95.22013854980469,
+    "first_flight_action_gradient": [
+      [
+        0.08386807143688202,
+        -0.028502998873591423,
+        -0.04941440746188164
+      ],
+      [
+        0.09213325381278992,
+        -0.022816380485892296,
+        -0.0034623933024704456
+      ],
+      [
+        0.09643857926130295,
+        -0.026535365730524063,
+        -0.009532320313155651
+      ],
+      [
+        0.10289157181978226,
+        -0.01246936060488224,
+        -0.00870107114315033
+      ]
+    ]
+  },
+  "motion_observation_cut": {
+    "navigation_loss": 12.096988677978516,
+    "camera_head_gradient_norm": 2.4960975646972656,
+    "flight_parameter_gradient_norm": 90.26863861083984,
+    "first_flight_action_gradient": [
+      [
+        0.10440725088119507,
+        -0.01618720032274723,
+        -0.04347814619541168
+      ],
+      [
+        0.11113503575325012,
+        0.03161751851439476,
+        0.003158536273986101
+      ],
+      [
+        0.0871867761015892,
+        -0.03273366764187813,
+        -0.0076143452897667885
+      ],
+      [
+        0.10362359136343002,
+        -0.011058049276471138,
+        -0.007973503321409225
+      ]
+    ]
+  },
+  "camera_boundary_cut": {
+    "navigation_loss": 12.096988677978516,
+    "camera_head_gradient_norm": 0.0,
+    "flight_parameter_gradient_norm": 95.22311401367188,
+    "first_flight_action_gradient": [
+      [
+        0.08389324694871902,
+        -0.02851925976574421,
+        -0.049403853714466095
+      ],
+      [
+        0.09213882684707642,
+        -0.02284432388842106,
+        -0.0034629276487976313
+      ],
+      [
+        0.09642485529184341,
+        -0.026532068848609924,
+        -0.00953693501651287
+      ],
+      [
+        0.10289278626441956,
+        -0.012465616688132286,
+        -0.008700194768607616
+      ]
+    ]
+  },
+  "nondifferentiable_sensing": {
+    "navigation_loss": 12.096988677978516,
+    "camera_head_gradient_norm": 0.0,
+    "flight_parameter_gradient_norm": 90.26828002929688,
+    "first_flight_action_gradient": [
+      [
+        0.10443346947431564,
+        -0.01620321534574032,
+        -0.043469443917274475
+      ],
+      [
+        0.11114215850830078,
+        0.0315888412296772,
+        0.0031594783067703247
+      ],
+      [
+        0.08717229962348938,
+        -0.03274171054363251,
+        -0.0076167467050254345
+      ],
+      [
+        0.10362640023231506,
+        -0.0110555998980999,
+        -0.007972958497703075
+      ]
+    ]
+  },
+  "motion_to_observation_gradient_contribution_norm": 0.06408962607383728,
+  "flight_gradient_comparison": {
+    "motion_path_contribution_norm": 49.1638298034668,
+    "cosine_full_vs_motion_cut": 0.860823392868042
+  },
+  "checkpoint": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/flight_imitation_v2/final.pth",
+  "forward_trajectories_identical": true,
+  "template_seed": 182,
+  "rollout_seed": 183,
+  "interpretation": "Gradient wiring only; camera-boundary-cut is not a trained RL baseline."
+}

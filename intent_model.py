@@ -65,9 +65,8 @@ class IntentModel(nn.Module):
     def forward(self, v, hx=None, *, gray_obs=None, add_noise=False, cam_hx=None,
                 camera_state=None, camera_motion_state=None, intent_override=None,
                 camera_timeline=None):
-        x = self.preprocess_gray_input(gray_obs, add_noise=add_noise)
-        hx = self.hx_norm(self.gru(torch.tanh(self.stem(x) + self.state_proj(v)), hx))
-        action = self.max_acc_cmd * torch.tanh(self.fc(hx))
+        encoded = self.encode_observation(v, gray_obs, add_noise=add_noise)
+        action, hx = self.flight_from_encoded(encoded, hx)
         if camera_state is None:
             camera_state = v.new_zeros((v.shape[0], 2))
         if camera_motion_state is None:
@@ -85,6 +84,15 @@ class IntentModel(nn.Module):
         cam_input = torch.cat([hx, intent, camera_state, camera_motion_state, camera_timeline], -1)
         camera = torch.sigmoid(self.fc_cam(self.cam_pre(cam_input)))
         return action, camera, hx, None
+
+    def encode_observation(self, state, gray_obs, *, add_noise=False):
+        """Batched encoding also used by disclosed flight-only imitation."""
+        image = self.preprocess_gray_input(gray_obs, add_noise=add_noise)
+        return torch.tanh(self.stem(image) + self.state_proj(state))
+
+    def flight_from_encoded(self, encoded, hx=None):
+        hx = self.hx_norm(self.gru(encoded, hx))
+        return self.max_acc_cmd * torch.tanh(self.fc(hx)), hx
 
 
 def build_policy(args, obs_dim=None):

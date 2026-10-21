@@ -99,6 +99,12 @@ class Env:
         pole_lateral_range=0.48,
         pole_lateral_jitter=0.12,
         pole_arena_half_width=0.85,
+        pole_layout="stratified",
+        pole_pair_near_depth=1.0,
+        pole_pair_far_depth=1.8,
+        pole_pair_depth_jitter=.05,
+        pole_pair_bearing=.1,
+        pole_pair_angular_radius=.06,
     ):
         self.device = device
         self.batch_size = int(batch_size)
@@ -115,6 +121,10 @@ class Env:
         self.pole_lateral_range = float(pole_lateral_range)
         self.pole_lateral_jitter = float(pole_lateral_jitter)
         self.pole_arena_half_width = float(pole_arena_half_width)
+        self.pole_layout = str(pole_layout)
+        self.pole_pair_near_depth, self.pole_pair_far_depth = float(pole_pair_near_depth), float(pole_pair_far_depth)
+        self.pole_pair_depth_jitter = float(pole_pair_depth_jitter)
+        self.pole_pair_bearing, self.pole_pair_angular_radius = float(pole_pair_bearing), float(pole_pair_angular_radius)
         self.last_control_dt = 1 / 15
         self.fov_x_half_tan = float(fov_x_half_tan)
         self._fov_x_half_tan = float(fov_x_half_tan)

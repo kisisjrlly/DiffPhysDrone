@@ -6,7 +6,8 @@
 > including its failed learned-policy pilot. Do not keep training that task as
 > the default or cite its feasibility witness as learned navigation. The new
 > task uses the same actor and sensing/dynamics paths, with three round poles.
-> A competitive joint RL baseline remains to be implemented.
+> Current scope is full vs nondifferentiable sensing gradients; no RL baseline
+> implementation is requested in this iteration.
 
 Development branch: `codex/imx900-intent-closed-loop`, based on `d989ad9`
 of `active-sensing-grayscale-imx900`. Date: 2026-10-21.
@@ -60,8 +61,9 @@ IDs, depth and lighting labels are simulator internals, never actor inputs.
 The goal is identical for all aperture choices.
 
 Both flight and camera parameters, including the shared visual memory, are
-trained together by full BPTT. There is no image-quality target, search teacher,
-oracle waypoint supervision or PPO in this implementation. Existing velocity,
+trained together by full BPTT. There is no image-quality target or E/G teacher.
+A newly disclosed common flight-only imitation warm start is being tested on
+the sparse-pole task; the original gate pilots did not use it. No PPO is used. Existing velocity,
 collision and action-regularity losses are retained; an explicit terminal
 goal-distance term is enabled for this task. Camera smoothness is a disclosed
 regularizer. Shared parameters are included in the `flight_parameter_sha256`

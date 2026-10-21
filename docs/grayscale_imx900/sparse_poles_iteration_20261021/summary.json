@@ -1,0 +1,220 @@
+{
+  "status": "development only; learned flight-for-measurement not established",
+  "calibrated": false,
+  "common_flight_warm_start": {
+    "v1": {
+      "optimizer_steps": 600,
+      "training_wall_time_s": 55.822071084003255,
+      "actor_parameters": 200605,
+      "checkpoint_sha256": "f7ad48f701cf18d087e691660a0ea8c190230a20997ffb08b2a19e3392e80187",
+      "flight_parameter_sha256": "20ff681029b92018f8a416f567d63a11a2ba4041d7b4094bd7c1ebf708c5db2c",
+      "camera_parameter_sha256": "cf8cae287e3e2dc072c3ea379e7587f236104c12cdaaf40cee9cd4068b6c8bb0",
+      "dataset": {
+        "generation_seed": 6201,
+        "episodes": 128,
+        "steps": 120,
+        "generated_transitions": 15360,
+        "valid_transitions": 13401,
+        "generation_wall_time_s": 32.89477958500356,
+        "teacher_success_rate": 1.0,
+        "teacher_collision_rate": 0.0,
+        "privileged_acceleration_labels": true,
+        "camera_parameter_labels": false,
+        "actor_inputs": "ordinary grayscale, velocity, orientation and goal only",
+        "frame_storage": "float16 at policy resolution; single frame, previous frame reconstructed",
+        "dataset_path": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/flight_demonstrations/flight_dataset.pt",
+        "dataset_sha256": "19e52cef97fa757f0afda398d7d1c361b667306190f3ecd251b130034748a642"
+      },
+      "successes": {
+        "gray": 9.0,
+        "zero": 4.0
+      }
+    },
+    "v2": {
+      "optimizer_steps": 600,
+      "training_wall_time_s": 51.789915687004395,
+      "actor_parameters": 200605,
+      "checkpoint_sha256": "63031c4e7cdfb935874598d4246c28204c90ce106cb569cec7cc80c8bfb33056",
+      "flight_parameter_sha256": "1e48d304a174fafec7f88a413d0d024f3c17bff65106295044f5dc1b71e70e00",
+      "camera_parameter_sha256": "cf8cae287e3e2dc072c3ea379e7587f236104c12cdaaf40cee9cd4068b6c8bb0",
+      "dataset": {
+        "datasets": [
+          {
+            "generation_seed": 6201,
+            "episodes": 128,
+            "steps": 120,
+            "generated_transitions": 15360,
+            "valid_transitions": 13401,
+            "generation_wall_time_s": 32.89477958500356,
+            "teacher_success_rate": 1.0,
+            "teacher_collision_rate": 0.0,
+            "privileged_acceleration_labels": true,
+            "camera_parameter_labels": false,
+            "actor_inputs": "ordinary grayscale, velocity, orientation and goal only",
+            "frame_storage": "float16 at policy resolution; single frame, previous frame reconstructed",
+            "dataset_path": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/flight_demonstrations/flight_dataset.pt",
+            "dataset_sha256": "19e52cef97fa757f0afda398d7d1c361b667306190f3ecd251b130034748a642"
+          },
+          {
+            "generation_seed": 6202,
+            "episodes": 128,
+            "steps": 120,
+            "generated_transitions": 15360,
+            "valid_transitions": 13427,
+            "generation_wall_time_s": 36.3978358999957,
+            "teacher_success_rate": 1.0,
+            "teacher_collision_rate": 0.0,
+            "privileged_acceleration_labels": true,
+            "camera_parameter_labels": false,
+            "teacher_execution_probability": 0.5,
+            "collection_actor": "current learned policy with teacher mixing",
+            "actor_inputs": "ordinary grayscale, velocity, orientation and goal only",
+            "frame_storage": "float16 at policy resolution; single frame, previous frame reconstructed",
+            "collection_checkpoint_sha256": "f7ad48f701cf18d087e691660a0ea8c190230a20997ffb08b2a19e3392e80187",
+            "dataset_path": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/flight_recovery_v1/flight_dataset.pt",
+            "dataset_sha256": "5d99c48492ff5c20d3df7ef27d885166b8ddf5a491878b78e9a2803c551edcc3"
+          }
+        ],
+        "episodes": 256,
+        "generated_transitions": 30720,
+        "valid_transitions": 26828,
+        "privileged_acceleration_labels": true,
+        "camera_parameter_labels": false
+      },
+      "successes": {
+        "gray": 31.0,
+        "zero": 0.0
+      }
+    }
+  },
+  "sensing_gradient_trials": {
+    "lr1": {
+      "successes": {
+        "joint": 13.0,
+        "nondiff_sensing": 10.0
+      },
+      "episodes_per_method": 40,
+      "paired_delta": {
+        "mean": 0.075,
+        "episode_bootstrap_95": [
+          -0.075,
+          0.225
+        ],
+        "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+      },
+      "initialization_matched": true,
+      "iterations": 100,
+      "batch_size": 4,
+      "generated_transitions_per_method": 48000,
+      "camera_lr_multiplier": 1,
+      "eval_seed_range": [
+        751000,
+        751039
+      ],
+      "training_wall_time_s": {
+        "joint": 415.3739743232727,
+        "nondiff_sensing": 167.51900434494019
+      }
+    },
+    "camera_lr20": {
+      "successes": {
+        "joint": 11.0,
+        "nondiff_sensing": 13.0
+      },
+      "episodes_per_method": 40,
+      "paired_delta": {
+        "mean": -0.05,
+        "episode_bootstrap_95": [
+          -0.2,
+          0.1
+        ],
+        "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+      },
+      "initialization_matched": true,
+      "iterations": 100,
+      "batch_size": 4,
+      "generated_transitions_per_method": 48000,
+      "camera_lr_multiplier": 20,
+      "eval_seed_range": [
+        761000,
+        761039
+      ],
+      "training_wall_time_s": {
+        "joint": 395.6714382171631,
+        "nondiff_sensing": 164.93432331085205
+      }
+    }
+  },
+  "motion_integration_intervention": {
+    "device": "cpu",
+    "episode_seed_range": [
+      751000,
+      751039
+    ],
+    "successes": {
+      "nominal": 9.0,
+      "no_motion_integration": 9.0
+    },
+    "episodes_with_changed_success": 0,
+    "mean_matched_position_difference_m": 0.00040557654055088806,
+    "limitation": "Idealized removal of motion integration at the same photon/noise model. CPU random worlds/noise differ from the CUDA primary trial; only the two CPU interventions are paired."
+  },
+  "parallax_direct_pair": {
+    "manifest": "parallax_direct_joint_pair.json",
+    "iterations": 100,
+    "batch_size": 4,
+    "initialization_matched": true,
+    "successes": {
+      "joint": 0.0,
+      "nondiff_sensing": 0.0
+    },
+    "episodes_per_method": 40,
+    "status": "Both failed; not learned coordination."
+  },
+  "parallax_memory_audit": {
+    "purpose": "Frozen actor observability diagnostic; no policy training",
+    "collection": {
+      "episodes": 384,
+      "steps_per_episode": 24,
+      "generated_transitions": 9216,
+      "sensor_rendered_frames": 18432,
+      "motion_independent_of_hidden_order": true,
+      "probe_amplitude_range_m": [
+        0.08,
+        0.16
+      ],
+      "probe_duration_s": 1.6,
+      "maximum_command_component": 2.5142812728881836,
+      "min_clearance_m": 0.0818559005856514,
+      "camera_settings_fixed": [
+        0.08,
+        0.05
+      ],
+      "collection_seed": 785000
+    },
+    "train_samples": 256,
+    "holdout_samples": 128,
+    "results": {
+      "initial": {
+        "training_accuracy": 0.6171875,
+        "holdout_accuracy": 0.484375,
+        "training_only_readout_parameters": 129
+      },
+      "moving_view": {
+        "training_accuracy": 0.99609375,
+        "holdout_accuracy": 0.984375,
+        "training_only_readout_parameters": 129
+      },
+      "frozen_view": {
+        "training_accuracy": 0.625,
+        "holdout_accuracy": 0.46875,
+        "training_only_readout_parameters": 129
+      }
+    },
+    "checkpoint_sha256": "63031c4e7cdfb935874598d4246c28204c90ce106cb569cec7cc80c8bfb33056",
+    "actor_parameters_unchanged": true,
+    "camera_or_flight_action_labels": false,
+    "limitation": "Linear decodability is not evidence that the existing action head uses depth or learns a measurement maneuver."
+  },
+  "resource_budget_limit": "Matched transitions/updates, not matched wall time; no compute-efficiency claim."
+}

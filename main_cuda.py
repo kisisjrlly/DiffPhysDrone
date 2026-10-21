@@ -167,7 +167,22 @@ def main():
 
     use_amp = bool(args.amp and device.type == "cuda")
     scaler = GradScaler(enabled=use_amp)
-    optim = AdamW(trainable, args.lr)
+    if args.camera_lr_multiplier == 1.0:
+        optim = AdamW(trainable, args.lr)
+    else:
+        groups = []
+        for is_camera, group_name, rate in ((False, "flight_and_shared", args.lr),
+                                             (True, "camera_specific", args.lr * args.camera_lr_multiplier)):
+            values = [p for name, p in model.named_parameters()
+                      if p.requires_grad and model._is_camera_parameter(name) == is_camera]
+            if values:
+                groups.append({"params": values, "lr": rate, "name": group_name})
+        optim = AdamW(groups, args.lr)
+    with open(os.path.join(checkpoint_dir, "optimizer_configuration.json"), "w") as handle:
+        json.dump({"type": "AdamW", "groups": [
+            {"name": group.get("name", "all_trainable"), "lr": group["lr"],
+             "weight_decay": group["weight_decay"], "parameters": sum(p.numel() for p in group["params"])}
+            for group in optim.param_groups]}, handle, indent=2)
     sched = CosineAnnealingLR(
         optim,
         estimate_optimizer_steps(args),

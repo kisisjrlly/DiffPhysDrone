@@ -1,0 +1,60 @@
+{
+  "full": {
+    "navigation_loss": 24.128236770629883,
+    "camera_head_gradient_norm": 0.02208162657916546,
+    "flight_parameter_gradient_norm": 1049.5771484375,
+    "first_flight_action_gradient": [
+      [
+        0.015272557735443115,
+        1.8823587894439697,
+        -0.0033360738307237625
+      ]
+    ]
+  },
+  "motion_observation_cut": {
+    "navigation_loss": 24.128236770629883,
+    "camera_head_gradient_norm": 0.02208126150071621,
+    "flight_parameter_gradient_norm": 1049.587646484375,
+    "first_flight_action_gradient": [
+      [
+        0.015462785959243774,
+        1.882277250289917,
+        -0.003385559655725956
+      ]
+    ]
+  },
+  "camera_boundary_cut": {
+    "navigation_loss": 24.128236770629883,
+    "camera_head_gradient_norm": 0.0,
+    "flight_parameter_gradient_norm": 1049.5771484375,
+    "first_flight_action_gradient": [
+      [
+        0.015272527933120728,
+        1.8823589086532593,
+        -0.003336002118885517
+      ]
+    ]
+  },
+  "nondifferentiable_sensing": {
+    "navigation_loss": 24.128236770629883,
+    "camera_head_gradient_norm": 0.0,
+    "flight_parameter_gradient_norm": 1049.5877685546875,
+    "first_flight_action_gradient": [
+      [
+        0.015462785959243774,
+        1.882277250289917,
+        -0.0033854860812425613
+      ]
+    ]
+  },
+  "motion_to_observation_gradient_contribution_norm": 0.0002128009800799191,
+  "flight_gradient_comparison": {
+    "motion_path_contribution_norm": 0.044090624898672104,
+    "cosine_full_vs_motion_cut": 1.0000001192092896
+  },
+  "checkpoint": null,
+  "forward_trajectories_identical": true,
+  "template_seed": 182,
+  "rollout_seed": 183,
+  "interpretation": "Gradient wiring only; camera-boundary-cut is not a trained RL baseline."
+}

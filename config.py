@@ -28,6 +28,8 @@ def build_parser():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--deterministic", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--lr", type=float, default=5e-5)
+    p.add_argument("--camera_lr_multiplier", type=float, default=1.0,
+                   help="Learning-rate multiplier for camera-specific weights; shared visual memory keeps the flight LR.")
     p.add_argument("--grad_decay", type=float, default=0.3)
     p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
@@ -37,6 +39,12 @@ def build_parser():
     p.add_argument("--gray_temporal_samples", type=int, default=1)
     p.add_argument("--intent_gate_spacing", type=float, default=2.4)
     p.add_argument("--pole_count", type=int, default=3)
+    p.add_argument("--pole_layout", choices=["stratified", "parallax_pair"], default="stratified")
+    p.add_argument("--pole_pair_near_depth", type=float, default=1.0)
+    p.add_argument("--pole_pair_far_depth", type=float, default=1.8)
+    p.add_argument("--pole_pair_depth_jitter", type=float, default=.05)
+    p.add_argument("--pole_pair_bearing", type=float, default=.1)
+    p.add_argument("--pole_pair_angular_radius", type=float, default=.06)
     p.add_argument("--pole_radius_min", type=float, default=0.08)
     p.add_argument("--pole_radius_max", type=float, default=0.12)
     p.add_argument("--pole_spacing", type=float, default=1.5)
@@ -216,7 +224,7 @@ def validate_args(args):
             raise ValueError("both intent gates must lie between start and goal")
         if args.intent_gate_spacing <= 2 * 0.1 + 2 * 0.12:
             raise ValueError("intent gates are too close for the vehicle")
-    if args.scene_layout == "sparse_poles":
+    if args.scene_layout == "sparse_poles" and args.pole_layout == "stratified":
         if not 1 <= args.pole_count <= 5:
             raise ValueError("pole_count must be between 1 and 5")
         if not 0 < args.pole_radius_min <= args.pole_radius_max:
@@ -229,11 +237,30 @@ def validate_args(args):
         if not (args.simple_start_x + 1 < args.simple_wall_x - args.pole_x_jitter and
                 args.simple_wall_x + (args.pole_count - 1) * args.pole_spacing + args.pole_x_jitter < args.simple_goal_x - 1):
             raise ValueError("poles must lie at least 1m from start and goal")
+    if args.scene_layout == "sparse_poles" and args.pole_layout == "parallax_pair":
+        near, far, jitter = args.pole_pair_near_depth, args.pole_pair_far_depth, args.pole_pair_depth_jitter
+        bearing, angular_radius, arena = args.pole_pair_bearing, args.pole_pair_angular_radius, args.pole_arena_half_width
+        if not all(np.isfinite(x) for x in (near, far, jitter, bearing, angular_radius, arena)):
+            raise ValueError("parallax pair geometry must be finite")
+        if args.pole_count != 2 or not (jitter >= 0 and .5 < near - jitter <= near + jitter < far - jitter):
+            raise ValueError("parallax pair requires two separated depth intervals")
+        if not (0 < angular_radius < bearing and far + jitter < args.simple_goal_x - args.simple_start_x - 1):
+            raise ValueError("invalid parallax bearing/radius or goal clearance")
+        if args.cam_angle != 0 or args.gray_texture_strength != 0 or not set(args.scenarios) <= {"nominal", "dark", "bright"}:
+            raise ValueError("parallax ambiguity requires level camera, uniform albedo and spatially uniform lighting")
+        if (far + jitter) * args.fov_x_half_tan * args.gray_height / args.gray_width >= 1.15:
+            raise ValueError("parallax pole feet/tops must remain outside the initial image")
+        if not ((far + jitter) * (bearing + angular_radius) < arena and
+                arena - .12 < (near - jitter) * (bearing + angular_radius) + .12 and
+                (near + jitter) * bearing < (near - jitter) * angular_radius + .12):
+            raise ValueError("parallax pair must fit the arena and block a common blind lane")
     if args.policy_arch == "intent_shared":
         if args.train_camera_only or args.include_camera_state_in_obs:
             raise ValueError("intent_shared uses joint/shared-memory learning without a camera-state flight shortcut")
         if args.intent_horizon_s < 2 / args.base_control_freq:
             raise ValueError("intent horizon must cover the two-control-step flight command queue")
+    if not np.isfinite(args.camera_lr_multiplier) or args.camera_lr_multiplier <= 0:
+        raise ValueError("--camera_lr_multiplier must be finite and positive")
     if args.gray_width < 1 or args.gray_height < 1:
         raise ValueError("--gray_width/--gray_height must be >= 1")
     if args.gray_nn_width < 1 or args.gray_nn_height < 1:

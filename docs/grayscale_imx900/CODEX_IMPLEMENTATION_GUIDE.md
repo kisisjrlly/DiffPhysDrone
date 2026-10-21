@@ -19,8 +19,11 @@ The current joint-learning task is specified by
 [SPARSE_POLES_PROTOCOL.md](SPARSE_POLES_PROTOCOL.md), using three round poles.
 The double-gate scene is historical development evidence, not the default next
 training target. Check blind-route shortcuts and fixed-camera visual learning
-before camera-learning claims. Compare learning methods with an actual trained
-joint RL baseline; a camera-boundary gradient cut is only an ablation.
+before camera-learning claims. The current user-requested scope is full vs
+nondifferentiable sensing only. This is a causal gradient comparison, not a
+competitive RL benchmark. Do not expand this iteration to RL implementation.
+A disclosed common flight-only imitation warm start may be used for both;
+no E/G teacher targets are supplied.
 
 ## Phase 0 — legacy separation ✅ COMPLETE
 

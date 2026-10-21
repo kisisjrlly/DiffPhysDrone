@@ -1,0 +1,20 @@
+{
+  "generation_seed": 6301,
+  "episodes": 128,
+  "steps": 120,
+  "generated_transitions": 15360,
+  "valid_transitions": 10178,
+  "generation_wall_time_s": 32.171367242001,
+  "collection_success_rate": 0.9921875,
+  "collection_collision_rate": 0.0078125,
+  "privileged_acceleration_labels": true,
+  "camera_parameter_labels": false,
+  "teacher_execution_probability": 1.0,
+  "unlabelled_initial_probe_steps": 24,
+  "initial_probe_motion_labels": false,
+  "collection_actor": "teacher only",
+  "actor_inputs": "ordinary grayscale, velocity, orientation and goal only",
+  "frame_storage": "float16 at policy resolution; single frame, previous frame reconstructed",
+  "dataset_path": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/parallax_post_measurement_demonstrations/flight_dataset.pt",
+  "dataset_sha256": "d3ad671c0f8dcfd34e37c668877b56f965fcf6de86a7bc6cae1f693b004fa37a"
+}

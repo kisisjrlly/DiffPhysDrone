@@ -13,6 +13,16 @@
   `docs/grayscale_imx900/SPARSE_POLES_PROTOCOL.md`. Keep the failed double-gate
   pilot as historical evidence. Do not treat a gradient cut as an RL baseline
   or claim method superiority before matched, trained method comparisons.
+  Current user scope is full vs nondifferentiable sensing only, cutting both
+  E/G→image and pose/motion→image in the latter. Do not add an RL baseline now.
+  A shared flight-only imitation warm start must be disclosed, costed and
+  checkpoint-matched; it must not label camera settings.
+- Current iteration evidence and the two-pole parallax task are in
+  `docs/grayscale_imx900/SPARSE_POLES_ITERATION_2026_10_21.md`.
+  Do not call the three-pole pilots successful sensing/motion coordination.
+  `forced_probe` is an external-action diagnostic, never learned flight.
+  In parallax imitation, the initial 24 measurement actions are unlabelled;
+  geometry-aware flight labels start only after the informative view change.
 - The verified local interpreter is
   `/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python` (PyTorch/CUDA).
   Check it before reporting missing dependencies from a system Python.
