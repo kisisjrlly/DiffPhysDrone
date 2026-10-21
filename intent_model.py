@@ -64,9 +64,13 @@ class IntentModel(nn.Module):
 
     def forward(self, v, hx=None, *, gray_obs=None, add_noise=False, cam_hx=None,
                 camera_state=None, camera_motion_state=None, intent_override=None,
-                camera_timeline=None):
+                camera_timeline=None, action_noise=None):
         encoded = self.encode_observation(v, gray_obs, add_noise=add_noise)
         action, hx = self.flight_from_encoded(encoded, hx)
+        if action_noise is not None:
+            if action_noise.shape != action.shape:
+                raise ValueError("action_noise must have shape [batch,3]")
+            action = (action + action_noise).clamp(-self.max_acc_cmd, self.max_acc_cmd)
         if camera_state is None:
             camera_state = v.new_zeros((v.shape[0], 2))
         if camera_motion_state is None:

@@ -12,6 +12,7 @@ from .box_scene import trace_boxes
 from .ideal_gray import render_ideal_grayscale
 from .pose import body_angular_velocity, rotation_exp
 from .pole_scene import trace_pole_scene, surface_light_scale
+from .pose_gradient import image_warp_pose_surrogate
 
 
 def build_intent_gates(env, *, centers=None, half_widths=None):
@@ -101,6 +102,17 @@ def render_scene_irradiance(env, position, rotation):
 render_boxes_irradiance = render_scene_irradiance
 
 
+def render_with_pose_gradient(env, position, rotation):
+    if env.pose_gradient_estimator == "analytic":
+        return render_scene_irradiance(env, position, rotation)
+    with torch.no_grad():
+        image, aux = render_scene_irradiance(env, position, rotation)
+    if torch.is_grad_enabled() and (position.requires_grad or rotation.requires_grad):
+        image = image_warp_pose_surrogate(image, aux["geometry_depth"], position,
+                                          rotation, env._fov_x_half_tan)
+    return image, aux
+
+
 def render_exposure(env, exposure01, *, return_aux=False):
     """Uniform shutter integration over the past exposure, ending at now.
 
@@ -126,7 +138,7 @@ def render_exposure(env, exposure01, *, return_aux=False):
             sample_p = position + velocity * offset[:, None]
             sample_R = rotation @ rotation_exp(omega * offset[:, None]) @ env.R_cam
             def image_at(p, r):
-                return render_scene_irradiance(env, p, r)[0]
+                return render_with_pose_gradient(env, p, r)[0]
             if torch.is_grad_enabled() and (sample_p.requires_grad or sample_R.requires_grad):
                 sample = checkpoint(image_at, sample_p, sample_R, use_reentrant=False)
             else:
@@ -134,7 +146,7 @@ def render_exposure(env, exposure01, *, return_aux=False):
             accumulated = accumulated + sample / samples
         image = accumulated
     else:
-        image, aux = render_scene_irradiance(env, position, camera_rotation)
+        image, aux = render_with_pose_gradient(env, position, camera_rotation)
     aux["temporal_blur_mae"] = (image.detach() - sharp).abs().mean(dim=(1, 2, 3))
     aux["angular_speed_rad_s"] = omega.norm(dim=-1)
     aux["temporal_samples"] = samples

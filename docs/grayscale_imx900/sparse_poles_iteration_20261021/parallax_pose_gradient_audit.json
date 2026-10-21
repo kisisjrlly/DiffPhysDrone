@@ -1,0 +1,56 @@
+{
+  "same_forward_pixels": true,
+  "batch": 64,
+  "seed": 4921,
+  "interpretation": "Local image sensitivity only; surrogate is not the exact hard-raster derivative.",
+  "finite_difference": {
+    "0.005": {
+      "analytic": {
+        "rmse": 0.12822632491588593,
+        "cosine": 0.17837706208229065,
+        "same_sign_fraction": 0.671875,
+        "gradient_rms": 0.0908130332827568,
+        "finite_difference_rms": 0.1081630140542984
+      },
+      "warp_ste": {
+        "rmse": 0.09094737470149994,
+        "cosine": 0.5663459300994873,
+        "same_sign_fraction": 0.71875,
+        "gradient_rms": 0.043238528072834015,
+        "finite_difference_rms": 0.1081630140542984
+      }
+    },
+    "0.01": {
+      "analytic": {
+        "rmse": 0.09917846322059631,
+        "cosine": 0.24090267717838287,
+        "same_sign_fraction": 0.59375,
+        "gradient_rms": 0.0908130332827568,
+        "finite_difference_rms": 0.06735203415155411
+      },
+      "warp_ste": {
+        "rmse": 0.047111205756664276,
+        "cosine": 0.7187687754631042,
+        "same_sign_fraction": 0.703125,
+        "gradient_rms": 0.043238528072834015,
+        "finite_difference_rms": 0.06735203415155411
+      }
+    },
+    "0.02": {
+      "analytic": {
+        "rmse": 0.09572666883468628,
+        "cosine": 0.11240822076797485,
+        "same_sign_fraction": 0.5,
+        "gradient_rms": 0.0908130332827568,
+        "finite_difference_rms": 0.04215801879763603
+      },
+      "warp_ste": {
+        "rmse": 0.03067125380039215,
+        "cosine": 0.7422832250595093,
+        "same_sign_fraction": 0.796875,
+        "gradient_rms": 0.043238528072834015,
+        "finite_difference_rms": 0.04215801879763603
+      }
+    }
+  }
+}

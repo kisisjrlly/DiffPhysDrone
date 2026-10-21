@@ -115,6 +115,7 @@ def build_env(batch_size, args, device, *, eval_mode=False):
         gray_motion_depth_floor=args.gray_motion_depth_floor,
         scene_layout=args.scene_layout,
         observation_grad_mode=args.observation_grad_mode,
+        pose_gradient_estimator=args.pose_gradient_estimator,
         gray_temporal_samples=args.gray_temporal_samples,
         intent_gate_spacing=args.intent_gate_spacing,
         flight_max_speed=args.flight_max_speed,
@@ -169,7 +170,9 @@ def write_run_provenance(directory, args):
     if not calibration.calibrated:
         limitations.append("provisional sensor profile")
     if args.scene_layout in DIFFERENTIABLE_SCENES:
-        limitations.extend(["piecewise hard visibility gradients", "constant twist during exposure"])
+        limitations.append("constant twist during exposure")
+        limitations.append("fixed-depth brightness-constancy image-warp backward; approximate visibility gradients"
+                           if args.pose_gradient_estimator == "warp_ste" else "piecewise hard visibility gradients")
     manifest = {
         "git_revision": git("rev-parse", "HEAD"), "git_status": git("status", "--porcelain"),
         "source_sha256": {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)},
@@ -184,6 +187,7 @@ def write_run_provenance(directory, args):
                     "deterministic_algorithms_enabled": torch.are_deterministic_algorithms_enabled()},
         "scene_layout": args.scene_layout, "policy_arch": args.policy_arch,
         "observation_grad_mode": args.observation_grad_mode,
+        "pose_gradient_estimator": args.pose_gradient_estimator,
         "camera_delay_unit": "control_steps", "frame_period_s": 1 / args.base_control_freq,
         "temporal_integration_samples": args.gray_temporal_samples,
         "limitations": limitations,

@@ -79,6 +79,23 @@ def test_no_intent_ablation_has_identical_parameters_and_ignores_override():
     torch.testing.assert_close(a[1], b[1], rtol=0, atol=0)
 
 
+def test_training_noise_is_in_actual_flight_intent_and_not_extra_actor_capacity():
+    args = intent_args()
+    model = build_policy(args)
+    state, image = torch.zeros(2, 10), torch.rand(2, 2, 16, 20)
+    original = model(state, gray_obs=image)
+    noise = torch.tensor([[.2, -.3, 0.], [-.1, .25, 0.]])
+    sampled = model(state, gray_obs=image, action_noise=noise)
+    torch.testing.assert_close(sampled[0], (original[0] + noise).clamp(-args.max_acc_cmd, args.max_acc_cmd))
+    intent = torch.cat([sampled[0] / args.max_acc_cmd,
+                        sampled[0] * args.intent_horizon_s / args.flight_max_speed], -1)
+    expected = model(state, gray_obs=image, intent_override=intent)
+    torch.testing.assert_close(expected[1], sampled[1], rtol=0, atol=0)
+    assert sum(p.numel() for p in model.parameters()) == 200605
+    # Ordinary inference has no sampling and is unchanged by the training flag.
+    torch.testing.assert_close(model(state, gray_obs=image)[0], original[0], rtol=0, atol=0)
+
+
 def test_gate_geometry_is_visual_only_and_goal_does_not_encode_openings():
     args = intent_args(batch_size=32)
     env = build_env(32, args, torch.device("cpu"))

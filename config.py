@@ -30,12 +30,17 @@ def build_parser():
     p.add_argument("--lr", type=float, default=5e-5)
     p.add_argument("--camera_lr_multiplier", type=float, default=1.0,
                    help="Learning-rate multiplier for camera-specific weights; shared visual memory keeps the flight LR.")
+    p.add_argument("--flight_exploration_std", type=float, default=0.,
+                   help="Training-only correlated XY acceleration noise; zero keeps deterministic training unchanged.")
+    p.add_argument("--flight_exploration_rho", type=float, default=.85)
     p.add_argument("--grad_decay", type=float, default=0.3)
     p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
     p.add_argument("--intent_horizon_s", type=float, default=0.20)
     p.add_argument("--scene_layout", choices=["single_wall_slit", *DIFFERENTIABLE_SCENES], default="single_wall_slit")
     p.add_argument("--observation_grad_mode", choices=["full", "detached"], default="detached")
+    p.add_argument("--pose_gradient_estimator", choices=["analytic", "warp_ste"], default="analytic",
+                   help="Pose backward only: local hard-render derivative or fixed-depth image-warp surrogate.")
     p.add_argument("--gray_temporal_samples", type=int, default=1)
     p.add_argument("--intent_gate_spacing", type=float, default=2.4)
     p.add_argument("--pole_count", type=int, default=3)
@@ -218,6 +223,8 @@ def validate_args(args):
             raise ValueError("differentiable scenes require at least 3 temporal shutter samples")
     elif args.observation_grad_mode == "full" or args.gray_temporal_samples != 1:
         raise ValueError("pose gradients / temporal integration require a differentiable scene")
+    if args.pose_gradient_estimator != "analytic" and args.scene_layout not in DIFFERENTIABLE_SCENES:
+        raise ValueError("image-warp pose gradients require a differentiable scene")
     if args.scene_layout == "intent_gates":
         if not (args.simple_start_x < args.simple_wall_x and
                 args.simple_wall_x + args.intent_gate_spacing < args.simple_goal_x):
@@ -261,6 +268,10 @@ def validate_args(args):
             raise ValueError("intent horizon must cover the two-control-step flight command queue")
     if not np.isfinite(args.camera_lr_multiplier) or args.camera_lr_multiplier <= 0:
         raise ValueError("--camera_lr_multiplier must be finite and positive")
+    if not np.isfinite(args.flight_exploration_std) or args.flight_exploration_std < 0 or not 0 <= args.flight_exploration_rho < 1:
+        raise ValueError("invalid flight exploration parameters")
+    if args.flight_exploration_std > 0 and args.policy_arch != "intent_shared":
+        raise ValueError("flight exploration currently requires intent_shared")
     if args.gray_width < 1 or args.gray_height < 1:
         raise ValueError("--gray_width/--gray_height must be >= 1")
     if args.gray_nn_width < 1 or args.gray_nn_height < 1:

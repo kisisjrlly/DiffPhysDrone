@@ -216,5 +216,21 @@
     "camera_or_flight_action_labels": false,
     "limitation": "Linear decodability is not evidence that the existing action head uses depth or learns a measurement maneuver."
   },
-  "resource_budget_limit": "Matched transitions/updates, not matched wall time; no compute-efficiency claim."
+  "resource_budget_limit": "Matched transitions/updates, not matched wall time; no compute-efficiency claim.",
+  "post_measurement_flight_curriculum": {
+    "manifest": "parallax_post_measurement_imitation.json",
+    "ordinary_autonomous_successes": 0,
+    "external_initial_probe_successes": 29,
+    "episodes_per_condition": 40,
+    "measurement_actions_supervised": false,
+    "camera_labels": false,
+    "interpretation": "Only conditional flight after an externally supplied observation motion; not learned active sensing."
+  },
+  "pose_gradient_correction": {
+    "audit": "parallax_pose_gradient_audit.json",
+    "wiring": "parallax_warp_wiring.json",
+    "unchanged_hard_forward": true,
+    "estimator": "fixed-depth image-warp backward approximation",
+    "training_evidence": "pending; gradient checks do not establish performance"
+  }
 }

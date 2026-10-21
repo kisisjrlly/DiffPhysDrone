@@ -134,6 +134,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     terminal_reached = torch.zeros(B, dtype=torch.bool, device=device)
     terminal_step = torch.full((B,), -1, dtype=torch.long, device=device)
     terminal_position = torch.zeros(B, 3, dtype=env.p.dtype, device=device)
+    exploration = torch.zeros(B, 3, dtype=env.p.dtype, device=device)
 
     sensor_differentiable = args.sensor_grad_mode == "full"
 
@@ -184,6 +185,12 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             args.include_camera_state_in_obs,
         )
 
+        policy_extra = {}
+        if args.flight_exploration_std > 0:
+            rho = args.flight_exploration_rho
+            innovation = torch.cat([torch.randn(B, 2, device=device), torch.zeros(B, 1, device=device)], -1)
+            exploration = rho * exploration + (1 - rho**2)**.5 * args.flight_exploration_std * innovation
+            policy_extra["action_noise"] = exploration
         with autocast(enabled=use_amp):
             act_raw, cam_params, h, cam_h = policy_forward(
                 model,
@@ -195,6 +202,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 cam_hx=cam_h,
                 camera_state=camera_state,
                 camera_motion_state=camera_motion_state,
+                **policy_extra,
             )
 
         act = decode_action_direct(
