@@ -231,6 +231,48 @@
     "wiring": "parallax_warp_wiring.json",
     "unchanged_hard_forward": true,
     "estimator": "fixed-depth image-warp backward approximation",
-    "training_evidence": "pending; gradient checks do not establish performance"
+    "training_evidence": {
+      "manifest": "parallax_warp_pair.json",
+      "successes": {
+        "joint": 0.0,
+        "nondiff_sensing": 0.0
+      },
+      "matched_initialization": true,
+      "iterations": 100,
+      "batch_size": 4,
+      "interpretation": "Better local image derivative did not produce autonomous navigation."
+    }
+  },
+  "post_measurement_autonomous_pair": {
+    "manifest": "parallax_post_measurement_pair.json",
+    "successes": {
+      "joint": 0.0,
+      "nondiff_sensing": 0.0
+    },
+    "collision_rates": {
+      "joint": 0.825,
+      "nondiff_sensing": 0.9
+    },
+    "matched_initialization_verified": true,
+    "iterations": 100,
+    "batch_size": 4,
+    "source_note": "nondiff loaded the inactive default-zero exploration option added after joint launched; actual sources archived separately; default analytic estimator in both."
+  },
+  "longer_lookahead_scene": {
+    "config": "configs/gray_joint_parallax_lookahead.args",
+    "audit": "parallax_lookahead_scene_audit_margin08.json",
+    "near_depth_m": 2.5,
+    "far_depth_m": 4.5,
+    "fov_x_half_tan": 0.328,
+    "goal_x_m": 4.2,
+    "first_attempt_margin06": {
+      "success": 62,
+      "n": 64
+    },
+    "adjusted_tracker_margin08": {
+      "success": 64,
+      "n": 64
+    },
+    "interpretation": "Same ambiguity and lateral blockage, more reaction time; privileged feasibility only."
   }
 }

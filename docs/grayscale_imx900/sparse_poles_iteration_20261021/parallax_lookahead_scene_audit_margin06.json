@@ -1,0 +1,49 @@
+{
+  "status": "scene design audit only",
+  "calibrated": false,
+  "definition": {
+    "near_depth_m": 2.5,
+    "far_depth_m": 4.5,
+    "depth_jitter_m": 0.05,
+    "bearing_y_over_depth": 0.04,
+    "radius_over_depth": 0.024,
+    "arena_half_width_m": 0.38,
+    "uniform_albedo": true
+  },
+  "image_audit": {
+    "initial": {
+      "policy_image_mae": 9.110145811064285e-07,
+      "policy_image_max": 1.3589859008789062e-05,
+      "different_policy_pixels_over_1e3": 0
+    },
+    "sideways_12cm": {
+      "policy_image_mae": 0.03353971615433693,
+      "policy_image_max": 0.2827618718147278,
+      "different_policy_pixels_over_1e3": 432
+    },
+    "forward_15cm": {
+      "policy_image_mae": 0.005624786484986544,
+      "policy_image_max": 0.10072754323482513,
+      "different_policy_pixels_over_1e3": 360
+    }
+  },
+  "feasibility": {
+    "episodes": 64,
+    "successes": 62,
+    "collisions": 2,
+    "timeouts": 0,
+    "min_clearance_m": -0.0008006393909454346,
+    "max_reference_duration_s": 6.069546699523926,
+    "planned_clearance_m": 0.06,
+    "privileged_tracker": true,
+    "external_initial_probe_steps": 24,
+    "deadline_s": 8.0
+  },
+  "image_audit_limit": "No image noise; static views at specified poses. Not an executed sensing maneuver.",
+  "initial_no_common_safe_lane": {
+    "center_allowed_abs_y_m": 0.26,
+    "minimum_union_obstacle_extent_abs_y_m": 0.27680000000000005,
+    "reason": "At the shared near-pole plane the two mirrored body-expanded obstacles cover every permitted lateral center position."
+  },
+  "claim": "Initial optical ambiguity and geometric/dynamic feasibility only; not learned coordination."
+}

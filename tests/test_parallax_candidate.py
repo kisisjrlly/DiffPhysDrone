@@ -14,11 +14,12 @@ from intent_model import build_policy
 from eval import run_one_episode
 
 
-def test_initial_images_are_ambiguous_but_a_new_view_reveals_depth_order():
-    stats, _ = image_audit()
+@pytest.mark.parametrize("config", ["configs/gray_joint_parallax.args", "configs/gray_joint_parallax_lookahead.args"])
+def test_initial_images_are_ambiguous_but_a_new_view_reveals_depth_order(config):
+    stats, _ = image_audit(config)
     assert stats["initial"]["policy_image_max"] < 1e-4
     assert stats["sideways_12cm"]["policy_image_mae"] > .01
-    env, args = candidate_env()
+    env, args = candidate_env(config=config)
     state = build_state_vector(env, compute_target_velocity(env.p_target - env.p, env),
                                build_local_frame(env), torch.full((2,), .08),
                                torch.full((2,), .05), args.no_odom, False)[0]
@@ -35,6 +36,14 @@ def test_both_depth_orders_have_executed_bounded_collision_free_routes():
     assert report["collisions"] == 0
     assert report["min_clearance_m"] > 0
     assert report["max_reference_duration_s"] < 8
+
+
+def test_longer_lookahead_leaves_time_to_measure_then_complete_actual_route():
+    report, _ = feasibility_audit(4, "configs/gray_joint_parallax_lookahead.args", 24, .08)
+    assert report["successes"] == 4
+    assert report["collisions"] == 0
+    assert report["min_clearance_m"] > 0
+    assert report["max_reference_duration_s"] + 24 / 15 < report["deadline_s"]
 
 
 def test_selectable_parallax_layout_preserves_initial_optical_ambiguity():

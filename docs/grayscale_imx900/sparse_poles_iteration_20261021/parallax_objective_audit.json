@@ -1,0 +1,120 @@
+{
+  "seed": 784301,
+  "episodes": 32,
+  "device": "cpu",
+  "source": "parallax_objective_audit_source.py",
+  "source_sha256": "d155a0387b133a3bae8ebbdbee1ba41cf6447a874285b1009c94a60a58e31533",
+  "limitation": "The source labels zero acceleration commands as hover; this is NOT a stabilized stationary policy. Only the executed probe_then_teacher and learned actor comparisons are used in the report. Diagnostic controllers have privileged geometry and do not count as learned sensing.",
+  "results": {
+    "probe_then_teacher": {
+      "loss": 13.459309577941895,
+      "success": 1.0,
+      "collision": 0.0,
+      "goal_distance": 0.31078940629959106,
+      "contributions": {
+        "loss_contrib/v": 8.791608095169067,
+        "loss_share/v": 0.6531990256080396,
+        "loss_contrib/obj_avoidance": 0.47172218561172485,
+        "loss_share/obj_avoidance": 0.035048021779836624,
+        "loss_contrib/collide": 0.4250631481409073,
+        "loss_share/collide": 0.031581347937937966,
+        "loss_contrib/d_acc": 0.09363411903381348,
+        "loss_share/d_acc": 0.006956829132336111,
+        "loss_contrib/d_jerk": 3.366492919921875,
+        "loss_share/d_jerk": 0.2501237397305805,
+        "loss_contrib/cam_smooth": 0.0,
+        "loss_share/cam_smooth": 0.0,
+        "loss_contrib/terminal_goal": 0.31078940629959106,
+        "loss_share/terminal_goal": 0.023091035811269298
+      }
+    },
+    "hover": {
+      "loss": 24.27216148376465,
+      "success": 0.0,
+      "collision": 1.0,
+      "goal_distance": 7.173520565032959,
+      "contributions": {
+        "loss_contrib/v": 15.736245095729828,
+        "loss_share/v": 0.6483248412452886,
+        "loss_contrib/obj_avoidance": 0.39856889843940735,
+        "loss_share/obj_avoidance": 0.016420824423747572,
+        "loss_contrib/collide": 0.9638267010450363,
+        "loss_share/collide": 0.03970914212009561,
+        "loss_contrib/d_acc": 0.0,
+        "loss_share/d_acc": 0.0,
+        "loss_contrib/d_jerk": 0.0,
+        "loss_share/d_jerk": 0.0,
+        "loss_contrib/cam_smooth": 0.0,
+        "loss_share/cam_smooth": 0.0,
+        "loss_contrib/terminal_goal": 7.173520565032959,
+        "loss_share/terminal_goal": 0.2955451922108683
+      }
+    },
+    "straight": {
+      "loss": 38.291717529296875,
+      "success": 0.0,
+      "collision": 1.0,
+      "goal_distance": 6.281373500823975,
+      "contributions": {
+        "loss_contrib/v": 6.472879707813263,
+        "loss_share/v": 0.1690412399872904,
+        "loss_contrib/obj_avoidance": 1.4875290393829346,
+        "loss_share/obj_avoidance": 0.038847277361090185,
+        "loss_contrib/collide": 19.986754655838013,
+        "loss_share/collide": 0.5219602314355378,
+        "loss_contrib/d_acc": 0.245,
+        "loss_share/d_acc": 0.006398250186372989,
+        "loss_contrib/d_jerk": 3.818182373046875,
+        "loss_share/d_jerk": 0.09971300440797236,
+        "loss_contrib/cam_smooth": 0.0,
+        "loss_share/cam_smooth": 0.0,
+        "loss_contrib/terminal_goal": 6.281373500823975,
+        "loss_share/terminal_goal": 0.16403999662173613
+      }
+    },
+    "common_actor": {
+      "loss": 39.77278137207031,
+      "success": 0.0,
+      "collision": 1.0,
+      "goal_distance": 6.269843101501465,
+      "contributions": {
+        "loss_contrib/v": 6.106691837310791,
+        "loss_share/v": 0.1535394801390949,
+        "loss_contrib/obj_avoidance": 1.3522660732269287,
+        "loss_share/obj_avoidance": 0.03399978833456748,
+        "loss_contrib/collide": 17.237839698791504,
+        "loss_share/collide": 0.43340797547744353,
+        "loss_contrib/d_acc": 0.16170730590820312,
+        "loss_share/d_acc": 0.004065778386284647,
+        "loss_contrib/d_jerk": 8.644431152343751,
+        "loss_share/d_jerk": 0.21734541394732373,
+        "loss_contrib/cam_smooth": 1.8361646647591102e-11,
+        "loss_share/cam_smooth": 4.616636561785969e-13,
+        "loss_contrib/terminal_goal": 6.269843101501465,
+        "loss_share/terminal_goal": 0.15764156371482413
+      }
+    },
+    "trained_actor": {
+      "loss": 22.0494384765625,
+      "success": 0.0,
+      "collision": 0.75,
+      "goal_distance": 6.003942489624023,
+      "contributions": {
+        "loss_contrib/v": 13.550646007061005,
+        "loss_share/v": 0.6145574242568088,
+        "loss_contrib/obj_avoidance": 0.4238632917404175,
+        "loss_share/obj_avoidance": 0.01922331471674984,
+        "loss_contrib/collide": 0.8708731085062027,
+        "loss_share/collide": 0.039496385201060386,
+        "loss_contrib/d_acc": 0.02634364128112793,
+        "loss_share/d_acc": 0.0011947533957302966,
+        "loss_contrib/d_jerk": 1.173769760131836,
+        "loss_share/d_jerk": 0.05323354473884648,
+        "loss_contrib/cam_smooth": 1.967401708213856e-10,
+        "loss_share/cam_smooth": 8.922684022948588e-12,
+        "loss_contrib/terminal_goal": 6.003942489624023,
+        "loss_share/terminal_goal": 0.27229457768188164
+      }
+    }
+  }
+}
