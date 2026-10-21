@@ -308,6 +308,45 @@
     "common_actor_successes": 35,
     "post_joint_actor_successes": 0,
     "episodes": 40,
-    "interpretation": "Joint fine tuning destroyed previously available post-measurement flight ability; motivation to test replay retention, not proof of a successful fix."
+    "interpretation": "Joint fine tuning destroyed previously available post-measurement flight ability; motivation to test replay retention, not proof of a successful fix.",
+    "post_replay_full_actor_successes": 36
+  },
+  "flight_replay_trial": {
+    "manifest": "parallax_replay_pair.json",
+    "successes": {
+      "joint": 17.0,
+      "nondiff_sensing": 27.0
+    },
+    "paired_delta": {
+      "nondiff_sensing": {
+        "mean": -0.25,
+        "episode_bootstrap_95": [
+          -0.4,
+          -0.075
+        ],
+        "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+      }
+    },
+    "matched_initialization": true,
+    "matched_source_hashes": true,
+    "matched_replay_targets": true,
+    "training_process_wall_time_s": {
+      "joint": 367.94512433600175,
+      "nondiff_sensing": 178.42594019800163
+    },
+    "iterations": 100,
+    "batch_size": 4,
+    "generated_navigation_transitions_per_method": 48000,
+    "extra_replay_sequences_per_method": 400,
+    "extra_valid_replay_action_samples_per_method": 33067,
+    "interpretation": "Retention worked, but full was worse than nondifferentiable sensing; no method-advantage claim."
+  },
+  "update_direction_diagnostic": {
+    "manifest": "parallax_update_direction_audit.json",
+    "base_training_loss": 13.499109268188477,
+    "base_holdout_loss": 13.614227294921875,
+    "full_first_step_loss_lr_1e4": 18.5181827545166,
+    "full_first_step_loss_lr_1e5": 13.175334930419922,
+    "interpretation": "One matched gradient/update diagnostic, not proof of converged superiority. Lower step size is the next isolated change."
   }
 }

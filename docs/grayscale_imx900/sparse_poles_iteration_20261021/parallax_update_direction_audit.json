@@ -1,0 +1,152 @@
+{
+  "config": "configs/gray_joint_parallax_replay.args",
+  "batch": 8,
+  "train_seed": 789301,
+  "holdout_seed": 789302,
+  "optimizer": "actual first AdamW update after clipping to norm 5",
+  "limitation": "Single update with discontinuous hard-forward objectives; seed pairs are local development evidence, not evidence of trained-policy superiority.",
+  "conditions": {
+    "full": [
+      {
+        "lr": 1e-05,
+        "gradient_norm": 243.0906219482422,
+        "train": {
+          "total_loss": 13.175334930419922,
+          "navigation_loss": 13.105536460876465,
+          "replay_contribution": 0.06979855970712379,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0435173511505127
+        },
+        "holdout": {
+          "total_loss": 13.337294578552246,
+          "navigation_loss": 13.267496109008789,
+          "replay_contribution": 0.06979855970712379,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.070106267929077
+        }
+      },
+      {
+        "lr": 3e-05,
+        "gradient_norm": 243.0906219482422,
+        "train": {
+          "total_loss": 13.452414512634277,
+          "navigation_loss": 12.82433795928955,
+          "replay_contribution": 0.6280761444941163,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.049968957901001
+        },
+        "holdout": {
+          "total_loss": 13.441133499145508,
+          "navigation_loss": 12.813056945800781,
+          "replay_contribution": 0.6280761444941163,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0788156986236572
+        }
+      },
+      {
+        "lr": 0.0001,
+        "gradient_norm": 243.0906219482422,
+        "train": {
+          "total_loss": 18.5181827545166,
+          "navigation_loss": 11.519943237304688,
+          "replay_contribution": 6.998239550739527,
+          "success": 0.625,
+          "collision": 0.375,
+          "goal_distance": 1.6485204696655273
+        },
+        "holdout": {
+          "total_loss": 18.930553436279297,
+          "navigation_loss": 11.932312965393066,
+          "replay_contribution": 6.998239550739527,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.071871519088745
+        }
+      }
+    ],
+    "detached": [
+      {
+        "lr": 1e-05,
+        "gradient_norm": 244.26528930664062,
+        "train": {
+          "total_loss": 13.151886940002441,
+          "navigation_loss": 13.085119247436523,
+          "replay_contribution": 0.06676790508208796,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0439085960388184
+        },
+        "holdout": {
+          "total_loss": 13.333660125732422,
+          "navigation_loss": 13.266892433166504,
+          "replay_contribution": 0.06676790508208796,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.069662094116211
+        }
+      },
+      {
+        "lr": 3e-05,
+        "gradient_norm": 244.26528930664062,
+        "train": {
+          "total_loss": 12.90097427368164,
+          "navigation_loss": 12.29996109008789,
+          "replay_contribution": 0.6010136567056179,
+          "success": 0.625,
+          "collision": 0.375,
+          "goal_distance": 1.6254171133041382
+        },
+        "holdout": {
+          "total_loss": 13.387304306030273,
+          "navigation_loss": 12.786290168762207,
+          "replay_contribution": 0.6010136567056179,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0791432857513428
+        }
+      },
+      {
+        "lr": 0.0001,
+        "gradient_norm": 244.26528930664062,
+        "train": {
+          "total_loss": 18.175527572631836,
+          "navigation_loss": 11.476602554321289,
+          "replay_contribution": 6.698925048112869,
+          "success": 0.625,
+          "collision": 0.375,
+          "goal_distance": 1.6475322246551514
+        },
+        "holdout": {
+          "total_loss": 18.532573699951172,
+          "navigation_loss": 11.833647727966309,
+          "replay_contribution": 6.698925048112869,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0765886306762695
+        }
+      }
+    ]
+  },
+  "before_train": {
+    "total_loss": 13.499109268188477,
+    "navigation_loss": 13.499109268188477,
+    "replay_contribution": 0.0,
+    "success": 0.5,
+    "collision": 0.5,
+    "goal_distance": 2.0592100620269775
+  },
+  "before_holdout": {
+    "total_loss": 13.614227294921875,
+    "navigation_loss": 13.614227294921875,
+    "replay_contribution": 0.0,
+    "success": 0.5,
+    "collision": 0.5,
+    "goal_distance": 2.057114839553833
+  },
+  "source": "update_direction_audit_source.py",
+  "source_sha256": "7feea96e4696965fffc8301b2937998916a65a5a548cf4a901534b697906bc06"
+}
