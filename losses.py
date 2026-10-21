@@ -43,6 +43,7 @@ def compute_physics_losses(
     valid_mask=None,
     post_vec_chunk=None,
     post_clearance_chunk=None,
+    differentiate_approach_weight=False,
 ):
     _ = p_chunk
     loss_v = velocity_tracking_loss(v_chunk, tv_chunk, win=win, valid_mask=valid_mask)
@@ -71,8 +72,9 @@ def compute_physics_losses(
     dist_post = torch.norm(post_vec + 1e-6, 2, -1) - margin
     if post_clearance_chunk is not None:
         dist_post = post_clearance_chunk - margin
-    with torch.no_grad():
-        v_to = ((dist_pre - dist_post) * 135).clamp_min(1)
+    v_to = ((dist_pre - dist_post) * 135).clamp_min(1)
+    if not differentiate_approach_weight:
+        v_to = v_to.detach()
     loss_avoid = barrier(dist_post, v_to, valid_mask=transition_mask)
     collide = F.softplus(dist_post.clamp(min=-3.0).mul(-32)).mul(v_to)
     if valid_mask is not None:

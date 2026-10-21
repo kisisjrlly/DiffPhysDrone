@@ -1,0 +1,184 @@
+{
+  "seed": 791101,
+  "batch": 8,
+  "meaning": "Fine local changes with common random numbers; terminal/raster discontinuities may remain.",
+  "scenarios": {
+    "nominal": {
+      "base": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.273310661315918,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.259805679321289,
+        "derivative_E_G": [
+          -15.227828979492188,
+          -2.9586219787597656
+        ]
+      },
+      "differences": {
+        "0.0001": {
+          "minus": {
+            "command_E": 0.0799,
+            "command_G": 0.05,
+            "loss": 14.27586841583252,
+            "success": 0.375,
+            "collision": 0.625,
+            "goal_distance": 2.25976824760437,
+            "derivative_E_G": null
+          },
+          "plus": {
+            "command_E": 0.0801,
+            "command_G": 0.05,
+            "loss": 14.275941848754883,
+            "success": 0.375,
+            "collision": 0.625,
+            "goal_distance": 2.259873151779175,
+            "derivative_E_G": null
+          },
+          "central_difference": 0.36716461181640625
+        },
+        "0.001": {
+          "minus": {
+            "command_E": 0.079,
+            "command_G": 0.05,
+            "loss": 14.273821830749512,
+            "success": 0.375,
+            "collision": 0.625,
+            "goal_distance": 2.25866961479187,
+            "derivative_E_G": null
+          },
+          "plus": {
+            "command_E": 0.081,
+            "command_G": 0.05,
+            "loss": 14.25186824798584,
+            "success": 0.375,
+            "collision": 0.625,
+            "goal_distance": 2.261073350906372,
+            "derivative_E_G": null
+          },
+          "central_difference": -10.976791381835938
+        }
+      }
+    },
+    "dark": {
+      "base": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 16.68295669555664,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.512888193130493,
+        "derivative_E_G": [
+          -2.8284170627593994,
+          -0.5531873106956482
+        ]
+      },
+      "differences": {
+        "0.0001": {
+          "minus": {
+            "command_E": 0.0799,
+            "command_G": 0.05,
+            "loss": 16.682722091674805,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.5129411220550537,
+            "derivative_E_G": null
+          },
+          "plus": {
+            "command_E": 0.0801,
+            "command_G": 0.05,
+            "loss": 16.683229446411133,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.512834072113037,
+            "derivative_E_G": null
+          },
+          "central_difference": 2.536773681640625
+        },
+        "0.001": {
+          "minus": {
+            "command_E": 0.079,
+            "command_G": 0.05,
+            "loss": 16.663753509521484,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.5180740356445312,
+            "derivative_E_G": null
+          },
+          "plus": {
+            "command_E": 0.081,
+            "command_G": 0.05,
+            "loss": 16.685731887817383,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.5123348236083984,
+            "derivative_E_G": null
+          },
+          "central_difference": 10.989189147949219
+        }
+      }
+    },
+    "bright": {
+      "base": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.777952194213867,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.330719470977783,
+        "derivative_E_G": [
+          -19.171504974365234,
+          -3.695251941680908
+        ]
+      },
+      "differences": {
+        "0.0001": {
+          "minus": {
+            "command_E": 0.0799,
+            "command_G": 0.05,
+            "loss": 14.780707359313965,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.3306334018707275,
+            "derivative_E_G": null
+          },
+          "plus": {
+            "command_E": 0.0801,
+            "command_G": 0.05,
+            "loss": 14.771553039550781,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.3308897018432617,
+            "derivative_E_G": null
+          },
+          "central_difference": -45.77159881591797
+        },
+        "0.001": {
+          "minus": {
+            "command_E": 0.079,
+            "command_G": 0.05,
+            "loss": 14.564980506896973,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.3264636993408203,
+            "derivative_E_G": null
+          },
+          "plus": {
+            "command_E": 0.081,
+            "command_G": 0.05,
+            "loss": 14.753276824951172,
+            "success": 0.0,
+            "collision": 1.0,
+            "goal_distance": 3.3314077854156494,
+            "derivative_E_G": null
+          },
+          "central_difference": 94.14815902709961
+        }
+      }
+    }
+  },
+  "source": "parallax_camera_fine_direction_audit_source.py",
+  "source_sha256": "24b33875c3ff0418423c3d6c6a7ebdd40d303d7b95327b72316594a0a4f6d48e",
+  "provenance_limitation": "Development diagnostic: executed Python source was not frozen before the run; script hash is retained. The optional backward changes are versioned with this evidence."
+}

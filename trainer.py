@@ -173,7 +173,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 history.append(value)
 
         vec_now = _nearest_vec_per_batch(env.find_vec_to_nearest_pt(), B)
-        target_v_raw = env.p_target - env.p.detach()
+        target_position = env.p if args.joint_backward == "consistent" else env.p.detach()
+        target_v_raw = env.p_target - target_position
         R = build_local_frame(env)
         target_v = compute_target_velocity(target_v_raw, env)
         state, _, camera_state, camera_motion_state = build_state_vector(
@@ -350,6 +351,7 @@ def _loss_from_rollout(rollout, env, args):
         valid_mask=torch.stack(rollout["valid_history"]),
         post_vec_chunk=post_vec_history,
         post_clearance_chunk=_stack_or_none(rollout.get("post_clearance_history")),
+        differentiate_approach_weight=args.joint_backward == "consistent",
     )
     camera_losses = compute_camera_losses(
         _stack_or_none(rollout["cam_history"]),

@@ -1,0 +1,72 @@
+{
+  "config": "configs/gray_joint_parallax_consistent.args",
+  "batch": 8,
+  "train_seed": 789301,
+  "holdout_seed": 789302,
+  "optimizer": "actual first AdamW update after clipping to norm 5",
+  "limitation": "Single update with discontinuous hard-forward objectives; seed pairs are local development evidence, not evidence of trained-policy superiority.",
+  "conditions": {
+    "full": [
+      {
+        "lr": 1e-05,
+        "gradient_norm": 446.3019104003906,
+        "train": {
+          "total_loss": 13.16699504852295,
+          "navigation_loss": 13.093925476074219,
+          "replay_contribution": 0.07306997576961294,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0440540313720703
+        },
+        "holdout": {
+          "total_loss": 13.33052921295166,
+          "navigation_loss": 13.25745964050293,
+          "replay_contribution": 0.07306997576961294,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0707449913024902
+        }
+      }
+    ],
+    "detached": [
+      {
+        "lr": 1e-05,
+        "gradient_norm": 457.4556884765625,
+        "train": {
+          "total_loss": 13.153213500976562,
+          "navigation_loss": 13.082952499389648,
+          "replay_contribution": 0.07026146340649575,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0445408821105957
+        },
+        "holdout": {
+          "total_loss": 13.336607933044434,
+          "navigation_loss": 13.26634693145752,
+          "replay_contribution": 0.07026146340649575,
+          "success": 0.5,
+          "collision": 0.5,
+          "goal_distance": 2.0700769424438477
+        }
+      }
+    ]
+  },
+  "before_train": {
+    "total_loss": 13.499109268188477,
+    "navigation_loss": 13.499109268188477,
+    "replay_contribution": 0.0,
+    "success": 0.5,
+    "collision": 0.5,
+    "goal_distance": 2.0592100620269775
+  },
+  "before_holdout": {
+    "total_loss": 13.614227294921875,
+    "navigation_loss": 13.614227294921875,
+    "replay_contribution": 0.0,
+    "success": 0.5,
+    "collision": 0.5,
+    "goal_distance": 2.057114839553833
+  },
+  "source": "consistent_update_direction_audit_source.py",
+  "source_sha256": "f2327dbc93729372b6943f5b02c7386593618fe24e531cabfd302ba857f353f0"
+}

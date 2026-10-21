@@ -38,6 +38,8 @@ def build_parser():
     p.add_argument("--flight_replay_weight", type=float, default=0.)
     p.add_argument("--flight_replay_batch", type=int, default=4)
     p.add_argument("--grad_decay", type=float, default=0.3)
+    p.add_argument("--joint_backward", choices=["legacy", "consistent"], default="legacy",
+                   help="Optional research mode: preserve feedback/smoothing derivatives and differentiate approach weights; requires grad_decay=1.")
     p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
     p.add_argument("--intent_horizon_s", type=float, default=0.20)
@@ -212,6 +214,10 @@ def set_global_seed(seed: int, deterministic: bool = True):
 
 
 def validate_args(args):
+    if args.joint_backward == "consistent" and (args.policy_arch != "intent_shared" or args.grad_decay != 1):
+        raise ValueError("consistent joint backward requires intent_shared and grad_decay=1")
+    if args.joint_backward == "consistent" and args.scene_layout not in DIFFERENTIABLE_SCENES:
+        raise ValueError("consistent joint backward requires a differentiable scene")
     if args.base_control_freq <= 0 or args.max_acc_cmd <= 0:
         raise ValueError("control frequency and acceleration bound must be positive")
     if args.flight_max_speed <= 0 or args.intent_horizon_s <= 0:

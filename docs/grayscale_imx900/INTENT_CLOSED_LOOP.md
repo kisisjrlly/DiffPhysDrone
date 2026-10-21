@@ -12,6 +12,24 @@
 Development branch: `codex/imx900-intent-closed-loop`, based on `d989ad9`
 of `active-sensing-grayscale-imx900`. Date: 2026-10-21.
 
+### Optional closed-loop backward mode
+
+`--joint_backward consistent --grad_decay 1` is an opt-in research mode for
+`intent_shared` on differentiable scenes. The default remains `legacy`.
+It preserves position feedback in the goal-direction input and past applied
+camera settings in the smoothing/queue recurrence; it also differentiates the
+approach-speed weighting in the collision objective instead of stopping its
+gradient. No forward values, observations, loss weights, deployed parameters
+or terminal rules change. Both full and nondifferentiable sensing receive the
+same mode in a comparison.
+
+This is **not an exact derivative of the hard navigation objective**: hard
+visibility/termination, saturation STE and the optional image-warp pose
+estimator still have their documented limitations. Tests compare local
+derivatives against finite differences on smooth examples and verify identical
+forward trajectories. Policy-learning results, including negative results,
+are tracked in `SPARSE_POLES_ITERATION_2026_10_21.md`.
+
 ## Question and current status
 
 Can a drone choose exposure/gain for an upcoming maneuver, and learn to change

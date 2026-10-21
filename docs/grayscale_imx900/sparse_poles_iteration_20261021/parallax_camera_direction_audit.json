@@ -1,0 +1,114 @@
+{
+  "seed": 791101,
+  "batch": 8,
+  "settings_initial": [
+    0.08,
+    0.05
+  ],
+  "constant_command_after_normal_queue": true,
+  "limitation": "Frozen actor and local constant camera commands, with approximate sensing/pose derivatives and hard termination. Diagnostic only; no camera labels are used for policy training.",
+  "scenarios": {
+    "nominal": {
+      "base": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.273310661315918,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.259805679321289,
+        "derivative_E_G": [
+          -15.227828979492188,
+          -2.9586219787597656
+        ]
+      },
+      "E_minus": {
+        "command_E": 0.07,
+        "command_G": 0.05,
+        "loss": 14.021873474121094,
+        "success": 0.5,
+        "collision": 0.5,
+        "goal_distance": 2.0753588676452637,
+        "derivative_E_G": null
+      },
+      "E_plus": {
+        "command_E": 0.09,
+        "command_G": 0.05,
+        "loss": 14.293218612670898,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.2504382133483887,
+        "derivative_E_G": null
+      },
+      "E_central_difference": 13.567256927490234
+    },
+    "dark": {
+      "base": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 16.68295669555664,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.512888193130493,
+        "derivative_E_G": [
+          -2.8284170627593994,
+          -0.5531873106956482
+        ]
+      },
+      "E_minus": {
+        "command_E": 0.07,
+        "command_G": 0.05,
+        "loss": 16.62108612060547,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.5388383865356445,
+        "derivative_E_G": null
+      },
+      "E_plus": {
+        "command_E": 0.09,
+        "command_G": 0.05,
+        "loss": 17.044109344482422,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.2383718490600586,
+        "derivative_E_G": null
+      },
+      "E_central_difference": 21.151161193847656
+    },
+    "bright": {
+      "base": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.777952194213867,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.330719470977783,
+        "derivative_E_G": [
+          -19.171504974365234,
+          -3.695251941680908
+        ]
+      },
+      "E_minus": {
+        "command_E": 0.07,
+        "command_G": 0.05,
+        "loss": 14.089065551757812,
+        "success": 0.125,
+        "collision": 0.875,
+        "goal_distance": 2.893317699432373,
+        "derivative_E_G": null
+      },
+      "E_plus": {
+        "command_E": 0.09,
+        "command_G": 0.05,
+        "loss": 15.025732040405273,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.328369617462158,
+        "derivative_E_G": null
+      },
+      "E_central_difference": 46.83332443237305
+    }
+  },
+  "source": "parallax_camera_direction_audit_source.py",
+  "source_sha256": "ad4b0a5d9e3d7999bda079cee6256ef0e14775e215cab7ebf878d3f0160412de",
+  "provenance_limitation": "Development diagnostic: executed Python source was not frozen before the run; script hash is retained. The optional backward changes are versioned with this evidence."
+}

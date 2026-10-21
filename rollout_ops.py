@@ -198,6 +198,7 @@ def update_camera_params(cam_params, exposure, gain, env):
 
     mode = getattr(env, "camera_control_mode", "learned")
     current = torch.stack([exposure, gain], -1)
+    recurrent_current = current if getattr(env, "joint_backward", "legacy") == "consistent" else current.detach()
 
     if mode == "fixed":
         requested = torch.stack(
@@ -218,10 +219,10 @@ def update_camera_params(cam_params, exposure, gain, env):
         )
         # This is policy-command smoothing only. Real camera latency/step
         # behavior is modeled separately from the calibration profile.
-        requested = alpha * current.detach() + (1.0 - alpha) * target
+        requested = alpha * recurrent_current + (1.0 - alpha) * target
 
     env._camera_requested_state = requested
-    applied = _apply_camera_command_delay(env, requested, current.detach())
+    applied = _apply_camera_command_delay(env, requested, recurrent_current)
     return applied[:, 0], applied[:, 1], requested
 
 

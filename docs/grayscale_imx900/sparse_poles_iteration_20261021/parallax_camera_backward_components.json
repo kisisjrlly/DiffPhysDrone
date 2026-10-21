@@ -1,0 +1,162 @@
+{
+  "seed": 791101,
+  "batch": 8,
+  "interpretation": "Same forward constant-camera trajectories. Backward choices compared separately; none guarantees learning.",
+  "conditions": {
+    "legacy_warp_ste": {
+      "nominal": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.273310661315918,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.259805679321289,
+        "derivative_E_G": [
+          -15.227828979492188,
+          -2.9586219787597656
+        ]
+      },
+      "dark": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 16.68295669555664,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.512888193130493,
+        "derivative_E_G": [
+          -2.8284170627593994,
+          -0.5531873106956482
+        ]
+      },
+      "bright": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.777952194213867,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.330719470977783,
+        "derivative_E_G": [
+          -19.171504974365234,
+          -3.695251941680908
+        ]
+      }
+    },
+    "legacy_analytic": {
+      "nominal": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.273310661315918,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.259805679321289,
+        "derivative_E_G": [
+          -15.833208084106445,
+          -3.076763868331909
+        ]
+      },
+      "dark": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 16.68295669555664,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.512888193130493,
+        "derivative_E_G": [
+          -2.8321926593780518,
+          -0.5537911057472229
+        ]
+      },
+      "bright": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.777952194213867,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.330719470977783,
+        "derivative_E_G": [
+          -19.57745361328125,
+          -3.777146577835083
+        ]
+      }
+    },
+    "consistent_warp_ste": {
+      "nominal": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.273310661315918,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.259805679321289,
+        "derivative_E_G": [
+          -25.331829071044922,
+          -4.935116291046143
+        ]
+      },
+      "dark": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 16.68295669555664,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.512888193130493,
+        "derivative_E_G": [
+          2.708190441131592,
+          0.5217439532279968
+        ]
+      },
+      "bright": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.777952194213867,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.330719470977783,
+        "derivative_E_G": [
+          -58.45039367675781,
+          -11.263435363769531
+        ]
+      }
+    },
+    "consistent_analytic": {
+      "nominal": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.273310661315918,
+        "success": 0.375,
+        "collision": 0.625,
+        "goal_distance": 2.259805679321289,
+        "derivative_E_G": [
+          -28.666301727294922,
+          -5.581753253936768
+        ]
+      },
+      "dark": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 16.68295669555664,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.512888193130493,
+        "derivative_E_G": [
+          2.7640058994293213,
+          0.5328752398490906
+        ]
+      },
+      "bright": {
+        "command_E": 0.08,
+        "command_G": 0.05,
+        "loss": 14.777952194213867,
+        "success": 0.0,
+        "collision": 1.0,
+        "goal_distance": 3.330719470977783,
+        "derivative_E_G": [
+          -50.15617370605469,
+          -9.676016807556152
+        ]
+      }
+    }
+  },
+  "source": "parallax_camera_backward_components_source.py",
+  "source_sha256": "d93f33cbf21f21b6551d6af21155139bf076b1741b4b33ed9e0931840ee13e3f",
+  "provenance_limitation": "Development diagnostic: executed Python source was not frozen before the run; script hash is retained. The optional backward changes are versioned with this evidence."
+}

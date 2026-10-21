@@ -89,6 +89,7 @@ class Env:
         scene_layout="single_wall_slit",
         observation_grad_mode="detached",
         pose_gradient_estimator="analytic",
+        joint_backward="legacy",
         gray_temporal_samples=1,
         intent_gate_spacing=2.4,
         flight_max_speed=1.15,
@@ -115,6 +116,7 @@ class Env:
         self.scene_layout = str(scene_layout)
         self.observation_grad_mode = str(observation_grad_mode)
         self.pose_gradient_estimator = str(pose_gradient_estimator)
+        self.joint_backward = str(joint_backward)
         self.gray_temporal_samples = int(gray_temporal_samples)
         self.intent_gate_spacing = float(intent_gate_spacing)
         self.pole_count = int(pole_count)

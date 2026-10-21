@@ -1,0 +1,80 @@
+{
+  "full": {
+    "navigation_loss": 16.791309356689453,
+    "camera_head_gradient_norm": 7.007842540740967,
+    "flight_parameter_gradient_norm": 1506.5340576171875,
+    "first_flight_action_gradient": [
+      [
+        1.139947533607483,
+        1.4806257486343384,
+        -0.22724118828773499
+      ],
+      [
+        1.0786393880844116,
+        -1.813122034072876,
+        0.5545938611030579
+      ]
+    ]
+  },
+  "motion_observation_cut": {
+    "navigation_loss": 16.791309356689453,
+    "camera_head_gradient_norm": 6.798971652984619,
+    "flight_parameter_gradient_norm": 1671.0069580078125,
+    "first_flight_action_gradient": [
+      [
+        1.847358226776123,
+        1.0568081140518188,
+        -0.1595989465713501
+      ],
+      [
+        1.2419168949127197,
+        1.7036874294281006,
+        0.7585020661354065
+      ]
+    ]
+  },
+  "camera_boundary_cut": {
+    "navigation_loss": 16.791309356689453,
+    "camera_head_gradient_norm": 0.0,
+    "flight_parameter_gradient_norm": 1506.552734375,
+    "first_flight_action_gradient": [
+      [
+        1.1399431228637695,
+        1.4802979230880737,
+        -0.22723610699176788
+      ],
+      [
+        1.0787672996520996,
+        -1.8136351108551025,
+        0.5545676350593567
+      ]
+    ]
+  },
+  "nondifferentiable_sensing": {
+    "navigation_loss": 16.791309356689453,
+    "camera_head_gradient_norm": 0.0,
+    "flight_parameter_gradient_norm": 1671.029052734375,
+    "first_flight_action_gradient": [
+      [
+        1.8473889827728271,
+        1.0566668510437012,
+        -0.1595289260149002
+      ],
+      [
+        1.2419719696044922,
+        1.7035267353057861,
+        0.758525550365448
+      ]
+    ]
+  },
+  "motion_to_observation_gradient_contribution_norm": 3.6222662925720215,
+  "flight_gradient_comparison": {
+    "motion_path_contribution_norm": 477.6029357910156,
+    "cosine_full_vs_motion_cut": 0.9600678086280823
+  },
+  "checkpoint": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth",
+  "forward_trajectories_identical": true,
+  "template_seed": 182,
+  "rollout_seed": 183,
+  "interpretation": "Gradient wiring only; camera-boundary-cut is not a trained RL baseline."
+}
