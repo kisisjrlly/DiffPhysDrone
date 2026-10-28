@@ -1,0 +1,79 @@
+"""Evaluate saved curves and independent holdout; never change trained actors."""
+import argparse,collections,copy,hashlib,json,sys,time
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+from config import build_parser,parse_scenarios,validate_args
+from eval import run_one_episode
+from intent_model import build_policy
+from train_utils import build_env,write_run_provenance
+from tools.evaluate_pole_coordination import frozen_view_renderer
+from tools.run_intent_pilot import bootstrap_difference
+
+ROOT=Path.cwd()
+STUDY=ROOT/'logs/method_selection_20261029'
+
+def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+def load_args(directory):
+ args=build_parser().parse_args([])
+ vars(args).update(json.loads((directory/'args.json').read_text()))
+ args.batch_size,args.vis_enable,args.vis_episode_idx=1,False,-1
+ args.scenarios=parse_scenarios(args.scenarios)
+ args.imx900_calibration=str(directory/'imx900_calibration.json')
+ validate_args(args);return args
+
+def evaluate(args,checkpoint,seed,n,condition,device):
+ model=build_policy(args).to(device).eval()
+ model.load_state_dict(torch.load(checkpoint,map_location=device),strict=True)
+ args=copy.deepcopy(args)
+ if condition in ('fixed_nominal','zero_image'):
+  args.camera_control_mode='fixed'
+  args.fixed_camera_exposure,args.fixed_camera_gain=.08,.05
+ if condition=='zero_image':args.policy_gray_mode='zero'
+ env=build_env(1,args,device,eval_mode=True);rows=[];spans=[]
+ start=time.perf_counter()
+ with torch.no_grad():
+  for i in range(n):
+   row,trace=run_one_episode(i,'nominal',args,model,env,None,device,episode_seed=seed+i,collect_trace=True,sensor_renderer=frozen_view_renderer() if condition=='frozen_view' else None)
+   row['near_pole_sign']=int(env.cyl[0,0,1].sign());rows.append(row)
+   spans.append({k:max(x[k] for x in trace)-min(x[k] for x in trace) for k in ('exposure','gain')})
+ result={'checkpoint_sha256':digest(checkpoint),'checkpoint':str(checkpoint.relative_to(ROOT)),'condition':condition,'seed_range_inclusive':[seed,seed+n-1],'episodes':rows,'n':n,'successes':int(sum(r['success_rate'] for r in rows)),'collisions':int(sum(r['collision_rate'] for r in rows)),'timeouts':sum(r['stop_reason']=='timeout' for r in rows),'evaluation_wall_time_s':time.perf_counter()-start,'mean_goal_distance':sum(r['final_goal_dist'] for r in rows)/n,'mean_elapsed_s':sum(r['elapsed_s'] for r in rows)/n,'mean_exposure':sum(r['exposure_mean'] for r in rows)/n,'mean_gain':sum(r['gain_mean'] for r in rows)/n,'mean_camera_range':{k:sum(v[k] for v in spans)/n for k in spans[0]},'by_near_pole_sign':{str(s):{'n':sum(r['near_pole_sign']==s for r in rows),'successes':int(sum(r['success_rate'] for r in rows if r['near_pole_sign']==s)),'collisions':int(sum(r['collision_rate'] for r in rows if r['near_pole_sign']==s))} for s in (-1,1)}}
+ del model,env;torch.cuda.empty_cache() if device.type=='cuda' else None
+ return result
+
+def main():
+ p=argparse.ArgumentParser();p.add_argument('--horizons',nargs='+',type=int,default=[4,8,16,120]);p.add_argument('--device',default='cuda');cli=p.parse_args()
+ torch.set_num_threads(4);device=torch.device(cli.device)
+ directory=STUDY/'evaluation';directory.mkdir(exist_ok=True)
+ report_path=directory/'results.json'
+ report=json.loads(report_path.read_text()) if report_path.exists() else {'purpose':'method selection; conditional single-training-seed comparison','calibrated':False,'device':str(device),'methods':{},'baselines':{}}
+ def save():report_path.write_text(json.dumps(report,indent=2)+'\n')
+ base_args=load_args(STUDY/'h4/joint')
+ if 'common_holdout' not in report['baselines']:
+  checkpoint=ROOT/base_args.resume
+  for label,condition,n,seed in [('common_validation','learned',40,800000),('common_holdout','learned',100,801000)]:
+   report['baselines'][label]=evaluate(base_args,checkpoint,seed,n,condition,device);save()
+   print(label,report['baselines'][label]['successes'],'/',n,flush=True)
+ for h in cli.horizons:
+  for method in ('joint','camera_gradient_cut'):
+   run=STUDY/f'h{h}'/method;args=load_args(run)
+   key=f'h{h}/{method}';entry=report['methods'].setdefault(key,{})
+   for step,checkpoint,n,seed,label,condition in [(50,run/'checkpoint0000.pth',40,800000,'validation_50','learned'),(100,run/'checkpoint0001.pth',40,800000,'validation_100','learned'),(150,run/'final.pth',100,801000,'holdout_150','learned')]:
+    if label in entry:continue
+    entry[label]=evaluate(args,checkpoint,seed,n,condition,device);save()
+    print(key,label,entry[label]['successes'],'/',n,flush=True)
+  full=report['methods'][f'h{h}/joint']['holdout_150']['episodes'];cut=report['methods'][f'h{h}/camera_gradient_cut']['holdout_150']['episodes']
+  report.setdefault('paired_holdout_difference',{})[str(h)]=bootstrap_difference([r['success_rate'] for r in full],[r['success_rate'] for r in cut]);save()
+ # Check whether final long-horizon behavior actually depends on learned E/G
+ # or on an evolving image. Camera state still never enters the flight head.
+ if 120 in cli.horizons:
+  run=STUDY/'h120/joint';args=load_args(run);entry=report['methods']['h120/joint']
+  for condition in ('fixed_nominal','zero_image','frozen_view'):
+   label='holdout_'+condition
+   if label in entry:continue
+   entry[label]=evaluate(args,run/'final.pth',801000,100,condition,device);save()
+   print('h120/joint',condition,entry[label]['successes'],'/100',flush=True)
+ print('saved',report_path,flush=True)
+
+if __name__=='__main__':main()

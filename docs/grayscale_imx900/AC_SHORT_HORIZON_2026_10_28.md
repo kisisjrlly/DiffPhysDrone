@@ -1,5 +1,9 @@
 # Short-horizon actor-critic implementation audit — 2026-10-28
 
+> Update 2026-10-29: the matched horizon study and its negative results are
+> recorded in [METHOD_SELECTION_2026_10_29.md](METHOD_SELECTION_2026_10_29.md).
+> This earlier integration pilot is historical evidence, not a method recommendation.
+
 ## Purpose
 
 The earlier full-vs-sensing-cut implementation could produce a zero camera

@@ -1,0 +1,43 @@
+import sys,json,hashlib
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+from tools.intent_common import load_intent_args
+from intent_model import build_policy
+from train_utils import build_env,write_run_provenance
+from eval import run_one_episode
+from tools.evaluate_pole_coordination import initial_probe_override
+from tools.run_intent_pilot import bootstrap_difference
+
+torch.set_num_threads(4)
+device=torch.device('cpu')
+args=load_intent_args('configs/gray_method_selection_h120.args',batch_size=1,vis_enable=False)
+args.vis_episode_idx=-1
+checkpoint=Path(args.resume)
+model=build_policy(args).to(device).eval();model.load_state_dict(torch.load(checkpoint,map_location=device))
+out=Path('logs/method_selection_20261029/camera_sensitivity');out.mkdir(exist_ok=False)
+write_run_provenance(out,args)
+record={'purpose':'frozen-actor exposure/gain intervention, not camera policy learning','checkpoint_sha256':hashlib.sha256(checkpoint.read_bytes()).hexdigest(),'calibrated':False,'device':str(device),'seed_range':[802000,802039],'methods':{}}
+for label,mode,E,G,probe,vision in (
+ ('learned_nominal','learned',.08,.05,False,'gray'),
+ ('fixed_nominal','fixed',.08,.05,False,'gray'),
+ ('fixed_short','fixed',.02,.05,False,'gray'),
+ ('fixed_long','fixed',.40,.05,False,'gray'),
+ ('fixed_gain','fixed',.08,.40,False,'gray'),
+ ('probe_nominal','fixed',.08,.05,True,'gray'),
+ ('probe_short','fixed',.02,.05,True,'gray'),
+ ('probe_long','fixed',.40,.05,True,'gray'),
+ ('zero_image','fixed',.08,.05,False,'zero'),
+):
+ args.camera_control_mode=mode;args.fixed_camera_exposure=E;args.fixed_camera_gain=G;args.policy_gray_mode=vision
+ env=build_env(1,args,device,eval_mode=True);rows=[]
+ with torch.no_grad():
+  for i in range(40):
+   row,_=run_one_episode(i,'nominal',args,model,env,None,device,episode_seed=802000+i,action_override=initial_probe_override(args,.12 if i%2 else -.12) if probe else None)
+   row['near_pole_sign']=int(env.cyl[0,0,1].sign());rows.append(row)
+ record['methods'][label]={'camera_mode':mode,'E':E,'G':G,'external_probe':probe,'vision':vision,'episodes':rows,'success_rate':sum(r['success_rate'] for r in rows)/len(rows),'collision_rate':sum(r['collision_rate'] for r in rows)/len(rows)}
+ if 'fixed_nominal' in record['methods']:
+  reference=record['methods']['fixed_nominal']['episodes']
+  record['methods'][label]['difference_vs_fixed_nominal']=bootstrap_difference([r['success_rate'] for r in rows],[r['success_rate'] for r in reference])
+ (out/'results.json').write_text(json.dumps(record,indent=2)+'\n')
+ print(label,record['methods'][label]['success_rate'],flush=True)

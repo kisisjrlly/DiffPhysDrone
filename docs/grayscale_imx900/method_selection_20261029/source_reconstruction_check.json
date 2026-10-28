@@ -1,0 +1,14 @@
+{
+  "cold": {
+    "patch_applies_to_base_revision": "2e74ba2",
+    "apply_option": "--unidiff-zero",
+    "all_executed_source_hashes_reconstructed": true,
+    "files": 73
+  },
+  "warm": {
+    "patch_applies_to_base_revision": "2e74ba2",
+    "apply_option": "--unidiff-zero",
+    "all_executed_source_hashes_reconstructed": true,
+    "files": 74
+  }
+}

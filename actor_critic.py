@@ -1,8 +1,21 @@
 """Small recurrent-policy value head and short-horizon training objectives."""
 
+import hashlib
+import io
+from pathlib import Path
+
 import torch
 from torch import nn
 import torch.nn.functional as F
+
+
+def load_critic_checkpoint(critic, checkpoint, *, map_location="cpu"):
+    """Strictly restore value weights and identify the exact bytes loaded."""
+    source = Path(checkpoint).resolve()
+    payload = source.read_bytes()
+    critic.load_state_dict(torch.load(io.BytesIO(payload), map_location=map_location,
+                                     weights_only=True), strict=True)
+    return {"path": str(source), "sha256": hashlib.sha256(payload).hexdigest()}
 
 
 class LatentCostCritic(nn.Module):

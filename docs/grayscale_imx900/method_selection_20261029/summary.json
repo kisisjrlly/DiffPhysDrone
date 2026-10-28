@@ -1,0 +1,428 @@
+{
+  "status": "complete",
+  "decision": "No validated winner. Withdraw short-horizon AC recommendation; retain BPTT only as a reference. Joint training failed in this configuration.",
+  "calibrated": false,
+  "common_actor_sha256": "b1fa7436da59db48c64d6d043ecda8909b269007f3d38db1f4e09535abf039ec",
+  "common_cpu_holdout": {
+    "checkpoint_sha256": "b1fa7436da59db48c64d6d043ecda8909b269007f3d38db1f4e09535abf039ec",
+    "condition": "learned",
+    "seed_range_inclusive": [
+      801000,
+      801099
+    ],
+    "n": 100,
+    "successes": 24,
+    "collisions": 76,
+    "timeouts": 0,
+    "evaluation_wall_time_s": 26.55482870398555,
+    "mean_goal_distance": 2.91101155847311,
+    "mean_elapsed_s": 2.6946666666666657,
+    "mean_exposure": 0.07991847231984138,
+    "mean_gain": 0.049992222785949704,
+    "mean_camera_range": {
+      "exposure": 0.0006848874688148498,
+      "gain": 0.0002512001618742943
+    },
+    "by_near_pole_sign": {
+      "-1": {
+        "n": 58,
+        "successes": 0,
+        "collisions": 58
+      },
+      "1": {
+        "n": 42,
+        "successes": 24,
+        "collisions": 18
+      }
+    }
+  },
+  "cold": {
+    "h4/joint": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 100,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 42
+        }
+      },
+      "checkpoint_sha256": "8b1ec0196c1bf4fd955b7cd9af8fce45e66323395285aa614cc473583206a547",
+      "mean_exposure": 0.9080453240871429,
+      "mean_gain": 0.914520987868309,
+      "training_process_wall_time_s": 398.8747010700172,
+      "peak_allocated_cuda_mib": 348.7119140625,
+      "generated_transitions": 72000
+    },
+    "h4/camera_gradient_cut": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 100,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 42
+        }
+      },
+      "checkpoint_sha256": "f2a7c801a75a39e1198645da81bd6a230c2d6db16fa79adf7027a04fa5e03890",
+      "mean_exposure": 0.07521957568824292,
+      "mean_gain": 0.048636025488376616,
+      "training_process_wall_time_s": 364.2454125320073,
+      "peak_allocated_cuda_mib": 264.66796875,
+      "generated_transitions": 72000
+    },
+    "h8/joint": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 100,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 42
+        }
+      },
+      "checkpoint_sha256": "536cd8d2afa3ac69fd86adb957fb4acce53982ecf032635ba9274143d7646d95",
+      "mean_exposure": 0.9056711113452911,
+      "mean_gain": 0.9066872781515122,
+      "training_process_wall_time_s": 451.3221402630443,
+      "peak_allocated_cuda_mib": 350.775390625,
+      "generated_transitions": 72000
+    },
+    "h8/camera_gradient_cut": {
+      "successes": 3,
+      "n": 100,
+      "collisions": 97,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 3,
+          "collisions": 55
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 42
+        }
+      },
+      "checkpoint_sha256": "ade27d4a7eba038318e4ce337719d710b229af43cf926e6ec6fa7836e40fbcd5",
+      "mean_exposure": 0.07771495051681995,
+      "mean_gain": 0.045676327422261236,
+      "training_process_wall_time_s": 438.5011626050109,
+      "peak_allocated_cuda_mib": 268.1748046875,
+      "generated_transitions": 72000
+    },
+    "h16/joint": {
+      "successes": 1,
+      "n": 100,
+      "collisions": 99,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 1,
+          "collisions": 41
+        }
+      },
+      "checkpoint_sha256": "77dd12df77de62ef4295a9140c8a4b6c6bda7e2473bad459a1923e79ff930c7c",
+      "mean_exposure": 0.1347394509613514,
+      "mean_gain": 0.15304699823260307,
+      "training_process_wall_time_s": 479.3608976310352,
+      "peak_allocated_cuda_mib": 351.7392578125,
+      "generated_transitions": 72000
+    },
+    "h16/camera_gradient_cut": {
+      "successes": 2,
+      "n": 100,
+      "collisions": 74,
+      "timeouts": 24,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 2,
+          "collisions": 16
+        }
+      },
+      "checkpoint_sha256": "fe8513fb9ca2e5e11db244dab274f1ba730b64c12dadbf5d849d53363cd7cb63",
+      "mean_exposure": 0.08445131473243236,
+      "mean_gain": 0.035777411460876464,
+      "training_process_wall_time_s": 477.18794542900287,
+      "peak_allocated_cuda_mib": 269.79833984375,
+      "generated_transitions": 72000
+    },
+    "h120/joint": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 31,
+      "timeouts": 69,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 18
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 13
+        }
+      },
+      "checkpoint_sha256": "66014a4de6ba74740b6f85451b9ce657b118b99e4f95bfc31764b293d6a2ed88",
+      "mean_exposure": 0.10555421121418476,
+      "mean_gain": 0.07423477791249752,
+      "training_process_wall_time_s": 502.566921726102,
+      "peak_allocated_cuda_mib": 352.703125,
+      "generated_transitions": 72000
+    },
+    "h120/camera_gradient_cut": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 56,
+      "timeouts": 44,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 23
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 33
+        }
+      },
+      "checkpoint_sha256": "dbd7e45fba38e7cead513d6414d2727bc3a1bf86f3f5c117e6511eda495e0a84",
+      "mean_exposure": 0.06709006361663342,
+      "mean_gain": 0.04439663771539926,
+      "training_process_wall_time_s": 509.751583453035,
+      "peak_allocated_cuda_mib": 271.421875,
+      "generated_transitions": 72000
+    }
+  },
+  "warm": {
+    "joint": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 100,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 42
+        }
+      },
+      "checkpoint_sha256": "ee9dac1c5b474c581376cb983d61beefe6f2756e7a85a6daa75ca105d37e34ee",
+      "mean_exposure": 0.4965052434802055,
+      "mean_gain": 0.4346498891711235,
+      "training_process_wall_time_s": 475.2046181450132,
+      "peak_allocated_cuda_mib": 351.7392578125,
+      "generated_transitions": 72000
+    },
+    "camera_gradient_cut": {
+      "successes": 0,
+      "n": 100,
+      "collisions": 100,
+      "timeouts": 0,
+      "by_near_pole_sign": {
+        "-1": {
+          "n": 58,
+          "successes": 0,
+          "collisions": 58
+        },
+        "1": {
+          "n": 42,
+          "successes": 0,
+          "collisions": 42
+        }
+      },
+      "checkpoint_sha256": "7b920345a9e85a2ce327106d32c60d21d4e151a267a7aba62f80a3f527657bb4",
+      "mean_exposure": 0.00726933557074517,
+      "mean_gain": 0.003943688157014549,
+      "training_process_wall_time_s": 476.022324765916,
+      "peak_allocated_cuda_mib": 269.79833984375,
+      "generated_transitions": 72000
+    }
+  },
+  "verification": {
+    "pytest_passed": 134,
+    "training_resolution_gradient_wiring": {
+      "full": {
+        "navigation_loss": 15.035184860229492,
+        "camera_head_gradient_norm": 4.013621807098389,
+        "flight_parameter_gradient_norm": 1269.3546142578125,
+        "first_flight_action_gradient": [
+          [
+            2.515533924102783,
+            -1.5398609638214111,
+            0.8527202010154724
+          ]
+        ]
+      },
+      "motion_observation_cut": {
+        "navigation_loss": 15.035184860229492,
+        "camera_head_gradient_norm": 3.428720474243164,
+        "flight_parameter_gradient_norm": 1507.624267578125,
+        "first_flight_action_gradient": [
+          [
+            1.6961610317230225,
+            2.338420867919922,
+            1.1829960346221924
+          ]
+        ]
+      },
+      "camera_boundary_cut": {
+        "navigation_loss": 15.035184860229492,
+        "camera_head_gradient_norm": 0.0,
+        "flight_parameter_gradient_norm": 1269.357666015625,
+        "first_flight_action_gradient": [
+          [
+            2.515625476837158,
+            -1.5402041673660278,
+            0.8525992631912231
+          ]
+        ]
+      },
+      "nondifferentiable_sensing": {
+        "navigation_loss": 15.035184860229492,
+        "camera_head_gradient_norm": 0.0,
+        "flight_parameter_gradient_norm": 1507.619873046875,
+        "first_flight_action_gradient": [
+          [
+            1.696202039718628,
+            2.3382339477539062,
+            1.1829174757003784
+          ]
+        ]
+      },
+      "motion_to_observation_gradient_contribution_norm": 3.977627992630005,
+      "flight_gradient_comparison": {
+        "motion_path_contribution_norm": 544.6989135742188,
+        "cosine_full_vs_motion_cut": 0.9373160600662231
+      },
+      "checkpoint": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth",
+      "forward_trajectories_identical": true,
+      "template_seed": 182,
+      "rollout_seed": 183,
+      "interpretation": "Gradient wiring only; camera-boundary-cut is not a trained RL baseline."
+    },
+    "matched_initialization_and_source": {
+      "all_eight_actor_and_critic_initializations_identical": true,
+      "all_eight_executed_source_snapshots_identical": true,
+      "all_eight_optimizer_configurations_identical": true,
+      "all_eight_updates_equal_150": true,
+      "only_camera_gradient_boundary_differs_within_pair": true
+    },
+    "source_reconstruction": {
+      "cold": {
+        "patch_applies_to_base_revision": "2e74ba2",
+        "apply_option": "--unidiff-zero",
+        "all_executed_source_hashes_reconstructed": true,
+        "files": 73
+      },
+      "warm": {
+        "patch_applies_to_base_revision": "2e74ba2",
+        "apply_option": "--unidiff-zero",
+        "all_executed_source_hashes_reconstructed": true,
+        "files": 74
+      }
+    }
+  },
+  "limitations": [
+    "single training seed and one hyperparameter protocol",
+    "not a faithful streamed SHAC/ABPT reproduction",
+    "no competitive PPO/SAC or imitation method ranking",
+    "warm critic return accuracy does not guarantee gradients or post-update accuracy",
+    "camera adaptation necessity not established in nominal-light parallax scene"
+  ],
+  "cold_paired_difference": {
+    "4": {
+      "mean": 0.0,
+      "episode_bootstrap_95": [
+        0.0,
+        0.0
+      ],
+      "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+    },
+    "8": {
+      "mean": -0.03,
+      "episode_bootstrap_95": [
+        -0.07,
+        0.0
+      ],
+      "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+    },
+    "16": {
+      "mean": -0.01,
+      "episode_bootstrap_95": [
+        -0.05,
+        0.02
+      ],
+      "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+    },
+    "120": {
+      "mean": 0.0,
+      "episode_bootstrap_95": [
+        0.0,
+        0.0
+      ],
+      "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+    }
+  },
+  "warm_paired_difference": {
+    "16": {
+      "mean": 0.0,
+      "episode_bootstrap_95": [
+        0.0,
+        0.0
+      ],
+      "interpretation": "Exploratory episode interval from a short single-training-seed development run."
+    }
+  },
+  "critic_warmup": {
+    "training_episodes": 64,
+    "validation_episodes": 32,
+    "generated_transitions": 11520,
+    "collection_wall_time_s": 30.420880050049163,
+    "fit_wall_time_s": 0.584053157013841,
+    "validation_r2": 0.7206383943557739,
+    "data_sha256": "cccb6c12c2f5bd1756650123a091efb80fd5d232afd3cd82dbf1c079d4939ef9",
+    "critic_sha256": "bae5a7a810ed000223fe3b971f2b107bb022ff413301d15aedcd9bc4f4e2dc75"
+  }
+}

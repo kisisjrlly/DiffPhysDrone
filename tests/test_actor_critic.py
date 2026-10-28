@@ -8,7 +8,8 @@ import pytest
 
 from actor_critic import (LatentCostCritic, camera_score_function_loss,
                           discounted_cost_to_go, short_horizon_actor_objective,
-                          short_horizon_critic_loss, task_step_costs)
+                          short_horizon_critic_loss, task_step_costs,
+                          load_critic_checkpoint)
 from config import set_global_seed
 from intent_model import build_policy
 from tools.intent_common import load_intent_args
@@ -36,6 +37,40 @@ def rollout_for_test(args, model=None):
 
 def test_default_bptt_still_accepts_short_rollouts():
     args_for_test(policy_update_mode="full_bptt", timesteps=1, loss_v_window=1)
+
+
+def test_return_pretrained_critic_restores_exact_weights_and_rejects_wrong_architecture(tmp_path):
+    import hashlib
+    source = LatentCostCritic()
+    torch.nn.init.normal_(source.net[-1].weight)
+    path = tmp_path / "critic.pth"
+    torch.save(source.state_dict(), path)
+    restored = LatentCostCritic()
+    info = load_critic_checkpoint(restored, path)
+    assert info["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    latent = torch.randn(3, 128)
+    torch.testing.assert_close(restored(latent), source(latent), rtol=0, atol=0)
+    with pytest.raises(RuntimeError, match="size mismatch"):
+        load_critic_checkpoint(LatentCostCritic(latent_dim=3), path)
+
+
+def test_critic_resume_is_not_silently_ignored_in_bptt():
+    with pytest.raises(ValueError, match="critic resume requires"):
+        args_for_test(policy_update_mode="full_bptt", critic_resume="unused.pth")
+
+
+def test_full_horizon_actor_matches_bptt_loss_and_parameter_gradient():
+    args = args_for_test(policy_gradient_horizon=10, policy_return_gamma=1.,
+                         joint_backward="consistent", grad_decay=1., coef_terminal_goal=1.)
+    env, model, rollout = rollout_for_test(args)
+    bptt_loss, _, _, _ = _loss_from_rollout(rollout, env, args)
+    costs = task_step_costs(rollout, env, args)
+    objective = short_horizon_actor_objective(rollout, costs, LatentCostCritic(), args)
+    torch.testing.assert_close(objective, bptt_loss, rtol=2e-5, atol=2e-5)
+    for parameter in (model.fc.weight, model.fc_cam.weight):
+        bptt_gradient, = torch.autograd.grad(bptt_loss, parameter, retain_graph=True)
+        ac_gradient, = torch.autograd.grad(objective, parameter, retain_graph=True)
+        torch.testing.assert_close(ac_gradient, bptt_gradient, rtol=2e-4, atol=2e-5)
 
 
 def test_new_ac_config_matches_common_warm_start_scene_and_replay():

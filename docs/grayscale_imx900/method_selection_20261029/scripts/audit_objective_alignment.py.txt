@@ -1,0 +1,31 @@
+"""Compare task surrogate and success on common held-out batches, without updates."""
+import json,sys,time
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+from config import build_parser,parse_scenarios,set_global_seed,validate_args
+from intent_model import build_policy
+from train_utils import build_env
+from trainer import _rollout,_loss_from_rollout,_compute_success_collision
+
+torch.set_num_threads(4)
+root=Path('logs/method_selection_20261029')
+report={'purpose':'paired task-objective alignment diagnostic; deterministic camera, no training','device':'cpu','batch_seeds':list(range(808000,808008)),'batch_size':4,'methods':{}}
+for label in ['common','h4/joint','h16/joint','h120/joint']:
+ run=root/('h120/joint' if label=='common' else label)
+ args=build_parser().parse_args([]);vars(args).update(json.loads((run/'args.json').read_text()))
+ args.batch_size=4;args.policy_update_mode='full_bptt';args.critic_resume=None;args.scenarios=parse_scenarios(args.scenarios);validate_args(args)
+ model=build_policy(args).eval();path=Path(args.resume) if label=='common' else run/'final.pth'
+ model.load_state_dict(torch.load(path,map_location='cpu'))
+ rows=[]
+ with torch.no_grad():
+  for seed in report['batch_seeds']:
+   set_global_seed(seed,False);env=build_env(4,args,torch.device('cpu'));env.reset('nominal')
+   r=_rollout(env,model,args,4,torch.device('cpu'),False,None,False)
+   loss,terms,positions,clearance=_loss_from_rollout(r,env,args)
+   success,collision,dist=_compute_success_collision(positions,clearance,env,args,rollout=r)
+   rows.append({'seed':seed,'loss':float(loss),'success_rate':float(success),'collision_rate':float(collision),'goal_distance':float(dist),'components':{k:float(v) for k,v in terms.items()}})
+ item={'episodes':32,'batches':rows,**{k:sum(x[k] for x in rows)/len(rows) for k in ['loss','success_rate','collision_rate','goal_distance']}}
+ report['methods'][label]=item
+ (root/'objective_alignment.json').write_text(json.dumps(report,indent=2)+'\n')
+ print(label,{k:v for k,v in item.items() if k!='batches'},flush=True)

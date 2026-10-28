@@ -19,7 +19,7 @@ from rerun_vis import RerunVis
 from sensors.imx900_calibration import IMX900Calibration
 from train_utils import build_env, estimate_optimizer_steps
 from trainer import train
-from actor_critic import LatentCostCritic
+from actor_critic import LatentCostCritic, load_critic_checkpoint
 
 faulthandler.enable(all_threads=True)
 
@@ -137,6 +137,11 @@ def main():
         else:
             model.load_state_dict(state_dict, strict=True)
 
+    critic_source = None
+    if args.critic_resume:
+        critic_source = load_critic_checkpoint(critic, args.critic_resume, map_location=device)
+        torch.save(critic.state_dict(), os.path.join(checkpoint_dir, "critic_initial.pth"))
+
     if args.train_flight_only:
         frozen = model.freeze_camera_for_flight_only()
         print(
@@ -166,6 +171,7 @@ def main():
             "flight_parameter_sha256": _parameter_hash(model, camera=False),
             "camera_parameter_sha256": _parameter_hash(model, camera=True),
             "critic_parameter_sha256": _parameter_hash(critic) if critic is not None else None,
+            "critic_resume": critic_source,
             "actor_parameters": sum(p.numel() for p in model.parameters()),
             "training_only_critic_parameters": sum(p.numel() for p in critic.parameters()) if critic is not None else 0,
         }, handle, indent=2)

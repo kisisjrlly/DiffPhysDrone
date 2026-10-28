@@ -1,0 +1,392 @@
+--- a/config.py
++++ b/config.py
+@@ -27,0 +28 @@
++    p.add_argument("--checkpoint_every_iters", type=int, default=200)
+@@ -228,0 +230,2 @@
++    if args.checkpoint_every_iters < 1:
++        raise ValueError("checkpoint interval must be positive")
+--- /dev/null
++++ b/configs/gray_method_selection_h120.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 120
++--checkpoint_every_iters 50
+--- /dev/null
++++ b/configs/gray_method_selection_h16.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 16
++--checkpoint_every_iters 50
+--- /dev/null
++++ b/configs/gray_method_selection_h4.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 4
++--checkpoint_every_iters 50
+--- /dev/null
++++ b/configs/gray_method_selection_h8.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 8
++--checkpoint_every_iters 50
+--- a/tools/audit_actor_critic_pilot.py
++++ b/tools/audit_actor_critic_pilot.py
+@@ -88,0 +89 @@
++            critic_path = directory / "critic_final.pth"
+@@ -91 +92,4 @@
+-                "critic_checkpoint_sha256": digest(directory / "critic_final.pth"),
++                # Full-BPTT pilots do not instantiate a training-only critic.
++                # The previous unconditional digest made the common audit
++                # unusable for the very BPTT reference it is meant to compare.
++                "critic_checkpoint_sha256": digest(critic_path) if critic_path.exists() else None,
+--- a/train_utils.py
++++ b/train_utils.py
+@@ -38 +38 @@
+-    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/")
++    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/", "runtime/")
+@@ -56,3 +56,3 @@
+-def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother):
+-    if (iter_idx + 1) % 200 == 0:
+-        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // 200:04d}.pth")
++def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother, checkpoint_every=200):
++    if (iter_idx + 1) % checkpoint_every == 0:
++        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // checkpoint_every:04d}.pth")
+--- a/trainer.py
++++ b/trainer.py
+@@ -611,0 +612,5 @@
++        if device.type == "cuda":
++            # Keep one resource metric for both full-BPTT and short-horizon
++            # runs.  The AC-specific field below is retained for compatibility
++            # with earlier pilot manifests.
++            log["runtime/peak_cuda_memory_mib"] = torch.cuda.max_memory_allocated(device) / 1024**2
+@@ -643 +648 @@
+-        periodic_tail_ops(i, checkpoint_dir, model, smoother)
++        periodic_tail_ops(i, checkpoint_dir, model, smoother, args.checkpoint_every_iters)

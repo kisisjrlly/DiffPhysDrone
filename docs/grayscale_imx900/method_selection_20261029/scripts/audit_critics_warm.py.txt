@@ -1,0 +1,36 @@
+import json,sys,argparse
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+from actor_critic import LatentCostCritic,task_step_costs,discounted_cost_to_go
+from config import build_parser,parse_scenarios,set_global_seed,validate_args
+from intent_model import build_policy
+from train_utils import build_env
+from trainer import _rollout
+
+p=argparse.ArgumentParser();p.add_argument('--horizons',nargs='+',type=int,default=[4,8,16,120]);cli=p.parse_args()
+torch.set_num_threads(4);root=Path('logs/method_selection_20261029_warm');out=root/'critic_audit.json'
+record=json.loads(out.read_text()) if out.exists() else {'purpose':'held-out critic return prediction on its own exploratory policy; diagnostic, no method ranking','device':'cpu','batches':4,'batch_size':4,'methods':{}}
+for h in cli.horizons:
+ for method in ('joint','camera_gradient_cut'):
+  key=f'h{h}/{method}'
+  if key in record['methods']:continue
+  folder=root/key
+  if not (folder/'critic_final.pth').exists():continue
+  args=build_parser().parse_args([]);vars(args).update(json.loads((folder/'args.json').read_text()));args.batch_size=4;args.scenarios=parse_scenarios(args.scenarios);validate_args(args)
+  model=build_policy(args).eval();model.load_state_dict(torch.load(folder/'final.pth',map_location='cpu'))
+  critic=LatentCostCritic().eval();critic.load_state_dict(torch.load(folder/'critic_final.pth',map_location='cpu'))
+  predictions=[];targets=[]
+  with torch.no_grad():
+   for i in range(4):
+    set_global_seed(806000+i,False);env=build_env(4,args,torch.device('cpu'));env.reset('nominal')
+    rollout=_rollout(env,model,args,4,torch.device('cpu'),False,None,False)
+    costs=task_step_costs(rollout,env,args)
+    truth=discounted_cost_to_go(costs,args.policy_return_gamma)/args.timesteps
+    values=critic(torch.stack(rollout['hidden_history']))
+    mask=torch.stack(rollout['valid_history'])
+    predictions.append(values[mask]);targets.append(truth[mask])
+  prediction=torch.cat(predictions);target=torch.cat(targets)
+  error=(prediction-target).square().mean();variance=(target-target.mean()).square().mean()
+  record['methods'][key]={'valid_samples':target.numel(),'rmse':float(error.sqrt()),'return_std':float(target.std()),'r2_vs_constant_holdout_mean':float(1-error/variance.clamp_min(1e-12)),'mean_predicted_return':float(prediction.mean()),'mean_observed_return':float(target.mean())}
+  out.write_text(json.dumps(record,indent=2)+'\n');print(key,record['methods'][key],flush=True)

@@ -35,7 +35,7 @@ class MetricSmoother:
         "iter_per_sec",
         "sim_fps",
     }
-    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/")
+    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/", "runtime/")
 
     def __init__(self, args):
         self._q = defaultdict(list)
@@ -53,9 +53,9 @@ class MetricSmoother:
         self._q.clear()
 
 
-def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother):
-    if (iter_idx + 1) % 200 == 0:
-        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // 200:04d}.pth")
+def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother, checkpoint_every=200):
+    if (iter_idx + 1) % checkpoint_every == 0:
+        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // checkpoint_every:04d}.pth")
         print("save checkpoint to:", ckpt_path)
         torch.save(model.state_dict(), ckpt_path)
         wandb.save(ckpt_path)

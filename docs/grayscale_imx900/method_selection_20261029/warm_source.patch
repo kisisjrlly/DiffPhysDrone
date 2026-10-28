@@ -1,0 +1,609 @@
+--- a/actor_critic.py
++++ b/actor_critic.py
+@@ -1,0 +2,4 @@
++
++import hashlib
++import io
++from pathlib import Path
+@@ -5,0 +10,9 @@
++
++
++def load_critic_checkpoint(critic, checkpoint, *, map_location="cpu"):
++    """Strictly restore value weights and identify the exact bytes loaded."""
++    source = Path(checkpoint).resolve()
++    payload = source.read_bytes()
++    critic.load_state_dict(torch.load(io.BytesIO(payload), map_location=map_location,
++                                     weights_only=True), strict=True)
++    return {"path": str(source), "sha256": hashlib.sha256(payload).hexdigest()}
+--- a/config.py
++++ b/config.py
+@@ -27,0 +28 @@
++    p.add_argument("--checkpoint_every_iters", type=int, default=200)
+@@ -41,0 +43,2 @@
++    p.add_argument("--critic_resume", default=None,
++                   help="Optional return-pretrained training-only critic; never restores actor weights or optimizer state.")
+@@ -228,0 +232,2 @@
++    if args.checkpoint_every_iters < 1:
++        raise ValueError("checkpoint interval must be positive")
+@@ -230,0 +236,2 @@
++    if args.critic_resume and args.policy_update_mode != "short_horizon_ac":
++        raise ValueError("critic resume requires short_horizon_ac")
+--- /dev/null
++++ b/configs/gray_method_selection_h120.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 120
++--checkpoint_every_iters 50
+--- /dev/null
++++ b/configs/gray_method_selection_h16.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 16
++--checkpoint_every_iters 50
+--- /dev/null
++++ b/configs/gray_method_selection_h4.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 4
++--checkpoint_every_iters 50
+--- /dev/null
++++ b/configs/gray_method_selection_h8.args
+@@ -0,0 +1,85 @@
++# Same parallax task and forward images; optional image-warp pose backward.
++# Two-pole depth ambiguity development. No privileged sensing or camera labels.
++--pole_layout parallax_pair
++--pole_pair_near_depth 1.0
++--pole_pair_far_depth 1.8
++--pole_pair_depth_jitter 0.05
++--pole_pair_bearing 0.10
++--pole_pair_angular_radius 0.06
++--camera_lr_multiplier 20
++--policy_arch intent_shared
++--scene_layout sparse_poles
++--observation_grad_mode full
++--camera_use_flight_intent
++--intent_horizon_s 0.25
++--gray_temporal_samples 3
++--camera_control_mode learned
++--sensor_grad_mode full
++--imx900_calibration configs/calibration/imx900_intent_provisional.json
++--gray_saturation_mode ste
++--fixed_camera_exposure 0.08
++--fixed_camera_gain 0.05
++--pole_count 2
++--pole_radius_min 0.08
++--pole_radius_max 0.12
++--pole_spacing 1.5
++--pole_x_jitter 0.15
++--pole_lateral_range 0.48
++--pole_lateral_jitter 0.12
++--pole_arena_half_width 0.38
++--batch_size 8
++--timesteps 120
++--num_iters 2000
++--lr 0.0001
++--no-amp
++--base_control_freq 15
++--control_dt_jitter 0
++--flight_max_speed 2.0
++--max_acc_cmd 3.5
++--simple_start_x -2.0
++--simple_wall_x 0
++--simple_goal_x 5.2
++--scenarios nominal
++--gray_width 64
++--gray_height 48
++--gray_nn_width 48
++--gray_nn_height 36
++--cam_angle 0
++--gray_dark_scale 0.12
++--gray_bright_scale 2.2
++--gray_transition_x 1.5
++--gray_transition_width 0.3
++--gray_texture_strength 0
++--gray_texture_scale 18
++--gray_light_jitter 0.08
++--coef_terminal_goal 1.0
++--loss_v_window 8
++--coef_d_jerk 0.02
++--coef_d_acc 0.02
++--coef_cam_smooth 0.005
++
++--pose_gradient_estimator warp_ste
++
++# 2.5x lookahead, same physical lateral blockage and optical ambiguity.
++--pole_pair_near_depth 2.5
++--pole_pair_far_depth 4.5
++--pole_pair_bearing 0.04
++--pole_pair_angular_radius 0.024
++--fov_x_half_tan 0.328
++--simple_goal_x 4.2
++
++# Matched horizon study: no replay or live privileged guidance.
++--policy_update_mode short_horizon_ac
++--joint_backward consistent
++--grad_decay 1
++--policy_return_gamma 1
++--camera_exploration_std 0.25
++--critic_lr_multiplier 10
++--camera_lr_multiplier 20
++--batch_size 4
++--timesteps 120
++--num_iters 150
++--lr 0.0001
++--resume logs/sparse_poles_iteration_20261021/parallax_lookahead_flight_imitation_v1/final.pth
++--policy_gradient_horizon 8
++--checkpoint_every_iters 50
+--- a/main_cuda.py
++++ b/main_cuda.py
+@@ -22 +22 @@
+-from actor_critic import LatentCostCritic
++from actor_critic import LatentCostCritic, load_critic_checkpoint
+@@ -139,0 +140,5 @@
++    critic_source = None
++    if args.critic_resume:
++        critic_source = load_critic_checkpoint(critic, args.critic_resume, map_location=device)
++        torch.save(critic.state_dict(), os.path.join(checkpoint_dir, "critic_initial.pth"))
++
+@@ -168,0 +174 @@
++            "critic_resume": critic_source,
+--- a/tools/audit_actor_critic_pilot.py
++++ b/tools/audit_actor_critic_pilot.py
+@@ -88,0 +89 @@
++            critic_path = directory / "critic_final.pth"
+@@ -91 +92,4 @@
+-                "critic_checkpoint_sha256": digest(directory / "critic_final.pth"),
++                # Full-BPTT pilots do not instantiate a training-only critic.
++                # The previous unconditional digest made the common audit
++                # unusable for the very BPTT reference it is meant to compare.
++                "critic_checkpoint_sha256": digest(critic_path) if critic_path.exists() else None,
+--- /dev/null
++++ b/tools/evaluate_learning_method_study.py
+@@ -0,0 +1,166 @@
++#!/usr/bin/env python3
++"""Evaluate saved learning curves and paired holdouts without training actors."""
++
++import argparse
++import copy
++import hashlib
++import json
++from pathlib import Path
++import sys
++import time
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT))
++
++import torch
++
++from config import build_parser, parse_scenarios, validate_args
++from eval import run_one_episode
++from intent_model import build_policy
++from train_utils import build_env
++from tools.evaluate_pole_coordination import frozen_view_renderer
++from tools.run_intent_pilot import bootstrap_difference
++
++
++def digest(path):
++    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
++
++
++def load_args(directory):
++    args = build_parser().parse_args([])
++    vars(args).update(json.loads((directory / 'args.json').read_text()))
++    args.batch_size, args.vis_enable, args.vis_episode_idx = 1, False, -1
++    args.scenarios = parse_scenarios(args.scenarios)
++    args.imx900_calibration = str(directory / 'imx900_calibration.json')
++    validate_args(args)
++    return args
++
++
++def evaluate(args, checkpoint, seed, n, condition, device):
++    args = copy.deepcopy(args)
++    model = build_policy(args).to(device).eval()
++    model.load_state_dict(torch.load(checkpoint, map_location=device), strict=True)
++    if condition in ('fixed_nominal', 'zero_image'):
++        args.camera_control_mode = 'fixed'
++        args.fixed_camera_exposure, args.fixed_camera_gain = .08, .05
++    if condition == 'zero_image':
++        args.policy_gray_mode = 'zero'
++    env = build_env(1, args, device, eval_mode=True)
++    rows, spans = [], []
++    start = time.perf_counter()
++    with torch.no_grad():
++        for i in range(n):
++            renderer = frozen_view_renderer() if condition == 'frozen_view' else None
++            row, trace = run_one_episode(
++                i, 'nominal', args, model, env, None, device,
++                episode_seed=seed + i, collect_trace=True, sensor_renderer=renderer)
++            row['near_pole_sign'] = int(env.cyl[0, 0, 1].sign())
++            rows.append(row)
++            spans.append({k: max(x[k] for x in trace) - min(x[k] for x in trace)
++                          for k in ('exposure', 'gain')})
++    result = {
++        'checkpoint_sha256': digest(checkpoint), 'checkpoint': str(checkpoint),
++        'calibration_sha256': digest(args.imx900_calibration),
++        'condition': condition, 'seed_range_inclusive': [seed, seed + n - 1],
++        'episodes': rows, 'n': n,
++        'successes': int(sum(r['success_rate'] for r in rows)),
++        'collisions': int(sum(r['collision_rate'] for r in rows)),
++        'timeouts': sum(r['stop_reason'] == 'timeout' for r in rows),
++        'evaluation_wall_time_s': time.perf_counter() - start,
++        'mean_goal_distance': sum(r['final_goal_dist'] for r in rows) / n,
++        'mean_elapsed_s': sum(r['elapsed_s'] for r in rows) / n,
++        'mean_exposure': sum(r['exposure_mean'] for r in rows) / n,
++        'mean_gain': sum(r['gain_mean'] for r in rows) / n,
++        'mean_camera_range': {k: sum(v[k] for v in spans) / n for k in spans[0]},
++        'by_near_pole_sign': {
++            str(s): {
++                'n': sum(r['near_pole_sign'] == s for r in rows),
++                'successes': int(sum(r['success_rate'] for r in rows
++                                     if r['near_pole_sign'] == s)),
++                'collisions': int(sum(r['collision_rate'] for r in rows
++                                      if r['near_pole_sign'] == s))}
++            for s in (-1, 1)}}
++    del model, env
++    if device.type == 'cuda':
++        torch.cuda.empty_cache()
++    return result
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument('--study_dir', required=True)
++    parser.add_argument('--horizons', nargs='+', type=int, default=[4, 8, 16, 120])
++    parser.add_argument('--device', default='cpu')
++    parser.add_argument('--interventions', action='store_true',
++                        help='Also evaluate fixed camera/zero image/frozen view for the last horizon.')
++    cli = parser.parse_args()
++    study = Path(cli.study_dir).resolve()
++    torch.set_num_threads(4)
++    device = torch.device(cli.device)
++    directory = study / 'evaluation'
++    directory.mkdir(exist_ok=True)
++    report_path = directory / 'results.json'
++    script_hash = digest(__file__)
++    report = json.loads(report_path.read_text()) if report_path.exists() else {
++        'purpose': 'conditional single-training-seed method comparison',
++        'calibrated': False, 'device': str(device),
++        'evaluation_script_sha256': script_hash, 'methods': {}, 'baselines': {}}
++    if report['device'] != str(device):
++        raise ValueError('cannot mix evaluation devices in one report')
++    if report.get('evaluation_script_sha256', script_hash) != script_hash:
++        raise ValueError('evaluation script changed; use a separate output directory')
++
++    def save():
++        temporary = report_path.with_suffix('.json.tmp')
++        temporary.write_text(json.dumps(report, indent=2) + '\n')
++        temporary.replace(report_path)
++
++    def collect(entry, label, args, checkpoint, seed, n, condition='learned'):
++        if label in entry:
++            if entry[label]['checkpoint_sha256'] != digest(checkpoint):
++                raise ValueError('cached evaluation checkpoint changed')
++            return
++        entry[label] = evaluate(args, checkpoint, seed, n, condition, device)
++        save()
++        print(label, entry[label]['successes'], '/', n, flush=True)
++
++    base_args = load_args(study / f'h{cli.horizons[0]}' / 'joint')
++    checkpoint = Path(base_args.resume)
++    if not checkpoint.is_absolute():
++        checkpoint = ROOT / checkpoint
++    for label, n, seed in [('common_validation', 40, 800000),
++                           ('common_holdout', 100, 801000)]:
++        collect(report['baselines'], label, base_args, checkpoint, seed, n)
++
++    for h in cli.horizons:
++        for method in ('joint', 'camera_gradient_cut'):
++            run = study / f'h{h}' / method
++            args = load_args(run)
++            key = f'h{h}/{method}'
++            entry = report['methods'].setdefault(key, {})
++            for name, n, seed, label in [
++                    ('checkpoint0000.pth', 40, 800000, 'validation_50'),
++                    ('checkpoint0001.pth', 40, 800000, 'validation_100'),
++                    ('final.pth', 100, 801000, 'holdout_150')]:
++                print(key, flush=True)
++                collect(entry, label, args, run / name, seed, n)
++        full = report['methods'][f'h{h}/joint']['holdout_150']['episodes']
++        cut = report['methods'][f'h{h}/camera_gradient_cut']['holdout_150']['episodes']
++        assert [r['episode_seed'] for r in full] == [r['episode_seed'] for r in cut]
++        report.setdefault('paired_holdout_difference', {})[str(h)] = bootstrap_difference(
++            [r['success_rate'] for r in full], [r['success_rate'] for r in cut])
++        save()
++
++    if cli.interventions:
++        h = cli.horizons[-1]
++        run = study / f'h{h}' / 'joint'
++        args = load_args(run)
++        entry = report['methods'][f'h{h}/joint']
++        for condition in ('fixed_nominal', 'zero_image', 'frozen_view'):
++            collect(entry, 'holdout_' + condition, args, run / 'final.pth',
++                    801000, 100, condition)
++    print('saved', report_path, flush=True)
++
++
++if __name__ == '__main__':
++    main()
+--- a/tools/run_intent_pilot.py
++++ b/tools/run_intent_pilot.py
+@@ -57,0 +58 @@
++    parser.add_argument("--critic_resume", help="Common return-pretrained critic supplied unchanged to every condition.")
+@@ -79,0 +81,2 @@
++        if cli.critic_resume:
++            preflight.critic_resume = str(Path(cli.critic_resume).resolve())
+@@ -91,0 +95 @@
++               "common_critic_checkpoint_sha256": sha256(preflight.critic_resume) if preflight.critic_resume else None,
+@@ -107,0 +112,2 @@
++        if cli.critic_resume:
++            command.extend(["--critic_resume", str(Path(cli.critic_resume).resolve())])
+--- a/train_utils.py
++++ b/train_utils.py
+@@ -38 +38 @@
+-    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/")
++    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/", "runtime/")
+@@ -56,3 +56,3 @@
+-def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother):
+-    if (iter_idx + 1) % 200 == 0:
+-        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // 200:04d}.pth")
++def periodic_tail_ops(iter_idx, checkpoint_dir, model, smoother, checkpoint_every=200):
++    if (iter_idx + 1) % checkpoint_every == 0:
++        ckpt_path = os.path.join(checkpoint_dir, f"checkpoint{iter_idx // checkpoint_every:04d}.pth")
+--- a/trainer.py
++++ b/trainer.py
+@@ -611,0 +612,5 @@
++        if device.type == "cuda":
++            # Keep one resource metric for both full-BPTT and short-horizon
++            # runs.  The AC-specific field below is retained for compatibility
++            # with earlier pilot manifests.
++            log["runtime/peak_cuda_memory_mib"] = torch.cuda.max_memory_allocated(device) / 1024**2
+@@ -643 +648 @@
+-        periodic_tail_ops(i, checkpoint_dir, model, smoother)
++        periodic_tail_ops(i, checkpoint_dir, model, smoother, args.checkpoint_every_iters)

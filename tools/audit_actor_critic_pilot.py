@@ -86,9 +86,13 @@ def audit(pilot_dir, device):
             source = json.loads((directory / "provenance.json").read_text())
             metrics = [json.loads(line) for line in (directory / "metrics.jsonl").read_text().splitlines()]
             method = manifest["methods"][name]
+            critic_path = directory / "critic_final.pth"
             item.update({
                 "checkpoint_sha256": digest(directory / "final.pth"),
-                "critic_checkpoint_sha256": digest(directory / "critic_final.pth"),
+                # Full-BPTT pilots do not instantiate a training-only critic.
+                # The previous unconditional digest made the common audit
+                # unusable for the very BPTT reference it is meant to compare.
+                "critic_checkpoint_sha256": digest(critic_path) if critic_path.exists() else None,
                 "initialization": method["initialization"],
                 "source_provenance": source,
                 "flight_replay": method["flight_replay"],

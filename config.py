@@ -25,6 +25,7 @@ def build_parser():
     p.add_argument("--checkpoint_dir", default=None)
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--num_iters", type=int, default=5000)
+    p.add_argument("--checkpoint_every_iters", type=int, default=200)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--deterministic", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--lr", type=float, default=5e-5)
@@ -39,6 +40,8 @@ def build_parser():
     p.add_argument("--camera_exploration_std", type=float, default=.25,
                    help="Fixed standard deviation in camera-logit space for short-horizon actor-critic.")
     p.add_argument("--critic_lr_multiplier", type=float, default=1.0)
+    p.add_argument("--critic_resume", default=None,
+                   help="Optional return-pretrained training-only critic; never restores actor weights or optimizer state.")
     p.add_argument("--flight_replay_dataset", default=None,
                    help="Optional common flight observations for retaining post-measurement flight skills.")
     p.add_argument("--flight_replay_weight", type=float, default=0.)
@@ -226,8 +229,12 @@ def set_global_seed(seed: int, deterministic: bool = True):
 
 
 def validate_args(args):
+    if args.checkpoint_every_iters < 1:
+        raise ValueError("checkpoint interval must be positive")
     if args.wandb_disabled and args.wandb_offline:
         raise ValueError("choose either disabled or offline W&B logging")
+    if args.critic_resume and args.policy_update_mode != "short_horizon_ac":
+        raise ValueError("critic resume requires short_horizon_ac")
     if args.policy_update_mode == "short_horizon_ac":
         if args.policy_gradient_horizon < 2 or args.policy_gradient_horizon > args.timesteps:
             raise ValueError("policy gradient horizon must be in [2, timesteps]")

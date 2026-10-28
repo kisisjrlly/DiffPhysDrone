@@ -1,0 +1,46 @@
+import sys,json,hashlib,copy,time
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+import torch.nn.functional as F
+from actor_critic import LatentCostCritic,task_step_costs,discounted_cost_to_go
+from config import set_global_seed
+from tools.intent_common import load_intent_args
+from intent_model import build_policy
+from train_utils import build_env
+from trainer import _rollout
+
+torch.set_num_threads(4)
+folder=Path('logs/method_selection_20261029/critic_warmup');folder.mkdir(exist_ok=False)
+args=load_intent_args('configs/gray_method_selection_h120.args',batch_size=4)
+model=build_policy(args).eval();model.load_state_dict(torch.load(args.resume,map_location='cpu'))
+start=time.perf_counter();features=[];targets=[];splits=[]
+with torch.no_grad():
+ for i in range(24):
+  set_global_seed(807000+i,False);env=build_env(4,args,torch.device('cpu'));env.reset('nominal')
+  rollout=_rollout(env,model,args,4,torch.device('cpu'),False,None,False)
+  costs=task_step_costs(rollout,env,args);returns=discounted_cost_to_go(costs,args.policy_return_gamma)/args.timesteps
+  valid=torch.stack(rollout['valid_history'])
+  features.append(torch.stack(rollout['hidden_history'])[valid]);targets.append(returns[valid]);splits.append(i<16)
+  if (i+1)%4==0:print('critic data batches',i+1,'/24',flush=True)
+collection_time=time.perf_counter()-start
+train_x=torch.cat([x for x,s in zip(features,splits) if s]);train_y=torch.cat([y for y,s in zip(targets,splits) if s])
+val_x=torch.cat([x for x,s in zip(features,splits) if not s]);val_y=torch.cat([y for y,s in zip(targets,splits) if not s])
+torch.save({'train_x':train_x,'train_y':train_y,'val_x':val_x,'val_y':val_y,'train_batch_seeds':list(range(807000,807016)),'validation_batch_seeds':list(range(807016,807024))},folder/'data.pt')
+set_global_seed(101,False);critic=LatentCostCritic();optim=torch.optim.Adam(critic.parameters(),lr=.001)
+history=[];best_error=float('inf');best=None;best_update=None
+fit_start=time.perf_counter()
+for step in range(1000):
+ index=torch.randint(len(train_x),(min(256,len(train_x)),))
+ loss=F.smooth_l1_loss(critic(train_x[index]),train_y[index]);optim.zero_grad();loss.backward();torch.nn.utils.clip_grad_norm_(critic.parameters(),5.);optim.step()
+ if (step+1)%50==0:
+  with torch.no_grad():
+   pred=critic(val_x);error=(pred-val_y).square().mean().item();variance=val_y.var(unbiased=False).item()
+   item={'step':step+1,'val_rmse':error**.5,'val_r2':1-error/max(variance,1e-12)};history.append(item)
+   if error<best_error:best_error=error;best=copy.deepcopy(critic.state_dict());best_update=step+1
+   print('critic fit',item,flush=True)
+critic.load_state_dict(best);torch.save(best,folder/'critic.pth')
+with torch.no_grad():
+ pred=critic(val_x);error=(pred-val_y).square().mean();variance=val_y.var(unbiased=False)
+manifest={'purpose':'common-actor return-only critic warmup; no camera or flight action labels','actor_sha256':hashlib.sha256(Path(args.resume).read_bytes()).hexdigest(),'data_sha256':hashlib.sha256((folder/'data.pt').read_bytes()).hexdigest(),'critic_sha256':hashlib.sha256((folder/'critic.pth').read_bytes()).hexdigest(),'training_episodes':64,'validation_episodes':32,'generated_transitions':24*4*120,'training_valid_samples':len(train_x),'validation_valid_samples':len(val_x),'collection_wall_time_s':collection_time,'fit_wall_time_s':time.perf_counter()-fit_start,'updates':1000,'chosen_update':best_update,'validation_rmse':float(error.sqrt()),'validation_r2':float(1-error/variance),'history':history,'screen_passed':float(1-error/variance)>.5,'limit':'critic fit on common actor distribution, not proof of accurate derivatives or post-update generalization','args':vars(args)}
+(folder/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n');print('warmup finished R2',manifest['validation_r2'],'pass',manifest['screen_passed'],flush=True)

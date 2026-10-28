@@ -1,0 +1,27 @@
+import sys,json,hashlib
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+from config import set_global_seed
+from intent_model import build_policy
+from tools.intent_common import load_intent_args
+from train_utils import build_env
+from trainer import _rollout,_loss_from_rollout
+
+torch.set_num_threads(4);device=torch.device('cpu')
+args=load_intent_args('configs/gray_method_selection_h120.args',batch_size=4)
+model=build_policy(args).to(device)
+model.load_state_dict(torch.load(args.resume,map_location=device));model.eval()
+set_global_seed(804000,False);env=build_env(4,args,device);env.reset('nominal')
+rollout=_rollout(env,model,args,4,device,False,None,False)
+loss,terms,_,_=_loss_from_rollout(rollout,env,args)
+params=[p for n,p in model.named_parameters() if model._is_camera_parameter(n)]
+def grad(value):
+ gs=torch.autograd.grad(value,params,allow_unused=True,retain_graph=True)
+ return torch.cat([torch.zeros_like(p).flatten() if g is None else g.flatten() for p,g in zip(params,gs)])
+full=grad(loss);result={'purpose':'gradient attribution at common checkpoint; a local surrogate diagnostic only','config':vars(args),'total_loss':float(loss),'camera_gradient_norm':float(full.norm()),'terms':{}}
+for key,coef in [('loss_v',args.coef_v),('loss_obj_avoidance',args.coef_obj_avoidance),('loss_collide',args.coef_collide),('loss_d_acc',args.coef_d_acc),('loss_d_jerk',args.coef_d_jerk),('loss_cam_smooth',args.coef_cam_smooth),('loss_terminal_goal',args.coef_terminal_goal)]:
+ value=terms[key]*coef;g=grad(value)
+ result['terms'][key]={'weighted_value':float(value),'camera_gradient_norm':float(g.norm()),'cosine_with_total':float(torch.nn.functional.cosine_similarity(g,full,dim=0))}
+print(json.dumps(result,indent=2))
+Path('logs/method_selection_20261029/gradient_components.json').write_text(json.dumps(result,indent=2)+'\n')

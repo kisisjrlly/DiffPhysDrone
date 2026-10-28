@@ -55,6 +55,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--training_seed", type=int, default=101)
     parser.add_argument("--resume", help="Common actor checkpoint supplied unchanged to every condition.")
+    parser.add_argument("--critic_resume", help="Common return-pretrained critic supplied unchanged to every condition.")
     parser.add_argument("--camera_lr_multiplier", type=float)
     parser.add_argument("--eval_seed", type=int, default=721000)
     parser.add_argument("--eval_episodes", type=int, default=8)
@@ -77,6 +78,8 @@ def main():
         ])
         if cli.resume:
             preflight.resume = str(Path(cli.resume).resolve())
+        if cli.critic_resume:
+            preflight.critic_resume = str(Path(cli.critic_resume).resolve())
         preflight.scenarios = parse_scenarios(preflight.scenarios)
         validate_args(preflight)
         if preflight.flight_replay_dataset:
@@ -89,6 +92,7 @@ def main():
                "calibrated": False, "methods": {},
                "common_checkpoint": str(Path(preflight.resume).resolve()) if preflight.resume else None,
                "common_checkpoint_sha256": sha256(preflight.resume) if preflight.resume else None,
+               "common_critic_checkpoint_sha256": sha256(preflight.critic_resume) if preflight.critic_resume else None,
                "camera_lr_multiplier_override": cli.camera_lr_multiplier,
                "claim": "Checks train/eval integration only; does not establish learned coordination, superiority or real deployment readiness."}
     initials = []
@@ -105,6 +109,8 @@ def main():
                    "--seed", str(cli.training_seed), "--checkpoint_dir", str(directory), *VARIANTS[variant]]
         if cli.resume:
             command.extend(["--resume", str(Path(cli.resume).resolve())])
+        if cli.critic_resume:
+            command.extend(["--critic_resume", str(Path(cli.critic_resume).resolve())])
         if cli.camera_lr_multiplier is not None:
             command.extend(["--camera_lr_multiplier", str(cli.camera_lr_multiplier)])
         if cli.wandb_disabled:

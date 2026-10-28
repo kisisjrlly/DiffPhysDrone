@@ -609,6 +609,11 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             "cam/grad_norm": cam_grad_norm,
             "flight/grad_norm": flight_grad_norm,
         }
+        if device.type == "cuda":
+            # Keep one resource metric for both full-BPTT and short-horizon
+            # runs.  The AC-specific field below is retained for compatibility
+            # with earlier pilot manifests.
+            log["runtime/peak_cuda_memory_mib"] = torch.cuda.max_memory_allocated(device) / 1024**2
         if args.policy_update_mode == "short_horizon_ac":
             log.update({"ac/task_loss": float(task_loss),
                         "ac/actor_loss": float(loss_terms["loss_actor"].detach()),
@@ -640,7 +645,7 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 }},
                 iter_idx=i,
             )
-        periodic_tail_ops(i, checkpoint_dir, model, smoother)
+        periodic_tail_ops(i, checkpoint_dir, model, smoother, args.checkpoint_every_iters)
         pbar.set_description_str(f"loss: {float(loss.detach()):.3f}")
     smoother.flush(args.num_iters)
     torch.save(model.state_dict(), str(Path(checkpoint_dir) / "final.pth"))

@@ -1,0 +1,31 @@
+import json,sys
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()))
+import torch
+from config import set_global_seed
+from intent_model import build_policy
+from train_utils import build_env
+from trainer import _rollout
+from tools.intent_common import load_intent_args
+
+torch.set_num_threads(4)
+args=load_intent_args('configs/gray_method_selection_h120.args',batch_size=1,timesteps=12,policy_gradient_horizon=12,gray_enable_noise=False)
+set_global_seed(805000,False);env=build_env(1,args,torch.device('cpu'));env.reset('nominal')
+model=build_policy(args);model.load_state_dict(torch.load(args.resume,map_location='cpu'))
+r=_rollout(env,model,args,1,torch.device('cpu'),False,None,False);command=r['cam_history'][0]
+rows=[]
+for t in range(args.timesteps):
+ row={'step':t}
+ for key,seq in [('flight_action','act_history'),('post_position','post_p_history'),('velocity','v_history')]:
+  output=r[seq][t]
+  components=[]
+  for j in range(3):
+   g=None
+   if output.requires_grad:
+    g,=torch.autograd.grad(output[0,j],command,allow_unused=True,retain_graph=True)
+   components.append(torch.zeros_like(command) if g is None else g)
+  row[key+'_gradient_norm']=float(torch.stack(components).norm())
+ rows.append(row)
+result={'purpose':'earliest local influence of first camera request on later actions/state; not a policy-learning result','camera_queue_delay_control_steps':1,'flight_action_queue_control_steps':2,'frequency_hz':15,'rows':rows,'earliest_nonzero':{key:next((r['step'] for r in rows if r[key+'_gradient_norm']>1e-10),None) for key in ('flight_action','post_position','velocity')}}
+Path('logs/method_selection_20261029/credit_delay.json').write_text(json.dumps(result,indent=2)+'\n')
+print(json.dumps(result,indent=2))
