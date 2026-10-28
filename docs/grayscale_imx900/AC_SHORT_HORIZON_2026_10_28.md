@@ -52,6 +52,12 @@ The provisional calibration remains `calibrated: false`.
 | sensing-cut + score function | 20 | 8/16 (50%) | 8/16 |
 | common actor before update | — | 8/16 (50%) | 8/16 |
 
+Each trained condition generated 9,600 navigation transitions and 28,800
+temporal shutter samples. End-to-end training process time was 75.7 s for full
+and 47.5 s for the sensing-cut arm; peak allocated CUDA memory was 454 MiB and
+398 MiB. These budgets are equal in transitions and optimizer updates, not
+wall-clock compute.
+
 The paired difference is zero on these particular episodes. The degenerate
 episode-bootstrap interval [0, 0] reflects identical paired outcomes and cannot
 establish population equivalence. Both conditions kept the common actor's initial
