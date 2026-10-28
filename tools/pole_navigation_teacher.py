@@ -49,7 +49,18 @@ class PoleNavigationTeacher:
 
     def reference(self, time):
         time = torch.as_tensor(time, device=self.points.device, dtype=self.points.dtype)
-        index = (time > self.ends[:, :-1]).sum(-1)
+        # ``ends`` is batched (B, segments).  A batched time vector is
+        # (B,), so add the segment axis before comparing.  The previous
+        # implementation compared (B,) directly with (B, segments-1),
+        # which only happened to work for a scalar/single compatible shape
+        # and crashed as soon as the guidance pilot used batch_size > 1.
+        if time.ndim == 0:
+            time = time.expand(self.points.shape[0])
+        if time.ndim != 1 or time.shape[0] != self.points.shape[0]:
+            raise ValueError(
+                f"reference time must have shape ({self.points.shape[0]},), got {tuple(time.shape)}"
+            )
+        index = (time[:, None] > self.ends[:, :-1]).sum(-1)
         rows = torch.arange(len(self.points), device=self.points.device)
         duration = self.durations[rows, index]
         u = ((time - self.starts[rows, index]) / duration).clamp(0, 1)

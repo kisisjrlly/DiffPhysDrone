@@ -68,6 +68,20 @@ def test_live_guidance_excludes_initial_measurement_and_terminal_suffix():
     assert targets.grad is None
 
 
+def test_pole_guidance_reference_accepts_batched_times():
+    from flight_guidance import LiveFlightGuidance
+    args = args_for_test(batch_size=4, timesteps=32,
+                         live_flight_guidance_weight=1.,
+                         live_flight_guidance_start_step=24,
+                         live_flight_guidance_margin=.08)
+    env = build_env(args.batch_size, args, torch.device("cpu"))
+    env.reset("nominal")
+    guidance = LiveFlightGuidance(env, args)
+    target = guidance.target(env)
+    assert target.shape == (args.batch_size, 3)
+    assert torch.isfinite(target).all()
+
+
 def test_sampled_camera_logits_preserve_inference_and_mean():
     model = build_policy(args_for_test())
     state, images = torch.randn(2, 10), torch.rand(2, 2, 12, 16)
