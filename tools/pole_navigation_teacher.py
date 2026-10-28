@@ -48,7 +48,7 @@ class PoleNavigationTeacher:
         self.starts = self.ends - self.durations
 
     def reference(self, time):
-        time = self.points.new_tensor(time)
+        time = torch.as_tensor(time, device=self.points.device, dtype=self.points.dtype)
         index = (time > self.ends[:, :-1]).sum(-1)
         rows = torch.arange(len(self.points), device=self.points.device)
         duration = self.durations[rows, index]

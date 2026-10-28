@@ -7,6 +7,7 @@ import time
 
 import torch
 from torch.cuda.amp import autocast
+from torch.distributions import Normal
 from tqdm import tqdm
 
 from controllers.auto_exposure import (
@@ -28,6 +29,13 @@ from rollout_ops import (
 )
 from train_utils import MetricSmoother, periodic_tail_ops
 from render.scene_types import DIFFERENTIABLE_SCENES
+from actor_critic import (
+    camera_score_function_loss,
+    discounted_cost_to_go,
+    short_horizon_actor_objective,
+    short_horizon_critic_loss,
+    task_step_costs,
+)
 
 
 def _stack_or_none(values):
@@ -79,6 +87,7 @@ def _build_loss_contrib_metrics(loss_terms, args):
         ("cam_smooth", "loss_cam_smooth", args.coef_cam_smooth),
         ("terminal_goal", "loss_terminal_goal", getattr(args, "coef_terminal_goal", 0.0)),
         ("flight_replay", "loss_flight_replay", getattr(args, "flight_replay_weight", 0.0)),
+        ("live_flight_guidance", "loss_live_flight_guidance", getattr(args, "live_flight_guidance_weight", 0.0)),
     ]
     contrib = {}
     for name, key, coef in specs:
@@ -114,9 +123,32 @@ def _flight_grad_norm(model):
                if p.grad is not None and not model._is_camera_parameter(name)) ** 0.5
 
 
+def _detach_environment_state(env):
+    for name in ("p", "v", "a", "act", "R", "R_old", "p_old", "dg", "v_wind"):
+        value = getattr(env, name, None)
+        if isinstance(value, torch.Tensor):
+            setattr(env, name, value.detach())
+
+
+def _detach_camera_timeline(env):
+    if isinstance(getattr(env, "_camera_requested_state", None), torch.Tensor):
+        env._camera_requested_state = env._camera_requested_state.detach()
+    if hasattr(env, "_camera_command_queue"):
+        env._camera_command_queue = [
+            value.detach() if isinstance(value, torch.Tensor) else value
+            for value in env._camera_command_queue
+        ]
+
+
 def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
+    guidance = None
+    guidance_history = []
+    if args.live_flight_guidance_weight > 0:
+        from flight_guidance import LiveFlightGuidance
+        guidance = LiveFlightGuidance(env, args)
     h = None
     cam_h = None
+    score_h = None
     act_buffer = [env.act] * 2
     exposure, gain = init_camera_params(env, B, device)
     camera_initial = torch.stack([exposure.detach(), gain.detach()], -1)
@@ -136,6 +168,10 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     terminal_step = torch.full((B,), -1, dtype=torch.long, device=device)
     terminal_position = torch.zeros(B, 3, dtype=env.p.dtype, device=device)
     exploration = torch.zeros(B, 3, dtype=env.p.dtype, device=device)
+    hidden_history, camera_log_prob_history = [], []
+    segment_boundaries = [0]
+    short_horizon = args.policy_update_mode == "short_horizon_ac"
+    camera_noise_std = float(args.camera_exploration_std)
 
     sensor_differentiable = args.sensor_grad_mode == "full"
 
@@ -193,12 +229,17 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             innovation = torch.cat([torch.randn(B, 2, device=device), torch.zeros(B, 1, device=device)], -1)
             exploration = rho * exploration + (1 - rho**2)**.5 * args.flight_exploration_std * innovation
             policy_extra["action_noise"] = exploration
+        boundary = short_horizon and t > 0 and t % args.policy_gradient_horizon == 0
+        camera_noise = (
+            torch.randn(B, 2, device=device, dtype=state.dtype) * camera_noise_std
+            if short_horizon else None
+        )
+        if short_horizon:
+            policy_extra.update(camera_logit_noise=camera_noise, return_camera_logits=True)
+        previous_h, previous_cam_h = h, cam_h
         with autocast(enabled=use_amp):
-            act_raw, cam_params, h, cam_h = policy_forward(
-                model,
-                state,
-                h,
-                env,
+            output = policy_forward(
+                model, state, h, env,
                 gray_obs=policy_gray,
                 add_noise=False,
                 cam_hx=cam_h,
@@ -206,10 +247,64 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 camera_motion_state=camera_motion_state,
                 **policy_extra,
             )
+        if short_horizon:
+            _, _, h_connected, _, _, _ = output
+            if boundary:
+                hidden_history.append(h_connected)
+                segment_boundaries.append(t)
+                _detach_camera_timeline(env)
+                act_buffer = [value.detach() for value in act_buffer]
+                with autocast(enabled=use_amp):
+                    output = policy_forward(
+                        model,
+                        state.detach(),
+                        None if previous_h is None else previous_h.detach(),
+                        env,
+                        gray_obs=policy_gray.detach(),
+                        add_noise=False,
+                        cam_hx=None if previous_cam_h is None else previous_cam_h.detach(),
+                        camera_state=camera_state.detach(),
+                        camera_motion_state=camera_motion_state.detach(),
+                        **policy_extra,
+                    )
+            act_raw, cam_params, h, cam_h, sampled_logits, mean_logits = output
+            if not boundary:
+                hidden_history.append(h)
+            # Score-function derivatives hold realized observations and
+            # commands fixed. Recurrent policy-weight derivatives remain.
+            detached_env_timeline = getattr(env, "_camera_requested_state", None)
+            detached_queue = getattr(env, "_camera_command_queue", None)
+            _detach_camera_timeline(env)
+            if boundary and score_h is not None:
+                score_h = score_h.detach()
+            with autocast(enabled=use_amp):
+                score_output = policy_forward(
+                    model, state.detach(), score_h, env,
+                    gray_obs=policy_gray.detach(), add_noise=False,
+                    camera_state=camera_state.detach(),
+                    camera_motion_state=camera_motion_state.detach(),
+                    return_camera_logits=True,
+                )
+            env._camera_requested_state = detached_env_timeline
+            env._camera_command_queue = detached_queue
+            score_h = score_output[2]
+            score_mean_logits = score_output[-1]
+            log_prob = Normal(score_mean_logits, camera_noise_std).log_prob(
+                sampled_logits.detach()
+            ).sum(-1)
+            camera_log_prob_history.append(log_prob)
+        else:
+            act_raw, cam_params, h, cam_h = output
 
+        action_frame = R.detach() if boundary else R
+        if boundary:
+            target_v = target_v.detach()
+            target_v_raw = target_v_raw.detach()
+            vec_now = vec_now.detach()
+            exposure, gain = exposure.detach(), gain.detach()
         act = decode_action_direct(
             act_raw.float(),
-            R,
+            action_frame,
             env,
             B,
             args.max_acc_cmd,
@@ -238,6 +333,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             env,
         )
         act_buffer.append(act)
+        if guidance is not None:
+            guidance_history.append(guidance.target(env) if t >= guidance.start_step else torch.zeros_like(act).detach())
 
         valid_history.append(alive.clone())
         p_history.append(env.p)
@@ -277,6 +374,12 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 depth_hw=(int(env.height), int(env.width)),
             )
 
+        if boundary:
+            p_history[-1] = p_history[-1].detach()
+            v_history[-1] = v_history[-1].detach()
+            _detach_environment_state(env)
+            if prev_gray is not None:
+                prev_gray = prev_gray.detach()
         env.run(act_buffer[t], ctl_dt, target_v_raw)
 
         # Terminal state belongs to the action just taken. Keep it in the
@@ -328,6 +431,10 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
         "motion_proxy_history": motion_proxy_history,
         "char_depth_history": char_depth_history,
         "act_buffer": act_buffer,
+        "guidance_history": guidance_history,
+        "hidden_history": hidden_history,
+        "camera_log_prob_history": camera_log_prob_history,
+        "segment_boundaries": segment_boundaries,
     }
 
 
@@ -359,6 +466,13 @@ def _loss_from_rollout(rollout, env, args):
         valid_mask=torch.stack(rollout["valid_history"]),
     )
     loss, terms = aggregate_loss(physics_losses, camera_losses, args)
+    if args.live_flight_guidance_weight > 0:
+        from flight_guidance import live_flight_guidance_loss
+        guidance_loss = live_flight_guidance_loss(
+            act_history, torch.stack(rollout["guidance_history"]),
+            torch.stack(rollout["valid_history"]), args.live_flight_guidance_start_step)
+        loss = loss + args.live_flight_guidance_weight * guidance_loss
+        terms["loss_live_flight_guidance"] = guidance_loss
     if float(getattr(args, "coef_terminal_goal", 0.0)):
         terminal = torch.where((rollout["terminal_step"] >= 0)[:, None],
                                rollout["terminal_position"], p_history[-1])
@@ -371,7 +485,8 @@ def _loss_from_rollout(rollout, env, args):
     return loss, terms, p_history, clearance
 
 
-def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoint_dir, device):
+def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoint_dir, device,
+          critic=None):
     _ = env_full
     use_amp = bool(args.amp and device.type == "cuda")
     smoother = MetricSmoother(args)
@@ -420,6 +535,22 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             env_train,
             args,
         )
+        if args.policy_update_mode == "short_horizon_ac":
+            if critic is None:
+                raise RuntimeError("short_horizon_ac requires a critic")
+            costs = task_step_costs(rollout, env_train, args)
+            actor_loss = short_horizon_actor_objective(rollout, costs, critic, args)
+            critic_loss, returns, baseline = short_horizon_critic_loss(
+                rollout, costs, critic, args)
+            if args.sensor_grad_mode != "full":
+                nav_costs = task_step_costs(rollout, env_train, args, include_camera_regularizer=False)
+                nav_returns = discounted_cost_to_go(nav_costs.detach(), args.policy_return_gamma) / args.timesteps
+                actor_loss = actor_loss + camera_score_function_loss(
+                    rollout, nav_returns, baseline, args)
+            task_loss = loss.detach()
+            loss = actor_loss + 0.5 * critic_loss
+            loss_terms["loss_actor"] = actor_loss
+            loss_terms["loss_critic"] = critic_loss
         if replay is not None:
             anchor = replay.loss(model)
             loss_terms["loss_flight_replay"] = anchor
@@ -437,6 +568,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 cam_grad_norm = _camera_grad_norm(model)
                 flight_grad_norm = _flight_grad_norm(model)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+                if critic is not None:
+                    torch.nn.utils.clip_grad_norm_(critic.parameters(), max_norm=5.0)
                 scaler.step(optim)
                 scaler.update()
             else:
@@ -445,6 +578,8 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
                 flight_grad_norm = _flight_grad_norm(model)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0,
                                               error_if_nonfinite=args.policy_arch == "intent_shared")
+                if critic is not None:
+                    torch.nn.utils.clip_grad_norm_(critic.parameters(), max_norm=5.0, error_if_nonfinite=True)
                 optim.step()
             sched.step()
         elif not torch.isfinite(loss):
@@ -474,6 +609,12 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
             "cam/grad_norm": cam_grad_norm,
             "flight/grad_norm": flight_grad_norm,
         }
+        if args.policy_update_mode == "short_horizon_ac":
+            log.update({"ac/task_loss": float(task_loss),
+                        "ac/actor_loss": float(loss_terms["loss_actor"].detach()),
+                        "ac/critic_loss": float(loss_terms["loss_critic"].detach())})
+            if device.type == "cuda":
+                log["ac/peak_cuda_memory_mib"] = torch.cuda.max_memory_allocated(device) / 1024**2
         log.update(_build_loss_contrib_metrics(loss_terms, args))
         log.update({f"cam/{k}": v for k, v in cam_stats.items()})
         if rollout["angular_speed_history"]:

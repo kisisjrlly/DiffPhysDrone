@@ -33,10 +33,20 @@ def build_parser():
     p.add_argument("--flight_exploration_std", type=float, default=0.,
                    help="Training-only correlated XY acceleration noise; zero keeps deterministic training unchanged.")
     p.add_argument("--flight_exploration_rho", type=float, default=.85)
+    p.add_argument("--policy_update_mode", choices=["full_bptt", "short_horizon_ac"], default="full_bptt")
+    p.add_argument("--policy_gradient_horizon", type=int, default=16)
+    p.add_argument("--policy_return_gamma", type=float, default=.99)
+    p.add_argument("--camera_exploration_std", type=float, default=.25,
+                   help="Fixed standard deviation in camera-logit space for short-horizon actor-critic.")
+    p.add_argument("--critic_lr_multiplier", type=float, default=1.0)
     p.add_argument("--flight_replay_dataset", default=None,
                    help="Optional common flight observations for retaining post-measurement flight skills.")
     p.add_argument("--flight_replay_weight", type=float, default=0.)
     p.add_argument("--flight_replay_batch", type=int, default=4)
+    p.add_argument("--live_flight_guidance_weight", type=float, default=0.,
+                   help="Optional privileged flight teaching on live rollouts; no initial-action or camera targets.")
+    p.add_argument("--live_flight_guidance_start_step", type=int, default=24)
+    p.add_argument("--live_flight_guidance_margin", type=float, default=.08)
     p.add_argument("--grad_decay", type=float, default=0.3)
     p.add_argument("--joint_backward", choices=["legacy", "consistent"], default="legacy",
                    help="Optional research mode: preserve feedback/smoothing derivatives and differentiate approach weights; requires grad_decay=1.")
@@ -164,6 +174,8 @@ def build_parser():
     p.add_argument("--drone_c", type=float, default=0.075)
 
     p.add_argument("--wandb_disabled", default=False, action="store_true")
+    p.add_argument("--wandb_offline", default=False, action="store_true",
+                   help="Keep a local W&B run for later sync when online logging is unavailable.")
     p.add_argument("--wandb_episode_history", default=True, action=argparse.BooleanOptionalAction)
     p.add_argument("--wandb_episode_history_every_iters", type=int, default=100)
     p.add_argument("--vis_enable", default=False, action="store_true")
@@ -214,6 +226,31 @@ def set_global_seed(seed: int, deterministic: bool = True):
 
 
 def validate_args(args):
+    if args.wandb_disabled and args.wandb_offline:
+        raise ValueError("choose either disabled or offline W&B logging")
+    if args.policy_update_mode == "short_horizon_ac":
+        if args.policy_gradient_horizon < 2 or args.policy_gradient_horizon > args.timesteps:
+            raise ValueError("policy gradient horizon must be in [2, timesteps]")
+        if not 0 < args.policy_return_gamma <= 1:
+            raise ValueError("policy return gamma must be in (0,1]")
+        if not all(np.isfinite(x) and x > 0 for x in (args.camera_exploration_std, args.critic_lr_multiplier)):
+            raise ValueError("short-horizon camera exploration and critic learning rate must be positive")
+        if args.policy_arch != "intent_shared" or args.camera_control_mode != "learned":
+            raise ValueError("short-horizon actor-critic requires the learned intent_shared policy")
+        if args.train_camera_only or args.train_flight_only:
+            raise ValueError("short-horizon actor-critic trains flight and camera together")
+        if args.flight_exploration_std > 0:
+            raise ValueError("short-horizon flight is deterministic; only camera actions use score-function exploration")
+    if (not all(np.isfinite(x) for x in (args.live_flight_guidance_weight, args.live_flight_guidance_margin))
+            or args.live_flight_guidance_weight < 0 or args.live_flight_guidance_margin <= 0):
+        raise ValueError("live flight guidance weight must be nonnegative and margin positive")
+    if args.live_flight_guidance_weight > 0:
+        if args.policy_arch != "intent_shared" or args.scene_layout != "sparse_poles":
+            raise ValueError("live flight guidance requires intent_shared sparse_poles")
+        if not 0 <= args.live_flight_guidance_start_step < args.timesteps:
+            raise ValueError("live flight guidance must leave supervised steps")
+        if args.pole_layout == "parallax_pair" and args.live_flight_guidance_start_step < 24:
+            raise ValueError("parallax guidance cannot label initial measurement actions")
     if args.joint_backward == "consistent" and (args.policy_arch != "intent_shared" or args.grad_decay != 1):
         raise ValueError("consistent joint backward requires intent_shared and grad_decay=1")
     if args.joint_backward == "consistent" and args.scene_layout not in DIFFERENTIABLE_SCENES:

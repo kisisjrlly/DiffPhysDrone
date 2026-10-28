@@ -64,7 +64,8 @@ class IntentModel(nn.Module):
 
     def forward(self, v, hx=None, *, gray_obs=None, add_noise=False, cam_hx=None,
                 camera_state=None, camera_motion_state=None, intent_override=None,
-                camera_timeline=None, action_noise=None):
+                camera_timeline=None, action_noise=None, camera_logit_noise=None,
+                return_camera_logits=False):
         encoded = self.encode_observation(v, gray_obs, add_noise=add_noise)
         action, hx = self.flight_from_encoded(encoded, hx)
         if action_noise is not None:
@@ -86,7 +87,15 @@ class IntentModel(nn.Module):
         if not self.intent_enabled:
             intent = torch.zeros_like(intent)
         cam_input = torch.cat([hx, intent, camera_state, camera_motion_state, camera_timeline], -1)
-        camera = torch.sigmoid(self.fc_cam(self.cam_pre(cam_input)))
+        mean_logits = self.fc_cam(self.cam_pre(cam_input))
+        camera_logits = mean_logits
+        if camera_logit_noise is not None:
+            if camera_logit_noise.shape != camera_logits.shape:
+                raise ValueError("camera_logit_noise must have shape [batch,2]")
+            camera_logits = camera_logits + camera_logit_noise
+        camera = torch.sigmoid(camera_logits)
+        if return_camera_logits:
+            return action, camera, hx, None, camera_logits, mean_logits
         return action, camera, hx, None
 
     def encode_observation(self, state, gray_obs, *, add_noise=False):

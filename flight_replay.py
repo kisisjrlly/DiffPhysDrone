@@ -34,17 +34,20 @@ def masked_action_anchor(actions, targets, valid):
 
 
 class FlightReplayAnchor:
-    def __init__(self, model, args, device, directory):
-        start = time.perf_counter()
-        path = Path(args.flight_replay_dataset).resolve()
-        stored = torch.load(path, map_location="cpu")
-        configuration = stored["dataset_configuration"]
-        for key, value in configuration.items():
+    @staticmethod
+    def validate_configuration(stored, args):
+        for key, value in stored["dataset_configuration"].items():
             if key.startswith("imitation_"):
                 continue
             actual = hashlib.sha256(Path(args.imx900_calibration).read_bytes()).hexdigest() if key == "calibration_sha256" else getattr(args, key)
             if actual != value:
                 raise ValueError(f"replay dataset configuration mismatch: {key}")
+
+    def __init__(self, model, args, device, directory):
+        start = time.perf_counter()
+        path = Path(args.flight_replay_dataset).resolve()
+        stored = torch.load(path, map_location="cpu")
+        self.validate_configuration(stored, args)
         self.data = stored["data"]
         self.device = device
         self.batch = args.flight_replay_batch

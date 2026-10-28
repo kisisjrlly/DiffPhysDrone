@@ -6,8 +6,9 @@
 > including its failed learned-policy pilot. Do not keep training that task as
 > the default or cite its feasibility witness as learned navigation. The new
 > task uses the same actor and sensing/dynamics paths, with three round poles.
-> Current scope is full vs nondifferentiable sensing gradients; no RL baseline
-> implementation is requested in this iteration.
+> The original scope was full vs nondifferentiable sensing gradients. An
+> opt-in actor-critic estimator now exists only to make the sensing-cut arm a
+> legitimate learned-camera control; it is not a separate algorithm claim.
 
 Development branch: `codex/imx900-intent-closed-loop`, based on `d989ad9`
 of `active-sensing-grayscale-imx900`. Date: 2026-10-21.
@@ -37,7 +38,10 @@ its maneuver to obtain a useful observation, using a navigation objective?
 
 This branch implements the learning paths and an independently checked scene.
 It does **not** yet establish learned sensing/motion coordination, superiority
-over reinforcement learning, or real-camera deployment readiness. Historical
+over reinforcement learning, or real-camera deployment readiness. An opt-in
+short-horizon actor-critic estimator is available for a fair diagnostic: the
+full arm keeps pathwise image gradients, while the sensing-cut arm uses the
+same camera exploration and a score-function return estimator. Historical
 five-seed full/detached evidence concerns a different, frozen-flight method.
 Those checkpoints and results are not modified or reused as evidence here.
 
@@ -79,7 +83,10 @@ IDs, depth and lighting labels are simulator internals, never actor inputs.
 The goal is identical for all aperture choices.
 
 Both flight and camera parameters, including the shared visual memory, are
-trained together by full BPTT. There is no image-quality target or E/G teacher.
+trained together by full BPTT by default. The optional short-horizon mode
+truncates the differentiable rollout at a fixed control-step horizon and learns
+a training-only latent cost critic. It does not add a deployed input or a
+camera target. There is no image-quality target or E/G teacher.
 A newly disclosed common flight-only imitation warm start is being tested on
 the sparse-pole task; the original gate pilots did not use it. No PPO is used. Existing velocity,
 collision and action-regularity losses are retained; an explicit terminal
@@ -174,6 +181,22 @@ Frame reception, readout and measured clock domains are not simulated here.
 Hard forward + STE backward saturation is the experiment default. The STE is a
 training approximation. It must not be confused with a finite-difference
 derivative of hard clipping.
+
+## Optional short-horizon actor-critic diagnostic
+
+`--policy_update_mode short_horizon_ac` uses a 16-step differentiable segment,
+then bootstraps through `LatentCostCritic`. The full arm receives the camera
+pathwise gradient. The sensing-cut arm cuts both sensor paths and estimates the
+camera update with a Gaussian score function using the same sampled logit
+noise. The critic is trained on the same masked task costs and is saved only
+for audit; it is not part of inference.
+
+This is an implementation of a standard first-order model-based actor-critic
+pattern, not a new RL algorithm. It is useful here because it prevents a
+camera-gradient cut from being confused with a camera-learning baseline.
+Before any result is interpreted, the pilot manifest must verify identical
+actor initialization, critic initialization, replay targets, source hashes and
+evaluation episode seeds.
 
 ## Verification and development evidence
 

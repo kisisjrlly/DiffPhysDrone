@@ -19,6 +19,7 @@ from rerun_vis import RerunVis
 from sensors.imx900_calibration import IMX900Calibration
 from train_utils import build_env, estimate_optimizer_steps
 from trainer import train
+from actor_critic import LatentCostCritic
 
 faulthandler.enable(all_threads=True)
 
@@ -45,10 +46,10 @@ def _print_cuda_failure_summary(args, device, exc):
     )
 
 
-def _parameter_hash(model, camera):
+def _parameter_hash(model, camera=None):
     digest = hashlib.sha256()
     for name, param in model.named_parameters():
-        if model._is_camera_parameter(name) != camera:
+        if camera is not None and model._is_camera_parameter(name) != camera:
             continue
         digest.update(name.encode())
         digest.update(param.detach().cpu().contiguous().numpy().tobytes())
@@ -94,8 +95,14 @@ def main():
         name=run_name,
         config=args,
         settings=wandb.Settings(code_dir="."),
-        mode="disabled" if args.wandb_disabled else "online",
+        mode="disabled" if args.wandb_disabled else "offline" if args.wandb_offline else "online",
     )
+    with open(os.path.join(checkpoint_dir, "wandb_run.json"), "w") as handle:
+        json.dump({"id": wandb.run.id,
+                   "url": wandb.run.url if not (args.wandb_disabled or args.wandb_offline) else None,
+                   "enabled": not args.wandb_disabled,
+                   "mode": "disabled" if args.wandb_disabled else "offline" if args.wandb_offline else "online",
+                   "directory": wandb.run.dir}, handle, indent=2)
     wandb.save("*.py")
     wandb.save("src/*.cu")
     wandb.save("src/*.cpp")
@@ -118,6 +125,7 @@ def main():
     env_train = build_env(args.batch_size, args, device)
     obs_dim = 7 if args.no_odom else 10
     model = build_policy(args, obs_dim).to(device)
+    critic = LatentCostCritic(latent_dim=128).to(device) if args.policy_update_mode == "short_horizon_ac" else None
     if args.policy_arch == "intent_shared" and not args.resume:
         model.initialize_camera_output(args.fixed_camera_exposure, args.fixed_camera_gain)
 
@@ -157,6 +165,9 @@ def main():
             "observation_grad_mode": args.observation_grad_mode,
             "flight_parameter_sha256": _parameter_hash(model, camera=False),
             "camera_parameter_sha256": _parameter_hash(model, camera=True),
+            "critic_parameter_sha256": _parameter_hash(critic) if critic is not None else None,
+            "actor_parameters": sum(p.numel() for p in model.parameters()),
+            "training_only_critic_parameters": sum(p.numel() for p in critic.parameters()) if critic is not None else 0,
         }, handle, indent=2)
     from train_utils import write_run_provenance
     write_run_provenance(checkpoint_dir, args)
@@ -168,7 +179,7 @@ def main():
     use_amp = bool(args.amp and device.type == "cuda")
     scaler = GradScaler(enabled=use_amp)
     if args.camera_lr_multiplier == 1.0:
-        optim = AdamW(trainable, args.lr)
+        groups = [{"params": trainable, "lr": args.lr, "name": "actor"}]
     else:
         groups = []
         for is_camera, group_name, rate in ((False, "flight_and_shared", args.lr),
@@ -177,7 +188,11 @@ def main():
                       if p.requires_grad and model._is_camera_parameter(name) == is_camera]
             if values:
                 groups.append({"params": values, "lr": rate, "name": group_name})
-        optim = AdamW(groups, args.lr)
+    if critic is not None:
+        groups.append({"params": list(critic.parameters()),
+                       "lr": args.lr * args.critic_lr_multiplier,
+                       "name": "critic"})
+    optim = AdamW(groups, args.lr)
     with open(os.path.join(checkpoint_dir, "optimizer_configuration.json"), "w") as handle:
         json.dump({"type": "AdamW", "groups": [
             {"name": group.get("name", "all_trainable"), "lr": group["lr"],
@@ -208,7 +223,10 @@ def main():
             vis,
             checkpoint_dir,
             device,
+            critic=critic,
         )
+        if critic is not None:
+            torch.save(critic.state_dict(), str(os.path.join(checkpoint_dir, "critic_final.pth")))
     except RuntimeError as exc:
         msg = str(exc).lower()
         if "out of memory" in msg or "cudnn_status_not_initialized" in msg:

@@ -59,6 +59,7 @@ def main():
     parser.add_argument("--eval_seed", type=int, default=721000)
     parser.add_argument("--eval_episodes", type=int, default=8)
     parser.add_argument("--wandb_disabled", action="store_true", help="Online logging is enabled unless explicitly disabled.")
+    parser.add_argument("--wandb_offline", action="store_true", help="Record W&B locally for later sync.")
     cli = parser.parse_args()
     if min(cli.iterations, cli.batch_size, cli.eval_episodes) < 1:
         raise ValueError("budgets must be positive")
@@ -67,15 +68,31 @@ def main():
         raise ValueError(f"refusing to overwrite existing pilot directory: {out}")
     out.mkdir(parents=True, exist_ok=True)
     tokens = shlex.split(Path(cli.config).read_text(), comments=True)
+    # Catch unsupported protocols and stale replay configuration before W&B or
+    # GPU allocation. All conditions are checked before the first is trained.
+    for variant in cli.variants:
+        preflight = build_parser().parse_args([
+            *tokens, "--num_iters", str(cli.iterations), "--batch_size", str(cli.batch_size),
+            *VARIANTS[variant],
+        ])
+        if cli.resume:
+            preflight.resume = str(Path(cli.resume).resolve())
+        preflight.scenarios = parse_scenarios(preflight.scenarios)
+        validate_args(preflight)
+        if preflight.flight_replay_dataset:
+            from flight_replay import FlightReplayAnchor
+            FlightReplayAnchor.validate_configuration(
+                torch.load(preflight.flight_replay_dataset, map_location="cpu"), preflight)
     summary = {"purpose": "development pilot", "training_seed": cli.training_seed,
                "iterations": cli.iterations, "batch_size": cli.batch_size,
                "evaluation_episode_seeds": list(range(cli.eval_seed, cli.eval_seed + cli.eval_episodes)),
                "calibrated": False, "methods": {},
-               "common_checkpoint": str(Path(cli.resume).resolve()) if cli.resume else None,
-               "common_checkpoint_sha256": sha256(cli.resume) if cli.resume else None,
+               "common_checkpoint": str(Path(preflight.resume).resolve()) if preflight.resume else None,
+               "common_checkpoint_sha256": sha256(preflight.resume) if preflight.resume else None,
                "camera_lr_multiplier_override": cli.camera_lr_multiplier,
                "claim": "Checks train/eval integration only; does not establish learned coordination, superiority or real deployment readiness."}
     initials = []
+    critics = []
     anchors = []
     sources = []
     device = torch.device("cuda")
@@ -92,6 +109,8 @@ def main():
             command.extend(["--camera_lr_multiplier", str(cli.camera_lr_multiplier)])
         if cli.wandb_disabled:
             command.append("--wandb_disabled")
+        if cli.wandb_offline:
+            command.append("--wandb_offline")
         (directory / "command.json").write_text(json.dumps(command, indent=2) + "\n")
         print(f"[pilot] training {variant}; log={directory / 'train.log'}", flush=True)
         training_start = time.perf_counter()
@@ -103,6 +122,9 @@ def main():
         if any(value != sources[0] for value in sources[1:]):
             raise RuntimeError("paired executed source snapshots differ; inspect provenance before interpreting this run")
         initial = json.loads((directory / "initialization_manifest.json").read_text())
+        critics.append(initial.get("critic_parameter_sha256"))
+        if len(set(critics)) != 1:
+            raise RuntimeError("matched training-only critic initialization hashes differ")
         if (directory / "flight_replay_manifest.json").exists():
             anchor = json.loads((directory / "flight_replay_manifest.json").read_text())
             anchors.append((anchor["dataset_sha256"], anchor["targets_sha256"]))
@@ -134,7 +156,14 @@ def main():
         (directory / "episodes.json").write_text(json.dumps(rows, indent=2) + "\n")
         (directory / "traces.json").write_text(json.dumps(traces) + "\n")
         method = {"checkpoint": str(checkpoint), "checkpoint_sha256": sha256(checkpoint),
+                  "critic_checkpoint_sha256": sha256(directory / "critic_final.pth") if (directory / "critic_final.pth").exists() else None,
+                  "git_revision": provenance["git_revision"],
+                  "git_status": provenance["git_status"],
+                  "source_sha256": provenance["source_sha256"],
+                  "calibration_sha256": provenance["calibration_sha256"],
+                  "calibrated": provenance["calibrated"],
                   "initialization": initial,
+                  "wandb": json.loads((directory / "wandb_run.json").read_text()),
                   "flight_replay": anchor,
                   "training_process_wall_time_s": training_seconds,
                   "generated_navigation_transitions": cli.iterations * cli.batch_size * args.timesteps,
@@ -151,7 +180,10 @@ def main():
         del env, model
         torch.cuda.empty_cache()
     summary["matched_initialization_verified"] = len(set(initials)) == 1
+    summary["matched_critic_initialization_verified"] = len(set(critics)) == 1 if any(critics) else None
     summary["matched_source_hashes_verified"] = all(value == sources[0] for value in sources)
+    summary["git_revisions"] = sorted({method["git_revision"] for method in summary["methods"].values()})
+    summary["source_sha256"] = sources[0] if sources else None
     summary["matched_replay_targets_verified"] = len(set(anchors)) == 1 if anchors else None
     if "joint" in summary["methods"]:
         reference = [r["success_rate"] for r in summary["methods"]["joint"]["episode_rows"]]

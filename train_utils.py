@@ -35,7 +35,7 @@ class MetricSmoother:
         "iter_per_sec",
         "sim_fps",
     }
-    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/")
+    ALLOWED_PREFIXES = ("loss_contrib/", "loss_share/", "flight/", "ac/")
 
     def __init__(self, args):
         self._q = defaultdict(list)
@@ -190,6 +190,24 @@ def write_run_provenance(directory, args):
         "observation_grad_mode": args.observation_grad_mode,
         "pose_gradient_estimator": args.pose_gradient_estimator,
         "joint_backward": args.joint_backward,
+        "learning_protocol": {
+            "mode": args.policy_update_mode,
+            "horizon_control_steps": args.policy_gradient_horizon,
+            "gamma": args.policy_return_gamma,
+            "camera_logit_noise_std": args.camera_exploration_std,
+            "camera_estimator": "pathwise" if args.sensor_grad_mode == "full" else "score_function",
+            "flight_estimator": "differentiable_dynamics",
+            "critic_parameters_deployed": False,
+        } if args.policy_update_mode == "short_horizon_ac" else None,
+        "live_flight_guidance": {
+            "weight": args.live_flight_guidance_weight,
+            "start_step": args.live_flight_guidance_start_step,
+            "clearance_margin_m": args.live_flight_guidance_margin,
+            "target_source": "detached privileged geometry route on live actor states",
+            "initial_measurement_action_labels": False,
+            "camera_labels": False,
+            "extra_deployed_parameters": 0,
+        } if args.live_flight_guidance_weight > 0 else None,
         "camera_delay_unit": "control_steps", "frame_period_s": 1 / args.base_control_freq,
         "temporal_integration_samples": args.gray_temporal_samples,
         "limitations": limitations,
