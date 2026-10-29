@@ -100,6 +100,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True,
                         help="Seed-101 full camera-policy checkpoint from the frozen-flight slit experiment.")
+    parser.add_argument("--detached_checkpoint", default=None,
+                        help="Optional matched detached camera-policy checkpoint for the same training seed.")
     parser.add_argument("--common_flight_checkpoint", required=True,
                         help="Mean-AE flight checkpoint used to initialize the full camera run.")
     parser.add_argument("--out_dir", required=True)
@@ -111,9 +113,12 @@ def main():
     if cli.episodes_per_scenario < 1:
         raise ValueError("episodes_per_scenario must be positive")
     checkpoint = Path(cli.checkpoint).resolve()
+    detached_checkpoint = Path(cli.detached_checkpoint).resolve() if cli.detached_checkpoint else None
     common_checkpoint = Path(cli.common_flight_checkpoint).resolve()
     if not checkpoint.is_file() or not common_checkpoint.is_file():
         raise FileNotFoundError("both camera-policy and common-flight checkpoints must exist")
+    if detached_checkpoint is not None and not detached_checkpoint.is_file():
+        raise FileNotFoundError(f"detached checkpoint does not exist: {detached_checkpoint}")
     out = Path(cli.out_dir).resolve()
     out.mkdir(parents=True, exist_ok=False)
 
@@ -121,6 +126,29 @@ def main():
     calibration_path = checkpoint.parent / "imx900_calibration.json"
     if not args_path.is_file() or not calibration_path.is_file():
         raise FileNotFoundError("checkpoint args.json and calibration snapshot are required")
+    detached_init = None
+    if detached_checkpoint is not None:
+        detached_args_path = detached_checkpoint.parent / "args.json"
+        detached_calibration_path = detached_checkpoint.parent / "imx900_calibration.json"
+        full_init_path = checkpoint.parent / "initialization_manifest.json"
+        detached_init_path = detached_checkpoint.parent / "initialization_manifest.json"
+        required = (detached_args_path, detached_calibration_path, full_init_path, detached_init_path)
+        if not all(path.is_file() for path in required):
+            raise FileNotFoundError("matched detached args, calibration, and initialization manifests are required")
+        full_training_args = json.loads(args_path.read_text())
+        detached_training_args = json.loads(detached_args_path.read_text())
+        ignored = {"checkpoint_dir", "sensor_grad_mode"}
+        if {k: v for k, v in full_training_args.items() if k not in ignored} != {
+            k: v for k, v in detached_training_args.items() if k not in ignored
+        }:
+            raise ValueError("full and detached training configurations differ beyond sensor_grad_mode")
+        if sha256(calibration_path) != sha256(detached_calibration_path):
+            raise ValueError("full and detached calibration snapshots differ")
+        full_init = json.loads(full_init_path.read_text())
+        detached_init = json.loads(detached_init_path.read_text())
+        for key in ("flight_parameter_sha256", "camera_parameter_sha256"):
+            if full_init.get(key) != detached_init.get(key):
+                raise ValueError(f"full and detached initialization mismatch: {key}")
     args = build_parser().parse_args([])
     vars(args).update(json.loads(args_path.read_text()))
     args.resume = str(checkpoint)
@@ -153,16 +181,27 @@ def main():
     common_flight_hash = flight_parameter_hash(common)
     if learned_flight_hash != common_flight_hash:
         raise RuntimeError("camera checkpoint changed flight weights; intervention is not isolated")
+    detached_flight_hash = None
+    if detached_checkpoint is not None:
+        detached_model = build_policy(args).to(device).eval()
+        detached_model.load_state_dict(torch.load(detached_checkpoint, map_location=device), strict=True)
+        detached_flight_hash = flight_parameter_hash(detached_model)
+        if detached_flight_hash != common_flight_hash:
+            raise RuntimeError("detached checkpoint changed flight weights; comparison is not matched")
+        del detached_model
 
     # The fixed settings were specified before this new held-out evaluation.
     methods = [
-        {"name": "learned_full", "mode": "learned", "exposure": 0.10, "gain": 0.02},
-        {"name": "mean_ae", "mode": "mean_ae", "exposure": 0.10, "gain": 0.02},
-        {"name": "fixed_nominal", "mode": "fixed", "exposure": 0.10, "gain": 0.02},
-        {"name": "fixed_low", "mode": "fixed", "exposure": 0.03, "gain": 0.00},
-        {"name": "fixed_high", "mode": "fixed", "exposure": 0.35, "gain": 0.15},
-        {"name": "fixed_prior_response_best", "mode": "fixed", "exposure": 0.00, "gain": 0.80},
+        {"name": "learned_full", "mode": "learned", "checkpoint_variant": "full", "exposure": 0.10, "gain": 0.02},
+        {"name": "mean_ae", "mode": "mean_ae", "checkpoint_variant": "full", "exposure": 0.10, "gain": 0.02},
+        {"name": "fixed_nominal", "mode": "fixed", "checkpoint_variant": "full", "exposure": 0.10, "gain": 0.02},
+        {"name": "fixed_low", "mode": "fixed", "checkpoint_variant": "full", "exposure": 0.03, "gain": 0.00},
+        {"name": "fixed_high", "mode": "fixed", "checkpoint_variant": "full", "exposure": 0.35, "gain": 0.15},
+        {"name": "fixed_prior_response_best", "mode": "fixed", "checkpoint_variant": "full", "exposure": 0.00, "gain": 0.80},
     ]
+    if detached_checkpoint is not None:
+        methods.insert(1, {"name": "learned_detached", "mode": "learned",
+                           "checkpoint_variant": "detached", "exposure": 0.10, "gain": 0.02})
     if cli.method_filter:
         requested = set(cli.method_filter)
         unknown = requested - {item["name"] for item in methods}
@@ -180,10 +219,15 @@ def main():
         "claim_scope": "Provisional simulator, original single-wall narrow slit, conditional on one frozen flight checkpoint.",
         "checkpoint": str(checkpoint),
         "checkpoint_sha256": sha256(checkpoint),
+        "detached_checkpoint": str(detached_checkpoint) if detached_checkpoint else None,
+        "detached_checkpoint_sha256": sha256(detached_checkpoint) if detached_checkpoint else None,
         "common_flight_checkpoint": str(common_checkpoint),
         "common_flight_checkpoint_sha256": sha256(common_checkpoint),
         "flight_weights_identical": True,
         "flight_parameter_sha256": learned_flight_hash,
+        "detached_flight_parameter_sha256": detached_flight_hash,
+        "matched_initialization": bool(detached_checkpoint is not None),
+        "initial_camera_parameter_sha256": detached_init.get("camera_parameter_sha256") if detached_init else None,
         "calibration_snapshot": str(calibration_path),
         "calibration_sha256": sha256(calibration_path),
         "calibrated": False,
@@ -209,7 +253,10 @@ def main():
         method_args.fixed_camera_gain = method["gain"]
         validate_args(method_args)
         model = build_policy(method_args).to(device).eval()
-        model.load_state_dict(torch.load(checkpoint, map_location=device), strict=True)
+        method_checkpoint = detached_checkpoint if method["checkpoint_variant"] == "detached" else checkpoint
+        if method_checkpoint is None:
+            raise RuntimeError("detached method requested without a detached checkpoint")
+        model.load_state_dict(torch.load(method_checkpoint, map_location=device), strict=True)
         env = build_env(1, method_args, device, eval_mode=True)
         rows = []
         started = time.perf_counter()
@@ -245,6 +292,7 @@ def main():
             }
         summaries[method["name"]] = {
             "mode": method["mode"],
+            "checkpoint_variant": method["checkpoint_variant"],
             "fixed_exposure": method["exposure"],
             "fixed_gain": method["gain"],
             "episodes": len(rows),
