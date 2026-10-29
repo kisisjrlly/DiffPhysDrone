@@ -1,0 +1,700 @@
+{
+  "claim": "Held-out linear cue decoder only; NOT flight training or policy superiority.",
+  "calibrated": false,
+  "train_per_class": 64,
+  "test_per_class": 64,
+  "spatial_supersample": 2,
+  "focused": true,
+  "sensor_resolution": [
+    72,
+    96
+  ],
+  "spatial_filter": "subpixel box-area integration before sensor noise",
+  "train_seed": 391000,
+  "test_seed": 491000,
+  "nuisance": {
+    "yaw_uniform_deg": [
+      -0.25,
+      0.25
+    ],
+    "texture_phase_uniform_rad": [
+      0,
+      6.283185307179586
+    ],
+    "light_factor_uniform": [
+      0.92,
+      1.08
+    ],
+    "frame_noise": true
+  },
+  "ridge_rule": "train-only feature standard deviation with .005 floor; alpha=.1*mean(diag(X X^T)); fixed before evaluating test examples",
+  "rows": [
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.1,
+      "gain01": 0.02,
+      "test_accuracy": 0.96875,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.3,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.6,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.85,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.1,
+      "gain01": 0.02,
+      "test_accuracy": 0.953125,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.3,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.6,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.85,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.1,
+      "gain01": 0.998945492781853,
+      "test_accuracy": 0.9453125,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.3,
+      "gain01": 0.5080675592424262,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.6,
+      "gain01": 0.18456889067912063,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.85,
+      "gain01": 0.02000002083558231,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.1,
+      "gain01": 0.998945492781853,
+      "test_accuracy": 0.9453125,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.3,
+      "gain01": 0.5080675592424262,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.6,
+      "gain01": 0.18456889067912063,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.85,
+      "gain01": 0.02000002083558231,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.1,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.3,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.6,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "exposure01": 0.85,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.1,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.3,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.6,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.85,
+      "gain01": 0.02,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.1,
+      "gain01": 0.998945492781853,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.3,
+      "gain01": 0.5080675592424262,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.6,
+      "gain01": 0.18456889067912063,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "exposure01": 0.85,
+      "gain01": 0.02000002083558231,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.1,
+      "gain01": 0.998945492781853,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.3,
+      "gain01": 0.5080675592424262,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.6,
+      "gain01": 0.18456889067912063,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "exposure01": 0.85,
+      "gain01": 0.02000002083558231,
+      "test_accuracy": 1.0,
+      "test_examples": 128
+    }
+  ],
+  "paired_short_minus_long": [
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": -0.03125,
+      "paired_nuisance_example_bootstrap_95": [
+        -0.0625,
+        -0.0078125
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": -0.046875,
+      "paired_nuisance_example_bootstrap_95": [
+        -0.0859375,
+        -0.015625
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": -0.0546875,
+      "paired_nuisance_example_bootstrap_95": [
+        -0.09375,
+        -0.023242187500001066
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": -0.0546875,
+      "paired_nuisance_example_bootstrap_95": [
+        -0.09394531249999999,
+        -0.0234375
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "stationary",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "fixed_gain",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "stationary",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.1,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.3,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "center_difference_m": 0.005,
+      "gain_mode": "matched_signal",
+      "motion": "translation_yaw_1p5",
+      "short_exposure01": 0.6,
+      "short_minus_long_accuracy": 0.0,
+      "paired_nuisance_example_bootstrap_95": [
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "limitation": "A weak decoder may miss usable cues; examples reuse common physical nuisance/noise seeds across conditions. No learning-rate or test-accuracy tuning."
+}

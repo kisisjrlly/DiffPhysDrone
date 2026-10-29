@@ -87,6 +87,7 @@ def render_scene_irradiance(env, position, rotation):
         ambient=env.gray_nominal_ambient, diffuse=env.gray_nominal_diffuse,
         background_intensity=env.gray_background_intensity,
         texture_strength=env.gray_texture_strength, texture_scale=env.gray_texture_scale,
+        texture_phase=getattr(env, "gray_texture_phase", 0.0),
         detach_geometry=False, return_aux=True,
     )
     if env.scene_layout == "sparse_poles":

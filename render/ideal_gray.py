@@ -52,6 +52,7 @@ def render_ideal_grayscale(
     base_albedo: float = 0.65,
     texture_strength: float = 0.30,
     texture_scale: float = 5.0,
+    texture_phase: ScalarLike = 0.0,
     background_intensity: ScalarLike = 0.08,
     background_depth_threshold: float = 99.0,
     irradiance_max: float = 4.0,
@@ -109,8 +110,9 @@ def render_ideal_grayscale(
     ndotl = (normal * light).sum(dim=-1).clamp_min(0.0)
 
     x, y, z = points.unbind(dim=-1)
-    tex = 0.5 + 0.25 * torch.sin(float(texture_scale) * x) + 0.25 * torch.sin(
-        float(texture_scale) * (1.31 * y + 0.47 * z)
+    phase = _batch_scalar(texture_phase, depth)
+    tex = 0.5 + 0.25 * torch.sin(float(texture_scale) * x + phase) + 0.25 * torch.sin(
+        float(texture_scale) * (1.31 * y + 0.47 * z) + phase
     )
     tex = tex.clamp(0.0, 1.0)
     strength = min(max(float(texture_strength), 0.0), 1.0)

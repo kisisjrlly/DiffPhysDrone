@@ -80,6 +80,23 @@ def test_shutter_responds_to_translation_and_rotation_but_still_camera_does_not_
     assert rotated["temporal_blur_mae"].item() > 1e-6
 
 
+def test_material_phase_is_a_world_property_shared_across_shutter_samples():
+    env = build_env(2, slit_args(batch_size=2), torch.device("cpu"))
+    env.reset("dark")
+    env.voxels[1] = env.voxels[0]
+    env.gray_light_factor[:] = 1
+    position = env.p[:1].expand(2, -1)
+    rotation = (env.R @ env.R_cam)[:1].expand(2, -1, -1)
+    baseline, _ = render_scene_irradiance(env, position, rotation)
+    env.gray_texture_phase = torch.tensor([0., 1.5])
+    changed, _ = render_scene_irradiance(env, position, rotation)
+    torch.testing.assert_close(baseline[0], changed[0], rtol=0, atol=0)
+    assert (baseline[1] - changed[1]).abs().mean() > 1e-4
+    # A repeated frame under the same world phase is identical.
+    repeated, _ = render_scene_irradiance(env, position, rotation)
+    torch.testing.assert_close(changed, repeated, rtol=0, atol=0)
+
+
 def test_motion_boundary_cut_preserves_pixels_and_only_cuts_motion_not_exposure():
     env = build_env(1, slit_args(), torch.device("cpu"))
     env.reset("dark")

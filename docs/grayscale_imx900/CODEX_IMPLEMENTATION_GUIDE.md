@@ -27,6 +27,8 @@ Do not launch a training-method comparison or claim learned camera/flight
 coordination from gradient wiring or the frozen-flight camera results. First
 demonstrate a task-relevant measurement benefit from changing motion and a
 reliable flight baseline under the same timing and disturbances.
+The [precision follow-up](JOINT_SLIT_PRECISION_2026_10_29.md) retains this
+decision after pose/texture nuisance and 2x spatial-integration checks.
 
 ### Historical pole exploration
 
