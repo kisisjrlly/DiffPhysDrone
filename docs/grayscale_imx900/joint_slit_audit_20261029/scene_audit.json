@@ -1,0 +1,5517 @@
+{
+  "scene": {
+    "geometry_kind": "joint_slit",
+    "illumination_scenario": "dark",
+    "slit_center_y": 0.6499999761581421,
+    "slit_half_y": 0.15000000596046448,
+    "world_fixed_lighting": true,
+    "lighting_coordinates": "ray-hit scene x",
+    "transition_x": -0.65,
+    "transition_width": 0.25,
+    "goal_independent_of_slit": true,
+    "enclosed_corridor": true,
+    "legacy_wall_boxes_preserved": true
+  },
+  "calibrated": false,
+  "claim": "Scene physics and optimistic cue audit only; NO learned coordination or algorithm superiority result.",
+  "reference_dynamics_witness": {
+    "success": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ],
+    "collision": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ],
+    "min_transition_clearance_m": [
+      0.0,
+      0.00612359493970871,
+      0.013109095394611359,
+      0.029453672468662262,
+      0.0270240381360054,
+      0.002958424389362335,
+      0.0,
+      0.0,
+      0.0,
+      0.02285636216402054,
+      0.0,
+      0.022182710468769073,
+      0.004423029720783234,
+      0.01937592774629593,
+      0.0,
+      0.011399514973163605,
+      0.014290250837802887,
+      0.01884663850069046,
+      0.0040689557790756226,
+      0.0,
+      0.016257397830486298,
+      0.025425441563129425,
+      0.0,
+      0.022520922124385834,
+      0.0,
+      0.0,
+      0.023214586079120636,
+      0.02049601823091507,
+      0.0,
+      0.02155189961194992,
+      0.017432577908039093,
+      0.0
+    ],
+    "terminal_time_s": [
+      3.200000047683716,
+      4.933333396911621,
+      5.066666603088379,
+      4.933333396911621,
+      5.0,
+      5.0,
+      3.200000047683716,
+      3.133333444595337,
+      3.200000047683716,
+      5.0,
+      3.200000047683716,
+      5.0,
+      5.133333206176758,
+      5.0,
+      3.200000047683716,
+      5.066666603088379,
+      5.0,
+      5.0,
+      5.0,
+      3.2666666507720947,
+      5.0,
+      4.933333396911621,
+      3.200000047683716,
+      5.066666603088379,
+      3.200000047683716,
+      3.200000047683716,
+      5.0,
+      4.933333396911621,
+      3.2666666507720947,
+      5.0,
+      5.0,
+      3.133333444595337
+    ],
+    "max_local_acceleration_command_m_s2": 2.200000047683716,
+    "privileged_oracle": true,
+    "used_for_training": false,
+    "compensates_current_simulator_disturbance": false,
+    "slit_centers_y": [
+      0.010107815265655518,
+      -0.0491081178188324,
+      -0.5888879895210266,
+      0.3455115258693695,
+      -0.3459473252296448,
+      -0.46226269006729126,
+      -0.524360179901123,
+      -0.2595142722129822,
+      0.47769302129745483,
+      -0.11184856295585632,
+      0.2671785056591034,
+      -0.5748563408851624,
+      0.677740216255188,
+      0.501924991607666,
+      -0.22013278305530548,
+      -0.4770822525024414,
+      0.43758586049079895,
+      -0.29651936888694763,
+      -0.10541470348834991,
+      -0.38526299595832825,
+      -0.20177596807479858,
+      -0.25733375549316406,
+      0.602401077747345,
+      -0.5794299840927124,
+      -0.16739746928215027,
+      0.34291765093803406,
+      -0.13596497476100922,
+      -0.09550179541110992,
+      0.4359157383441925,
+      0.0979931652545929,
+      0.13877776265144348,
+      -0.7293118238449097
+    ],
+    "episode_reset_seed": 291030,
+    "dynamics_seed": 291031,
+    "active_speed_m_s_p50_p95_max": [
+      0.7656989693641663,
+      1.4198254108428956,
+      1.5229647159576416
+    ],
+    "active_angular_speed_rad_s_p50_p95_max": [
+      0.31352993845939636,
+      1.4916380167007446,
+      2.0756561756134033
+    ],
+    "reference_speed_is_not_a_hard_speed_limit": true
+  },
+  "lighting_preview": {
+    "dark": {
+      "visible_light_min": 0.11999999731779099,
+      "visible_light_max": 0.11999999731779099,
+      "wall_light": 0.11999999731779099
+    },
+    "bright": {
+      "visible_light_min": 2.200000047683716,
+      "visible_light_max": 2.200000047683716,
+      "wall_light": 2.200000047683716
+    },
+    "dark_to_bright": {
+      "visible_light_min": 0.3809387683868408,
+      "visible_light_max": 2.1999950408935547,
+      "wall_light": 2.056191921234131
+    },
+    "bright_to_dark": {
+      "visible_light_min": 0.12000656127929688,
+      "visible_light_max": 1.9390612840652466,
+      "wall_light": 0.263808012008667
+    }
+  },
+  "disturbance_compensated_dynamics_witness": {
+    "success": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ],
+    "collision": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ],
+    "min_transition_clearance_m": [
+      0.026672013103961945,
+      0.025681503117084503,
+      0.014077670872211456,
+      0.017733342945575714,
+      0.015657074749469757,
+      0.011461369693279266,
+      0.00499165803194046,
+      0.023591794073581696,
+      0.012885697185993195,
+      0.020442984998226166,
+      0.01664368063211441,
+      0.011300452053546906,
+      0.0004503801465034485,
+      0.008717663586139679,
+      0.02164042741060257,
+      0.0013312175869941711,
+      0.010752446949481964,
+      0.013467200100421906,
+      0.024623043835163116,
+      0.012979395687580109,
+      0.01767004281282425,
+      0.02138873189687729,
+      0.0,
+      0.009237177670001984,
+      0.022171981632709503,
+      0.012409888207912445,
+      0.023652561008930206,
+      0.027572907507419586,
+      -6.460398435592651e-05,
+      0.029253609478473663,
+      0.02390659600496292,
+      0.013944722712039948
+    ],
+    "terminal_time_s": [
+      4.933333396911621,
+      5.0,
+      5.066666603088379,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      3.2666666507720947,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      5.0,
+      3.200000047683716,
+      5.066666603088379,
+      5.0,
+      5.0,
+      5.0,
+      4.933333396911621,
+      3.3333332538604736,
+      5.0,
+      5.0,
+      5.066666603088379
+    ],
+    "max_local_acceleration_command_m_s2": 2.200000047683716,
+    "privileged_oracle": true,
+    "used_for_training": false,
+    "compensates_current_simulator_disturbance": true
+  },
+  "cue_definition": "Two slit centers 0.625/0.675m; actual sensor noise followed by 48x36 averaging. Known-pose mean-template decoder, not a policy.",
+  "noise_samples_per_class": 128,
+  "motion_conditions": {
+    "stationary": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      0.0
+    ],
+    "translation": [
+      [
+        0.8,
+        0.6,
+        0.0
+      ],
+      0.0
+    ],
+    "translation_yaw_1": [
+      [
+        0.8,
+        0.6,
+        0.0
+      ],
+      1.0
+    ],
+    "translation_yaw_3_stress": [
+      [
+        0.8,
+        0.6,
+        0.0
+      ],
+      3.0
+    ]
+  },
+  "rows": [
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 90.64663696289062,
+      "policy_resolution_cue_rms": 0.006560603156685829,
+      "temporal_irradiance_mae": 2.419255906715989e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 212.2365264892578,
+      "policy_resolution_cue_rms": 0.01820751465857029,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 347.43975830078125,
+      "policy_resolution_cue_rms": 0.03567788749933243,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 436.99005126953125,
+      "policy_resolution_cue_rms": 0.050236526876688004,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 90.64656066894531,
+      "policy_resolution_cue_rms": 0.0502365343272686,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 212.23626708984375,
+      "policy_resolution_cue_rms": 0.050236526876688004,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 347.4400634765625,
+      "policy_resolution_cue_rms": 0.0502365306019783,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 436.99005126953125,
+      "policy_resolution_cue_rms": 0.050236526876688004,
+      "temporal_irradiance_mae": 2.420468603325787e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 90.62394714355469,
+      "policy_resolution_cue_rms": 0.006557661574333906,
+      "temporal_irradiance_mae": 9.220899755746359e-06
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 212.87826538085938,
+      "policy_resolution_cue_rms": 0.018246563151478767,
+      "temporal_irradiance_mae": 5.3357819524535444e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 338.1625671386719,
+      "policy_resolution_cue_rms": 0.03489573299884796,
+      "temporal_irradiance_mae": 0.0001487745757913217
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 412.5408630371094,
+      "policy_resolution_cue_rms": 0.04799734428524971,
+      "temporal_irradiance_mae": 0.00022252630878938362
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 90.62391662597656,
+      "policy_resolution_cue_rms": 0.0502140074968338,
+      "temporal_irradiance_mae": 9.220899755746359e-06
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 212.87826538085938,
+      "policy_resolution_cue_rms": 0.05034426599740982,
+      "temporal_irradiance_mae": 5.3357819524535444e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 338.16217041015625,
+      "policy_resolution_cue_rms": 0.04913521185517311,
+      "temporal_irradiance_mae": 0.0001487745757913217
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 412.5408630371094,
+      "policy_resolution_cue_rms": 0.04799734428524971,
+      "temporal_irradiance_mae": 0.00022252630878938362
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 90.57048797607422,
+      "policy_resolution_cue_rms": 0.006557699758559465,
+      "temporal_irradiance_mae": 6.702690552629065e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 202.72984313964844,
+      "policy_resolution_cue_rms": 0.017516642808914185,
+      "temporal_irradiance_mae": 0.00026118961250176653
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 324.71514892578125,
+      "policy_resolution_cue_rms": 0.0329386331140995,
+      "temporal_irradiance_mae": 0.00048154598334804177
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 409.54046630859375,
+      "policy_resolution_cue_rms": 0.04527783766388893,
+      "temporal_irradiance_mae": 0.0006541119946632534
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 90.57044982910156,
+      "policy_resolution_cue_rms": 0.05021430179476738,
+      "temporal_irradiance_mae": 6.702690552629065e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 202.72988891601562,
+      "policy_resolution_cue_rms": 0.04833033308386803,
+      "temporal_irradiance_mae": 0.00026118961250176653
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 324.7149658203125,
+      "policy_resolution_cue_rms": 0.04637950658798218,
+      "temporal_irradiance_mae": 0.00048154598334804177
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 409.54046630859375,
+      "policy_resolution_cue_rms": 0.04527783766388893,
+      "temporal_irradiance_mae": 0.0006541119946632534
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 88.02079010009766,
+      "policy_resolution_cue_rms": 0.006410314701497555,
+      "temporal_irradiance_mae": 0.0002155093679903075
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 198.0796661376953,
+      "policy_resolution_cue_rms": 0.016708407551050186,
+      "temporal_irradiance_mae": 0.0005781184008810669
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 333.60675048828125,
+      "policy_resolution_cue_rms": 0.03238331899046898,
+      "temporal_irradiance_mae": 0.0010393713600933552
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 413.4367980957031,
+      "policy_resolution_cue_rms": 0.045272283256053925,
+      "temporal_irradiance_mae": 0.0013739158166572452
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 88.02078247070312,
+      "policy_resolution_cue_rms": 0.04908572509884834,
+      "temporal_irradiance_mae": 0.0002155093679903075
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 198.07981872558594,
+      "policy_resolution_cue_rms": 0.046100322157144547,
+      "temporal_irradiance_mae": 0.0005781184008810669
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 333.6067199707031,
+      "policy_resolution_cue_rms": 0.04559759050607681,
+      "temporal_irradiance_mae": 0.0010393713600933552
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 413.4367980957031,
+      "policy_resolution_cue_rms": 0.045272283256053925,
+      "temporal_irradiance_mae": 0.0013739158166572452
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.16815185546875,
+      "policy_resolution_cue_rms": 0.01138161402195692,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 370.4696350097656,
+      "policy_resolution_cue_rms": 0.03158717602491379,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 604.1353149414062,
+      "policy_resolution_cue_rms": 0.061895519495010376,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 758.5671997070312,
+      "policy_resolution_cue_rms": 0.08715247362852097,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.16818237304688,
+      "policy_resolution_cue_rms": 0.08715248852968216,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 370.4694519042969,
+      "policy_resolution_cue_rms": 0.08715247362852097,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 604.1331787109375,
+      "policy_resolution_cue_rms": 0.08715248107910156,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 758.5671997070312,
+      "policy_resolution_cue_rms": 0.08715247362852097,
+      "temporal_irradiance_mae": 2.013284428059592e-09
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.24942016601562,
+      "policy_resolution_cue_rms": 0.011360261589288712,
+      "temporal_irradiance_mae": 2.1352190742618404e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 371.5189208984375,
+      "policy_resolution_cue_rms": 0.031819846481084824,
+      "temporal_irradiance_mae": 9.282133032684214e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 595.6976928710938,
+      "policy_resolution_cue_rms": 0.06192044913768768,
+      "temporal_irradiance_mae": 0.00023965506261447445
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 748.6146850585938,
+      "policy_resolution_cue_rms": 0.08709309250116348,
+      "temporal_irradiance_mae": 0.00036395565257407725
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.24954223632812,
+      "policy_resolution_cue_rms": 0.08698898553848267,
+      "temporal_irradiance_mae": 2.1352190742618404e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 371.5192565917969,
+      "policy_resolution_cue_rms": 0.08779443800449371,
+      "temporal_irradiance_mae": 9.282133032684214e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 595.6996459960938,
+      "policy_resolution_cue_rms": 0.08718758076429367,
+      "temporal_irradiance_mae": 0.00023965506261447445
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 748.6146850585938,
+      "policy_resolution_cue_rms": 0.08709309250116348,
+      "temporal_irradiance_mae": 0.00036395565257407725
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.3256072998047,
+      "policy_resolution_cue_rms": 0.011364681646227837,
+      "temporal_irradiance_mae": 5.879145646758843e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 368.9154357910156,
+      "policy_resolution_cue_rms": 0.031743116676807404,
+      "temporal_irradiance_mae": 0.0002176192865590565
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 604.1947631835938,
+      "policy_resolution_cue_rms": 0.06231017783284187,
+      "temporal_irradiance_mae": 0.0004965626867488027
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 762.4727783203125,
+      "policy_resolution_cue_rms": 0.08784513920545578,
+      "temporal_irradiance_mae": 0.0006739764357917011
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.32559204101562,
+      "policy_resolution_cue_rms": 0.0870228260755539,
+      "temporal_irradiance_mae": 5.879145646758843e-05
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 368.91571044921875,
+      "policy_resolution_cue_rms": 0.08758272975683212,
+      "temporal_irradiance_mae": 0.0002176192865590565
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 604.1972045898438,
+      "policy_resolution_cue_rms": 0.0877363383769989,
+      "temporal_irradiance_mae": 0.0004965626867488027
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 762.4727783203125,
+      "policy_resolution_cue_rms": 0.08784513920545578,
+      "temporal_irradiance_mae": 0.0006739764357917011
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.63088989257812,
+      "policy_resolution_cue_rms": 0.011426742188632488,
+      "temporal_irradiance_mae": 0.0001383459057251457
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 371.1141662597656,
+      "policy_resolution_cue_rms": 0.03180493786931038,
+      "temporal_irradiance_mae": 0.0004866366653004661
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 606.8092651367188,
+      "policy_resolution_cue_rms": 0.06178091838955879,
+      "temporal_irradiance_mae": 0.00092162677901797
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 731.4559326171875,
+      "policy_resolution_cue_rms": 0.0838652178645134,
+      "temporal_irradiance_mae": 0.0013024724903516471
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 159.63082885742188,
+      "policy_resolution_cue_rms": 0.08749803900718689,
+      "temporal_irradiance_mae": 0.0001383459057251457
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 371.11395263671875,
+      "policy_resolution_cue_rms": 0.0877533033490181,
+      "temporal_irradiance_mae": 0.0004866366653004661
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 606.8101806640625,
+      "policy_resolution_cue_rms": 0.08699110895395279,
+      "temporal_irradiance_mae": 0.00092162677901797
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 731.4559326171875,
+      "policy_resolution_cue_rms": 0.0838652178645134,
+      "temporal_irradiance_mae": 0.0013024724903516471
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 737.3657836914062,
+      "policy_resolution_cue_rms": 0.11942002922296524,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 508.8644714355469,
+      "policy_resolution_cue_rms": 0.05347767099738121,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.2738436789591105e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 736.6395263671875,
+      "policy_resolution_cue_rms": 0.1193646639585495,
+      "temporal_irradiance_mae": 0.00016879451868589967
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 505.7248840332031,
+      "policy_resolution_cue_rms": 0.05529792234301567,
+      "temporal_irradiance_mae": 0.000990228756563738
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0027335984050296247
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.004080497310496867
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.00016879451868589967
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.000990228756563738
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0027335984050296247
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.004080497310496867
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 736.4942016601562,
+      "policy_resolution_cue_rms": 0.11936543881893158,
+      "temporal_irradiance_mae": 0.0012265018303878605
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 429.7707214355469,
+      "policy_resolution_cue_rms": 0.04949488118290901,
+      "temporal_irradiance_mae": 0.004764904268085957
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.009021582081913948
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.012390658725053072
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0012265018303878605
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.004764904268085957
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.009021582081913948
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.012390658725053072
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 715.8466796875,
+      "policy_resolution_cue_rms": 0.1167873665690422,
+      "temporal_irradiance_mae": 0.003927092649973929
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 374.86273193359375,
+      "policy_resolution_cue_rms": 0.044864535331726074,
+      "temporal_irradiance_mae": 0.0110152093693614
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.01956483442336321
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.02524774894118309
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.003927092649973929
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0110152093693614
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.01956483442336321
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.02524774894118309
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1278.4483642578125,
+      "policy_resolution_cue_rms": 0.20682817697525024,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 856.5899047851562,
+      "policy_resolution_cue_rms": 0.09139875322580338,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.794277070312546e-08
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1274.9385986328125,
+      "policy_resolution_cue_rms": 0.20649060606956482,
+      "temporal_irradiance_mae": 0.0003950863247155212
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 881.515625,
+      "policy_resolution_cue_rms": 0.09297583997249603,
+      "temporal_irradiance_mae": 0.001707075338345021
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.004365419037640095
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.006582852685824037
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0003950863247155212
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.001707075338345021
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.004365419037640095
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.006582852685824037
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1275.3426513671875,
+      "policy_resolution_cue_rms": 0.20665967464447021,
+      "temporal_irradiance_mae": 0.0010763468162622303
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 855.8078002929688,
+      "policy_resolution_cue_rms": 0.09076692909002304,
+      "temporal_irradiance_mae": 0.003991402452811599
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.009128674399107695
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.012340746354311705
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0010763468162622303
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.003991402452811599
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.009128674399107695
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.012340746354311705
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1277.9296875,
+      "policy_resolution_cue_rms": 0.20781821012496948,
+      "temporal_irradiance_mae": 0.002559612796176225
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 811.4517822265625,
+      "policy_resolution_cue_rms": 0.08703744411468506,
+      "temporal_irradiance_mae": 0.008974069729447365
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.01675547705963254
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.02356437500566244
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.002559612796176225
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.008974069729447365
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.01675547705963254
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.02356437500566244
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 689.3927612304688,
+      "policy_resolution_cue_rms": 0.10640505701303482,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 553.9581298828125,
+      "policy_resolution_cue_rms": 0.05598960816860199,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 4.0794947864242204e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 688.1165771484375,
+      "policy_resolution_cue_rms": 0.10634559392929077,
+      "temporal_irradiance_mae": 0.00016425804642494768
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 555.7987670898438,
+      "policy_resolution_cue_rms": 0.05776688829064369,
+      "temporal_irradiance_mae": 0.0009044746548170224
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0024682950461283326
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0036774497712031007
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.00016425804642494768
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0009044746548170224
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0024682950461283326
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0036774497712031007
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 685.8600463867188,
+      "policy_resolution_cue_rms": 0.10625545680522919,
+      "temporal_irradiance_mae": 0.001093050726922229
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 450.6374206542969,
+      "policy_resolution_cue_rms": 0.05057680606842041,
+      "temporal_irradiance_mae": 0.004237920278683305
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.008101877989247441
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.011183598078787327
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.001093050726922229
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.004237920278683305
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.008101877989247441
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.011183598078787327
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 659.1444702148438,
+      "policy_resolution_cue_rms": 0.10317473113536835,
+      "temporal_irradiance_mae": 0.0034713969798758626
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 385.10650634765625,
+      "policy_resolution_cue_rms": 0.04524071887135506,
+      "temporal_irradiance_mae": 0.009876837488263845
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.017953227274119854
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.023394763469696045
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0034713969798758626
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.009876837488263845
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.017953227274119854
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.023394763469696045
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1206.938720703125,
+      "policy_resolution_cue_rms": 0.18500582873821259,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 996.2017211914062,
+      "policy_resolution_cue_rms": 0.1015269085764885,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 3.545601146015542e-08
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1206.0848388671875,
+      "policy_resolution_cue_rms": 0.18506640195846558,
+      "temporal_irradiance_mae": 0.0003944704949390143
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1009.4244995117188,
+      "policy_resolution_cue_rms": 0.102681964635849,
+      "temporal_irradiance_mae": 0.0016538649215362966
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.00409538927488029
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.006209911545738578
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0003944704949390143
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0016538649215362966
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.00409538927488029
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.006209911545738578
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1206.4947509765625,
+      "policy_resolution_cue_rms": 0.18538853526115417,
+      "temporal_irradiance_mae": 0.0010373977711424232
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 983.4463500976562,
+      "policy_resolution_cue_rms": 0.10024658590555191,
+      "temporal_irradiance_mae": 0.003748117364011705
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.008700552396476269
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.011816015001386404
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0010373977711424232
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.003748117364011705
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.008700552396476269
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.011816015001386404
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1207.0130615234375,
+      "policy_resolution_cue_rms": 0.18640153110027313,
+      "temporal_irradiance_mae": 0.0024225068045780063
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 926.972412109375,
+      "policy_resolution_cue_rms": 0.09596791118383408,
+      "temporal_irradiance_mae": 0.008620287757366896
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.016102768946439028
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.022579976357519627
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.0024225068045780063
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.008620287757366896
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.016102768946439028
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 0.5,
+      "known_state_template_dprime": 0.0,
+      "policy_resolution_cue_rms": 0.0,
+      "temporal_irradiance_mae": 0.022579976357519627
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 274.0560302734375,
+      "policy_resolution_cue_rms": 0.022486312314867973,
+      "temporal_irradiance_mae": 3.674223925109743e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 576.9559326171875,
+      "policy_resolution_cue_rms": 0.06240583583712578,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 879.3067016601562,
+      "policy_resolution_cue_rms": 0.12228512763977051,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1480.32861328125,
+      "policy_resolution_cue_rms": 0.16022273898124695,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 349.53887939453125,
+      "policy_resolution_cue_rms": 0.16022273898124695,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 774.9087524414062,
+      "policy_resolution_cue_rms": 0.16022273898124695,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1204.5777587890625,
+      "policy_resolution_cue_rms": 0.16022273898124695,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1480.32861328125,
+      "policy_resolution_cue_rms": 0.16022273898124695,
+      "temporal_irradiance_mae": 3.675032389516275e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 274.43194580078125,
+      "policy_resolution_cue_rms": 0.022483354434370995,
+      "temporal_irradiance_mae": 2.6941593205265235e-05
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 581.5458374023438,
+      "policy_resolution_cue_rms": 0.0626903623342514,
+      "temporal_irradiance_mae": 0.00014623135575675406
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 889.5822143554688,
+      "policy_resolution_cue_rms": 0.12311437726020813,
+      "temporal_irradiance_mae": 0.0004071695584570989
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1442.208740234375,
+      "policy_resolution_cue_rms": 0.1618104875087738,
+      "temporal_irradiance_mae": 0.0006085732456995174
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 349.93353271484375,
+      "policy_resolution_cue_rms": 0.16022291779518127,
+      "temporal_irradiance_mae": 2.6941593205265235e-05
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 770.625732421875,
+      "policy_resolution_cue_rms": 0.16111430525779724,
+      "temporal_irradiance_mae": 0.00014623135575675406
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1189.81396484375,
+      "policy_resolution_cue_rms": 0.16171008348464966,
+      "temporal_irradiance_mae": 0.0004071695584570989
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1442.208740234375,
+      "policy_resolution_cue_rms": 0.1618104875087738,
+      "temporal_irradiance_mae": 0.0006085732456995174
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 275.8046569824219,
+      "policy_resolution_cue_rms": 0.022563805803656578,
+      "temporal_irradiance_mae": 0.00016733489974285476
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 585.075439453125,
+      "policy_resolution_cue_rms": 0.06286019086837769,
+      "temporal_irradiance_mae": 0.0006718429358443245
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 896.7924194335938,
+      "policy_resolution_cue_rms": 0.12181580811738968,
+      "temporal_irradiance_mae": 0.001274102833122015
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1384.033203125,
+      "policy_resolution_cue_rms": 0.1593829244375229,
+      "temporal_irradiance_mae": 0.0017137329559773207
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 347.1783142089844,
+      "policy_resolution_cue_rms": 0.16091611981391907,
+      "temporal_irradiance_mae": 0.00016733489974285476
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 755.7432250976562,
+      "policy_resolution_cue_rms": 0.16201013326644897,
+      "temporal_irradiance_mae": 0.0006718429358443245
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1130.3426513671875,
+      "policy_resolution_cue_rms": 0.16073289513587952,
+      "temporal_irradiance_mae": 0.001274102833122015
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1384.033203125,
+      "policy_resolution_cue_rms": 0.1593829244375229,
+      "temporal_irradiance_mae": 0.0017137329559773207
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 277.74359130859375,
+      "policy_resolution_cue_rms": 0.022658368572592735,
+      "temporal_irradiance_mae": 0.0005462537083076313
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 592.6675415039062,
+      "policy_resolution_cue_rms": 0.06203193962574005,
+      "temporal_irradiance_mae": 0.001530317822471261
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 910.65869140625,
+      "policy_resolution_cue_rms": 0.1204482913017273,
+      "temporal_irradiance_mae": 0.0026253516552969813
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1373.7645263671875,
+      "policy_resolution_cue_rms": 0.15903878211975098,
+      "temporal_irradiance_mae": 0.0034468132071197033
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 343.24322509765625,
+      "policy_resolution_cue_rms": 0.16190889477729797,
+      "temporal_irradiance_mae": 0.0005462537083076313
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 730.9103393554688,
+      "policy_resolution_cue_rms": 0.16047069430351257,
+      "temporal_irradiance_mae": 0.001530317822471261
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1133.96630859375,
+      "policy_resolution_cue_rms": 0.15897181630134583,
+      "temporal_irradiance_mae": 0.0026253516552969813
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1373.7645263671875,
+      "policy_resolution_cue_rms": 0.15903878211975098,
+      "temporal_irradiance_mae": 0.0034468132071197033
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 424.2063293457031,
+      "policy_resolution_cue_rms": 0.03632744401693344,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 888.9236450195312,
+      "policy_resolution_cue_rms": 0.10081885755062103,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1359.59814453125,
+      "policy_resolution_cue_rms": 0.1975560039281845,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 3079.7666015625,
+      "policy_resolution_cue_rms": 0.2584086060523987,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 595.765380859375,
+      "policy_resolution_cue_rms": 0.2584085762500763,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1477.64990234375,
+      "policy_resolution_cue_rms": 0.2584086060523987,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2456.88720703125,
+      "policy_resolution_cue_rms": 0.2584086060523987,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 3079.7666015625,
+      "policy_resolution_cue_rms": 0.2584086060523987,
+      "temporal_irradiance_mae": 3.2596964016917696e-09
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 423.77545166015625,
+      "policy_resolution_cue_rms": 0.036295514553785324,
+      "temporal_irradiance_mae": 5.694810715795029e-05
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 887.12646484375,
+      "policy_resolution_cue_rms": 0.10146301984786987,
+      "temporal_irradiance_mae": 0.00023586305906064808
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1363.337890625,
+      "policy_resolution_cue_rms": 0.19997939467430115,
+      "temporal_irradiance_mae": 0.000600493251113221
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2988.606201171875,
+      "policy_resolution_cue_rms": 0.2625827193260193,
+      "temporal_irradiance_mae": 0.0008764545200392604
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 595.134033203125,
+      "policy_resolution_cue_rms": 0.2582043409347534,
+      "temporal_irradiance_mae": 5.694810715795029e-05
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1470.644287109375,
+      "policy_resolution_cue_rms": 0.26029884815216064,
+      "temporal_irradiance_mae": 0.00023586305906064808
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2397.767333984375,
+      "policy_resolution_cue_rms": 0.26205676794052124,
+      "temporal_irradiance_mae": 0.000600493251113221
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 0.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2988.606201171875,
+      "policy_resolution_cue_rms": 0.2625827193260193,
+      "temporal_irradiance_mae": 0.0008764545200392604
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 423.87225341796875,
+      "policy_resolution_cue_rms": 0.03630615025758743,
+      "temporal_irradiance_mae": 0.0001389300414302852
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 886.3916625976562,
+      "policy_resolution_cue_rms": 0.10161495208740234,
+      "temporal_irradiance_mae": 0.000514227562234737
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1371.96923828125,
+      "policy_resolution_cue_rms": 0.19966673851013184,
+      "temporal_irradiance_mae": 0.001129462558310479
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2901.32861328125,
+      "policy_resolution_cue_rms": 0.2610187232494354,
+      "temporal_irradiance_mae": 0.0015057142009027302
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 594.0684204101562,
+      "policy_resolution_cue_rms": 0.25835561752319336,
+      "temporal_irradiance_mae": 0.0001389300414302852
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1449.0391845703125,
+      "policy_resolution_cue_rms": 0.2609332799911499,
+      "temporal_irradiance_mae": 0.000514227562234737
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2374.172119140625,
+      "policy_resolution_cue_rms": 0.2621172070503235,
+      "temporal_irradiance_mae": 0.001129462558310479
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 1.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2901.32861328125,
+      "policy_resolution_cue_rms": 0.2610187232494354,
+      "temporal_irradiance_mae": 0.0015057142009027302
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 423.8575439453125,
+      "policy_resolution_cue_rms": 0.036417268216609955,
+      "temporal_irradiance_mae": 0.0003135834776912816
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 893.8587036132812,
+      "policy_resolution_cue_rms": 0.10169006884098053,
+      "temporal_irradiance_mae": 0.0010986831621266901
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1356.20361328125,
+      "policy_resolution_cue_rms": 0.1960909515619278,
+      "temporal_irradiance_mae": 0.0020416731131263077
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "fixed_gain",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2730.60986328125,
+      "policy_resolution_cue_rms": 0.25313130021095276,
+      "temporal_irradiance_mae": 0.0028693299973383546
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.1,
+      "exposure_us": 890.0,
+      "gain01": 0.998945492781853,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 589.48486328125,
+      "policy_resolution_cue_rms": 0.2593711018562317,
+      "temporal_irradiance_mae": 0.0003135834776912816
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.3,
+      "exposure_us": 2470.0,
+      "gain01": 0.5080675592424262,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 1433.9029541015625,
+      "policy_resolution_cue_rms": 0.2616899311542511,
+      "temporal_irradiance_mae": 0.0010986831621266901
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.6,
+      "exposure_us": 4840.0,
+      "gain01": 0.18456889067912063,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2294.937255859375,
+      "policy_resolution_cue_rms": 0.2582896947860718,
+      "temporal_irradiance_mae": 0.0020416731131263077
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "gain_mode": "matched_signal",
+      "exposure01": 0.85,
+      "exposure_us": 6815.0,
+      "gain01": 0.02000002083558231,
+      "velocity_m_s": [
+        0.8,
+        0.6,
+        0.0
+      ],
+      "yaw_rate_rad_s": 3.0,
+      "known_state_template_accuracy": 1.0,
+      "known_state_template_dprime": 2730.60986328125,
+      "policy_resolution_cue_rms": 0.25313130021095276,
+      "temporal_irradiance_mae": 0.0028693299973383546
+    }
+  ],
+  "sampled_exposure_preferences": [
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "dark_to_bright",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": null,
+      "best_template_accuracy": 0.5
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -1.0,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "stationary",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_1",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    },
+    {
+      "scenario": "bright_to_dark",
+      "x": -0.4,
+      "motion": "translation_yaw_3_stress",
+      "best_sampled_exposure01_by_dprime": 0.85,
+      "best_template_accuracy": 1.0
+    }
+  ],
+  "temporal_sampling_check": {
+    "9_vs_33_policy_irradiance_mae": 2.3650249204365537e-05,
+    "17_vs_33_policy_irradiance_mae": 1.2359704669506755e-05
+  },
+  "data_used_for_training": false,
+  "training_gate": {
+    "passed": false,
+    "motion_dependent_preference_changes": [],
+    "reliable_dynamics_witness": false,
+    "reasons": [
+      "No shorter-exposure preference with >10% template-dprime gain under motion in dark / bright-to-dark sampled states.",
+      "Privileged waypoint tracker does not reliably traverse all 32 randomized slits; tracking errors confound navigation results."
+    ],
+    "interpretation": "Exploratory scene-readiness screen; >10% is an engineering heuristic, not a significance test. A pass would still not prove learned coordination or method superiority."
+  },
+  "omitted_from_tracked_copy": [
+    "oracle local_trajectory arrays; available in the local full result"
+  ],
+  "full_local_result_sha256": "e1b35f933051004c0b8e123e9334b34ddb2634f6e4d3204aa0e4a7f18bcd0559"
+}

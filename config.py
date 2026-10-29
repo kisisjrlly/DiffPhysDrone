@@ -285,6 +285,15 @@ def validate_args(args):
             raise ValueError("both intent gates must lie between start and goal")
         if args.intent_gate_spacing <= 2 * 0.1 + 2 * 0.12:
             raise ValueError("intent gates are too close for the vehicle")
+    if args.scene_layout == "joint_slit":
+        half_min = args.simple_slit_half_y if args.simple_slit_half_y_min is None else args.simple_slit_half_y_min
+        half_max = args.simple_slit_half_y if args.simple_slit_half_y_max is None else args.simple_slit_half_y_max
+        if not (0.12 < half_min <= half_max < 0.5):
+            raise ValueError("joint slit half width must exceed body radius (0.12m) and be < 0.5m")
+        if max(abs(args.simple_slit_center_y_min), abs(args.simple_slit_center_y_max)) + half_max >= 1.2:
+            raise ValueError("joint slit must fit inside the 1.2m corridor half width")
+        if not (args.simple_wall_x < args.simple_goal_x < args.simple_back_wall_x_min - .22):
+            raise ValueError("joint slit goal must be ahead of the slit and clear of the back wall")
     if args.scene_layout == "sparse_poles" and args.pole_layout == "stratified":
         if not 1 <= args.pole_count <= 5:
             raise ValueError("pole_count must be between 1 and 5")

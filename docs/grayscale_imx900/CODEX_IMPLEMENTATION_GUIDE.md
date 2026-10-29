@@ -15,7 +15,22 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
-The current joint-learning task is specified by
+### Current decision (2026-10-29)
+
+The user returned the work to the **single-slit** task. See
+[JOINT_SLIT_AUDIT_2026_10_29.md](JOINT_SLIT_AUDIT_2026_10_29.md).
+`joint_slit` is an opt-in scene-physics prototype, not a replacement for the
+frozen `single_wall_slit` experiment. Its first readiness screen **fails**:
+the sampled motion does not create a shorter-exposure preference, and the
+diagnostic tracker is unreliable at the original 3cm lateral body clearance.
+Do not launch a training-method comparison or claim learned camera/flight
+coordination from gradient wiring or the frozen-flight camera results. First
+demonstrate a task-relevant measurement benefit from changing motion and a
+reliable flight baseline under the same timing and disturbances.
+
+### Historical pole exploration
+
+The earlier joint-learning task was specified by
 [SPARSE_POLES_PROTOCOL.md](SPARSE_POLES_PROTOCOL.md), using three round poles.
 The double-gate scene is historical development evidence, not the default next
 training target. Check blind-route shortcuts and fixed-camera visual learning

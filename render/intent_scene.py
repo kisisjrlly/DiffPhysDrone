@@ -13,6 +13,7 @@ from .ideal_gray import render_ideal_grayscale
 from .pose import body_angular_velocity, rotation_exp
 from .pole_scene import trace_pole_scene, surface_light_scale
 from .pose_gradient import image_warp_pose_surrogate
+from .slit_scene import slit_surface_light
 
 
 def build_intent_gates(env, *, centers=None, half_widths=None):
@@ -90,6 +91,8 @@ def render_scene_irradiance(env, position, rotation):
     )
     if env.scene_layout == "sparse_poles":
         light = surface_light_scale(env, aux["points"])
+    elif env.scene_layout == "joint_slit":
+        light = slit_surface_light(env, aux["points"])
     else:
         light = env.surface_lights.gather(1, ids.flatten(1)).reshape_as(depth)
     image = image * light[:, None] * env.gray_light_factor[:, None, None, None]

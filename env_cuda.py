@@ -29,6 +29,7 @@ from render.box_scene import box_clearance, swept_box_collision
 from render.intent_scene import build_intent_gates, render_exposure
 from render.pole_scene import build_sparse_poles, cylinder_clearance, swept_cylinder_clearance
 from render.scene_types import DIFFERENTIABLE_SCENES
+from render.slit_scene import build_joint_slit
 
 
 class Env:
@@ -328,6 +329,8 @@ class Env:
         ])
         if self.scene_layout == "intent_gates":
             build_intent_gates(self)
+        elif self.scene_layout == "joint_slit":
+            build_joint_slit(self)
 
         start_local = torch.stack([
             torch.full((B,), self.simple_start_x, device=device),
@@ -398,6 +401,16 @@ class Env:
 
     def get_scene_effects_for_env(self, env_idx=0):
         idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        if self.scene_layout == "joint_slit":
+            return {
+                "geometry_kind": "joint_slit", "illumination_scenario": self.current_scene_names[idx],
+                "slit_center_y": float(self.slit_center_y[idx].detach().cpu()),
+                "slit_half_y": float(self.slit_half_y[idx].detach().cpu()),
+                "world_fixed_lighting": True, "lighting_coordinates": "ray-hit scene x",
+                "transition_x": self.gray_transition_x, "transition_width": self.gray_transition_width,
+                "goal_independent_of_slit": True, "enclosed_corridor": True,
+                "legacy_wall_boxes_preserved": True,
+            }
         if self.scene_layout == "sparse_poles":
             return {
                 "geometry_kind": "sparse_poles", "illumination_scenario": self.current_scene_names[idx],

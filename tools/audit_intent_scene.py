@@ -58,7 +58,8 @@ def feasible_path(env):
 
 
 @torch.no_grad()
-def executed_dynamics_audit(template_env, args, *, local_points=None, durations=None):
+def executed_dynamics_audit(template_env, args, *, local_points=None, durations=None,
+                            record_camera_states=False, compensate_current_disturbance=False):
     """Privileged waypoint tracker checks reachability in the actual dynamics.
 
     This is deliberately an oracle diagnostic, never actor supervision or a
@@ -98,12 +99,23 @@ def executed_dynamics_audit(template_env, args, *, local_points=None, durations=
     minimum = env.p.new_full((batch,), 100)
     terminal_time = env.p.new_full((batch,), args.timesteps * dt)
     trajectory, maximum_command = [env.p.clone()], 0.0
+    camera_states = []
     for step in range(args.timesteps):
+        if record_camera_states:
+            camera_states.append({
+                key: getattr(env, key).detach().cpu().tolist()
+                for key in ("p", "v", "R", "R_old")
+            })
+            camera_states[-1].update(time_s=step * dt, alive=alive.cpu().tolist())
         horizon = 2 * dt + 1 / env.fixed_pitch_ctl_delay
         p, v, a = reference(step * dt + horizon)
         predicted_p = env.p + env.v * horizon + .5 * env.a * horizon**2
         predicted_v = env.v + env.a * horizon
         command_world = a + 6 * (p - predicted_p) + 4 * (v - predicted_v) + env.fixed_drag_linear * env.v
+        if compensate_current_disturbance:
+            # Privileged reachability diagnostic only: compensate the CURRENT
+            # known disturbance. The next random innovation remains unknown.
+            command_world = command_world - env.dg
         frame = build_local_frame(env)
         command_local = (command_world[:, None] @ frame).squeeze(1)
         command = decode_action_direct(command_local, frame, env, batch, args.max_acc_cmd)
@@ -127,7 +139,9 @@ def executed_dynamics_audit(template_env, args, *, local_points=None, durations=
         "terminal_time_s": terminal_time.cpu().tolist(),
         "max_local_acceleration_command_m_s2": maximum_command,
         "local_trajectory": local_trajectory.cpu().tolist(),
+        **({"camera_states": camera_states} if record_camera_states else {}),
         "privileged_oracle": True, "used_for_training": False,
+        "compensates_current_simulator_disturbance": compensate_current_disturbance,
     }
 
 
