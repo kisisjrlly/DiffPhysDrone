@@ -15,6 +15,19 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+### Bounded input-scale diagnosis (2026-11-02)
+
+The user authorized a same-noisy-frame 48x36 vs 96x72 image probe only.
+See [SENSING_SCALE_2026_11_02.md](SENSING_SCALE_2026_11_02.md).
+Replay of the historical reference trajectory is exact. The 24 sensor
+conditions / 48 readouts show no >=10pp change in relative exposure benefit
+under the selected actual motion; the maximum is 3.125pp. Near-wall readouts
+saturate at 100%. **Do not start policy training, enlarge the matrix or increase
+input resolution on the basis of this screen.** No candidate triggered the
+single optional gain follow-up. This is a fixed-rule diagnostic decoder, not
+navigation success or proof that native images contain no additional information.
+The production preprocessing, geometry and calibration remain unchanged.
+
 ### Bounded occlusion follow-up (2026-11-02)
 
 The user authorized an independent `occluded_route` scene and diagnosis only,

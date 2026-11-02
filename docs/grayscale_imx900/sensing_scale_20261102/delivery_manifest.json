@@ -1,0 +1,25 @@
+{
+  "execution": "logs/sensing_scale_20261102_final",
+  "calibrated": false,
+  "policy_training": false,
+  "total_sensor_conditions": 24,
+  "total_readout_results": 48,
+  "gain_followup_performed": false,
+  "reference": "historical 32-layout diagnostic replay; first successful episode index 1, not a learned flight trajectory",
+  "source_and_results_sha256": {
+    "tools/audit_sensing_scale.py": "f33d43536ea49812be58cd3ddafe9ce822631d7ce6d834f3e7911160b2039b91",
+    "tests/test_sensing_scale.py": "a94a547ab8c68d0d94fa7b73a1213484bedcdc7922fb2fa60d5483106d60a7db"
+  },
+  "debug_note": "Initial run stopped before image screening because tracked historical summary omits raw trajectory. Replay now verifies summary and available local raw trajectory. One completed development run used same samples; final run clarifies that relative exposure-effect changes need not reverse preference. All final numerical rows unchanged; repeated computation is not independent evidence.",
+  "verification": {
+    "pytest_passed": 160,
+    "warning": "existing PyTorch TypedStorage deprecation"
+  },
+  "limitations": [
+    "Only one successful privileged reference trajectory and two states",
+    "No policy recurrent memory tested",
+    "Fixed linear decoder may have different estimation error at different input dimension; native information superiority not disproved",
+    "Near state is a probe ceiling, far state is not",
+    "Optical displacement is constant-twist endpoint projection, not measured camera blur"
+  ]
+}

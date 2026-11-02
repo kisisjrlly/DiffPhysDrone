@@ -1,0 +1,1274 @@
+[
+  {
+    "condition": "-1.0_dark_stationary_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "7cf4a3f83893669602ec567dbee5e1e34d7d48b2ea26c01a37c97a30d34566ce",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "c3b7de99d042c40153d4845696d75a6f817ab6b81d8a93119e024c67b4d4e0d3",
+          "96x72": "43fd47c166dcab714d3d12178a5c220613edc3732cf5def4acb3771fdcd2a74c"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5834102034568787,
+        "temporal_irradiance_mae": 2.5348292354010482e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "77bbb21b4e8d9366d0faaf1593e02dd694b086e75cdb0814cc858fe827f8a5fb",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "03170dfd46be7a2f0623b620071dc5ee5a430736c012f7e6dce99aa31af306f0",
+          "96x72": "8d8a02fba08ebc64e1aea9750efe952e30867d9c85b8d9ef90ffe2b7eac5aafe"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.523084819316864,
+        "temporal_irradiance_mae": 2.582547953267067e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "373c10dcea57e7ba69b1e944903601c1ced521f1dd3c06109bf2c066d912d72b",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "a684c27a12076d9fd2f6d5a919eb51e2075e6942183650ef54866223fa84471a",
+          "96x72": "05a7060a25d3cc27ff1e2b152f87ede296717320433840a24f6b73d9488e5e13"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5254629850387573,
+        "temporal_irradiance_mae": 2.510403440680875e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "b7292394a82a5673c229246dd4baedc65f545b6c1152db08533500fade3bc6e4",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "cf22508e285e4c860c28f2d6bd4ea3ca566bf976ca4ecd831b450a5419073916",
+          "96x72": "1c2aaf6c2342fd45b78fc9070be6f5f596d834b1a7b633e461e0b48f91f2139a"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5535391569137573,
+        "temporal_irradiance_mae": 2.5277340220952738e-09
+      }
+    }
+  },
+  {
+    "condition": "-1.0_dark_stationary_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "f2dbd9775b6eb39f400ddf674601f950696ccfa98de6a9de0aee13692cb8d19b",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "1655d3dcaef3d73b5c87c32b87a6ec8296fb0fc29163149ac1ca57f92c17663d",
+          "96x72": "2abd20190e3d2a00d2e9af7af1a5d6c295139639580a78daf611132b777ef552"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001980251632630825,
+        "temporal_irradiance_mae": 2.5348292354010482e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "c236f20d62bcd2c3e905161ebf800cfce039bf08d82054d1862c9f5146f967c6",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "dc52fb1ab7c7e0240668ebe62db311123b48ad3e6f0b2165bfdd37baa9ba140c",
+          "96x72": "e18780d962f86e359c73c1492d7021bb77746c0f16304c23a8219e748dfa818a"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0013563368702307343,
+        "temporal_irradiance_mae": 2.582547953267067e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "b43fbed1693a80769a6a97b397e4ccc7f31576dbef0a74cee077458ebca08680",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "1eae875884ad77868b53f2935543d37c118f92e47a3d77a581e12bbb5813372e",
+          "96x72": "8f06252939e38e3035a8fe8b01e8d83178f39a2d888576b1fadb10ca758c1377"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0016140409279614687,
+        "temporal_irradiance_mae": 2.510403440680875e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "a36df603a2fc0da0c706e1cb69bc34ace470e1155ffddcb6e9e4d30c827971aa",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "76ed1558389326e651729992249b6e0c1a6e226ddf88c236636cbf38f0122cee",
+          "96x72": "d0453deda9a6d057c2c87911f2bf318cfe0846e39a95adb33c36242f4b6e5acc"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001270435517653823,
+        "temporal_irradiance_mae": 2.5277340220952738e-09
+      }
+    }
+  },
+  {
+    "condition": "-1.0_dark_stationary_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "e93a7c0c35dd8304a835e6eaf999fd87e72049f9e4849f7b029566ff0c8fac82",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "e8f7b0187f7359e756d6ce84f769994b94b9faab03d2e9c7c04d6afef2c7890b",
+          "96x72": "2ce425c217d88add44d011380705dd960952713aeb716a3bba9a7994709df4f3"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.5348292354010482e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "c36ebb230cdd6867d03124e17252521bc7a0ee08d0f9f2029a89fc9eebe365a0",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "0c5501758dbe5d3f867429cf1c6dc0d1d6554c2585097b775005b9b3341c25e0",
+          "96x72": "9ff3a40a46b6bd0ba19eb86e12c1b3348ed710be0883f29cddd90da79292549e"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.582547953267067e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "059c5cc0d3e2682e0f192fde3add1bb026260f19dd9bb4e5ef45d8eea856d642",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "00555fe2170905718ae979a64333ebf2ee44eb602d30e31c9a7134dc1f4fbb06",
+          "96x72": "3a6a8f94288e24fe6ef152090c52caff09e1e9b05c6bf2f0f3483e182d269b66"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.510403440680875e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "85576e7f1d94ae3c51f17716c9721da7e1a8aaaf1ca998677be9ca353668306d",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "8ae585edc1bc5e5d76aa9de35c97cf877f7009457262d70213e8018b495ec24a",
+          "96x72": "4d42d7ac9885597f4d4fd867c8096acd77982c99e998e313aa2513755d5fb45b"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.5277340220952738e-09
+      }
+    }
+  },
+  {
+    "condition": "-1.0_dark_moving_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "76397579a92aa33f3a1b91facd136614be4aae74b9e0f5ae4d13d563f1def4e4",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "d5bd5c35e934c3a95245399c9ba0a9e6ece3da42beed0a5504faaf2f4f10e401",
+          "96x72": "283f4c87a1f0a8c01ea1369e84ba5be1c8fb1107baf0d373105a27fb966a9fac"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5834146738052368,
+        "temporal_irradiance_mae": 8.85247573023662e-06
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "511ce577c0ad4d988a8c7a6874c2db986496d91d1f283722818827ca1376e0c2",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "0d36f5f936704aea68d4900d9bcd1b55e33b42431bda9aa3be8fd3a928f73b79",
+          "96x72": "575a10d5409df026d7a45c1506a7e1cdbe975ddd11ef74af293a4272bc0ca9a4"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5230984687805176,
+        "temporal_irradiance_mae": 1.029246959660668e-05
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "982c8bdaf3f6b1168b519a7d61986f23c6877305a4554de1aa477dcb7ab67ac0",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "ba6ac62a394429a74228ccfa6056af3460cce45b52fec29e915da354320f36b1",
+          "96x72": "ffdfbf6257142bd47ace7abec14a4e1dee5f85e68593e7c64c91ee1546d486fc"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5255126953125,
+        "temporal_irradiance_mae": 9.472269994148519e-06
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "5b26ffb80c9c9809a25b6bbd94855ba85130a9c82f8211e5d2c515d24e38ca32",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "1a9896feaffc71f9c05d46ce46f37b9d950dc7f23568cbc28a2839c905456f84",
+          "96x72": "35869a4ca74c4db6493dccc487c8d26a653d16d808426d38029a70a02e2080c1"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.5535572171211243,
+        "temporal_irradiance_mae": 9.734039849718101e-06
+      }
+    }
+  },
+  {
+    "condition": "-1.0_dark_moving_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "6b346f681258c48f80c5d8d32d43c154f459220c789f54914fc3f7ccf6a53c7b",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "40f737a2361e0f8908cf8503ac016b0d6179b1c3372446e3d31ca734cc616447",
+          "96x72": "ba4955e631554eaad1dac75c72c195c138ffb0b0b3841c19feec1fea56a36499"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001948604010976851,
+        "temporal_irradiance_mae": 4.777598223881796e-05
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "77293fe777f7436a0594ad3d5a67cdec403f83a702c1d63f6cff83cb605748a8",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "9123bc992725386bf93988a574f8853d784b7713ace218ce5855b8ef6aa42a74",
+          "96x72": "8a211af3a72e13893f55b0512de27ca8eb3f9be37cb07fbd5d8759f296e1e92e"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0013472945429384708,
+        "temporal_irradiance_mae": 5.6448785471729934e-05
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "5d2f61b30ab7bb573c11a38a3af1d548b05a5801bdac80ad6b4a4c6e22d07b62",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "3fd97c0e7b9cd0e3a06dcf7656cbf97c150e2f84769e5f4239a0cac09730e292",
+          "96x72": "34182233031881b23ca82e7e5dbbda4eadbfbbcf21810005a1f1e7d9629b9bba"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001604998717084527,
+        "temporal_irradiance_mae": 4.849452307098545e-05
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "3c66bc1463e67afc80913201216051dd5601ac5534ac226a17e2659450930bef",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "97784118ffb99c2aa3d7b81b42744fd3ee2236cb283627a7cc6876cdd47f7a87",
+          "96x72": "466b6328e845e7a0d5eb10b76fe45991701cc22c8e086e1f0b98b321e3f8196c"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001270435517653823,
+        "temporal_irradiance_mae": 5.600290387519635e-05
+      }
+    }
+  },
+  {
+    "condition": "-1.0_dark_moving_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "aeec95b6675b4e0f4018689f9c001b1edf3ce22a034a7993d4030bbbcb3c5ef9",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "ef7c9b35d7f613451546917e603a0e92a0d1d6e1a312ad47fdcc103c5cb66f7d",
+          "96x72": "d506779db307f31466bff62e224327f279a9a48ba40e1ae8c2d15474c1d14fc5"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 6.878087879158556e-05
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "3eafcc637bbe8900c53ad0ace8f933b58cb91b5392a6f2c0e2e008acf2cf2913",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "eb388cf5b45ae4a12dac3328fa3b0022d5c1ba0b7056661d3381a9b21540aed2",
+          "96x72": "d137e4444be6925bbf7dbe453f6ee5edd07a75198b7a9422bf33358f7c70c07b"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 8.094668737612665e-05
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "25dee8a692e9656baf97bfd17211548250babaf2e9d6660679758535a3424295",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "9b11c6c01dacb5732f44010eba86f9606226b4d3306ff8e808833c18cada1039",
+          "96x72": "f3d35dfde3504f558cfad1adb0c0e9fae68e0bbd8f86bd6d0475852473f75218"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 6.951671093702316e-05
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "f0442e3645c0bd390b22fd2d7de0ef0c630ecc7ae66b01fe554bd720b4f64e41",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "da1b0077ab2bf0f3149f599b3f137270857808f97b0738f94907a5a4638853bc",
+          "96x72": "acc306f2600aa8a1e80c89ccbbfb5b6dd35ed6af9cffc797ecd313dc9fb36e1e"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 8.056430669967085e-05
+      }
+    }
+  },
+  {
+    "condition": "-1.0_bright_to_dark_stationary_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "24688cc0c1a668f8bcbae28c3e6c3839ba1d9b9f81c800447fa1abb51532c2f7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "9f0deb83614fb2c797667f33266e97a0a50cbd93e3e5dc694c93f214b3813597",
+          "96x72": "21353c3e77dabea109305583b97f14d5862df42e35dec081eebd32442fb8827e"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.146145299077034,
+        "temporal_irradiance_mae": 4.445563916988249e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "0fd82b4b40441dfea076787a2e8273051d21e49144dd2194fbff562fd8b6c6d7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "d949f390d72d2f6979850a0365abeb64570dcb5c1d3bd7320cf88ab89d042d3b",
+          "96x72": "aa73d3e035c2b348d9f73c59c8cbadfefc1fe65908f1444b7402f171eb659cb0"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.1420084536075592,
+        "temporal_irradiance_mae": 4.582610735326398e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "cd21528e8f5efe0e38f8d37269bb9ddfd485e3cc1a4b5258b9498be333e07650",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "aa6a859c73919c9e685feb8d160aaecda1e9719a8963430ca7df8457b5e2cf8a",
+          "96x72": "ee65aaa765f1bc150af2d0304d076dc920138e507f34ce80b68bc3e255a9393f"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.13832375407218933,
+        "temporal_irradiance_mae": 4.599714831243773e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "294556950b6e21408513e98da6d23147c50ce812783211596bdbe719c7a668eb",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "78f59e0abe89c6ea65142a74eac93c0c761da90724bdb5184b9f417239ad0ece",
+          "96x72": "2317d9e778038d350c50d576f137fd026f1019770666d5aa22fa570a1bcd96d7"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.14261430501937866,
+        "temporal_irradiance_mae": 4.499202788110779e-09
+      }
+    }
+  },
+  {
+    "condition": "-1.0_bright_to_dark_stationary_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "64f59f704f32b1f384d7692551b0f1c71701674dc44bf8051779292791971fba",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "24585edefbd5547f78c66cc56f6d1002bb632319d9f9e1734d3fdde9610474d9",
+          "96x72": "0a7095e5128cf8fec0e5993ee1ac6926510cff4b4d1b5d143f71abce54606822"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0008454499184153974,
+        "temporal_irradiance_mae": 4.445563916988249e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "d160bf996338ab2eeeabda35a0b2b564ccd76c20ebbd1d93237e6d9cbbadb2c1",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "8b5ce419bec233ed65cb300aa5a3e6028ce66fad8e85e67e99bdc31fe41f62ea",
+          "96x72": "0a5167c433f343385557a212a96b6c92c22778e3e3ec32ecbee834fb74d9dc01"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0005244502099230886,
+        "temporal_irradiance_mae": 4.582610735326398e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "f26434a4e195e5e12bd5c5b3aca09a843011560af524db059580355649c721a8",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "2b8dffc39eb9410702d0812bce056261cb5440c58956a6da250b00d118c7ed3e",
+          "96x72": "0228c6e7db89f2355146dc1e2991e78530c9ac5f5ca31629e83eb17fb5b02668"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0007866753730922937,
+        "temporal_irradiance_mae": 4.599714831243773e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "1e97222c254281faf942ce0e51ce6c83b2ff1410ae23f8c710d465fa923aa3a7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "bbab441771547f6c8da64a920163cd807387711a3067d0bec4905b04ebd18c7f",
+          "96x72": "67f016c960f97083e2302f047e7486ab8285517b4e3ddd8d975b3ddac14c3539"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0005787037080153823,
+        "temporal_irradiance_mae": 4.499202788110779e-09
+      }
+    }
+  },
+  {
+    "condition": "-1.0_bright_to_dark_stationary_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "75d0c549ce382528263cfc7c8fbb11bd2f61f9d6c4329684b556126f64197bc9",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "8a06b3c3f8ea141e7beead579f5e84df99663594b41a730ad74fdc2f18be269d",
+          "96x72": "73c53820073e6d378b1d38c72777203fc7a95d82622b7bc4ab73dd8fdf06f56e"
+        },
+        "saturation_fraction": 0.4946514964103699,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 4.445563916988249e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "18a524a1503d6c990ccda930fc03bbada9f1b0f49919d415365df390580a336d",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "7c73e7b6333529558a0c92fe59513797056ad54a8538282b95e145e79865e363",
+          "96x72": "2cb2cb44973670573f9950f149eb4c1ba2122017977d406603132f1392fb8a5d"
+        },
+        "saturation_fraction": 0.5726454257965088,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 4.582610735326398e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "293f0baa6d69d83f3081c897e10f4645f2acc54799d5b5474baf139dd92c7ad7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "d1e6d3ad5fa640631ba02436d417f40f81a54a238848da19d5e31c848ae12b6d",
+          "96x72": "5d70768222b304bf26582d1e1c4321b313adb171cd8b8a6d3bd99ecf6348a2c4"
+        },
+        "saturation_fraction": 0.5530372858047485,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 4.599714831243773e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "3d7a15760f6fd6a75253bc5cbb82310cd082ca4c8bb14c6f386116b7b879f697",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "107c586f8ef0e896bbea9792ee85cc7f73ab00b14236cbd8e56e1c69f077d063",
+          "96x72": "cde9a592c2a42b6ec9f762aaed70a31087bac51d879844e27cad31969745ea53"
+        },
+        "saturation_fraction": 0.5226463079452515,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 4.499202788110779e-09
+      }
+    }
+  },
+  {
+    "condition": "-1.0_bright_to_dark_moving_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "c30d56fa598d6f868bd95cfbfea2ad816e03ba238ba2e0856ecdf0da130bad0c",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "b550c22d26be33f4c7f42a7cebf4ef1d6cc20baaaaed3ac166cb3d3db350d28b",
+          "96x72": "e62744bc0cf294ca58a52d415bb21f962b2152c7c9f245fab3539ff48d110e72"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.14604130387306213,
+        "temporal_irradiance_mae": 2.1996613213559613e-05
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "ef12f3d833dab2573a7dd01a996fb2d8b01c42403a7618f73a05decbcda8dcc6",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "60a2343f06b7a967d1e13be7cebd35ad675b615eb4b485326b755e6ee6cc15f9",
+          "96x72": "a74f122efa726513875c24481ba06aa85f1cf0cfb422adb960a8f1ddb07d7227"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.14190900325775146,
+        "temporal_irradiance_mae": 2.2946765966480598e-05
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "c1f7ff89dca149b728cfd11d6b558ed8aed025c8e1b2e13800e80fe20e96427e",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "c4f105fe078b1975371314d7440e6f34abfecd785214e2eada9ff2d76b60fe10",
+          "96x72": "f912cc1ba596d41dff20f8809c8357328842eccabaf0b71952684861ed9c26ff"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.13818359375,
+        "temporal_irradiance_mae": 2.289672011102084e-05
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "60b32d1ca70a6d9099431f9e447d8836c91d6a808cc442dfc8d3ea31b9a7f002",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "303eefa24de8cfc2a512525b4acff9737d41d40cac1de50331a425ee1d2f809b",
+          "96x72": "72a408c90d579dfcf3c30a03f2b900734a7632a98373006b69e9a56c15c65d17"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.1425238847732544,
+        "temporal_irradiance_mae": 2.300674532307312e-05
+      }
+    }
+  },
+  {
+    "condition": "-1.0_bright_to_dark_moving_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "d72baa53d20e9d1ba2caf5532fbcded433f9de095b42fab32fd3162cc76504d7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "65d838487798566eb26d44f16c151b6ed2ad9c030a71ab1499ead886b25ddb0d",
+          "96x72": "e7f4bc22cc10b22f65dedb1b47ebad434549b1e8f274b9b559031c9ee5498488"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0008454499766230583,
+        "temporal_irradiance_mae": 0.0001171794137917459
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "931ded67298968edd1a6df670d3cbd8959a9035d5aefd34df5cbfe5747c96051",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "ce511f77f8d4ec0f86d00c329badc24546ad742f1bcbd306b16d9aed8d8780fc",
+          "96x72": "3d6edcc5cd28a4fcc2098c721e9898eea8d6a71182bf9be018d81cc1a159106e"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0005289713153615594,
+        "temporal_irradiance_mae": 0.00013093522284179926
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "b69acc13ebcb89a342861acca41e81f11b8e14b29ec03dde988d8a8db1d0fcaf",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "7df711319b863db410ce5c7ce50301fc6329ecad22d5a356f10a20b57dd087f5",
+          "96x72": "1f549fdca8fb860c8681442cea66d39135d48240f0634187cb8a7db28d1d5cf3"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.000782154209446162,
+        "temporal_irradiance_mae": 0.00011894643830601126
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "a327c0015387ece929f8c5dbfbfd279fc32db47629f8d6baa9d664cb1b1ea0b4",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "153492e38fdf8d9bc02ba540ffc00ea393c357f2e65cccd394f07e536be15a53",
+          "96x72": "d902f2d443f719248bfd3ad6d0a8800507f722bc03dac62a18b73ba65464c18f"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0005787037080153823,
+        "temporal_irradiance_mae": 0.0001305900077568367
+      }
+    }
+  },
+  {
+    "condition": "-1.0_bright_to_dark_moving_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "116bccd8c7dd4b93dc799306bf0595afc0611613a00ae0f1e1dbacb9c6865cbd",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "47b3071c0a4cdc45b684c3bbb520a89416f0c57f2698fa3609b148b0126f54d2",
+          "96x72": "3568fb983e04c7601026d24bedb36ac6cf1e3a8ee324bdcd04df7ed0c7485594"
+        },
+        "saturation_fraction": 0.49482783675193787,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.0001664095325395465
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "f518d182bc3928d60e20cc95c3bb0fcbeec2dd4214ba73371775b25695fc8e52",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "2437a4740dd3b8618db2e97f270a2f9a9c6f2fef8e3b27e3589939f38ff7ff60",
+          "96x72": "1ae1f84f86d4d849f6347657e394879f0fe365162cb99b8e43f0da9e461ea9d4"
+        },
+        "saturation_fraction": 0.5728714466094971,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.0001863306388258934
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "180e116752195228634150e35655299ec70dd8505b738b4ebdd52093f3fb3fbe",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "8e32f841f63028a725c2c357d0590e8b990769b296ec3dc19579f5e15cf3d4e1",
+          "96x72": "eb8251ab095a2f99f6f07e04535f7196041144ed592163970d091ecb05c9f8f2"
+        },
+        "saturation_fraction": 0.5529152154922485,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.00016877779853530228
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "3692f4885c9e7266c535732d32646a61709e090bc09affa188cfdb3362ab1ebf",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "b94bd864d4156cf613d8b02b35e5e506f11be7907502e3e4cad892ea39892f1e",
+          "96x72": "c636c2dff8d0c9837ba4bc96e5c5ecc7784d1aa8fb60733ccd1969dd07c170c2"
+        },
+        "saturation_fraction": 0.5228633880615234,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.00018555652059148997
+      }
+    }
+  },
+  {
+    "condition": "-0.4_dark_stationary_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "8ba0595e467f9adf89d5960a02b08fca994b97376ec2152a7d1c3d8cc5f9dd26",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "9c11f446a9faba55422ca6c023f55ad33e535dc924384d7ad060fc10558e0503",
+          "96x72": "76ffa134e264600d152638c61cc42efaae62823e2066f18e3fc128935360a02f"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6926676630973816,
+        "temporal_irradiance_mae": 2.2012045519659296e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "af688f3010bfd9a865d099fbd779bf41b450ca6a9d422ad800fa31b046034598",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "3b049554793b8d83d0b0601f1522731aad5f2797674011826b9f47325316bf55",
+          "96x72": "8255759641fc9ea084f3cce290c4d74493c9e2a2a410ebe87b00a1f27cd0a337"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6547715663909912,
+        "temporal_irradiance_mae": 2.2669661703389465e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "1ebf6d0066f02187b8fbf127f1204285fa6e024a6e53abb9ce7d74a2acd68d1c",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "85677d51ea00d1d96a386968a3a9d2baa0d4b0457b7090732f74bfce01d3b6df",
+          "96x72": "232d1c5c6384ba608f714694f2a2ca2bcdbc0341beea890ddd1b6bdf69123dc6"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6523979902267456,
+        "temporal_irradiance_mae": 2.232519058509297e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "b214a4dd767aaffbca669e1a78f241fb851f3e9275a0e8755961161061d29abc",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "cfce82cd4fa8d95f5476d9583f5f315a49e95b576eca1f857da444d41a4cc811",
+          "96x72": "e8187eb1ea0fe805682604b6d24b54eaec33887c3a51ecc2b8264c5cdf65a603"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6648130416870117,
+        "temporal_irradiance_mae": 2.2415718170520904e-09
+      }
+    }
+  },
+  {
+    "condition": "-0.4_dark_stationary_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "9be9d0ad7a9d290465092c51c6e7ba22aac745db79756b56b329d002a6966797",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "886cca497fab0454900ef63c69bc2a5c20a1b01f7497ec31219499e1e5683129",
+          "96x72": "b39ea85cdeec3c25edeaf7a6e3cddf2230114b24d7a8f56970ceee658c89d857"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0031105324160307646,
+        "temporal_irradiance_mae": 2.2012045519659296e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "a75191c4f89b8032c84d264d03870a805f19a9348983e741bb66184bfefae005",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "bab257d5321ae118c1310b83f044291e4787a533a56aa0df7606f823b8b71139",
+          "96x72": "3bc88542945d0df8fcb7857909321a494988bb3c364e4f927cf147d94c015d50"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.002436885144561529,
+        "temporal_irradiance_mae": 2.2669661703389465e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "268f9626ad14cc1bf2943ab6a7c50a88ea0fb0e24acc2c6edd33b5a35d716e75",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "0abc571732a4dbfce675d78804cba46960228d325343a7a357a1da692a817cd7",
+          "96x72": "1f7db13807a39cf722d9d243c3dea487650af48b1192e40259ce360bfe27302f"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001880787080153823,
+        "temporal_irradiance_mae": 2.232519058509297e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "78d9e66efb0b2475afcb1c9bb98ccc8dd7ea8f759fc441b3b29ec892a6f4ce5b",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "00ce77c5da692ce6168f8f217eefbf06a43b46120e6c90d5a79c483eaab45d6b",
+          "96x72": "d974fd8d32922abd2206de6723e6dfb67c8dbd6c789908589fbbcb3437d427e2"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.002070674207061529,
+        "temporal_irradiance_mae": 2.2415718170520904e-09
+      }
+    }
+  },
+  {
+    "condition": "-0.4_dark_stationary_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "2387b18f61f51229496e29251ccca996d5edf0ea57c5ff798b78c174123393a8",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "03ab891f0fd12a7a862e65c270632491609e2f04e1d648cc689f6b21bb6f917a",
+          "96x72": "700ece2dab2c57f14dac62024f58043ad49cb1448c219768c43ed43371645bf4"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.2012045519659296e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "8363f18ed8a93ce9e7855874641ce61f8f0231c5423b2c75af0da4a97fb169be",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "7bcbfb1bff32a5c7dccc8c481ad52d13fa3e0deb9065032cde107293994c54a4",
+          "96x72": "f0808238aafd67c14e6574f8c9251c0b2a7e2e59e9034568bb1bf8abc532d0ed"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.2669661703389465e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "118997bb6b297ff505c5d693fbd6e1f104c0cdd597a87ec08a0f33da279696b7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "fb0af5b389328b3587cc10b8283f2e3b76610056e9130a45faea5c6d95695bc3",
+          "96x72": "c95aa28d4388c463954254b47187f2fc9f27c2fd5dfa2ffecfc0455f90796c98"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.232519058509297e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "d5105ed9c60053c5c1c247733e1e427500e4ef71eaea101c42ffac4a45c3ed6d",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "ae048aafc6e262869ef6cde20ec9ef8232408692a707179292e8f99d2ae6a667",
+          "96x72": "f170d1e9266ef9d9bb5ba3222bfdc0a15884de3d309acbf5740b7e8eda19da99"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 2.2415718170520904e-09
+      }
+    }
+  },
+  {
+    "condition": "-0.4_dark_moving_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "0c2311eede6706e170c638bae33950450c2c2258b941a6fe3e0cd77c3e512216",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "848e7b1dd2ffe414599834d13e5acbfdc2706d780d7c04edd393ff36e7ebbb03",
+          "96x72": "3fbdba3b1d5d8bf25f0e6e7b16c4c763e39ca2e5d3490cae00b8beaeaf94c5b5"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6926405429840088,
+        "temporal_irradiance_mae": 1.800781683414243e-05
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "f27601af1c253b49170937ec43dd2a5785215208cf61a12882a220e4e8f737c0",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "31523cd54fe1b37c971e9d57f40117553c3e140639335a5026193c2b25142628",
+          "96x72": "9d19a18c8f39a2a6e6c13cac0362d83665aa889e461fd39ac1434f4f9083e2ca"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6547625660896301,
+        "temporal_irradiance_mae": 1.9957707991125062e-05
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "9fe2f5848909608d2f60756d188b906f9674642e3bfe4ba85cf532e05ba9debe",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "3492851a8a05093a34868cacc89dc6529a68ca25c3e90079cd2124fd36aa12f9",
+          "96x72": "0d21b27e800a6dc51f02f73488ac9a7669465a5cd7991c7aff94393e745d9475"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6523618698120117,
+        "temporal_irradiance_mae": 2.237727676401846e-05
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "c428b9e4ac5894662863cced1151ac9ec82ee9569f11b4c15250cd9cb1e88cca",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "5aa436c5a7e071821becdfb59eb38871c2bf940b1e28fd73fbf374f6f8d71a3e",
+          "96x72": "2bbb2562b9ad5cce6595e459d0621d74290ef695e1604217f1d5311b55c2bc06"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.6648763418197632,
+        "temporal_irradiance_mae": 2.0255127310520038e-05
+      }
+    }
+  },
+  {
+    "condition": "-0.4_dark_moving_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "cb375dcafad6d8680a38c5a0c9dc935282b9bcb5691cf752054fc2d1e9c5f62b",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "7d3cec3a7c4639263c1f10ebb030d30c6bc12177610a5f0e5cc34df5dce06cc2",
+          "96x72": "a7134dd4f770edecace8185bd699ab8afb445e51bb1edc6797ccfb91d79d785b"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0030517580453306437,
+        "temporal_irradiance_mae": 0.00011045478458981961
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "082a3fe7ac68a22ca8e97ac753f202a5e8ff20abe5c3d6f5b7522dcea00e3343",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "541754dc91b51525a491022348321708829c0d349fe86b9b611f57701275e345",
+          "96x72": "67cd25e6246c42b60a4d2fd02e2235262d300c31758c173d9e2dc678431926c1"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0024233218282461166,
+        "temporal_irradiance_mae": 0.00011285903747193515
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "ee698fc807c59bfa13d657069750db06502a005049d2dffb3fd7eec61b608c41",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "9f967c75633729bef8fcb37865219a5cd57808b5414be72874804a10cbca327d",
+          "96x72": "b95c496a99ec60ebdc87f043c04541e74f9386dd2bc29edd81e9a256661cae39"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0018446180038154125,
+        "temporal_irradiance_mae": 0.00011278156307525933
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "1be7421d4d8d614bbcdc0ef62e93cb62bc52734aecc72bf3fff28d8f7978416d",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "ca6f0934934a239aed0462ae477498aa85f067a19d5db3b719537ded84a55c1a",
+          "96x72": "1d5b62851e075a62d95d4d81eca7a2c39bb97f2ae51641174816abeb51076b1b"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.002070674439892173,
+        "temporal_irradiance_mae": 0.00011246373469475657
+      }
+    }
+  },
+  {
+    "condition": "-0.4_dark_moving_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "84f4c2a2b535115c07cdee60fa5319626310203adf69aea4924cbab4f78301a7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "fa2739b00ff1aaf628410c82f276ecabcd11ebb3c65d0e6570128e884c343415",
+          "96x72": "891b718f1ef9abae3deb7c3c147deb52c2c980ff1effcebe34e01bdbfda68aeb"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.00015677191549912095
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "5b65b8f59cfb46b55ef39e21b6a7e7db9754db7f20061b635c210f18b7116341",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "0a1a99b99727fb3e1b16f3537a3acd4fbf4b4c4886ec10822805e1b5406a8a43",
+          "96x72": "3b2523c3af197377ff648a97df3f1b3065e1835928dd125d27d77dc826367aa4"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.000158165319589898
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "e37e63fd9e0b3768b56fbb36419d7ddc247c35d73ee4ae5e2ba5ea4b6e3acc93",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "2a993c1c72c18c8808ce5566e8e0d689da581dc6a2f353b2aedf9e7720ffcd86",
+          "96x72": "4a0440da9cc09c34b31a02dce010e64214a6baa3ef678438364f69438c9d2089"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.0001577050134073943
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "9facb6b627c8a1d7185726d339b93c3f21dbd95c3c9bd0e7f64899eb7b1ccaab",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "f70fbab31be4ed5ea4de7492f627a45047547ace081dd3485e780a75186695f4",
+          "96x72": "5b35afa27df08056fbb221137df63719965e0b9ddde601605034623a92687603"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.000157639617100358
+      }
+    }
+  },
+  {
+    "condition": "-0.4_bright_to_dark_stationary_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "d6fed796429b7fdd4aba458c2f33b02af7d341abec9994a3a1509f4109658d99",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "65374c385f0ccab2d212ed5e76530ce4ac11a29802579166ed75de5c9441203e",
+          "96x72": "6a296ce712a5bd2dcd97cdfdb57815c501e6b12357a367c9287c14e5ed68f8f5"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.38335955142974854,
+        "temporal_irradiance_mae": 3.3885290129376244e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "720104e749c20c3844fbcaa2295c7333bba6d66885577dc353a5727a091349a3",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "caba86f9522d3b15dee0ea900f07a076d9c43078a3514fa7ae4056c07a01b963",
+          "96x72": "c91d6985ea1b3694312789f11a8c7b29c47ab8ee95f3770127283dcd3c74510b"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.3650173544883728,
+        "temporal_irradiance_mae": 3.5211129567613852e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "e916e5456fe7c92dc5401a0a3e3b64b4fd03e2cc6e397213b8208e69a8e26cbd",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "d9b77b12178f4d5d60241c542a3e640aec51b3bd63f1d3401f36adedfe850ca9",
+          "96x72": "906bef07cfe4eb57bbd7c92d909331496c4da14a48b858b8a82d1b91b6491438"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.36334002017974854,
+        "temporal_irradiance_mae": 3.518430879978496e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "f3217df70d9eb46870d3020a71ea50fdf193fc6890196f4025b2f62115b9862e",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "4bf9a365d73118f6e781ff479cf5f63f05e8597a61f8baa3508d8f4b40d74c4e",
+          "96x72": "b7bbb53a574042f9a119dc5439581a7a017e0a5195d1c43bd5b806d1562720ca"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.36842629313468933,
+        "temporal_irradiance_mae": 3.4228118117596296e-09
+      }
+    }
+  },
+  {
+    "condition": "-0.4_bright_to_dark_stationary_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "5accf111cc37c515fe50cf2c53705e7f35f375d7e8a4ee1112eece6d4113a8df",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "2a322248df01f8ee4d43e98d0b33c349d5403b3659e581aaa4d95fbadd1404e2",
+          "96x72": "e0cac049aba627b43eaccd1e8e4884af6e8b5365a68c3c769beda5ed36e49a55"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0013111255830153823,
+        "temporal_irradiance_mae": 3.3885290129376244e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "a99a8b05e361a87472e2fbc9a9cad6709d37f7ae39617da4e01ca83733b28867",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "6cc27b3dd26a664f3ceee0edc0569159da85ec9a6bf6ca81fae66c9e2a1c38ef",
+          "96x72": "205b490993dc65f765550b04595eba3e4eb8ee4b9c3e504e6b3748f5c000a1f6"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.000926830165553838,
+        "temporal_irradiance_mae": 3.5211129567613852e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "fd7118e1184b67a7b99c4b36c103cb014640e0c76ee69b8ebe72cbb8c76badff",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "c79fdb1cf77df90896f795f3e234d785cb555407b4cbf8a74efe1cabb0030de3",
+          "96x72": "8f578407135cb6a30706bfe168b1de998ed4a91f8fc0e92ee2606ca0a2cac1bf"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0010398582089692354,
+        "temporal_irradiance_mae": 3.518430879978496e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "aa77f66276db5684638ba0d8cce0d65cf3f926596a3a38f74478956b5f83b031",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "a470e0da84a15ca8a969a0ec28e58d550aef644b32386a348f83f69d92fd9e56",
+          "96x72": "2e52d51d6ab866b9c7f039e0c475c54ec94f209d9b5556a85a6ce378f90335dd"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0006736472714692354,
+        "temporal_irradiance_mae": 3.4228118117596296e-09
+      }
+    }
+  },
+  {
+    "condition": "-0.4_bright_to_dark_stationary_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "0812c67750aa55e486ac5f329b4f2146decfcf5420e526d58c3ddf02f2b8bd58",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "65bc0c0c3e13bb62caee452a2349d7e1bd88e80af4cecc19759304a1e50d53ee",
+          "96x72": "2f9af21bcf2fc20644ec5ca380b09e38357dfa34ddf37c9dee36552b3f957fa1"
+        },
+        "saturation_fraction": 0.2783745527267456,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 3.3885290129376244e-09
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "f9988e4049883e124f197508cb7e4bac228eff3581f94abc45f86f64e1b27084",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "7705aa5844a84120b81eccbe7e4a1fcca86d4af6b9b81d3b36b5839e675b86fa",
+          "96x72": "8e0a613be3f1ad68226d66dca311ec018275e3d767b094bfa8c8158ef93ec5ec"
+        },
+        "saturation_fraction": 0.3166368305683136,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 3.5211129567613852e-09
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "26334674e2071084b3120bf9cdcfdd2f8bb4df2bfe1ef4b510a0a720c4416707",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "f85182d347e80d128cd49a1390043193559c21fdca337ea153d014bb241d0ade",
+          "96x72": "e7a1ed9b4d45a65b6dbe8b44a20e7bf65b43dad98f50e2ca529b1cc1126a8cc1"
+        },
+        "saturation_fraction": 0.30768951773643494,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 3.518430879978496e-09
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "0f0365d75ea4ea4a9f57131f54a699fdac6b918f14830d0c82a6a27be5935493",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "bc9644716ec4bff22239b64838b1f2dea10f4c54b59ff747a78129ab6d8ce084",
+          "96x72": "bec788180b6cced4fba31f20f0e7b95a17d98dcf27df41e724f2e60d24b5fa83"
+        },
+        "saturation_fraction": 0.2891981303691864,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 3.4228118117596296e-09
+      }
+    }
+  },
+  {
+    "condition": "-0.4_bright_to_dark_moving_0.1",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "ec490f6eb7dd772408a5377dcbb6e1935f62bc2d6c6f3b2f1ca4cd346730a46a",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "d7fae6b0c50d3d86f6154731432a67ff62a936783be7ef940191e236b93b5a84",
+          "96x72": "d4700695e752c8e649545e4f3c5f8d27ea49f36d9010d2a8c9ce6cb1a3de9f99"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.3829798102378845,
+        "temporal_irradiance_mae": 4.451722634257749e-05
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "a37c63f117ad1deb5e014449bbd2d27da1e8b85738ed0c79ddfa268e09023b83",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "c83cff6bc87f809850dac373781cc08fe9919b301f2e458c0080fa57c08de162",
+          "96x72": "10124287310d412d84bf00280c7352f4c5e86667dc8545618fbf7c433250061d"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.36474156379699707,
+        "temporal_irradiance_mae": 4.644385626306757e-05
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "0c60b0d35507fd589953a28967c736d2905bd408bc92af91f56d984093eccfbd",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "61c497472d2277b9cc63058b1624b12af6e965a2150e9e6881b6cc8736149be4",
+          "96x72": "31241787135b5c30032035a48b4d97f0180bde91d386fb06879bbeab40e6337c"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.3629918694496155,
+        "temporal_irradiance_mae": 5.415287159848958e-05
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "bd7b7c6f4e962a9ffb8a03a100574ec29018f11b8c3a37fe16131a910d9b6013",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "f076c3166f38315ee76a99a51ba69c48659344d4284b3e84735b9642c53b615a",
+          "96x72": "9028d42f8ed58472018417e6d98e20bba9e2153eaaeefa85bc54edae2a7497fd"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.3680691123008728,
+        "temporal_irradiance_mae": 4.840986366616562e-05
+      }
+    }
+  },
+  {
+    "condition": "-0.4_bright_to_dark_moving_0.6",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "341b4eb4173f1d5d6dadea33e8df4b6d98ce9c6bb6fccc121c226d7c7bfe8d6a",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "82fd433a0d5b0e1acc07a97d1d75d79c8cdb3ec11456f4743c8c1a9cce602271",
+          "96x72": "bc3096b38d0a87db1d62b817208f9bae48309dca6b5df7cfd95900271c192c26"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0012794777285307646,
+        "temporal_irradiance_mae": 0.00027139263693243265
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "202b69b8817881cffff8b16646496f7346b7733659cf9dbb5913b50f4239b6b7",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "bfaf2d4f6accfc999a1ee7f03d919dd8d0ad38392147bacb33709eea49b4412b",
+          "96x72": "187fa964b20bb5424b744afc316117125cc3c4a43a3e1f35ead527eecad01db9"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0009177878964692354,
+        "temporal_irradiance_mae": 0.00026486540446057916
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "db30399320ea56784f7860f34f70d09d6c35ef746326c4c11ba8512e32d05a13",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "ff45cde7aed12afb4225728c59435edb0b23079fa9178818330729bbab02ddae",
+          "96x72": "7d973da793135eac2c1d79c0c57e4fcfde9f879cab0de8cf9e43b51d20adbaed"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.001026294892653823,
+        "temporal_irradiance_mae": 0.00027570949168875813
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "b61464a39811ad13d270d636dd6b9ec49a3b9d8feb1543c7929cbcd01dc22f63",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "081841869079a3c717e3415135fb9dd0dbd454137ac0ba89ecbd28ab495cb036",
+          "96x72": "ac4a626847e3ac5cb1d699ae32ce2d5e5b92ad66fe50b97c253de4eaccb4890c"
+        },
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.0006917317514307797,
+        "temporal_irradiance_mae": 0.00026333704590797424
+      }
+    }
+  },
+  {
+    "condition": "-0.4_bright_to_dark_moving_0.85",
+    "images": {
+      "fit_-1": {
+        "seed": 391000,
+        "native_noisy_sha256": "e7167adbe0fdde60b878f8d5b41c23fdcc3ae06f29736a8484539d9c41090fe8",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "79bbfc485865b987ff77a86b9b00a14532004e9b159cd0fecb70c6acbed34cdc",
+          "96x72": "b59f0e55cb77146209b15d6450630bfd0a6e66356843dd7d858649e448c39578"
+        },
+        "saturation_fraction": 0.27850568294525146,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.00038538320222869515
+      },
+      "fit_1": {
+        "seed": 391200,
+        "native_noisy_sha256": "3a1c135c36f8aea8c8c18714b7cf73b43fc7cc2b24f8c389b29bf130b8e7cb6c",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "cb008adb69c18a3b43e5423af331732dbfdcdcd30be7a58965e2e8aa5c074133",
+          "96x72": "433965436e0b91f1a64212cddb280dddfeb3102687285fd5f380cea0802637cf"
+        },
+        "saturation_fraction": 0.31719744205474854,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.0003717674990184605
+      },
+      "check_-1": {
+        "seed": 491000,
+        "native_noisy_sha256": "0c21ea9ce79c439fa39b9f21b8744fa58635dd2e806313ffcdeaea2e8932e826",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "2243bd46e3332d14839fe352d569727e4034b45c07bc4692428faa637137ff5c",
+          "96x72": "a496bd4d69ff21d8b6fc5d5eae42053d3440f2380f733f2d45f430d9ec806fe7"
+        },
+        "saturation_fraction": 0.30812352895736694,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.00038568436866626143
+      },
+      "check_1": {
+        "seed": 491200,
+        "native_noisy_sha256": "8d9081aa29918958742678f6f0bfc87b2ae9fc8fbe2b0d9568becd6e7e3ff1d1",
+        "sensor_calls": 1,
+        "branch_sha256": {
+          "48x36": "2e5721c54cee0d393a4c70103664bc0ab24a608072f49b70cd4335cc10cc7f12",
+          "96x72": "ff45c1adc6f2fbf78d10e71af3e6b0843f171fbf208ea65fd0af13957760f139"
+        },
+        "saturation_fraction": 0.28951460123062134,
+        "dark_fraction": 0.0,
+        "temporal_irradiance_mae": 0.0003686905838549137
+      }
+    }
+  }
+]

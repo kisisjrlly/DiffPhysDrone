@@ -1,0 +1,63 @@
+{
+  "sensor_resolution_wh": [
+    96,
+    72
+  ],
+  "input_resolutions_wh": [
+    [
+      48,
+      36
+    ],
+    [
+      96,
+      72
+    ]
+  ],
+  "exposures": [
+    0.1,
+    0.6,
+    0.85
+  ],
+  "gain": 0.02,
+  "scenarios": [
+    "dark",
+    "bright_to_dark"
+  ],
+  "requested_x": [
+    -1.0,
+    -0.4
+  ],
+  "fit_per_class": 32,
+  "check_per_class": 32,
+  "center_difference_m": 0.005,
+  "interaction_threshold": 0.1,
+  "ceiling_rule": "all 48 accuracies >=95%",
+  "candidate_rule": "absolute change in long-minus-short benefit >=10pp; absolute benefit in one arm >=10pp; reversal not required",
+  "conditional_followup": "at most one highest-interaction candidate, deterministic order tie break; same nuisance data",
+  "no_policy_training": true,
+  "no_new_scene": true,
+  "no_sensor_changes": true,
+  "nuisance": {
+    "yaw_deg": [
+      -0.25,
+      0.25
+    ],
+    "texture_phase_rad": [
+      0,
+      6.283185307179586
+    ],
+    "light_factor": [
+      0.92,
+      1.08
+    ],
+    "fit_seed": 391000,
+    "check_seed": 491000,
+    "class_offset": "(class+1)*100"
+  },
+  "limitations": [
+    "single successful privileged reference trajectory",
+    "static is a counterfactual image, not free stopping",
+    "fixed-rule ridge fits are diagnostic only",
+    "not navigation success or learning-method comparison"
+  ]
+}

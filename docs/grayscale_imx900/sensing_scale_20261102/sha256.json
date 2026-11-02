@@ -1,0 +1,12 @@
+{
+  "provenance.json": "13dbed7153b3a08beee1350e267c16538f79237d2724345cf1eda0c4603cb010",
+  "motion_scale.json": "088daced0f92a76ed2bcaddc3ade5356c69e48a1882164d05a32073c79074a29",
+  "results.json": "bb5718280ed7b38a20a069ae6e04cf665edb1f8d8d8317b163df7ba8353930af",
+  "image_audit.json": "f06f0eb6fb38afb690dcb93ffd1493882eef64cdb967d1fc24909960621eef43",
+  "comparison.png": "4562c96f1062ab4c01895c73fd0240e3fff32c7e40fb6fa79dcf73b9acda72e0",
+  "calibration_snapshot.json": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f",
+  "reference_trajectory.json": "de7f0f2f9f0524de2c535f629c16e874fb2b0ab98ca98fffd7042a7c9525aca9",
+  "comparison_preview.jpg": "7672b6b748f2f0ef0ef9aac5c5a342d3a2c71b37a9e99735b27d09e75a1d81b7",
+  "protocol.json": "1bd6088e4e4724d7fe2f1eead54a1e6db37c8ad0ec4907c91f054956ab2ebbf9",
+  "representative_frames.npz": "5e956a0035c88d24fde5506dc258fb1e85ea547d3c42a106ab98a644ec2f2eb0"
+}
