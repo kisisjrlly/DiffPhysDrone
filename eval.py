@@ -223,6 +223,7 @@ def run_one_episode(
                 cam_hx=cam_h,
                 camera_state=camera_state,
                 camera_motion_state=camera_motion_state,
+                pending_flight_commands=act_buffer[t:t+2],
             )
 
         proposed_act_raw = act_raw

@@ -65,7 +65,7 @@ class IntentModel(nn.Module):
     def forward(self, v, hx=None, *, gray_obs=None, add_noise=False, cam_hx=None,
                 camera_state=None, camera_motion_state=None, intent_override=None,
                 camera_timeline=None, action_noise=None, camera_logit_noise=None,
-                return_camera_logits=False):
+                return_camera_logits=False, intent_motion_predictor=None):
         encoded = self.encode_observation(v, gray_obs, add_noise=add_noise)
         action, hx = self.flight_from_encoded(encoded, hx)
         if action_noise is not None:
@@ -80,6 +80,8 @@ class IntentModel(nn.Module):
             camera_timeline = v.new_zeros((v.shape[0], 6))
         future_velocity = camera_motion_state[:, :3] + action * self.intent_horizon_s / self.nominal_speed
         intent = torch.cat([action / self.max_acc_cmd, future_velocity], -1)
+        if intent_motion_predictor is not None:
+            intent = intent_motion_predictor(action)
         if intent_override is not None:
             if intent_override.shape != intent.shape:
                 raise ValueError("intent_override must have shape [batch,6]")

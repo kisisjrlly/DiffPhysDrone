@@ -223,7 +223,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             args.include_camera_state_in_obs,
         )
 
-        policy_extra = {}
+        policy_extra = {"pending_flight_commands": act_buffer[t:t+2]}
         if args.flight_exploration_std > 0:
             rho = args.flight_exploration_rho
             innovation = torch.cat([torch.randn(B, 2, device=device), torch.zeros(B, 1, device=device)], -1)
@@ -284,6 +284,7 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                     camera_state=camera_state.detach(),
                     camera_motion_state=camera_motion_state.detach(),
                     return_camera_logits=True,
+                    pending_flight_commands=act_buffer[t:t+2],
                 )
             env._camera_requested_state = detached_env_timeline
             env._camera_command_queue = detached_queue

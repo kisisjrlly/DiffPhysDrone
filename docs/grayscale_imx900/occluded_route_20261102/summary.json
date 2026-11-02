@@ -1,0 +1,4523 @@
+{
+  "visibility": [
+    {
+      "y_m": 0,
+      "max_image_difference": 0.0
+    },
+    {
+      "y_m": 0.4,
+      "max_image_difference": 0.945427417755127
+    },
+    {
+      "y_m": -0.4,
+      "max_image_difference": 0.981087327003479
+    }
+  ],
+  "calibrated": false,
+  "policy_training": false,
+  "development": [
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": [
+        0.03,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": [
+        0.3,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": [
+        0.3,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": [
+        0.85,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": [
+        0.85,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "hold",
+      "camera": "ae",
+      "seed": 1102100,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        5.199999809265137,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.931805610656738,
+        8.314384460449219,
+        8.988260269165039,
+        14.676970481872559,
+        14.637360572814941,
+        7.836549758911133,
+        9.892666816711426,
+        14.700626373291016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        13.00485897064209,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.669931411743164,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.006012414116412401,
+          0.005915218032896519,
+          -2.131354331970215,
+          2.3232643604278564,
+          -0.007070588413625956,
+          0.006761116907000542,
+          -2.6030325889587402,
+          2.5258662700653076
+        ],
+        "template_cue_rms": [
+          0.0027426157612353563,
+          0.002611170057207346,
+          0.04971904680132866,
+          0.0517403744161129,
+          0.0029835181776434183,
+          0.0027621551416814327,
+          0.054749954491853714,
+          0.05415170639753342
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": [
+        0.03,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        13.00485897064209,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.669931411743164,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.010324100963771343,
+          0.010157201439142227,
+          -3.65981388092041,
+          3.9893484115600586,
+          -0.012141125276684761,
+          0.01160972099751234,
+          -4.469747543334961,
+          4.337242126464844
+        ],
+        "template_cue_rms": [
+          0.0035939053632318974,
+          0.003421659814193845,
+          0.06515150517225266,
+          0.06780024617910385,
+          0.003909582272171974,
+          0.0036195097491145134,
+          0.07174397259950638,
+          0.07096003741025925
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": [
+        0.3,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        13.00485897064209,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.669931411743164,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.345533549785614,
+          0.3154357671737671,
+          -1.2935271263122559,
+          1.0356532335281372,
+          -0.40734726190567017,
+          0.35710448026657104,
+          -0.863350510597229,
+          0.7706460952758789
+        ],
+        "template_cue_rms": [
+          0.02007964253425598,
+          0.019137276336550713,
+          0.038791585713624954,
+          0.03461074084043503,
+          0.021852029487490654,
+          0.020230159163475037,
+          0.03146130591630936,
+          0.029825381934642792
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": [
+        0.3,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        13.00485897064209,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.669931411743164,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.593326210975647,
+          0.5416444540023804,
+          -0.32652533054351807,
+          0.20126135647296906,
+          -0.6994684934616089,
+          0.6131950616836548,
+          -0.11562567204236984,
+          0.08911371976137161
+        ],
+        "template_cue_rms": [
+          0.02631222829222679,
+          0.02507735975086689,
+          0.019563447684049606,
+          0.015256676822900772,
+          0.028634753078222275,
+          0.026509467512369156,
+          0.011338354088366032,
+          0.010125702247023582
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": [
+        0.85,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        12.221980094909668,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.739134788513184,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -2.6393232345581055,
+          2.402556896209717,
+          0.0,
+          0.0,
+          -3.118318557739258,
+          2.7047600746154785,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.05538960546255112,
+          0.052796363830566406,
+          0.0,
+          0.0,
+          0.06027675047516823,
+          0.05578284710645676,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": [
+        0.85,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        12.221980094909668,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.739134788513184,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -4.532063007354736,
+          4.125504016876221,
+          0.0,
+          0.0,
+          -5.354560375213623,
+          4.6444268226623535,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0725821703672409,
+          0.06918400526046753,
+          0.0,
+          0.0,
+          0.07898624986410141,
+          0.07309747487306595,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left",
+      "camera": "ae",
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        13.313066482543945,
+        17.76822280883789,
+        13.00485897064209,
+        18.287792205810547,
+        13.970968246459961,
+        17.229969024658203,
+        13.669931411743164,
+        18.260196685791016
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -3.369408369064331,
+          3.0646791458129883,
+          -12.964998245239258,
+          13.321083068847656,
+          -3.362178087234497,
+          3.2340946197509766,
+          -14.776895523071289,
+          14.043119430541992
+        ],
+        "template_cue_rms": [
+          0.06258773058652878,
+          0.05963058024644852,
+          0.12260688096284866,
+          0.12402771413326263,
+          0.06260444968938828,
+          0.060990557074546814,
+          0.13063497841358185,
+          0.12769803404808044
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        17.319324493408203,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        17.168577194213867,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.011381721124053001,
+          0.009635929018259048,
+          -3.784403085708618,
+          4.080145359039307,
+          -0.014430508017539978,
+          0.011037468910217285,
+          -4.713369369506836,
+          4.628034591674805
+        ],
+        "template_cue_rms": [
+          0.003680675057694316,
+          0.0035772165283560753,
+          0.06595511734485626,
+          0.06875308603048325,
+          0.004075107630342245,
+          0.0036750270519405603,
+          0.07395993173122406,
+          0.07318102568387985
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": [
+        0.03,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        17.319324493408203,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        17.168577194213867,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.019543904811143875,
+          0.01654614880681038,
+          -6.49831485748291,
+          7.006143093109131,
+          -0.0247790664434433,
+          0.018952777609229088,
+          -8.09347152709961,
+          7.9469404220581055
+        ],
+        "template_cue_rms": [
+          0.0048231324180960655,
+          0.004687560722231865,
+          0.08642714470624924,
+          0.09009359031915665,
+          0.005339994095265865,
+          0.004815731197595596,
+          0.09691660106182098,
+          0.0958959311246872
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": [
+        0.3,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        17.319324493408203,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        17.168577194213867,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.6204785108566284,
+          0.5882117748260498,
+          -7.984590530395508,
+          6.540266513824463,
+          -0.7725743055343628,
+          0.6313300728797913,
+          -5.545838356018066,
+          5.3284502029418945
+        ],
+        "template_cue_rms": [
+          0.02693767659366131,
+          0.026217985898256302,
+          0.09613461047410965,
+          0.08708414435386658,
+          0.029859201982617378,
+          0.026935119181871414,
+          0.08007889986038208,
+          0.07859634608030319
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": [
+        0.3,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        17.319324493408203,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        17.168577194213867,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -1.065442681312561,
+          1.0100363492965698,
+          -2.46651291847229,
+          1.5848495960235596,
+          -1.326611042022705,
+          1.0840762853622437,
+          -0.9573270082473755,
+          0.9142948389053345
+        ],
+        "template_cue_rms": [
+          0.03529895097017288,
+          0.034355875104665756,
+          0.053433019667863846,
+          0.04299243912100792,
+          0.03912729769945145,
+          0.035295601934194565,
+          0.033270787447690964,
+          0.03260575979948044
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": [
+        0.85,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        8.525131225585938,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        9.064737319946289,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -4.747493743896484,
+          4.493116855621338,
+          0.0,
+          0.0,
+          -5.8543548583984375,
+          4.787473201751709,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.07434536516666412,
+          0.07224401831626892,
+          0.0,
+          0.0,
+          0.0822356715798378,
+          0.07431410253047943,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": [
+        0.85,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        8.525131225585938,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        9.064737319946289,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -8.152067184448242,
+          7.715269088745117,
+          0.0,
+          0.0,
+          -10.052693367004395,
+          8.22071647644043,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.09742166846990585,
+          0.09466808289289474,
+          0.0,
+          0.0,
+          0.10776107013225555,
+          0.09738069027662277,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right",
+      "camera": "ae",
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        17.116613388061523,
+        13.335772514343262,
+        17.319324493408203,
+        14.100381851196289,
+        18.08378028869629,
+        13.23071575164795,
+        17.168577194213867,
+        13.94774341583252
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -6.061307907104492,
+          7.049422264099121,
+          -22.950111389160156,
+          24.95975112915039,
+          -6.314020156860352,
+          7.046765327453613,
+          -26.71709442138672,
+          26.777299880981445
+        ],
+        "template_cue_rms": [
+          0.0840122401714325,
+          0.0904880240559578,
+          0.16261452436447144,
+          0.17002135515213013,
+          0.08539912104606628,
+          0.09015943855047226,
+          0.17631171643733978,
+          0.1760523021221161
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.573375701904297,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.050168991088867,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.006126978900283575,
+          0.00630558654665947,
+          -2.102306842803955,
+          2.3899428844451904,
+          -0.0072928257286548615,
+          0.006614428944885731,
+          -2.6102259159088135,
+          2.5974056720733643
+        ],
+        "template_cue_rms": [
+          0.0027694159653037786,
+          0.0026576293166726828,
+          0.04939397796988487,
+          0.05244359001517296,
+          0.0030145698692649603,
+          0.0027272666338831186,
+          0.05487379804253578,
+          0.054906416684389114
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": [
+        0.03,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.573375701904297,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.050168991088867,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.010520823299884796,
+          0.010827516205608845,
+          -3.609935760498047,
+          4.103844165802002,
+          -0.012522734701633453,
+          0.011357838287949562,
+          -4.482099533081055,
+          4.460084915161133
+        ],
+        "template_cue_rms": [
+          0.003629024140536785,
+          0.0034825396724045277,
+          0.06472553312778473,
+          0.06872173398733139,
+          0.003950272221118212,
+          0.0035737918224185705,
+          0.07190625369548798,
+          0.07194900512695312
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": [
+        0.3,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.573375701904297,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.050168991088867,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.3525855541229248,
+          0.33177781105041504,
+          -0.9663686752319336,
+          0.8921695351600647,
+          -0.4159109592437744,
+          0.3486992120742798,
+          -0.6605581045150757,
+          0.6062048673629761
+        ],
+        "template_cue_rms": [
+          0.020289307460188866,
+          0.01957600563764572,
+          0.033575963228940964,
+          0.03211377561092377,
+          0.022077104076743126,
+          0.019987668842077255,
+          0.027580050751566887,
+          0.026471637189388275
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": [
+        0.3,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.573375701904297,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.050168991088867,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.6054354906082153,
+          0.5697057843208313,
+          -0.2306787222623825,
+          0.15668946504592896,
+          -0.7141733765602112,
+          0.5987621545791626,
+          -0.07788538932800293,
+          0.061684705317020416
+        ],
+        "template_cue_rms": [
+          0.026586972177028656,
+          0.025652267038822174,
+          0.01650802232325077,
+          0.013451503589749336,
+          0.028929689899086952,
+          0.02619170770049095,
+          0.00925849936902523,
+          0.00845225341618061
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": [
+        0.85,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.061676025390625,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.364660263061523,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -2.6874146461486816,
+          2.52895450592041,
+          0.0,
+          0.0,
+          -3.2217307090759277,
+          2.635298728942871,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.05589215084910393,
+          0.05411078408360481,
+          0.0,
+          0.0,
+          0.06126971170306206,
+          0.055059585720300674,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": [
+        0.85,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.061676025390625,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.364660263061523,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -4.614642143249512,
+          4.342545509338379,
+          0.0,
+          0.0,
+          -5.532132148742676,
+          4.525152206420898,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.07324069738388062,
+          0.07090641558170319,
+          0.0,
+          0.0,
+          0.08028741180896759,
+          0.07214971631765366,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "left_settle",
+      "camera": "ae",
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        16.70974349975586,
+        21.585872650146484,
+        16.573375701904297,
+        22.06163787841797,
+        17.457216262817383,
+        21.13351058959961,
+        17.050168991088867,
+        22.182300567626953
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -3.4610941410064697,
+          3.244598865509033,
+          -12.828399658203125,
+          13.74228286743164,
+          -3.487840175628662,
+          3.190340995788574,
+          -14.858938217163086,
+          14.486523628234863
+        ],
+        "template_cue_rms": [
+          0.06343401968479156,
+          0.06128901243209839,
+          0.12196171283721924,
+          0.12593533098697662,
+          0.06376463174819946,
+          0.06057412177324295,
+          0.13105744123458862,
+          0.12969422340393066
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        21.117860794067383,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        21.23509979248047,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.011874106712639332,
+          0.009806881658732891,
+          -3.8913865089416504,
+          4.2439985275268555,
+          -0.014400816522538662,
+          0.0113600492477417,
+          -4.7580976486206055,
+          4.810428619384766
+        ],
+        "template_cue_rms": [
+          0.0037546628154814243,
+          0.0035890666767954826,
+          0.06691541522741318,
+          0.07012933492660522,
+          0.004082234110683203,
+          0.003720441134646535,
+          0.07434044778347015,
+          0.07461624592542648
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": [
+        0.03,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        21.117860794067383,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        21.23509979248047,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.020389392971992493,
+          0.01683969795703888,
+          -6.682019233703613,
+          7.287500381469727,
+          -0.02472808212041855,
+          0.01950668729841709,
+          -8.17027473449707,
+          8.260135650634766
+        ],
+        "template_cue_rms": [
+          0.004920084960758686,
+          0.004703089129179716,
+          0.08768551796674728,
+          0.09189701080322266,
+          0.005349332466721535,
+          0.0048752413131296635,
+          0.09741522371768951,
+          0.0977766215801239
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": [
+        0.3,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        21.117860794067383,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        21.23509979248047,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.6479074954986572,
+          0.5928611755371094,
+          -8.186641693115234,
+          6.724294662475586,
+          -0.7736399173736572,
+          0.6473890542984009,
+          -5.527471542358398,
+          5.495788097381592
+        ],
+        "template_cue_rms": [
+          0.027509938925504684,
+          0.026304280385375023,
+          0.09733881056308746,
+          0.08832235634326935,
+          0.029903234913945198,
+          0.027267323806881905,
+          0.07995720207691193,
+          0.0797969177365303
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": [
+        0.3,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        21.117860794067383,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        21.23509979248047,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -1.112541675567627,
+          1.0180201530456543,
+          -2.492493152618408,
+          1.5833261013031006,
+          -1.32844078540802,
+          1.1116516590118408,
+          -0.9382981061935425,
+          0.9188953042030334
+        ],
+        "template_cue_rms": [
+          0.03604883700609207,
+          0.03446895256638527,
+          0.05370832234621048,
+          0.04298902675509453,
+          0.03918499872088432,
+          0.03573092073202133,
+          0.03292896971106529,
+          0.03262586146593094
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": [
+        0.85,
+        0.02
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        12.017057418823242,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        12.899145126342773,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -4.945953369140625,
+          4.526843070983887,
+          0.0,
+          0.0,
+          -5.872622489929199,
+          4.91796875,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.07585954666137695,
+          0.07249583303928375,
+          0.0,
+          0.0,
+          0.08239820599555969,
+          0.07531046122312546,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": [
+        0.85,
+        0.15
+      ],
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        5.266666889190674,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        5.266666889190674,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        12.017057418823242,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        12.899145126342773,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          false,
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "scores": [
+          -8.492847442626953,
+          7.773180961608887,
+          0.0,
+          0.0,
+          -10.08405876159668,
+          8.444795608520508,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.09940584003925323,
+          0.0949980616569519,
+          0.0,
+          0.0,
+          0.10797406733036041,
+          0.0986863300204277,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          -1,
+          -1,
+          1,
+          -1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "development",
+      "motion": "right_settle",
+      "camera": "ae",
+      "seed": 1102100,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.400000095367432,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        7.333333492279053,
+        7.333333492279053,
+        7.400000095367432
+      ],
+      "energy": [
+        20.82196807861328,
+        17.157968521118164,
+        21.117860794067383,
+        17.791650772094727,
+        22.146039962768555,
+        16.465473175048828,
+        21.23509979248047,
+        17.403690338134766
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -6.328282833099365,
+          7.0966033935546875,
+          -23.614967346191406,
+          25.97093963623047,
+          -6.3415021896362305,
+          7.247555732727051,
+          -27.0041446685791,
+          27.859115600585938
+        ],
+        "template_cue_rms": [
+          0.08581443130970001,
+          0.09076714515686035,
+          0.16500632464885712,
+          0.17345626652240753,
+          0.08562330156564713,
+          0.09142321348190308,
+          0.1773333102464676,
+          0.17959019541740417
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    }
+  ],
+  "locked_candidates": [
+    {
+      "motion": "right",
+      "camera": [
+        0.03,
+        0.02
+      ]
+    },
+    {
+      "motion": "right",
+      "camera": "ae"
+    },
+    {
+      "motion": "hold",
+      "camera": [
+        0.03,
+        0.02
+      ]
+    },
+    {
+      "motion": "right",
+      "camera": [
+        0.3,
+        0.02
+      ]
+    }
+  ],
+  "confirmation": [
+    {
+      "split": "confirmation",
+      "motion": "right",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102200,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.333333492279053,
+        7.400000095367432,
+        7.4666666984558105,
+        7.333333492279053,
+        7.400000095367432,
+        7.400000095367432,
+        7.266666889190674,
+        7.333333492279053
+      ],
+      "energy": [
+        16.928707122802734,
+        13.851163864135742,
+        19.561616897583008,
+        12.9517183303833,
+        17.185997009277344,
+        14.205681800842285,
+        15.987728118896484,
+        12.79710578918457
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.011470477096736431,
+          0.01343099307268858,
+          -3.7556703090667725,
+          3.7569355964660645,
+          -0.012339058332145214,
+          0.01303586084395647,
+          -3.946516513824463,
+          4.739426136016846
+        ],
+        "template_cue_rms": [
+          0.0036789949517697096,
+          0.004067891277372837,
+          0.06621552258729935,
+          0.06600379198789597,
+          0.0037015120033174753,
+          0.003920059651136398,
+          0.0676172599196434,
+          0.07417112588882446
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "confirmation",
+      "motion": "right",
+      "camera": "ae",
+      "seed": 1102200,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.333333492279053,
+        7.400000095367432,
+        7.4666666984558105,
+        7.333333492279053,
+        7.400000095367432,
+        7.400000095367432,
+        7.266666889190674,
+        7.333333492279053
+      ],
+      "energy": [
+        16.928707122802734,
+        13.851163864135742,
+        19.561616897583008,
+        12.9517183303833,
+        17.185997009277344,
+        14.205681800842285,
+        15.987728118896484,
+        12.79710578918457
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -6.276669502258301,
+          7.156215667724609,
+          -22.779869079589844,
+          23.060638427734375,
+          -6.40219783782959,
+          6.839634418487549,
+          -23.819293975830078,
+          27.368186950683594
+        ],
+        "template_cue_rms": [
+          0.08538777381181717,
+          0.09095177054405212,
+          0.1627294272184372,
+          0.16342388093471527,
+          0.0860411524772644,
+          0.08877603709697723,
+          0.16603198647499084,
+          0.17814716696739197
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "confirmation",
+      "motion": "hold",
+      "camera": [
+        0.03,
+        0.02
+      ],
+      "seed": 1102200,
+      "success": [
+        true,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        true
+      ],
+      "collision": [
+        false,
+        true,
+        true,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.333333492279053,
+        5.266666889190674,
+        5.333333492279053,
+        7.333333492279053,
+        7.400000095367432,
+        5.266666889190674,
+        5.199999809265137,
+        7.333333492279053
+      ],
+      "energy": [
+        13.353263854980469,
+        8.78984546661377,
+        10.87613582611084,
+        13.510437965393066,
+        14.017899513244629,
+        9.499191284179688,
+        8.261232376098633,
+        13.456962585449219
+      ],
+      "decision": {
+        "correct": [
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          false,
+          true
+        ],
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "template_cue_rms": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ties": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "chosen_route": [
+          1,
+          1,
+          -1,
+          -1,
+          1,
+          1,
+          -1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    },
+    {
+      "split": "confirmation",
+      "motion": "right",
+      "camera": [
+        0.3,
+        0.02
+      ],
+      "seed": 1102200,
+      "success": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "collision": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "timeout": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "time_s": [
+        7.333333492279053,
+        7.400000095367432,
+        7.4666666984558105,
+        7.333333492279053,
+        7.400000095367432,
+        7.400000095367432,
+        7.266666889190674,
+        7.333333492279053
+      ],
+      "energy": [
+        16.928707122802734,
+        13.851163864135742,
+        19.561616897583008,
+        12.9517183303833,
+        17.185997009277344,
+        14.205681800842285,
+        15.987728118896484,
+        12.79710578918457
+      ],
+      "decision": {
+        "correct": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ],
+        "scores": [
+          -0.6241815090179443,
+          0.7695539593696594,
+          -7.764562129974365,
+          8.69029426574707,
+          -0.638339102268219,
+          0.71843421459198,
+          -7.926093101501465,
+          5.449193000793457
+        ],
+        "template_cue_rms": [
+          0.026964096352458,
+          0.02981419675052166,
+          0.09477218240499496,
+          0.10028048604726791,
+          0.027129080146551132,
+          0.02870398946106434,
+          0.09578552097082138,
+          0.07970993220806122
+        ],
+        "ties": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "chosen_route": [
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "decision_time_s": 1.6,
+        "privileged_templates": true
+      },
+      "prediction_position_error_mean_m": 0.0,
+      "claim": "Privileged template/controller diagnostic; not learned navigation."
+    }
+  ],
+  "limitations": [
+    "8+8 screening episodes only",
+    "oracle templates and waypoint controller",
+    "image templates use simulator pose, settings and lighting; optimistic decoder",
+    "not learning algorithm comparison",
+    "warp_ste cannot model disocclusion"
+  ]
+}

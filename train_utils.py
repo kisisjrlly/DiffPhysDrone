@@ -139,6 +139,7 @@ def build_env(batch_size, args, device, *, eval_mode=False):
     env.imx900_calibration = env.gray_camera.calibration
     env.gray_enable_noise = bool(args.gray_enable_noise)
     env.control_period_s = 1 / args.base_control_freq
+    env.camera_queue_aligned_intent = args.camera_queue_aligned_intent
     if args.scene_layout in DIFFERENTIABLE_SCENES:
         period_us = 1e6 / args.base_control_freq
         if env.imx900_calibration.exposure_us_max > period_us:

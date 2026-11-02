@@ -1,0 +1,41 @@
+# Diagnostic only; no policy training.
+# Opt-in scene-physics diagnostic. Not a trained policy or a performance claim.
+# Preserve the single slit, goal, radiometry and E/G range. A longer approach
+# makes foreground illumination visible alongside the slit; allow 6s for flight.
+--scene_layout occluded_route
+--policy_arch intent_shared
+--joint_backward consistent
+--grad_decay 1
+--observation_grad_mode full
+--pose_gradient_estimator warp_ste
+--gray_temporal_samples 9
+--camera_control_mode learned
+--sensor_grad_mode full
+--imx900_calibration configs/calibration/imx900_provisional.json
+--gray_saturation_mode ste
+--fixed_camera_exposure 0.10
+--fixed_camera_gain 0.02
+--simple_start_x -1
+--simple_wall_x 0
+--simple_goal_x 3
+--simple_slit_half_y 0.15
+--gray_transition_x -0.65
+--gray_transition_width 0.25
+--gray_dark_scale 0.12
+--gray_bright_scale 2.2
+--gray_width 96
+--gray_height 72
+--gray_nn_width 48
+--gray_nn_height 36
+--cam_angle 0
+--base_control_freq 15
+--control_dt_jitter 0
+--flight_max_speed 1.15
+--max_acc_cmd 2.2
+--timesteps 120
+--batch_size 4
+--loss_v_window 12
+--scenarios dark bright
+--no-amp
+
+--camera_queue_aligned_intent

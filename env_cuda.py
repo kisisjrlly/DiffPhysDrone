@@ -30,6 +30,7 @@ from render.intent_scene import build_intent_gates, render_exposure
 from render.pole_scene import build_sparse_poles, cylinder_clearance, swept_cylinder_clearance
 from render.scene_types import DIFFERENTIABLE_SCENES
 from render.slit_scene import build_joint_slit
+from render.occluded_route import build_occluded_route
 
 
 class Env:
@@ -332,6 +333,9 @@ class Env:
         elif self.scene_layout == "joint_slit":
             build_joint_slit(self)
 
+        if self.scene_layout == "occluded_route":
+            build_occluded_route(self)
+
         start_local = torch.stack([
             torch.full((B,), self.simple_start_x, device=device),
             torch.zeros(B, device=device),
@@ -401,6 +405,9 @@ class Env:
 
     def get_scene_effects_for_env(self, env_idx=0):
         idx = int(min(max(env_idx, 0), self.batch_size - 1))
+        if self.scene_layout == "occluded_route":
+            return {"geometry_kind": "occluded_route", "blocked_side": int(self.route_blocked_side[idx]),
+                    "world_fixed_lighting": True, "calibrated": False}
         if self.scene_layout == "joint_slit":
             return {
                 "geometry_kind": "joint_slit", "illumination_scenario": self.current_scene_names[idx],

@@ -100,6 +100,18 @@ def build_state_vector(env, target_v, R, exposure, gain, no_odom, include_camera
 
 def policy_forward(model, state, hx, env, **kwargs):
     """Supply only the camera head with known command-queue/time information."""
+    pending_flight_commands = kwargs.pop("pending_flight_commands", None)
+    if getattr(env, "camera_queue_aligned_intent", False):
+        if pending_flight_commands is None:
+            raise ValueError("queue-aligned intent requires pending flight commands")
+        from motion_prediction import predict_exposure_motion
+        local_frame = build_local_frame(env)
+        def aligned_intent(action):
+            command = decode_action_direct(action, local_frame, env, state.shape[0], model.max_acc_cmd)
+            prediction = predict_exposure_motion(env, pending_flight_commands, command, _camera_delay_frames(env))
+            velocity = (prediction["velocity"][:, None] @ local_frame).squeeze(1) / model.nominal_speed
+            return torch.cat([velocity, prediction["angular_velocity"]], -1)
+        kwargs["intent_motion_predictor"] = aligned_intent
     if getattr(model, "uses_camera_timeline", False):
         applied = (kwargs["camera_state"] + 1) * .5
         requested = getattr(env, "_camera_requested_state", applied)

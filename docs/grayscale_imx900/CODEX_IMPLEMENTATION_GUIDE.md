@@ -15,6 +15,18 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+### Bounded occlusion follow-up (2026-11-02)
+
+The user authorized an independent `occluded_route` scene and diagnosis only,
+not policy training. See [OCCLUDED_ROUTE_2026_11_02.md](OCCLUDED_ROUTE_2026_11_02.md).
+The scene passes initial occlusion, lateral reveal and scripted navigation, but
+ordinary lateral observation + mean-AE matches the best tested camera/motion
+combination (8/8 confirmation). Current warp_ste also misses the measured
+finite-action disocclusion effect. **Do not launch training or enlarge the
+screen.** Retain the scene/timing interfaces and negative result; no frozen
+slit/checkpoint is replaced. Queue-aligned intent is opt-in, nominal rather
+than privileged prediction, and does not add new network parameters.
+
 ### Current decision (2026-10-29)
 
 The user returned the work to the **single-slit** task. See
@@ -201,7 +213,8 @@ Run:
 Cut:
 
 [
-(E,G)ightarrow I
+(E,G)
+ightarrow I
 ]
 
 gradient at the sensor boundary.
@@ -212,9 +225,12 @@ Preserve:
 
 [
 L_{nav}
-ightarrow I
-ightarrow(E,G)
-ightarrow	heta_{cam}.
+
+ightarrow I
+
+ightarrow(E,G)
+
+ightarrow	heta_{cam}.
 ]
 
 Everything else must match:

@@ -1,0 +1,27 @@
+[
+  {
+    "motion": "right",
+    "camera": [
+      0.03,
+      0.02
+    ]
+  },
+  {
+    "motion": "right",
+    "camera": "ae"
+  },
+  {
+    "motion": "hold",
+    "camera": [
+      0.03,
+      0.02
+    ]
+  },
+  {
+    "motion": "right",
+    "camera": [
+      0.3,
+      0.02
+    ]
+  }
+]

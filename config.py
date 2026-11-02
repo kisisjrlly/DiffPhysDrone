@@ -55,6 +55,7 @@ def build_parser():
                    help="Optional research mode: preserve feedback/smoothing derivatives and differentiate approach weights; requires grad_decay=1.")
     p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
+    p.add_argument("--camera_queue_aligned_intent", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--intent_horizon_s", type=float, default=0.20)
     p.add_argument("--scene_layout", choices=["single_wall_slit", *DIFFERENTIABLE_SCENES], default="single_wall_slit")
     p.add_argument("--observation_grad_mode", choices=["full", "detached"], default="detached")
@@ -279,6 +280,10 @@ def validate_args(args):
         raise ValueError("pose gradients / temporal integration require a differentiable scene")
     if args.pose_gradient_estimator != "analytic" and args.scene_layout not in DIFFERENTIABLE_SCENES:
         raise ValueError("image-warp pose gradients require a differentiable scene")
+    if args.camera_queue_aligned_intent and (args.policy_arch != "intent_shared" or args.scene_layout not in DIFFERENTIABLE_SCENES):
+        raise ValueError("queue-aligned intent requires intent_shared on a differentiable scene")
+    if args.scene_layout == "occluded_route" and any(s not in {"dark", "bright"} for s in args.scenarios):
+        raise ValueError("occluded_route v1 supports only dark/bright lighting")
     if args.scene_layout == "intent_gates":
         if not (args.simple_start_x < args.simple_wall_x and
                 args.simple_wall_x + args.intent_gate_spacing < args.simple_goal_x):

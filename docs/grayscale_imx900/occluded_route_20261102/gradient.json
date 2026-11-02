@@ -1,0 +1,27 @@
+{
+  "rows": [
+    {
+      "action_scale": 0.0,
+      "cue_mse": 0.0,
+      "autograd": 0.0,
+      "finite_action_difference": 0.0,
+      "finite_action_step": 0.05
+    },
+    {
+      "action_scale": 0.5,
+      "cue_mse": 0.006525975652039051,
+      "autograd": 1.319135942111284e-18,
+      "finite_action_difference": 0.016631376929581165,
+      "finite_action_step": 0.05
+    },
+    {
+      "action_scale": 1.0,
+      "cue_mse": 0.012503063306212425,
+      "autograd": -5.561395094444421e-12,
+      "finite_action_difference": 0.007830224931240082,
+      "finite_action_step": 0.05
+    }
+  ],
+  "metric": "noiseless irradiance template separation after 24 real dynamics steps",
+  "limitation": "diagnostic geometry used only in scoring; warp_ste has no disocclusion derivative; not navigation objective or a trained policy"
+}

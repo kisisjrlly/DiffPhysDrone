@@ -1,0 +1,39 @@
+{
+  "git_revision_at_execution": "c7ea58c49707af30559758b017130691efe8f985",
+  "dirty": true,
+  "calibrated": false,
+  "geometry_revisions": 0,
+  "training": false,
+  "local_full_logs": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/occluded_route_20261102_policy_resolution",
+  "episode_seed_bases": {
+    "development": 1102100,
+    "confirmation": 1102200
+  },
+  "notes": [
+    "8 episodes per split, batched RNG; not 8 training seeds",
+    "Initial debug run failed before completion; v2 and final debug repeat used same episode seeds",
+    "Final decoder uses 48x36 policy resolution; prior full-resolution debug results excluded",
+    "No tuning based on confirmation results; final rerun corrected decoder resolution and added timeline logging",
+    "Gradient probe is noiseless irradiance separation, not navigation loss"
+  ],
+  "delivery_source_sha256": {
+    "configs/gray_occluded_route.args": "be34e1c0163f996458820535e06d013db799b6b7152dac145cfeccc464522624",
+    "configs/calibration/imx900_provisional.json": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f",
+    "render/occluded_route.py": "c8520d4c97d9f0c69bd9ebd82965967e53d2095c60a38c71dfb4897ed79cf428",
+    "motion_prediction.py": "327b448f4682f1ff6a51f4deeb964cd63fae919d5c48d0dbe646fbe2ad1ff819",
+    "tools/audit_occluded_route.py": "b5b03ad5b93b271e06616444895d59c22e09073fbf8c525448155312e7a62c70",
+    "tools/audit_occluded_gradient.py": "32f9ce4b135e3640fe789b216eb3359ad8ea6ee0880ab3534957d60861cb1ff0",
+    "intent_model.py": "63afc52283f5bcd504bc967a8046a0f39c22df0d82e9d308142c44e4a98aa535",
+    "rollout_ops.py": "b04371699cdcd05f36647efb0bfb345330a671093e1daf574865ca086ed151ef",
+    "env_cuda.py": "6f5662c87bb12fba473c76d88da9c7ee2d6cc7b1e217b212396221d2144771f0",
+    "trainer.py": "a3221b16a66df247a7241c672a51b85df0ed45107a963e61911274cf0ef75a27",
+    "eval.py": "da9637c6bf426de6968ab7e6e16ac430789d7dc3e505b3251b64cbc488657070",
+    "train_utils.py": "3052d619e8c257d3b9a02e57bb69516db4e8991537aa7bcc710e1c08debc5257",
+    "render/intent_scene.py": "3f91723513810f67085e43d4026086983ced81ff3a0feb514608f22fb05bd5e2",
+    "render/pose.py": "f198a0290dbd04999a463feac6d2acfd255a795ae08f4c4fe4ccd4ee2c79b956"
+  },
+  "source_snapshot_note": "Exact executed sources and their hashes are in local run provenance/source_snapshot; delivered code adds input validation and removes unused locals after run, without changing successful simulation.",
+  "gradient_source_sha256": "32f9ce4b135e3640fe789b216eb3359ad8ea6ee0880ab3534957d60861cb1ff0",
+  "demo_source_sha256": "bacdb49c5f10f824924ea005fc3b8202fdee9e9108e7f5bf3bcaf1046a8968f6",
+  "video_sha256": "25350f5e41e8d5781834580720ac9fd5eb9b3e8af02a7fbe5e4ff629cc374c87"
+}
