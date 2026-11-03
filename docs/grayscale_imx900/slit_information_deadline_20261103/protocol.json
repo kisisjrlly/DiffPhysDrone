@@ -1,0 +1,194 @@
+{
+  "claim": "Privileged diagnostic controller/templates; NOT learned navigation or method superiority.",
+  "policy_training": false,
+  "calibrated": false,
+  "splits": {
+    "development": [
+      1,
+      2,
+      3,
+      12
+    ],
+    "confirmation": [
+      4,
+      5,
+      13,
+      16
+    ]
+  },
+  "scenarios": [
+    "dark",
+    "bright_to_dark"
+  ],
+  "motions": [
+    {
+      "id": 0,
+      "name": "original",
+      "x": [
+        -2.5,
+        -0.5,
+        0.5,
+        1.5
+      ],
+      "durations": [
+        2.6,
+        1.4,
+        1.6
+      ]
+    },
+    {
+      "id": 1,
+      "name": "slow_approach",
+      "x": [
+        -2.5,
+        -0.5,
+        0.5,
+        1.5
+      ],
+      "durations": [
+        3.0,
+        1.2,
+        1.4
+      ]
+    },
+    {
+      "id": 2,
+      "name": "settle_early",
+      "x": [
+        -2.5,
+        -1.0,
+        -1.0,
+        0.5,
+        1.5
+      ],
+      "durations": [
+        1.8,
+        0.4,
+        1.8,
+        1.6
+      ]
+    }
+  ],
+  "release_steps": [
+    0,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55
+  ],
+  "biases_m": [
+    -0.04,
+    -0.02,
+    -0.01,
+    0.0,
+    0.01,
+    0.02,
+    0.04
+  ],
+  "fps": 15,
+  "deadline_s": 6,
+  "sensor_wh": [
+    96,
+    72
+  ],
+  "input_wh": [
+    48,
+    36
+  ],
+  "grid_step_m": 0.01,
+  "reset_seed": 291030,
+  "dynamics_seed": 291031,
+  "noise_stream": "391031 + frame step; 32-layout indexed",
+  "historical_initial_light_factor": 1.0,
+  "sample_scope": "Historical tracker-successful layouts, NOT independent new held-out generalization.",
+  "cameras": [
+    {
+      "id": 0,
+      "name": "fixed_e0.10",
+      "kind": "fixed",
+      "exposure": 0.1,
+      "gain": 0.02,
+      "available": true
+    },
+    {
+      "id": 1,
+      "name": "fixed_e0.60",
+      "kind": "fixed",
+      "exposure": 0.6,
+      "gain": 0.02,
+      "available": true
+    },
+    {
+      "id": 2,
+      "name": "fixed_e0.85",
+      "kind": "fixed",
+      "exposure": 0.85,
+      "gain": 0.02,
+      "available": true
+    },
+    {
+      "id": 3,
+      "name": "matched_e0.10",
+      "kind": "fixed",
+      "exposure": 0.1,
+      "gain": 0.9989454904265024,
+      "available": true,
+      "match": {
+        "available": true,
+        "required_factor": 7.982476891173349,
+        "gain01": 0.9989454904265024,
+        "interpretation": "Matched exposure-time times gain, not matched SNR or measured brightness"
+      }
+    },
+    {
+      "id": 4,
+      "name": "matched_e0.60",
+      "kind": "fixed",
+      "exposure": 0.6,
+      "gain": 0.1845688762105384,
+      "available": true,
+      "match": {
+        "available": true,
+        "required_factor": 1.4678521186349514,
+        "gain01": 0.1845688762105384,
+        "interpretation": "Matched exposure-time times gain, not matched SNR or measured brightness"
+      }
+    },
+    {
+      "id": 5,
+      "name": "mean_ae",
+      "kind": "ae",
+      "available": true
+    },
+    {
+      "id": 6,
+      "name": "gradient_ae",
+      "kind": "ae",
+      "available": true
+    }
+  ],
+  "control_gate": "8/8 development; original process required for crossed attribution",
+  "geometry_lateral_margin_m": 0.0289,
+  "early_stop": "No eligible original control => no camera comparison, no training, no retuning.",
+  "source_sha256": {
+    "tools/audit_slit_information_deadline.py": "20e96ff93f83098212ef75cdeeddd57127ea5cc59c9018c6e7caf34bb64455a5",
+    "tools/audit_intent_scene.py": "b5269280975834d7f5dc7f1a952e30b7669c6ef091db2a6e63fdf4fa3dd38587",
+    "model.py": "ad39df953afc9793d1985bdae469fd773369cca2d9ea70766acd1027f01e4ca3",
+    "rollout_ops.py": "b04371699cdcd05f36647efb0bfb345330a671093e1daf574865ca086ed151ef",
+    "env_cuda.py": "6f5662c87bb12fba473c76d88da9c7ee2d6cc7b1e217b212396221d2144771f0",
+    "render/intent_scene.py": "3f91723513810f67085e43d4026086983ced81ff3a0feb514608f22fb05bd5e2",
+    "render/slit_scene.py": "ad44dc36331832aaae3fb1698e220bdbd2b52e09f216e99ce39ec1e5a743a77d",
+    "controllers/auto_exposure.py": "a368ca2ecb878fae437ae0f14236f4faf9fe71dcd8b2c8852f61457e9a04166c",
+    "configs/gray_joint_slit.args": "ba9639f0f7c888003a97eb7dfaf90c53e03dc846ab62879716240d335208b3f6"
+  },
+  "calibration_sha256": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f",
+  "historical_sha256": "28bc33334890dad3a7796301f195cb922816be3c55f9e75cd16d384306a37dc2",
+  "git_revision": "757714c4d60382502e6e62affc399b31c2bf1eab"
+}

@@ -1,0 +1,52 @@
+{
+  "reason": "Execution session disappeared during development; no exit status available.",
+  "completed_combinations_reused": [
+    [
+      "original",
+      "fixed_e0.10"
+    ],
+    [
+      "original",
+      "fixed_e0.60"
+    ],
+    [
+      "original",
+      "fixed_e0.85"
+    ],
+    [
+      "original",
+      "matched_e0.10"
+    ],
+    [
+      "original",
+      "matched_e0.60"
+    ],
+    [
+      "original",
+      "mean_ae"
+    ],
+    [
+      "original",
+      "gradient_ae"
+    ],
+    [
+      "settle_early",
+      "fixed_e0.10"
+    ],
+    [
+      "settle_early",
+      "fixed_e0.60"
+    ],
+    [
+      "settle_early",
+      "fixed_e0.85"
+    ],
+    [
+      "settle_early",
+      "matched_e0.10"
+    ]
+  ],
+  "parameters_changed": false,
+  "additional_episodes": false,
+  "script_sha256": "0b68657c844ef2d392befd9e8ea0d0f87c4bd11a59f04d76b1e740972f983221"
+}

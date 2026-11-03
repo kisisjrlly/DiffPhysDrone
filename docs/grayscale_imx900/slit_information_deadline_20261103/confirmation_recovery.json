@@ -1,0 +1,16 @@
+{
+  "reason": "Executor disappeared without exit status.",
+  "completed_files_reused": [
+    "confirm_0_bright_to_dark.json",
+    "confirm_0_dark.json",
+    "confirm_1_bright_to_dark.json",
+    "confirm_1_dark.json",
+    "confirm_2_bright_to_dark.json",
+    "confirm_2_dark.json",
+    "confirm_3_dark.json"
+  ],
+  "locked_candidates_sha256": "45ea5829b056e2d593a4e3814329a1937b95f967d528faee962ac0a0350489d4",
+  "no_reselection": true,
+  "no_parameter_changes": true,
+  "no_new_episodes": true
+}

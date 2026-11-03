@@ -1,0 +1,732 @@
+{
+  "0_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 4,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": null,
+        "0.01": null,
+        "0.02": null,
+        "0.04": null
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 10,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "0_bright_to_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 4,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 11,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 10,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "1_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 2,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": null,
+        "0.01": null,
+        "0.02": null,
+        "0.04": null
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 51,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": null,
+        "0.01": null,
+        "0.02": null,
+        "0.04": null
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "1_bright_to_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 51,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "2_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 13,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": null,
+        "0.01": null,
+        "0.02": null,
+        "0.04": null
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 10,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "2_bright_to_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 11,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 10,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "3_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 2,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 15,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 51,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "3_bright_to_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 51,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "4_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 4,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 11,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 10,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ],
+  "4_bright_to_dark": [
+    {
+      "episode_index": 4,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 4,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 5,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 11,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 13,
+      "cross_step": 52,
+      "stable_error_threshold_steps": {
+        "0.005": 10,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    },
+    {
+      "episode_index": 16,
+      "cross_step": 53,
+      "stable_error_threshold_steps": {
+        "0.005": 0,
+        "0.01": 0,
+        "0.02": 0,
+        "0.04": 0
+      },
+      "zero_bias_successful_release_steps": [
+        0,
+        5,
+        10,
+        15
+      ],
+      "caution": "Varying image errors differ from a single constant-bias release; thresholds are descriptive."
+    }
+  ]
+}

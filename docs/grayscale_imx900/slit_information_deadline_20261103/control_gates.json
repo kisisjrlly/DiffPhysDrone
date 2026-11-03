@@ -1,0 +1,12 @@
+{
+  "development": {
+    "original": true,
+    "slow_approach": false,
+    "settle_early": true
+  },
+  "confirmation": {
+    "original": true,
+    "slow_approach": false,
+    "settle_early": true
+  }
+}

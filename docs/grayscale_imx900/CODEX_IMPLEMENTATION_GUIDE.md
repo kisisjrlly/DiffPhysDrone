@@ -15,6 +15,31 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+### Bounded information-deadline diagnostic (2026-11-03)
+
+The user authorized information release and an image-driven template/controller
+diagnostic on the existing `joint_slit`, without policy training, retuning,
+geometry changes or new training seeds. Use
+`tools/audit_slit_information_deadline.py`. The historical CUDA initial state
+and 32-element disturbance stream are replayed; only the locked four layouts
+per split are scored under dark / bright-to-dark illumination. These layouts
+were selected from historical tracking successes, not new independent held-out
+data. All three full-information control references must be reported. Only
+development-control-successful processes enter the image comparison, and
+camera candidates must be locked before confirmation. The privileged image
+templates are diagnostic only, never deployed policy observations or training
+labels. Production physics, image preprocessing and frozen checkpoints remain
+unchanged.
+See [SLIT_INFORMATION_DEADLINE_2026_11_03.md](SLIT_INFORMATION_DEADLINE_2026_11_03.md).
+Original/settle control references pass (8/8 in each split); slow approach
+fails (4/8), so it is excluded without retuning. All 14 development image
+combinations and all 5 locked confirmation combinations succeed 8/8.
+Interaction is zero. This is a **ceiling / insufficient discrimination**
+decision, not evidence for training or joint advantage. Exact information
+released at 1s succeeds on all 8 layouts; at 1.667s only 1/8 succeeds, but the
+privileged image decoder already has small position error at the first frame.
+Stop; no training, larger matrix, physical retuning or new scene is authorized.
+
 ### Bounded input-scale diagnosis (2026-11-02)
 
 The user authorized a same-noisy-frame 48x36 vs 96x72 image probe only.

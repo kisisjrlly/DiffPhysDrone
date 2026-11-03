@@ -1,0 +1,76 @@
+{
+  "status": "locked",
+  "arms": [
+    {
+      "motion": "original",
+      "camera": {
+        "id": 6,
+        "name": "gradient_ae",
+        "kind": "ae",
+        "available": true
+      }
+    },
+    {
+      "motion": "settle_early",
+      "camera": {
+        "id": 6,
+        "name": "gradient_ae",
+        "kind": "ae",
+        "available": true
+      }
+    },
+    {
+      "motion": "original",
+      "camera": {
+        "id": 0,
+        "name": "fixed_e0.10",
+        "kind": "fixed",
+        "exposure": 0.1,
+        "gain": 0.02,
+        "available": true
+      }
+    },
+    {
+      "motion": "settle_early",
+      "camera": {
+        "id": 1,
+        "name": "fixed_e0.60",
+        "kind": "fixed",
+        "exposure": 0.6,
+        "gain": 0.02,
+        "available": true
+      }
+    },
+    {
+      "motion": "original",
+      "camera": {
+        "id": 1,
+        "name": "fixed_e0.60",
+        "kind": "fixed",
+        "exposure": 0.6,
+        "gain": 0.02,
+        "available": true
+      }
+    }
+  ],
+  "role_ids": {
+    "base_ae": 0,
+    "best_ae": 1,
+    "base_fixed": 2,
+    "joint": 3,
+    "cross_fixed": 4,
+    "joint_ae": 1,
+    "cross_ae": 0
+  },
+  "ae_family": "gradient_ae",
+  "development_counts": {
+    "base_ae": 8,
+    "best_ae": 8,
+    "base_fixed": 8,
+    "joint": 8,
+    "cross_fixed": 8,
+    "joint_ae": 8,
+    "cross_ae": 8
+  },
+  "selection_rule": "success, failure-penalized time, command effort, motion id, camera id"
+}
