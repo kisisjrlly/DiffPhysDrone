@@ -1,0 +1,29 @@
+{
+  "priority": "collision_geometry_first",
+  "reason": "Declared sphere is clear at newly lost cases stopped by its conservative expanded-box enclosure.",
+  "safe_terminal_cases": [
+    {
+      "cell": "OD",
+      "seed": 30005,
+      "clearance_lower_mm": 11.39635096719461
+    },
+    {
+      "cell": "OD",
+      "seed": 30015,
+      "clearance_lower_mm": 10.234097154580045
+    },
+    {
+      "cell": "WD",
+      "seed": 30001,
+      "clearance_lower_mm": 9.301492334667616
+    },
+    {
+      "cell": "WD",
+      "seed": 30008,
+      "clearance_lower_mm": 26.77676589048179
+    }
+  ],
+  "no_revised_success_claim": true,
+  "no_training": true,
+  "next_only": "Make the continuous collision criterion consistent with the declared spherical body, then reevaluate the same locked episodes; do not change camera, training or collision margin."
+}

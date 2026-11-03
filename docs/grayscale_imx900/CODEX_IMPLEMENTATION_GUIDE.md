@@ -15,6 +15,26 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+### Two-block transfer audit identifies a collision-geometry priority (2026-11-03)
+
+See [GRAY_TRANSFER_CROSS_2026_11_03.md](GRAY_TRANSFER_CROSS_2026_11_03.md) and its
+locked plan. Only two new conditions (32 historical episodes) were evaluated;
+no training or production physics changes. At the old start, old/old=8/16,
+new-scene/old-motion=3/16, old-scene/new-motion=6/16, new/new=1/16. These are raw
+outcomes under their original collision rules, not geometry-matched capability
+comparisons. All 48 matched-state original frame/action replays pass.
+
+Four added terminations caused by enabling the motion/collision block occur
+while the declared spherical body has a certified continuous clearance lower
+bound of 9.3–26.8mm, above the 1.1mm threshold. The radius-expanded AABB sweep is
+a documented conservative enclosure, whereas signed clearance uses a sphere.
+**The next priority is to align continuous collision with the declared body
+geometry and reevaluate the same locked episodes.** Preserve radius, collision
+margin and anti-tunnelling checks; no success count after correction is known.
+Do not claim all losses are collision artifacts: the scene/image-only block
+also loses five old successes. Do not launch training or change the network
+on the basis of these raw failure counts.
+
 ### Historical-chain regression supersedes the fixed-camera prerequisite (2026-11-03)
 
 See [GRAY_CHAIN_REGRESSION_2026_11_03.md](GRAY_CHAIN_REGRESSION_2026_11_03.md).

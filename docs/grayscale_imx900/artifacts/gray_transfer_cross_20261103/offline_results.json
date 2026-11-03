@@ -1,0 +1,2177 @@
+{
+  "executed": true,
+  "rows": [
+    {
+      "seed": 30000,
+      "scenario": "dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.0029611021745949984,
+      "network_input_mae": 0.00589017616584897,
+      "action_max_difference": 0.0162353515625,
+      "old_action": [
+        [
+          0.462646484375,
+          -0.162841796875,
+          -0.03924560546875
+        ]
+      ],
+      "new_action": [
+        [
+          0.460693359375,
+          -0.1466064453125,
+          -0.046783447265625
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30000,
+      "scenario": "dark",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.03332740440964699,
+      "network_input_mae": 0.06600863486528397,
+      "action_max_difference": 0.08935546875,
+      "old_action": [
+        [
+          0.251220703125,
+          -0.390625,
+          -0.002094268798828125
+        ]
+      ],
+      "new_action": [
+        [
+          0.2587890625,
+          -0.30126953125,
+          -0.01348876953125
+        ]
+      ],
+      "position": [
+        [
+          -0.9576969146728516,
+          -0.22617797553539276,
+          1.4938157796859741
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7287065386772156
+        ],
+        [
+          0.0672386959195137
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30000,
+      "scenario": "dark",
+      "label": "at_minus_half_m",
+      "step": 26,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.08172079920768738,
+      "network_input_mae": 0.16328363120555878,
+      "action_max_difference": 0.013875961303710938,
+      "old_action": [
+        [
+          0.73974609375,
+          1.162109375,
+          0.0118865966796875
+        ]
+      ],
+      "new_action": [
+        [
+          0.73779296875,
+          1.154296875,
+          -0.0019893646240234375
+        ]
+      ],
+      "position": [
+        [
+          -0.4450024664402008,
+          -0.5526948571205139,
+          1.4707242250442505
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.72038334608078
+        ],
+        [
+          0.0679970383644104
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30001,
+      "scenario": "bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.036951832473278046,
+      "network_input_mae": 0.07203954458236694,
+      "action_max_difference": 0.00927734375,
+      "old_action": [
+        [
+          0.498046875,
+          -0.04931640625,
+          -0.03497314453125
+        ]
+      ],
+      "new_action": [
+        [
+          0.50732421875,
+          -0.05816650390625,
+          -0.0323486328125
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30001,
+      "scenario": "bright",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.016585836187005043,
+      "network_input_mae": 0.03279436379671097,
+      "action_max_difference": 0.01513671875,
+      "old_action": [
+        [
+          0.35546875,
+          -0.305419921875,
+          -0.166748046875
+        ]
+      ],
+      "new_action": [
+        [
+          0.37060546875,
+          -0.291748046875,
+          -0.1749267578125
+        ]
+      ],
+      "position": [
+        [
+          -0.938160240650177,
+          -0.06653687357902527,
+          1.5216305255889893
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30001,
+      "scenario": "bright",
+      "label": "at_minus_half_m",
+      "step": 23,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.02892906218767166,
+      "network_input_mae": 0.05666887387633324,
+      "action_max_difference": 0.02001953125,
+      "old_action": [
+        [
+          -0.0118408203125,
+          0.77783203125,
+          -0.330078125
+        ]
+      ],
+      "new_action": [
+        [
+          0.0025691986083984375,
+          0.7978515625,
+          -0.327880859375
+        ]
+      ],
+      "position": [
+        [
+          -0.4337005317211151,
+          -0.18931426107883453,
+          1.5335780382156372
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30002,
+      "scenario": "dark_to_bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6867635250091553,
+      "network_input_mae": 1.373526930809021,
+      "action_max_difference": 0.0224609375,
+      "old_action": [
+        [
+          0.50732421875,
+          0.0004010200500488281,
+          -0.032196044921875
+        ]
+      ],
+      "new_action": [
+        [
+          0.52978515625,
+          0.0002722740173339844,
+          -0.030517578125
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30002,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.610952615737915,
+      "network_input_mae": 1.22190523147583,
+      "action_max_difference": 0.07639312744140625,
+      "old_action": [
+        [
+          0.67041015625,
+          -0.085205078125,
+          -0.1768798828125
+        ]
+      ],
+      "new_action": [
+        [
+          0.634765625,
+          -0.00881195068359375,
+          -0.15380859375
+        ]
+      ],
+      "position": [
+        [
+          -0.9763222336769104,
+          -0.019495531916618347,
+          1.535315752029419
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.6494806408882141
+        ],
+        [
+          0.053746774792671204
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30002,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_half_m",
+      "step": 23,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.4623471796512604,
+      "network_input_mae": 0.9246943593025208,
+      "action_max_difference": 0.101318359375,
+      "old_action": [
+        [
+          0.25341796875,
+          0.246337890625,
+          -0.11859130859375
+        ]
+      ],
+      "new_action": [
+        [
+          0.208740234375,
+          0.34765625,
+          -0.1038818359375
+        ]
+      ],
+      "position": [
+        [
+          -0.4847879111766815,
+          -0.0321502611041069,
+          1.5334954261779785
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.4179001450538635
+        ],
+        [
+          0.030946731567382812
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30003,
+      "scenario": "bright_to_dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6862468123435974,
+      "network_input_mae": 1.3724937438964844,
+      "action_max_difference": 0.1558837890625,
+      "old_action": [
+        [
+          0.488037109375,
+          -0.0946044921875,
+          -0.03948974609375
+        ]
+      ],
+      "new_action": [
+        [
+          0.513671875,
+          -0.25048828125,
+          -0.032623291015625
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30003,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.35673102736473083,
+      "network_input_mae": 0.7134620547294617,
+      "action_max_difference": 0.243896484375,
+      "old_action": [
+        [
+          0.58447265625,
+          0.1826171875,
+          0.026092529296875
+        ]
+      ],
+      "new_action": [
+        [
+          0.56005859375,
+          0.426513671875,
+          0.038330078125
+        ]
+      ],
+      "position": [
+        [
+          -0.9790897965431213,
+          -0.13840746879577637,
+          1.4982458353042603
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30003,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.3017248809337616,
+      "network_input_mae": 0.6034497618675232,
+      "action_max_difference": 0.0595703125,
+      "old_action": [
+        [
+          0.35986328125,
+          0.87109375,
+          -0.14306640625
+        ]
+      ],
+      "new_action": [
+        [
+          0.322509765625,
+          0.9306640625,
+          -0.132080078125
+        ]
+      ],
+      "position": [
+        [
+          -0.4333594739437103,
+          -0.2983890771865845,
+          1.49895179271698
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.09583775699138641
+        ],
+        [
+          0.006876382976770401
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30004,
+      "scenario": "dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.0028207728173583746,
+      "network_input_mae": 0.005609501153230667,
+      "action_max_difference": 0.0103759765625,
+      "old_action": [
+        [
+          0.4638671875,
+          -0.1468505859375,
+          -0.03851318359375
+        ]
+      ],
+      "new_action": [
+        [
+          0.46142578125,
+          -0.136474609375,
+          -0.045562744140625
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30004,
+      "scenario": "dark",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.03255902975797653,
+      "network_input_mae": 0.06461245566606522,
+      "action_max_difference": 0.08251953125,
+      "old_action": [
+        [
+          0.21240234375,
+          -0.7080078125,
+          -0.26025390625
+        ]
+      ],
+      "new_action": [
+        [
+          0.211669921875,
+          -0.62548828125,
+          -0.269775390625
+        ]
+      ],
+      "position": [
+        [
+          -0.9644954800605774,
+          -0.1990070343017578,
+          1.5547353029251099
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7608442306518555
+        ],
+        [
+          0.07405492663383484
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30004,
+      "scenario": "dark",
+      "label": "at_minus_half_m",
+      "step": 26,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.06734004616737366,
+      "network_input_mae": 0.13464348018169403,
+      "action_max_difference": 0.0166015625,
+      "old_action": [
+        [
+          0.759765625,
+          0.60888671875,
+          -0.054046630859375
+        ]
+      ],
+      "new_action": [
+        [
+          0.75537109375,
+          0.59228515625,
+          -0.07049560546875
+        ]
+      ],
+      "position": [
+        [
+          -0.4666246473789215,
+          -0.48069801926612854,
+          1.531618595123291
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7469549775123596
+        ],
+        [
+          0.0742565467953682
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30005,
+      "scenario": "bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.03915107995271683,
+      "network_input_mae": 0.07647652179002762,
+      "action_max_difference": 0.02606201171875,
+      "old_action": [
+        [
+          0.481201171875,
+          0.10308837890625,
+          -0.04241943359375
+        ]
+      ],
+      "new_action": [
+        [
+          0.486328125,
+          0.129150390625,
+          -0.041168212890625
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30005,
+      "scenario": "bright",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.020472552627325058,
+      "network_input_mae": 0.04072847217321396,
+      "action_max_difference": 0.02978515625,
+      "old_action": [
+        [
+          0.438232421875,
+          0.16064453125,
+          0.1573486328125
+        ]
+      ],
+      "new_action": [
+        [
+          0.468017578125,
+          0.1378173828125,
+          0.1568603515625
+        ]
+      ],
+      "position": [
+        [
+          -0.9309383630752563,
+          0.1667998880147934,
+          1.4815374612808228
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.09004626423120499
+        ],
+        [
+          0.006460842210799456
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30005,
+      "scenario": "bright",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.03564586117863655,
+      "network_input_mae": 0.06981459259986877,
+      "action_max_difference": 0.016845703125,
+      "old_action": [
+        [
+          0.348388671875,
+          -0.9111328125,
+          -0.1378173828125
+        ]
+      ],
+      "new_action": [
+        [
+          0.365234375,
+          -0.91748046875,
+          -0.13525390625
+        ]
+      ],
+      "position": [
+        [
+          -0.471172958612442,
+          0.32580846548080444,
+          1.482710361480713
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.09232012182474136
+        ],
+        [
+          0.0066239917650818825
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30006,
+      "scenario": "dark_to_bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6549859642982483,
+      "network_input_mae": 1.3099719285964966,
+      "action_max_difference": 0.0380859375,
+      "old_action": [
+        [
+          0.48046875,
+          0.159912109375,
+          -0.046844482421875
+        ]
+      ],
+      "new_action": [
+        [
+          0.470947265625,
+          0.197998046875,
+          -0.0440673828125
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30006,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_1m",
+      "step": 19,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6092687249183655,
+      "network_input_mae": 1.2185373306274414,
+      "action_max_difference": 0.288818359375,
+      "old_action": [
+        [
+          0.43212890625,
+          0.6865234375,
+          -0.1219482421875
+        ]
+      ],
+      "new_action": [
+        [
+          0.468505859375,
+          0.397705078125,
+          -0.1298828125
+        ]
+      ],
+      "position": [
+        [
+          -0.9771437644958496,
+          0.17643477022647858,
+          1.5273315906524658
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.6594441533088684
+        ],
+        [
+          0.056418370455503464
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30006,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_half_m",
+      "step": 28,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.48826634883880615,
+      "network_input_mae": 0.9765326976776123,
+      "action_max_difference": 0.214111328125,
+      "old_action": [
+        [
+          0.78271484375,
+          -0.347412109375,
+          -0.025146484375
+        ]
+      ],
+      "new_action": [
+        [
+          0.783203125,
+          -0.5615234375,
+          -0.00907135009765625
+        ]
+      ],
+      "position": [
+        [
+          -0.4468206465244293,
+          0.45309969782829285,
+          1.501848578453064
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.3376089334487915
+        ],
+        [
+          0.0204673670232296
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30007,
+      "scenario": "bright_to_dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6894115209579468,
+      "network_input_mae": 1.378823161125183,
+      "action_max_difference": 0.17919921875,
+      "old_action": [
+        [
+          0.484130859375,
+          -0.13623046875,
+          -0.043121337890625
+        ]
+      ],
+      "new_action": [
+        [
+          0.49365234375,
+          -0.3154296875,
+          -0.036529541015625
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30007,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.356563538312912,
+      "network_input_mae": 0.7131271362304688,
+      "action_max_difference": 0.31396484375,
+      "old_action": [
+        [
+          0.201904296875,
+          -0.252197265625,
+          -0.1812744140625
+        ]
+      ],
+      "new_action": [
+        [
+          0.1785888671875,
+          0.061767578125,
+          -0.156494140625
+        ]
+      ],
+      "position": [
+        [
+          -0.9401522278785706,
+          -0.18087807297706604,
+          1.5178743600845337
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30007,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_half_m",
+      "step": 23,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.3253656327724457,
+      "network_input_mae": 0.6507312059402466,
+      "action_max_difference": 0.18603515625,
+      "old_action": [
+        [
+          0.1141357421875,
+          0.98388671875,
+          -0.1607666015625
+        ]
+      ],
+      "new_action": [
+        [
+          0.1068115234375,
+          1.169921875,
+          -0.139892578125
+        ]
+      ],
+      "position": [
+        [
+          -0.4526589512825012,
+          -0.3529298007488251,
+          1.517377257347107
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30008,
+      "scenario": "dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.0015177058521658182,
+      "network_input_mae": 0.0029882395174354315,
+      "action_max_difference": 0.002685546875,
+      "old_action": [
+        [
+          0.4853515625,
+          -0.08831787109375,
+          -0.034027099609375
+        ]
+      ],
+      "new_action": [
+        [
+          0.488037109375,
+          -0.08697509765625,
+          -0.0335693359375
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30008,
+      "scenario": "dark",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.01341097243130207,
+      "network_input_mae": 0.025215255096554756,
+      "action_max_difference": 0.0107421875,
+      "old_action": [
+        [
+          0.55224609375,
+          -0.185302734375,
+          0.06988525390625
+        ]
+      ],
+      "new_action": [
+        [
+          0.56298828125,
+          -0.1759033203125,
+          0.0672607421875
+        ]
+      ],
+      "position": [
+        [
+          -0.989607036113739,
+          -0.09280223399400711,
+          1.4995763301849365
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7124594449996948
+        ],
+        [
+          0.06389335542917252
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30008,
+      "scenario": "dark",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.027554528787732124,
+      "network_input_mae": 0.05164942145347595,
+      "action_max_difference": 0.01806640625,
+      "old_action": [
+        [
+          0.31396484375,
+          0.88671875,
+          0.06787109375
+        ]
+      ],
+      "new_action": [
+        [
+          0.322998046875,
+          0.90478515625,
+          0.067626953125
+        ]
+      ],
+      "position": [
+        [
+          -0.44534412026405334,
+          -0.24538418650627136,
+          1.4777154922485352
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7481459975242615
+        ],
+        [
+          0.07167823612689972
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": true
+    },
+    {
+      "seed": 30009,
+      "scenario": "bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.04800960049033165,
+      "network_input_mae": 0.09458120912313461,
+      "action_max_difference": 0.006011962890625,
+      "old_action": [
+        [
+          0.47265625,
+          0.171142578125,
+          -0.038421630859375
+        ]
+      ],
+      "new_action": [
+        [
+          0.4697265625,
+          0.16796875,
+          -0.04443359375
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30009,
+      "scenario": "bright",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.03360075503587723,
+      "network_input_mae": 0.06645132601261139,
+      "action_max_difference": 0.12237548828125,
+      "old_action": [
+        [
+          0.267333984375,
+          0.2071533203125,
+          -0.52734375
+        ]
+      ],
+      "new_action": [
+        [
+          0.301025390625,
+          0.08477783203125,
+          -0.5224609375
+        ]
+      ],
+      "position": [
+        [
+          -0.9356240034103394,
+          0.20513728260993958,
+          1.5800336599349976
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.09199416637420654
+        ],
+        [
+          0.006600604392588139
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30009,
+      "scenario": "bright",
+      "label": "at_minus_half_m",
+      "step": 25,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.0601314939558506,
+      "network_input_mae": 0.11997748166322708,
+      "action_max_difference": 0.0595703125,
+      "old_action": [
+        [
+          0.412841796875,
+          -1.025390625,
+          -0.34326171875
+        ]
+      ],
+      "new_action": [
+        [
+          0.444091796875,
+          -1.0849609375,
+          -0.319580078125
+        ]
+      ],
+      "position": [
+        [
+          -0.42912307381629944,
+          0.43595805764198303,
+          1.5888092517852783
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30010,
+      "scenario": "dark_to_bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6220493912696838,
+      "network_input_mae": 1.2440987825393677,
+      "action_max_difference": 0.044921875,
+      "old_action": [
+        [
+          0.46875,
+          -0.146240234375,
+          -0.039337158203125
+        ]
+      ],
+      "new_action": [
+        [
+          0.4970703125,
+          -0.191162109375,
+          -0.042724609375
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30010,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6198614835739136,
+      "network_input_mae": 1.2397229671478271,
+      "action_max_difference": 0.32080078125,
+      "old_action": [
+        [
+          0.286865234375,
+          -0.58642578125,
+          -0.118408203125
+        ]
+      ],
+      "new_action": [
+        [
+          0.27783203125,
+          -0.265625,
+          -0.0865478515625
+        ]
+      ],
+      "position": [
+        [
+          -0.9925524592399597,
+          -0.13361310958862305,
+          1.5182251930236816
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.6883018612861633
+        ],
+        [
+          0.060181841254234314
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30010,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.4177781641483307,
+      "network_input_mae": 0.8355563282966614,
+      "action_max_difference": 0.130859375,
+      "old_action": [
+        [
+          0.40087890625,
+          0.4990234375,
+          -0.051910400390625
+        ]
+      ],
+      "new_action": [
+        [
+          0.400146484375,
+          0.6298828125,
+          -0.051239013671875
+        ]
+      ],
+      "position": [
+        [
+          -0.48433101177215576,
+          -0.33159130811691284,
+          1.5067695379257202
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.42602482438087463
+        ],
+        [
+          0.03550785034894943
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30011,
+      "scenario": "bright_to_dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.702972948551178,
+      "network_input_mae": 1.405945897102356,
+      "action_max_difference": 0.17791748046875,
+      "old_action": [
+        [
+          0.486572265625,
+          -0.08648681640625,
+          -0.0379638671875
+        ]
+      ],
+      "new_action": [
+        [
+          0.51220703125,
+          -0.264404296875,
+          -0.031829833984375
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30011,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.35976287722587585,
+      "network_input_mae": 0.7195257544517517,
+      "action_max_difference": 0.178955078125,
+      "old_action": [
+        [
+          0.64501953125,
+          0.2578125,
+          -0.024444580078125
+        ]
+      ],
+      "new_action": [
+        [
+          0.60986328125,
+          0.436767578125,
+          -0.01160430908203125
+        ]
+      ],
+      "position": [
+        [
+          -0.9301590919494629,
+          -0.1775691956281662,
+          1.5203962326049805
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.09055821597576141
+        ],
+        [
+          0.006497574970126152
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30011,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.31365638971328735,
+      "network_input_mae": 0.6273127794265747,
+      "action_max_difference": 0.03515625,
+      "old_action": [
+        [
+          0.3505859375,
+          1.177734375,
+          0.0127716064453125
+        ]
+      ],
+      "new_action": [
+        [
+          0.326904296875,
+          1.212890625,
+          0.020233154296875
+        ]
+      ],
+      "position": [
+        [
+          -0.45721638202667236,
+          -0.3252488970756531,
+          1.5049571990966797
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.09465470165014267
+        ],
+        [
+          0.006791498512029648
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30012,
+      "scenario": "dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.0016921748174354434,
+      "network_input_mae": 0.0033282677177339792,
+      "action_max_difference": 0.00262451171875,
+      "old_action": [
+        [
+          0.48486328125,
+          -0.104248046875,
+          -0.035430908203125
+        ]
+      ],
+      "new_action": [
+        [
+          0.486328125,
+          -0.10162353515625,
+          -0.034027099609375
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30012,
+      "scenario": "dark",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.018091527745127678,
+      "network_input_mae": 0.03500968962907791,
+      "action_max_difference": 0.035400390625,
+      "old_action": [
+        [
+          0.6787109375,
+          -0.353759765625,
+          -0.33349609375
+        ]
+      ],
+      "new_action": [
+        [
+          0.6884765625,
+          -0.318359375,
+          -0.333251953125
+        ]
+      ],
+      "position": [
+        [
+          -0.9959176182746887,
+          -0.07791312783956528,
+          1.5601445436477661
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7120011448860168
+        ],
+        [
+          0.06383679062128067
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30012,
+      "scenario": "dark",
+      "label": "at_minus_half_m",
+      "step": 26,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.047119442373514175,
+      "network_input_mae": 0.09240560233592987,
+      "action_max_difference": 0.022705078125,
+      "old_action": [
+        [
+          0.6025390625,
+          0.2275390625,
+          -0.130615234375
+        ]
+      ],
+      "new_action": [
+        [
+          0.611328125,
+          0.250244140625,
+          -0.1287841796875
+        ]
+      ],
+      "position": [
+        [
+          -0.4298197627067566,
+          -0.24627701938152313,
+          1.5555620193481445
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.7449508905410767
+        ],
+        [
+          0.07100457698106766
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30013,
+      "scenario": "bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.06014779582619667,
+      "network_input_mae": 0.11923928558826447,
+      "action_max_difference": 0.0084228515625,
+      "old_action": [
+        [
+          0.471923828125,
+          -0.167724609375,
+          -0.042816162109375
+        ]
+      ],
+      "new_action": [
+        [
+          0.468994140625,
+          -0.1761474609375,
+          -0.0455322265625
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30013,
+      "scenario": "bright",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.038190774619579315,
+      "network_input_mae": 0.07572463154792786,
+      "action_max_difference": 0.036376953125,
+      "old_action": [
+        [
+          0.06390380859375,
+          -0.42236328125,
+          -0.1097412109375
+        ]
+      ],
+      "new_action": [
+        [
+          0.0770263671875,
+          -0.385986328125,
+          -0.121337890625
+        ]
+      ],
+      "position": [
+        [
+          -0.9763839840888977,
+          -0.21020379662513733,
+          1.5160311460494995
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30013,
+      "scenario": "bright",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.08859926462173462,
+      "network_input_mae": 0.1768467128276825,
+      "action_max_difference": 0.041015625,
+      "old_action": [
+        [
+          -0.0308685302734375,
+          1.0703125,
+          -0.247802734375
+        ]
+      ],
+      "new_action": [
+        [
+          -0.0021209716796875,
+          1.111328125,
+          -0.2470703125
+        ]
+      ],
+      "position": [
+        [
+          -0.44251272082328796,
+          -0.4670428931713104,
+          1.5211299657821655
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.08942508697509766
+        ],
+        [
+          0.006416272837668657
+        ]
+      ],
+      "old_flight_success": false,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30014,
+      "scenario": "dark_to_bright",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.6441735625267029,
+      "network_input_mae": 1.2883473634719849,
+      "action_max_difference": 0.02392578125,
+      "old_action": [
+        [
+          0.5009765625,
+          0.031982421875,
+          -0.037017822265625
+        ]
+      ],
+      "new_action": [
+        [
+          0.52490234375,
+          0.03472900390625,
+          -0.034027099609375
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30014,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_1m",
+      "step": 18,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.5966891646385193,
+      "network_input_mae": 1.1933783292770386,
+      "action_max_difference": 0.08837890625,
+      "old_action": [
+        [
+          0.63623046875,
+          0.1402587890625,
+          -0.340576171875
+        ]
+      ],
+      "new_action": [
+        [
+          0.619140625,
+          0.0518798828125,
+          -0.3427734375
+        ]
+      ],
+      "position": [
+        [
+          -0.9309647083282471,
+          0.028348224237561226,
+          1.5572242736816406
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.6702346205711365
+        ],
+        [
+          0.0587744303047657
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30014,
+      "scenario": "dark_to_bright",
+      "label": "at_minus_half_m",
+      "step": 24,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.45362532138824463,
+      "network_input_mae": 0.907250702381134,
+      "action_max_difference": 0.0145263671875,
+      "old_action": [
+        [
+          0.28125,
+          -0.1480712890625,
+          -0.42236328125
+        ]
+      ],
+      "new_action": [
+        [
+          0.273193359375,
+          -0.16259765625,
+          -0.418212890625
+        ]
+      ],
+      "position": [
+        [
+          -0.4512367844581604,
+          0.0873584970831871,
+          1.5747501850128174
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.41185691952705383
+        ],
+        [
+          0.0336274579167366
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30015,
+      "scenario": "bright_to_dark",
+      "label": "initial",
+      "step": 0,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.7346586585044861,
+      "network_input_mae": 1.4693174362182617,
+      "action_max_difference": 0.18194580078125,
+      "old_action": [
+        [
+          0.48876953125,
+          0.09271240234375,
+          -0.0389404296875
+        ]
+      ],
+      "new_action": [
+        [
+          0.5712890625,
+          0.274658203125,
+          -0.04510498046875
+        ]
+      ],
+      "position": [
+        [
+          -1.5,
+          0.0,
+          1.5
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.10000000149011612
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30015,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_1m",
+      "step": 17,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.38419631123542786,
+      "network_input_mae": 0.7683925628662109,
+      "action_max_difference": 0.26171875,
+      "old_action": [
+        [
+          0.4384765625,
+          0.1361083984375,
+          -0.07861328125
+        ]
+      ],
+      "new_action": [
+        [
+          0.419921875,
+          -0.1256103515625,
+          -0.07037353515625
+        ]
+      ],
+      "position": [
+        [
+          -0.9641348123550415,
+          0.13979673385620117,
+          1.516845703125
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    },
+    {
+      "seed": 30015,
+      "scenario": "bright_to_dark",
+      "label": "at_minus_half_m",
+      "step": 23,
+      "missing": false,
+      "reconstruction_passed": true,
+      "raw_reconstruction_max": 0.0,
+      "network_reconstruction_max": 0.0,
+      "action_reconstruction_max": 0.0,
+      "image_mae": 0.34952157735824585,
+      "network_input_mae": 0.6990432143211365,
+      "action_max_difference": 0.30322265625,
+      "old_action": [
+        [
+          0.255615234375,
+          -0.5517578125,
+          -0.0220184326171875
+        ]
+      ],
+      "new_action": [
+        [
+          0.2254638671875,
+          -0.85498046875,
+          0.0086822509765625
+        ]
+      ],
+      "position": [
+        [
+          -0.49038636684417725,
+          0.27998286485671997,
+          1.5080410242080688
+        ]
+      ],
+      "applied_eg": [
+        [
+          0.0
+        ],
+        [
+          0.0
+        ]
+      ],
+      "old_flight_success": true,
+      "new_world_flight_success": false
+    }
+  ],
+  "reconstruction_passed": true,
+  "errors": [],
+  "source_sha256": "1009b809c0f47af453d2187d3fd5b5d93ba641b0dc6a9c67eb301e1eae894009",
+  "numerical_source": "def offline(out):\n    \"\"\"Matched-state image intervention; NOT another flight or trained policy.\"\"\"\n    lock_protocol(out)\n    cross_result=json.loads((out/'cross_results.json').read_text())\n    if cross_result['priority']!='world_first':\n        write_json(out/'offline_results.json',dict(executed=False,reason='Scene/image block is not the larger measured loss; no image intervention added.'))\n        return\n    import numpy as np\n    import torch\n    from torch.cuda.amp import autocast\n    from config import set_global_seed\n    from train_utils import build_env\n    from rollout_ops import build_local_frame,build_state_vector,compute_target_velocity\n    torch.set_num_threads(4);device=torch.device('cuda')\n    model=make_model(device)\n    environments={};components={}\n    for cell in ('OO','WO'):\n        args=variants()[cell].args(resolved_args())\n        environments[cell]=build_env(1,args,device,eval_mode=True)\n        components[cell]=Components(variants()[cell]);components[cell].install(environments[cell])\n    target=out/'offline';target.mkdir(exist_ok=True)\n    rows=[];errors=[]\n    with torch.no_grad():\n        for i,ref in enumerate(reference_rows('A_ae')[:16]):\n            trace=load_trace(source_cell(out,'OO')/f'ep_{i:03d}.npz')\n            seed=30000+i\n            for env in environments.values():\n                set_global_seed(seed,True);env.reset(ref['scenario'])\n                if not torch.equal(env.R_scene,torch.eye(3,device=device)[None]):raise RuntimeError('Nonzero scene yaw requires scene-frame sampling')\n                for key in ('p','v','R','dg','v_wind','slit_center_y','gray_light_factor'):\n                    actual=getattr(env,key).cpu().numpy()\n                    if not np.array_equal(actual,trace['initial_'+key]):raise RuntimeError(f'Offline reset mismatch {key}')\n            for label,step in observation_steps(trace):\n                if step is None:\n                    rows.append(dict(seed=seed,scenario=ref['scenario'],label=label,missing=True));continue\n                outputs={};arrays={}\n                for cell in ('OO','WO'):\n                    env=environments[cell]\n                    frames=[]\n                    frame_steps=[step] if step==0 else [step,step-1]\n                    for t in frame_steps:\n                        restore_pose(env,trace,t)\n                        e,g=recorded_settings(trace,t,env)\n                        set_global_seed((seed*1000003+3*t+1)%(2**32),True)\n                        image,_=components[cell].render(env,e,g,False)\n                        frames.append(image)\n                    if step==0:frames.append(frames[0])\n                    pixels=torch.cat(frames,1)\n                    restore_pose(env,trace,step)\n                    e,g=recorded_settings(trace,step,env)\n                    state,_,camera_state,motion_state=build_state_vector(env,\n                        compute_target_velocity(env.p_target-env.p,env),build_local_frame(env),e,g,False,False)\n                    original_state=sparse_value(trace,'state',step,device)\n                    torch.testing.assert_close(state,original_state,atol=1e-6,rtol=1e-5)\n                    torch.testing.assert_close(camera_state,sparse_value(trace,'camera_state',step,device),atol=0,rtol=0)\n                    recorded=[];original_preprocess=model.preprocess_gray_input\n                    def preprocess(*a,**kw):\n                        result=original_preprocess(*a,**kw);recorded.append(result);return result\n                    model.preprocess_gray_input=preprocess\n                    try:\n                        with autocast(enabled=True):\n                            action,_,_,_=model(original_state,sparse_value(trace,'hidden_before',step,device),\n                                gray_obs=pixels,cam_hx=sparse_value(trace,'camera_hidden_before',step,device),\n                                camera_state=camera_state,camera_motion_state=motion_state)\n                    finally:model.preprocess_gray_input=original_preprocess\n                    if len(recorded)!=1:raise RuntimeError('Preprocessing repeated')\n                    outputs[cell]=dict(raw=pixels.cpu().numpy(),network=recorded[0].cpu().numpy(),action=action.float().cpu().numpy())\n                    arrays.update({cell+'_'+k:v for k,v in outputs[cell].items()})\n                old,new=outputs['OO'],outputs['WO']\n                raw_error=float(np.abs(old['raw']-trace['raw_pixels'][step]).max())\n                network_error=float(np.abs(old['network']-trace['network_pixels'][step]).max())\n                action_error=float(np.abs(old['action']-trace['raw_action'][step].astype(float)).max())\n                passed=bool(np.allclose(old['raw'],trace['raw_pixels'][step],atol=1e-6,rtol=1e-5)\n                    and np.allclose(old['network'],trace['network_pixels'][step],atol=1e-6,rtol=1e-5)\n                    and np.allclose(old['action'],trace['raw_action'][step],atol=1e-3,rtol=1e-3))\n                item=dict(seed=seed,scenario=ref['scenario'],label=label,step=step,missing=False,\n                    reconstruction_passed=passed,raw_reconstruction_max=raw_error,\n                    network_reconstruction_max=network_error,action_reconstruction_max=action_error,\n                    image_mae=float(np.abs(old['raw']-new['raw']).mean()),\n                    network_input_mae=float(np.abs(old['network']-new['network']).mean()),\n                    action_max_difference=float(np.abs(old['action']-new['action']).max()),\n                    old_action=old['action'].tolist(),new_action=new['action'].tolist(),\n                    position=trace['pre_p'][step].tolist(),applied_eg=[e.cpu().tolist(),g.cpu().tolist()],\n                    old_flight_success=cross_result['paired'][i]['OO'],new_world_flight_success=cross_result['paired'][i]['WO'])\n                rows.append(item)\n                if not passed:errors.append(dict(seed=seed,label=label,step=step,raw=raw_error,network=network_error,action=action_error))\n                arrays['position']=trace['pre_p'][step]\n                np.savez_compressed(target/f'{seed}_{label}.npz',**arrays)\n    value=dict(executed=True,rows=rows,reconstruction_passed=not errors,errors=errors,\n        source_sha256=sha(__file__),numerical_source=inspect.getsource(offline),\n        helper_sources={f.__name__:inspect.getsource(f) for f in (load_trace,sparse_value,restore_pose,recorded_settings,observation_steps)},\n        limitation='Both frames rendered on the same recorded trajectory with fixed E/G, state and recurrent memories. Immediate action response, not a new closed-loop success result.')\n    write_json(out/'offline_results.json',value)\n    if errors:raise RuntimeError('Original frame/action replay failed; stop interpretation')\n    print('Matched-state image replay:',len(rows),'samples; original reconstruction passed',flush=True)\n",
+  "helper_sources": {
+    "load_trace": "def load_trace(path):\n    import numpy as np\n    with np.load(path) as z:return {key:z[key] for key in z.files}\n",
+    "sparse_value": "def sparse_value(trace,key,step,device):\n    import numpy as np\n    import torch\n    if key not in trace:return None\n    ids=np.flatnonzero(trace[key+'_steps']==step)\n    return torch.from_numpy(trace[key][ids[0]].copy()).to(device) if len(ids) else None\n",
+    "restore_pose": "def restore_pose(env,trace,step):\n    import torch\n    for name in ('p','v','a','R','act','dg'):\n        setattr(env,name,torch.from_numpy(trace['pre_'+name][step].copy()).to(env.device))\n    env.R_old=torch.from_numpy(trace['pre_R'][max(0,step-1)].copy()).to(env.device)\n    env.p_old=torch.from_numpy(trace['pre_p'][max(0,step-1)].copy()).to(env.device)\n    env.last_control_dt=float(trace['dt'][step-1]) if step else 1/15\n",
+    "recorded_settings": "def recorded_settings(trace,step,env):\n    import torch\n    if step:\n        values=torch.from_numpy(trace['next_eg'][step-1].copy()).to(env.device)\n        return values[:,0],values[:,1]\n    return (env.p.new_full((env.batch_size,),.10),env.p.new_zeros(env.batch_size))\n",
+    "observation_steps": "def observation_steps(trace):\n    import numpy as np\n    result=[('initial',0)]\n    # Scene yaw is zero in these fixed historical evaluations. Reject a future\n    # protocol change instead of treating world x as scene x implicitly.\n    for label,x in [('at_minus_1m',-1.),('at_minus_half_m',-.5)]:\n        ids=np.flatnonzero(trace['pre_p'][:,0,0]>=x)\n        if len(ids):result.append((label,int(ids[0])))\n        else:result.append((label,None))\n    return result\n"
+  },
+  "limitation": "Both frames rendered on the same recorded trajectory with fixed E/G, state and recurrent memories. Immediate action response, not a new closed-loop success result."
+}

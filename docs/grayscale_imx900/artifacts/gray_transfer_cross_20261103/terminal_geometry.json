@@ -1,0 +1,112 @@
+{
+  "radius_m": 0.12,
+  "collision_threshold_m": 0.0011,
+  "rows": [
+    {
+      "cell": "OD",
+      "reference_cell": "OO",
+      "seed": 30005,
+      "stop_step": 27,
+      "expanded_box_sweep": true,
+      "sampled_sphere_clearance_m": 0.013909115953545936,
+      "certified_sphere_clearance_lower_m": 0.01139635096719461,
+      "certified_above_collision_threshold": true,
+      "reference_full_path_lower_m": 0.005568975722763737,
+      "reference_full_path_certified_clear": true,
+      "start": [
+        [
+          -0.2353915125131607,
+          0.39238837361335754,
+          1.4968448877334595
+        ]
+      ],
+      "end": [
+        [
+          -0.15672877430915833,
+          0.4079694151878357,
+          1.5023022890090942
+        ]
+      ]
+    },
+    {
+      "cell": "OD",
+      "reference_cell": "OO",
+      "seed": 30015,
+      "stop_step": 26,
+      "expanded_box_sweep": true,
+      "sampled_sphere_clearance_m": 0.012813168347359821,
+      "certified_sphere_clearance_lower_m": 0.010234097154580044,
+      "certified_above_collision_threshold": true,
+      "reference_full_path_lower_m": 0.0028749920050896516,
+      "reference_full_path_certified_clear": true,
+      "start": [
+        [
+          -0.2474389672279358,
+          0.3453528583049774,
+          1.504555344581604
+        ]
+      ],
+      "end": [
+        [
+          -0.16701412200927734,
+          0.36372432112693787,
+          1.5040080547332764
+        ]
+      ]
+    },
+    {
+      "cell": "WD",
+      "reference_cell": "WO",
+      "seed": 30001,
+      "stop_step": 25,
+      "expanded_box_sweep": true,
+      "sampled_sphere_clearance_m": 0.012045687106750524,
+      "certified_sphere_clearance_lower_m": 0.009301492334667616,
+      "certified_above_collision_threshold": true,
+      "reference_full_path_lower_m": 0.0004298937382324386,
+      "reference_full_path_certified_clear": false,
+      "start": [
+        [
+          -0.25025230646133423,
+          -0.2158023566007614,
+          1.5345637798309326
+        ]
+      ],
+      "end": [
+        [
+          -0.1637318730354309,
+          -0.23042742908000946,
+          1.5370218753814697
+        ]
+      ]
+    },
+    {
+      "cell": "WD",
+      "reference_cell": "WO",
+      "seed": 30008,
+      "stop_step": 26,
+      "expanded_box_sweep": true,
+      "sampled_sphere_clearance_m": 0.02935827259095322,
+      "certified_sphere_clearance_lower_m": 0.02677676589048179,
+      "certified_above_collision_threshold": true,
+      "reference_full_path_lower_m": 0.003825602558527212,
+      "reference_full_path_certified_clear": true,
+      "start": [
+        [
+          -0.27243587374687195,
+          -0.26845481991767883,
+          1.4697800874710083
+        ]
+      ],
+      "end": [
+        [
+          -0.1906045377254486,
+          -0.2794188857078552,
+          1.4682791233062744
+        ]
+      ]
+    }
+  ],
+  "source": "def sphere_segment_certificate(start,end,boxes,radius):\n    \"\"\"Conservative lower bound for continuous spherical clearance.\n\n    Sphere/box signed distance is 1-Lipschitz. Every point on a straight\n    segment lies within length/(2*(17-1)) of a grid sample. Subtract that\n    amount plus a numerical guard from the minimum sampled clearance.\n    This audits existing trajectories; it never changes collision scoring.\n    \"\"\"\n    import torch\n    from render.box_scene import box_clearance\n    start,end,boxes=(v.to(dtype=torch.float64,device='cpu') for v in (start,end,boxes))\n    fractions=torch.linspace(0,1,17,dtype=torch.float64)[:,None,None]\n    points=start[None]+fractions*(end-start)[None]\n    minimum=box_clearance(points,boxes,radius).amin(0)\n    lower=minimum-(end-start).norm(dim=-1)/32-1e-6\n    return minimum,lower\n",
+  "limitation": "Certificate applies to recorded piecewise-linear spherical motion. No continuation after a stopped episode and no revised flight-success count are inferred."
+}

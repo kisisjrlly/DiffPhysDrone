@@ -1,0 +1,22 @@
+{
+  "source_sha256": {
+    "tools/audit_gray_transfer_cross.py": "7ebec4fcd4772bfa09d51059c76b37f475e0e50831e99488ece433e6805fd5d7",
+    "tests/test_gray_transfer_cross.py": "94208f1dacbfb733ebbb0fa2fcc19a578df0ac1a959f6456632e572ffe689f6d",
+    "docs/grayscale_imx900/GRAY_TRANSFER_CROSS_PLAN_2026_11_03.md": "8e29f86bc569f867a5fc02162fdb11e6c9dd521348156c2704268f09ae6152dd"
+  },
+  "checkpoint_sha256": "87875d118803503ab66bab855f07f542de4fc8460d4c2918fb38f27c6d344168",
+  "calibration_sha256": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f",
+  "python": "/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python",
+  "python_version": "3.9.23",
+  "torch": "2.1.0+cu121",
+  "cuda": "12.1",
+  "full_timelines": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_transfer_cross_20261103",
+  "previous_frozen_timelines": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_chain_regression_20261103",
+  "new_conditions": 2,
+  "new_episodes": 32,
+  "offline_snapshots": 48,
+  "representative_image_seed": 30003,
+  "priority": "collision_geometry_first",
+  "production_numerical_sources_unchanged": true,
+  "no_training": true
+}

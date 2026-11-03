@@ -1,0 +1,8 @@
+{
+  "command": "/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python -m pytest -q",
+  "passed": 198,
+  "warnings": 6,
+  "seconds": 7.84,
+  "console": "/tmp/gray_transfer_fulltests.log",
+  "focused": "8 new tests passed; includes configuration isolation, paired accounting, frame selection, history restore and continuous-clearance certificates"
+}

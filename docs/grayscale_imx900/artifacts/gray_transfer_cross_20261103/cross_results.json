@@ -1,0 +1,188 @@
+{
+  "cells": {
+    "OO": {
+      "successes": 8,
+      "collisions": 8,
+      "timeouts": 0,
+      "lost": [],
+      "recovered": []
+    },
+    "WO": {
+      "successes": 3,
+      "collisions": 13,
+      "timeouts": 0,
+      "lost": [
+        30003,
+        30005,
+        30011,
+        30014,
+        30015
+      ],
+      "recovered": []
+    },
+    "OD": {
+      "successes": 6,
+      "collisions": 10,
+      "timeouts": 0,
+      "lost": [
+        30005,
+        30015
+      ],
+      "recovered": []
+    },
+    "WD": {
+      "successes": 1,
+      "collisions": 15,
+      "timeouts": 0,
+      "lost": [
+        30001,
+        30003,
+        30005,
+        30008,
+        30011,
+        30014,
+        30015
+      ],
+      "recovered": []
+    }
+  },
+  "paired": [
+    {
+      "seed": 30000,
+      "scenario": "dark",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30001,
+      "scenario": "bright",
+      "OO": true,
+      "WO": true,
+      "OD": true,
+      "WD": false
+    },
+    {
+      "seed": 30002,
+      "scenario": "dark_to_bright",
+      "OO": true,
+      "WO": true,
+      "OD": true,
+      "WD": true
+    },
+    {
+      "seed": 30003,
+      "scenario": "bright_to_dark",
+      "OO": true,
+      "WO": false,
+      "OD": true,
+      "WD": false
+    },
+    {
+      "seed": 30004,
+      "scenario": "dark",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30005,
+      "scenario": "bright",
+      "OO": true,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30006,
+      "scenario": "dark_to_bright",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30007,
+      "scenario": "bright_to_dark",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30008,
+      "scenario": "dark",
+      "OO": true,
+      "WO": true,
+      "OD": true,
+      "WD": false
+    },
+    {
+      "seed": 30009,
+      "scenario": "bright",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30010,
+      "scenario": "dark_to_bright",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30011,
+      "scenario": "bright_to_dark",
+      "OO": true,
+      "WO": false,
+      "OD": true,
+      "WD": false
+    },
+    {
+      "seed": 30012,
+      "scenario": "dark",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30013,
+      "scenario": "bright",
+      "OO": false,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    },
+    {
+      "seed": 30014,
+      "scenario": "dark_to_bright",
+      "OO": true,
+      "WO": false,
+      "OD": true,
+      "WD": false
+    },
+    {
+      "seed": 30015,
+      "scenario": "bright_to_dark",
+      "OO": true,
+      "WO": false,
+      "OD": false,
+      "WD": false
+    }
+  ],
+  "priority": "world_first",
+  "caution": "Engineering prioritization on existing historical episodes; no significance/generalization or joint-learning claim.",
+  "source_paths": {
+    "OO": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_chain_regression_20261103/migration/M02",
+    "WO": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_transfer_cross_20261103/migration/WO",
+    "OD": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_transfer_cross_20261103/migration/OD",
+    "WD": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_chain_regression_20261103/migration/reverse_long_approach"
+  },
+  "matching_passed": true
+}

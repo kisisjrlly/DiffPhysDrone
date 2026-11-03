@@ -1,0 +1,17 @@
+seed,scenario,OO,WO,OD,WD
+30000,dark,False,False,False,False
+30001,bright,True,True,True,False
+30002,dark_to_bright,True,True,True,True
+30003,bright_to_dark,True,False,True,False
+30004,dark,False,False,False,False
+30005,bright,True,False,False,False
+30006,dark_to_bright,False,False,False,False
+30007,bright_to_dark,False,False,False,False
+30008,dark,True,True,True,False
+30009,bright,False,False,False,False
+30010,dark_to_bright,False,False,False,False
+30011,bright_to_dark,True,False,True,False
+30012,dark,False,False,False,False
+30013,bright,False,False,False,False
+30014,dark_to_bright,True,False,True,False
+30015,bright_to_dark,True,False,False,False
