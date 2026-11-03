@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "errors": [],
+  "rule": "Episode seed reset; image phase seed+1 and dynamics phase seed+2 each step; same draw shapes."
+}

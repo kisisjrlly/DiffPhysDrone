@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "summary": {
+    "N_gray": {
+      "successes": 69.0,
+      "collisions": 29.0
+    },
+    "N_zero": {
+      "successes": 1.0,
+      "collisions": 98.0
+    },
+    "A_ae": {
+      "successes": 66.0,
+      "collisions": 31.0
+    }
+  },
+  "differences": []
+}

@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "successes": {
+    "standard": {
+      "N_gray": 69.0,
+      "N_zero": 1.0,
+      "A_ae": 66.0
+    },
+    "diagnostic": {
+      "N_gray": 69.0,
+      "N_zero": 1.0,
+      "A_ae": 66.0
+    }
+  },
+  "differences": []
+}

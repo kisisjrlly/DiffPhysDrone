@@ -1,0 +1,43 @@
+{
+  "source_sha256": {
+    "tools/audit_gray_chain_regression.py": "543f41c85b3131c87fc7618836d933d10982950f65da3281b96be0e5b82f8bf4",
+    "tools/gray_chain_components.py": "f0b9ef2423d4c6ffefb841c8bddc466af2cbe3c1831ab617075c7bcd1fd2a37c",
+    "tools/audit_policy_sensing_decision.py": "f8f76182a27cd51dee08e9ee84aa986159e3b967d0c5fb50959ed25dd77e208d",
+    "tests/test_gray_chain_regression.py": "c723226a83d1b5067fb71b4f16ef5bc8d2c3e3d8bdd54722f5546f06a1914d37"
+  },
+  "calibration": {
+    "N": {
+      "path": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-09-24-10-33-44/imx900_calibration.json",
+      "sha256": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f"
+    },
+    "A": {
+      "path": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-09-24-11-35-14/imx900_calibration.json",
+      "sha256": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f"
+    }
+  },
+  "args_sha256": {
+    "N": "baa800244e7e4c70838bad1fa8352b3c3966922d2c3099e098442bc448d73cc9",
+    "A": "ec5f83b093192d11bd2a9e38c5bcf5bddb7f51b9dfc0821820296fa204f0a249"
+  },
+  "historical_reference_sha256": {
+    "/home/zhaoguodong/work/code/DiffPhysDrone/logs/imx900_formal_20260924_103343/evaluation/manifest.json": "9bc3b3fd9392162d1d1e42cd606b1d3e326c1cc36d8703bc51182fe09d78e167",
+    "/home/zhaoguodong/work/code/DiffPhysDrone/logs/imx900_formal_20260924_103343/evaluation/episodes.csv": "d4f71bcb3259887c006e83c3d28fa2053b886d5d8159bb35d224af00b40881fa",
+    "/home/zhaoguodong/work/code/DiffPhysDrone/logs/imx900_mean_ae_gate_20260924/evaluation/episodes.csv": "090fdc2a2c7014ad756a0f30d63742dd559b6bfb1869a719a61c25287053f928",
+    "/home/zhaoguodong/work/code/DiffPhysDrone/logs/imx900_mean_ae_gate_20260924/evaluation.log": "48a94e88a275f69c5a68414bf772c7698404745b67afde0983f3d9bdf80b2b15"
+  },
+  "checkpoint_unchanged": {
+    "N": true,
+    "A": true
+  },
+  "python": "/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python",
+  "python_version": "3.9.23",
+  "torch": "2.1.0+cu121",
+  "cuda": "12.1",
+  "cudnn": 8902,
+  "complete_timelines": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/gray_chain_regression_20261103",
+  "representative_episode_seed": 30001,
+  "no_training": true,
+  "calibrated": false,
+  "result": "multiple_transfer_effects_unresolved",
+  "next_only": "At the original start, isolate the remaining M4–M11 transfer combination; no learning-method change yet."
+}

@@ -65,7 +65,14 @@ class NetworkRun:
     queue metadata too; Env.save_state alone is insufficient for this purpose.
     Model has no episode state beyond the explicit recurrent tensors.
     """
-    def __init__(self, history, scenario):
+    def __init__(self, history=None, scenario=None, *, args=None, env=None,
+                 renderer=None, stepper=None, dt_provider=None, evaluation=None, collision_mode='legacy'):
+        self.configured = args is not None
+        if self.configured:
+            if env is None or dt_provider is None or evaluation is None:
+                raise ValueError('Configured replay requires explicit env, timing and evaluation operations')
+            self._init_configured(args,env,renderer,stepper,dt_provider,evaluation,collision_mode)
+            return
         self.env = history.new_env(scenario)
         self.env.camera_control_mode = 'learned'
         self.env.fixed_camera_exposure, self.env.fixed_camera_gain = .10, 0.
@@ -86,7 +93,10 @@ class NetworkRun:
         return copy.deepcopy(self)
 
     @torch.no_grad()
-    def advance(self, history, model, zero=False, camera=(.10, 0.), offset=(0., 0., 0.)):
+    def advance(self, history, model, zero=False, camera=None, offset=(0., 0., 0.)):
+        if self.configured:
+            return self._advance_configured(model,zero,camera,offset)
+        if camera is None:camera=(.10,0.)
         env, step, args = self.env, self.step, flight_args()
         _, gray = observe(history, env, range(32), self.e, self.g, step)
         previous = gray if self.previous is None else self.previous
@@ -135,6 +145,81 @@ class NetworkRun:
                    collision=self.collision.cpu().tolist())
         return row
 
+    def _init_configured(self, args, env, renderer, stepper, dt_provider, evaluation, collision_mode):
+        self.args, self.env = args, env
+        self.renderer = renderer or evaluation.render_gray_sensor
+        self.stepper, self.dt_provider = stepper, dt_provider
+        self.evaluation, self.collision_mode = evaluation, collision_mode
+        self.h = self.cam_h = self.previous = None
+        self.e, self.g = evaluation.init_camera_params(env, env.batch_size, env.device)
+        self.queue = [env.act.clone(), env.act.clone()]
+        self.step, self.elapsed = 0, 0.
+        self.alive = torch.ones(env.batch_size, dtype=torch.bool, device=env.device)
+        self.success = torch.zeros_like(self.alive)
+        self.collision = torch.zeros_like(self.alive)
+        self.cross_step = torch.full((env.batch_size,),-1,device=env.device,dtype=torch.long)
+        self.terminal_step = torch.full_like(self.cross_step,args.timesteps-1)
+        self.time = self.e.new_full((env.batch_size,),args.timesteps/args.base_control_freq)
+        self.minimum = self.e.new_full((env.batch_size,),100.)
+        self.effort = self.e.new_zeros(env.batch_size)
+        self.statistics = {k:[] for k in ('speed','e','g','sat','dark','blur','light','motion','depth')}
+
+    @torch.no_grad()
+    def _advance_configured(self, model, zero, camera, offset):
+        from torch.cuda.amp import autocast
+        ops, env, args = self.evaluation, self.env, self.args
+        step=self.step
+        dt=self.dt_provider(step)
+        gray, aux=self.renderer(env,self.e,self.g,differentiable=False)
+        previous=gray if self.previous is None else self.previous
+        pixels=torch.cat([gray,previous],1)
+        if zero:pixels=torch.zeros_like(pixels)
+        self.previous=gray
+        frame=ops.build_local_frame(env)
+        target_raw=env.p_target-env.p.detach()
+        state,_,cs,cms=ops.build_state_vector(env,ops.compute_target_velocity(target_raw,env),
+            frame,self.e,self.g,args.no_odom,args.include_camera_state_in_obs)
+        with autocast(enabled=bool(args.amp and env.device.type=='cuda')):
+            raw,cam,self.h,self.cam_h=policy_forward(model,state,self.h,env,
+                gray_obs=pixels,cam_hx=self.cam_h,camera_state=cs,camera_motion_state=cms,
+                pending_flight_commands=self.queue)
+        adjusted=raw.float()+raw.new_tensor(offset).float()
+        command=ops.decode_action_direct(adjusted,frame,env,env.batch_size,args.max_acc_cmd)
+        if camera is not None:
+            target=self.e.new_tensor(camera)[None].expand(env.batch_size,-1)
+        elif args.camera_control_mode=='mean_ae':
+            target=ops.mean_auto_exposure_target(gray.detach(),self.e.detach(),self.g.detach())
+        elif args.camera_control_mode=='gradient_ae':
+            target=ops.gradient_auto_exposure_target(gray.detach(),self.e.detach(),self.g.detach())
+        else:target=cam.float()
+        self.statistics['speed'].append(env.v.norm(2,-1).detach())
+        self.statistics['e'].append(self.e.detach());self.statistics['g'].append(self.g.detach())
+        for key,source in [('sat','saturation_fraction'),('dark','dark_fraction'),
+            ('blur','blur_strength'),('light','light_scale'),('motion','motion_proxy'),('depth','characteristic_depth')]:
+            value=aux.get(source)
+            if isinstance(value,torch.Tensor):
+                self.statistics[key].append((value.flatten(1).mean(1) if value.ndim>1 else value).detach())
+        applied=torch.stack([self.e,self.g],-1)
+        self.e,self.g,_=ops.update_camera_params(target,self.e,self.g,env)
+        executed=self.queue.pop(0);self.queue.append(command)
+        self.effort+=self.alive*command.square().sum(-1)*dt
+        if self.stepper is None:env.run(executed,dt,target_raw)
+        else:self.stepper(env,executed,dt,target_raw,step)
+        self.elapsed+=dt
+        clearance=(env.transition_clearance().detach() if self.collision_mode=='swept'
+            else ops._min_clearance_from_vec(env.find_vec_to_nearest_pt(),env))
+        self.minimum=torch.minimum(self.minimum,clearance)
+        hit=clearance<=args.collision_clearance
+        reached=(env.p-env.p_target).norm(dim=-1)<.35
+        self.collision|=self.alive & hit
+        self.success|=self.alive & ~hit & reached
+        done=self.alive & (hit | reached)
+        self.terminal_step[done]=step;self.time[done]=self.elapsed
+        self.alive &= ~done
+        self.step+=1
+        return dict(step=step,dt=dt,applied_eg=applied.cpu().tolist(),
+            submitted_command=command.cpu().tolist(),executed_command=executed.cpu().tolist())
+
     def episodes(self, indices, scenario):
         return [dict(episode_index=i, scenario=scenario, success=bool(self.success[i]),
             collision=bool(self.collision[i]),timeout=bool(self.alive[i]),
@@ -142,6 +227,51 @@ class NetworkRun:
             terminal_time_s=float(self.time[i]),
             scored_time_s=float(self.time[i]) if self.success[i] else 6.,
             control_cost=float(self.effort[i]),min_clearance_m=float(self.minimum[i])) for i in indices]
+
+
+@torch.no_grad()
+def run_configured_episode(ep_idx,scenario,args,model,env,device,*,evaluation,
+                           renderer=None,stepper=None,collision_mode='legacy'):
+    """Old single-episode timing/scoring through the injectable diagnostic runner."""
+    from config import set_global_seed
+    from random import normalvariate
+    seed=int(args.seed)+ep_idx
+    set_global_seed(seed,args.deterministic)
+    env.reset(scene_name=scenario);model.reset()
+    def dt_provider(step):
+        set_global_seed((seed*1000003+3*step+1)%(2**32),args.deterministic)
+        return normalvariate(1/args.base_control_freq,args.control_dt_jitter/args.base_control_freq)
+    def dynamics(environment,command,dt,target,step):
+        set_global_seed((seed*1000003+3*step+2)%(2**32),args.deterministic)
+        if stepper is None:environment.run(command,dt,target)
+        else:stepper(environment,command,dt,target,step)
+    run=NetworkRun(args=args,env=env,renderer=renderer,stepper=dynamics,
+        dt_provider=dt_provider,evaluation=evaluation,collision_mode=collision_mode)
+    for _ in range(args.timesteps):
+        clearance=evaluation._min_clearance_from_vec(env.find_vec_to_nearest_pt(),env)
+        run.minimum=torch.minimum(run.minimum,clearance)
+        hit=clearance<=args.collision_clearance
+        reached=(env.p-env.p_target).norm(dim=-1)<.35
+        run.collision|=run.alive & hit
+        run.success|=run.alive & ~hit & reached
+        run.alive &= ~(hit|reached)
+        if not run.alive.any():break
+        run.advance(None,model,zero=args.policy_gray_mode=='zero')
+        if not run.alive.any():break
+    def mean(key):
+        values=run.statistics[key]
+        return float(torch.stack(values).mean().cpu()) if values else 0.
+    calibration=getattr(env,'imx900_calibration',None)
+    reason='collision' if run.collision.any() else 'goal' if run.success.all() else 'timeout'
+    return dict(episode_seed=seed,scenario=scenario,
+        camera_profile=getattr(calibration,'profile_name',''),camera_profile_calibrated=bool(getattr(calibration,'calibrated',False)),
+        success_rate=float(run.success.float().mean()),collision_rate=float(run.collision.float().mean()),
+        goal_reach_rate=float(((env.p-env.p_target).norm(dim=-1)<.35).float().mean()),
+        final_goal_dist=float((env.p-env.p_target).norm(dim=-1).mean()),
+        avg_speed=mean('speed'),min_clearance=float(run.minimum.min()),exposure_mean=mean('e'),gain_mean=mean('g'),
+        saturation_fraction=mean('sat'),dark_fraction=mean('dark'),blur_strength=mean('blur'),
+        light_scale=mean('light'),motion_proxy=mean('motion'),characteristic_depth=mean('depth'),
+        steps=run.step,stop_reason=reason,elapsed_s=run.elapsed,deadline_s=args.timesteps/args.base_control_freq)
 
 
 def run_baseline(history, model, zero=False):

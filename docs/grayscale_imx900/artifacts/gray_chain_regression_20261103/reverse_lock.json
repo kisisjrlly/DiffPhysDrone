@@ -1,0 +1,97 @@
+{
+  "rankings": [
+    {
+      "step": 3,
+      "factor": "long_approach",
+      "new_failures": [
+        1,
+        2,
+        3,
+        5,
+        8,
+        11,
+        14,
+        15
+      ],
+      "action_change": 0.24652147401250424
+    },
+    {
+      "step": 1,
+      "factor": "zero_jitter",
+      "new_failures": [
+        7
+      ],
+      "action_change": 0.015898120173601475
+    },
+    {
+      "step": 6,
+      "factor": "corridor",
+      "new_failures": [],
+      "action_change": 0.11318790314455329
+    },
+    {
+      "step": 10,
+      "factor": "surface_light",
+      "new_failures": [],
+      "action_change": 0.03304763471005447
+    },
+    {
+      "step": 4,
+      "factor": "transition_shift",
+      "new_failures": [],
+      "action_change": 0.004903340955076664
+    },
+    {
+      "step": 5,
+      "factor": "hard_saturation",
+      "new_failures": [],
+      "action_change": 0.0024307183667378668
+    },
+    {
+      "step": 11,
+      "factor": "temporal_exposure",
+      "new_failures": [],
+      "action_change": 0.0019401252583094535
+    },
+    {
+      "step": 8,
+      "factor": "torch_dynamics",
+      "new_failures": [],
+      "action_change": 0.00032921484879788477
+    },
+    {
+      "step": 7,
+      "factor": "box_rays",
+      "new_failures": [],
+      "action_change": 0.0002223961905649005
+    },
+    {
+      "step": 2,
+      "factor": "extend_horizon",
+      "new_failures": [],
+      "action_change": 0.0
+    },
+    {
+      "step": 9,
+      "factor": "swept_collision",
+      "new_failures": [],
+      "action_change": 0.0
+    }
+  ],
+  "final_new_failures": [
+    1,
+    2,
+    3,
+    5,
+    7,
+    8,
+    11,
+    14,
+    15
+  ],
+  "selected": [
+    "long_approach",
+    "zero_jitter"
+  ],
+  "max_reverse_checks": 3
+}

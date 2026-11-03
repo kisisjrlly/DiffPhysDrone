@@ -1,0 +1,11 @@
+{
+  "command": "/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python -m pytest -q",
+  "passed": 190,
+  "warnings": 6,
+  "seconds": 8.12,
+  "console": "/tmp/gray_chain_delivery_tests.log",
+  "warning_notes": [
+    "TypedStorage deprecated",
+    "CUDA median deterministic warning; forward replay comparison passed"
+  ]
+}

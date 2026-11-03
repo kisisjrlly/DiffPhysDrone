@@ -15,6 +15,26 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+### Historical-chain regression supersedes the fixed-camera prerequisite (2026-11-03)
+
+See [GRAY_CHAIN_REGRESSION_2026_11_03.md](GRAY_CHAIN_REGRESSION_2026_11_03.md).
+The user-authorized round is **inference only**; no further 600-step adaptation,
+training, architecture change, scene search or joint intervention is authorized.
+The older diagnostic and its gate below are historical records, not a current
+research admission rule. A known poor fixed exposure need not fly successfully
+before camera control may be studied. Required prerequisites are correct
+execution, executable dynamics and visual flight under appropriate observations.
+
+Archived source and both current runners reproduce N=69/100, N-zero=1/100,
+A+mean-AE=66/100 with episode/step parity. On the fixed 16-case migration,
+M2=8/16 falls to M3=0/16 when only start changes −1.5→−2.5m. Returning to the
+old start in the complete new pipeline restores only 1/16, including when jitter
+is restored. A+mean-AE also remains 0/8 in the latest historical batch. Thus the
+remaining M4–M11 transfer combination at the old start is unresolved; that is
+the single next investigation, not another learning-method recommendation.
+Preserve all prior failures. Ordinary visual navigation is not demonstrated
+joint sensing/motion learning; calibration remains provisional.
+
 ### User-authorized actual-network prerequisite diagnostic (2026-11-03)
 
 The next user-authorized round replaces the privileged template diagnostic

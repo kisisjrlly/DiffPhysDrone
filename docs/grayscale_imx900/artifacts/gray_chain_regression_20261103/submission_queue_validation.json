@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "errors": [],
+  "provenance": "World submissions decoded from logged local raw_action and pre_R; checked against execution two steps later. No extra policy/render call."
+}
