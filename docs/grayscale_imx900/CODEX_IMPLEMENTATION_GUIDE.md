@@ -15,6 +15,25 @@ method, not a modification or re-interpretation of the frozen five-seed study.
 The frozen-flight restriction and "no architecture rewrite" handoff below apply
 to that original experiment. No legacy D455 code or results are merged here.
 
+### User-authorized actual-network prerequisite diagnostic (2026-11-03)
+
+The next user-authorized round replaces the privileged template diagnostic
+with the **existing legacy neural flight network**, not a new architecture.
+See [POLICY_SENSING_DECISION_PROTOCOL_2026_11_03.md](POLICY_SENSING_DECISION_PROTOCOL_2026_11_03.md).
+The earlier "no training" stop is superseded only for one bounded fixed-camera
+flight adaptation (600 updates, seed42, batch8, lr1e-5), if the immutable
+checkpoint fails the locked development normal-vs-zero-image gate. Camera
+weights/settings, the scene and physical parameters stay fixed. Evaluate
+final600 only. No joint-policy training, seed expansion, renderer changes or
+loss tuning is authorized. Failed/ceiling baseline gates stop interventions
+and gradient claims. Historical layout selection is not independent testing.
+The completed [actual-network prerequisite audit](POLICY_SENSING_DECISION_2026_11_03.md)
+fails: both original and final600 models score grayscale 0/8, zero-image 0/8.
+Stop interventions, confirmation and gradient claims. One 46-update configuration
+error attempt was invalidated and disclosed; the valid adaptation completed
+exactly 600 updates with unchanged camera hashes. Restore/diagnose the fixed
+grayscale neural flight baseline before another joint-benefit comparison.
+
 ### Bounded information-deadline diagnostic (2026-11-03)
 
 The user authorized information release and an image-driven template/controller

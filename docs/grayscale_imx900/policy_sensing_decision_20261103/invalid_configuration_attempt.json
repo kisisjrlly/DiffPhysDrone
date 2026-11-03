@@ -1,0 +1,6 @@
+{
+  "reason": "Implementation configuration error: coef_obj_avoidance default .5 instead of historical 0",
+  "completed_updates": 46,
+  "excluded_from_results": true,
+  "no_model_selection": true
+}

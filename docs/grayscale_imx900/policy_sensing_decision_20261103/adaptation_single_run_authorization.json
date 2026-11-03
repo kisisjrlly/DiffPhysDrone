@@ -1,0 +1,13 @@
+{
+  "updates": 600,
+  "seed": 42,
+  "batch": 8,
+  "lr": 1e-05,
+  "checkpoint_sha256": "748d5e11fcf4ed66af462e80c2787d7aa798ae25e37227aa31b955fcdb621b7a",
+  "command": [
+    "/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python",
+    "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/tools/audit_policy_sensing_decision.py",
+    "_train",
+    "outputs/policy_sensing_decision_20261103/adaptation"
+  ]
+}

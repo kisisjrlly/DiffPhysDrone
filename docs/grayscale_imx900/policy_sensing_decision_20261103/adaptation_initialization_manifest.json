@@ -1,0 +1,14 @@
+{
+  "seed": 42,
+  "resume": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-09-24-10-33-44/final.pth",
+  "mode": "gray_cam-fixed_grad-detached_vision-gray_flightonly",
+  "policy_arch": "legacy",
+  "camera_use_flight_intent": true,
+  "observation_grad_mode": "detached",
+  "flight_parameter_sha256": "5240ca588cd523088bab0a17d7cde7224a37c45118f4869b3f693ecf1a8de161",
+  "camera_parameter_sha256": "49802754d337658b87ec7b1dee0c11a622dac41bba115b55ebdf753120871376",
+  "critic_parameter_sha256": null,
+  "critic_resume": null,
+  "actor_parameters": 1640714,
+  "training_only_critic_parameters": 0
+}

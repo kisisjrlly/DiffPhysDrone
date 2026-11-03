@@ -1,0 +1,81 @@
+{
+  "decision": "STOP: no viable image-driven flight baseline under this bounded protocol",
+  "next_priority": "Diagnose fixed-camera neural flight transfer/training; no sensing-motion advantage claim.",
+  "baseline_results": [
+    {
+      "checkpoint": "/home/zhaoguodong/work/code/DiffPhysDrone/checkpoint/2026-09-24-10-33-44/final.pth",
+      "checkpoint_sha256": "748d5e11fcf4ed66af462e80c2787d7aa798ae25e37227aa31b955fcdb621b7a",
+      "source_sha256": "19e87c8ddafa7aea900dd2a67ba07798d17889e060ed922e63b8eddaeea3d78a",
+      "normal_success": 0,
+      "zero_success": 0,
+      "gate": "needs_flight_baseline",
+      "parameter_count": 1640714,
+      "camera_parameter_hash": "49802754d337658b87ec7b1dee0c11a622dac41bba115b55ebdf753120871376",
+      "flight_parameter_hash": "5240ca588cd523088bab0a17d7cde7224a37c45118f4869b3f693ecf1a8de161",
+      "layouts": {
+        "development": [
+          1,
+          2,
+          3,
+          12
+        ],
+        "confirmation": [
+          4,
+          5,
+          13,
+          16
+        ]
+      },
+      "scenarios": [
+        "dark",
+        "bright_to_dark"
+      ],
+      "limitation": "Historical tracking-success-selected development layouts; not independent test data.",
+      "reuse_note": "Numerical evaluation functions/classes verified AST-identical to original source_snapshot. Only adaptation configuration/preflight and cache provenance semantics changed.",
+      "compatible_tool_sha256": "6dd627f656b5d55867037bd333973d5e1e70525fc4a1bad4fa46eeb24a510de1"
+    },
+    {
+      "checkpoint": "outputs/policy_sensing_decision_20261103/adaptation/final.pth",
+      "checkpoint_sha256": "9ec16d9a2995d82b23c8cee78aef2aa1bcba0cdfa84fc2823b0cae94ad6b358d",
+      "source_sha256": "6dd627f656b5d55867037bd333973d5e1e70525fc4a1bad4fa46eeb24a510de1",
+      "normal_success": 0,
+      "zero_success": 0,
+      "gate": "needs_flight_baseline",
+      "parameter_count": 1640714,
+      "camera_parameter_hash": "49802754d337658b87ec7b1dee0c11a622dac41bba115b55ebdf753120871376",
+      "flight_parameter_hash": "d7d55c185d497e133af1d8d9ea98453cc1e6591f1d1ffe255c0ac459417aa656",
+      "layouts": {
+        "development": [
+          1,
+          2,
+          3,
+          12
+        ],
+        "confirmation": [
+          4,
+          5,
+          13,
+          16
+        ]
+      },
+      "scenarios": [
+        "dark",
+        "bright_to_dark"
+      ],
+      "limitation": "Historical tracking-success-selected development layouts; not independent test data."
+    }
+  ],
+  "intervention_stage": "not_started",
+  "confirmation_stage": "not_started",
+  "gradient_stage": "not_started",
+  "trained_joint_policy": false,
+  "calibrated": false,
+  "limitation": "8 selected historical development episodes, not independent generalization evidence.",
+  "effective_updates": 600,
+  "invalid_attempt": {
+    "reason": "Implementation configuration error: coef_obj_avoidance default .5 instead of historical 0",
+    "completed_updates": 46,
+    "excluded_from_results": true,
+    "no_model_selection": true
+  }
+}
