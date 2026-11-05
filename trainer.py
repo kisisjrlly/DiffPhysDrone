@@ -26,6 +26,7 @@ from rollout_ops import (
     update_camera_params,
     compute_camera_param_stats,
     policy_forward,
+    blend_camera_request,
 )
 from train_utils import MetricSmoother, periodic_tail_ops
 from render.scene_types import DIFFERENTIABLE_SCENES
@@ -176,6 +177,12 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
     sensor_differentiable = args.sensor_grad_mode == "full"
 
     for t in range(args.timesteps):
+        # Opt-in experiment streams: image and dynamics draws are indexed by
+        # update/step, independent of model internals, logging and termination.
+        audit_seed = getattr(args, "audit_rollout_seed", None)
+        if audit_seed is not None:
+            from config import set_global_seed
+            set_global_seed((int(audit_seed) * 1000003 + 3 * t + 1) % (2**32), args.deterministic)
         ctl_dt = normalvariate(
             1.0 / args.base_control_freq,
             getattr(args, "control_dt_jitter", 0.1) / args.base_control_freq,
@@ -325,6 +332,10 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             )
         else:
             cam_target = cam_params.float()
+            handoff = float(getattr(args, "camera_handoff_alpha", 1.0))
+            if handoff < 1.0:
+                automatic = mean_auto_exposure_target(gray_frame.detach(), exposure.detach(), gain.detach())
+                cam_target = blend_camera_request(cam_target, automatic, handoff)
 
         render_exposure, render_gain = exposure, gain
         exposure, gain, cam_hist_entry = update_camera_params(
@@ -381,6 +392,8 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
             _detach_environment_state(env)
             if prev_gray is not None:
                 prev_gray = prev_gray.detach()
+        if audit_seed is not None:
+            set_global_seed((int(audit_seed) * 1000003 + 3 * t + 2) % (2**32), args.deterministic)
         env.run(act_buffer[t], ctl_dt, target_v_raw)
 
         # Terminal state belongs to the action just taken. Keep it in the

@@ -1,0 +1,1366 @@
+{
+  "config": {
+    "resume": null,
+    "checkpoint_dir": null,
+    "batch_size": 4,
+    "num_iters": 2000,
+    "checkpoint_every_iters": 200,
+    "seed": 42,
+    "deterministic": false,
+    "lr": 0.0003,
+    "camera_lr_multiplier": 1.0,
+    "flight_exploration_std": 0.0,
+    "flight_exploration_rho": 0.85,
+    "policy_update_mode": "full_bptt",
+    "policy_gradient_horizon": 16,
+    "policy_return_gamma": 0.99,
+    "camera_exploration_std": 0.25,
+    "critic_lr_multiplier": 1.0,
+    "critic_resume": null,
+    "flight_replay_dataset": null,
+    "flight_replay_weight": 0.0,
+    "flight_replay_batch": 4,
+    "live_flight_guidance_weight": 0.0,
+    "live_flight_guidance_start_step": 24,
+    "live_flight_guidance_margin": 0.08,
+    "grad_decay": 1.0,
+    "joint_backward": "consistent",
+    "policy_arch": "intent_shared",
+    "camera_use_flight_intent": true,
+    "camera_queue_aligned_intent": true,
+    "intent_horizon_s": 0.2,
+    "scene_layout": "joint_slit",
+    "observation_grad_mode": "full",
+    "pose_gradient_estimator": "warp_ste",
+    "gray_temporal_samples": 9,
+    "intent_gate_spacing": 2.4,
+    "pole_count": 3,
+    "pole_layout": "stratified",
+    "pole_pair_near_depth": 1.0,
+    "pole_pair_far_depth": 1.8,
+    "pole_pair_depth_jitter": 0.05,
+    "pole_pair_bearing": 0.1,
+    "pole_pair_angular_radius": 0.06,
+    "pole_radius_min": 0.08,
+    "pole_radius_max": 0.12,
+    "pole_spacing": 1.5,
+    "pole_x_jitter": 0.15,
+    "pole_lateral_range": 0.48,
+    "pole_lateral_jitter": 0.12,
+    "pole_arena_half_width": 0.85,
+    "flight_max_speed": 1.15,
+    "control_dt_jitter": 0.0,
+    "amp": false,
+    "coef_v": 0.0,
+    "loss_v_window": 12,
+    "coef_collide": 6.0,
+    "coef_obj_avoidance": 0.0,
+    "coef_d_acc": 0.05,
+    "coef_d_jerk": 0.05,
+    "coef_cam_smooth": 0.0,
+    "coef_terminal_goal": 10.0,
+    "collision_clearance": 0.0011,
+    "fov_x_half_tan": 0.82,
+    "timesteps": 90,
+    "base_control_freq": 15.0,
+    "cam_angle": 5,
+    "gray_width": 96,
+    "gray_height": 72,
+    "gray_nn_width": 48,
+    "gray_nn_height": 36,
+    "policy_gray_mode": "gray",
+    "scenarios": [
+      "dark",
+      "bright",
+      "dark_to_bright",
+      "bright_to_dark"
+    ],
+    "random_rotation": false,
+    "random_rotation_max_deg": 45.0,
+    "simple_start_x": -2.5,
+    "simple_goal_x": 1.5,
+    "simple_wall_x": 0.0,
+    "simple_slit_center_y_min": -0.75,
+    "simple_slit_center_y_max": 0.75,
+    "simple_slit_half_y": 0.15,
+    "simple_slit_half_y_min": 0.15,
+    "simple_slit_half_y_max": 0.15,
+    "simple_slit_center_z": 1.5,
+    "simple_back_wall_x_min": 2.0,
+    "simple_back_wall_x_max": 2.85,
+    "gray_nominal_ambient": 0.18,
+    "gray_nominal_diffuse": 0.72,
+    "gray_dark_scale": 0.12,
+    "gray_bright_scale": 2.2,
+    "gray_background_intensity": 0.04,
+    "gray_transition_x": -0.65,
+    "gray_transition_width": 0.25,
+    "gray_light_jitter": 0.08,
+    "gray_texture_strength": 0.35,
+    "gray_texture_scale": 5.0,
+    "no_odom": false,
+    "include_camera_state_in_obs": false,
+    "max_acc_cmd": 2.2,
+    "camera_control_mode": "mean_ae",
+    "sensor_grad_mode": "detached",
+    "train_flight_only": true,
+    "train_camera_only": false,
+    "camera_smoothing_alpha": 0.0,
+    "fixed_camera_exposure": 0.1,
+    "fixed_camera_gain": 0.02,
+    "fixed_random_exposure_min": 0.1,
+    "fixed_random_exposure_max": 0.9,
+    "fixed_random_gain_min": 0.02,
+    "fixed_random_gain_max": 0.9,
+    "imx900_calibration": "configs/calibration/imx900_provisional.json",
+    "require_calibrated_imx900": false,
+    "gray_blur_kernel_size": 5,
+    "gray_motion_depth_floor": 0.35,
+    "gray_dark_threshold": 0.05,
+    "gray_saturation_mode": "ste",
+    "gray_soft_clip_beta": 12.0,
+    "gray_enable_noise": true,
+    "ellipsoid_collision": false,
+    "drone_a": 0.15,
+    "drone_c": 0.075,
+    "wandb_disabled": true,
+    "wandb_offline": false,
+    "wandb_episode_history": true,
+    "wandb_episode_history_every_iters": 100,
+    "vis_enable": false,
+    "vis_backend": "rerun",
+    "vis_env_idx": 0,
+    "vis_every_iters": 10,
+    "vis_every_steps": 10,
+    "vis_student": true,
+    "vis_spawn": true,
+    "vis_show_aabb": false
+  },
+  "sources": {
+    "actor_critic.py": "f272e9b7e39d1bd94ed30598009f6dac6e37e8ada00c7d7f22010c3edc5d69d9",
+    "autograd_ops.py": "7d44e3896151762f3d8b40321c8d702f842a9d45873c03f776640df6fa178ff7",
+    "config.py": "58b36281e748092822b701365a6b0de172c9415a5d8d2a4a8a99efe51ea42561",
+    "configs/gray_joint_slit_learning.args": "12e07a269aa7e7512f334eb4e4baf1658df83a058bcbf4dc104d31a37ad89cfe",
+    "controllers/__init__.py": "c689f1c8e8ff56651f822d000fa92bb8666addb72a4a80812edd8db7eaaf4bff",
+    "controllers/auto_exposure.py": "a368ca2ecb878fae437ae0f14236f4faf9fe71dcd8b2c8852f61457e9a04166c",
+    "env_cuda.py": "ebfca124e2bac9efccacb0f508bcddff169858721765832b0767afe2589db2bc",
+    "eval.py": "da9637c6bf426de6968ab7e6e16ac430789d7dc3e505b3251b64cbc488657070",
+    "flight_guidance.py": "967c2b3d7c965e8c9252da7068086f3edbcdbb87368e21e4d4455523a5495cb4",
+    "flight_replay.py": "8a1fe1e9debf298c67c65e382969992f9af81e41add79a69f826a25365125d4e",
+    "intent_model.py": "63afc52283f5bcd504bc967a8046a0f39c22df0d82e9d308142c44e4a98aa535",
+    "losses.py": "9345b3925f4d1e16938a1a9fecd58921b8669280804da3ebc351c22af8a2b2ae",
+    "main_cuda.py": "50c6423af99e4dae64ee319adae089e62903d35b4b30a613ad5590f9f8b39a0d",
+    "model.py": "ad39df953afc9793d1985bdae469fd773369cca2d9ea70766acd1027f01e4ca3",
+    "motion_prediction.py": "327b448f4682f1ff6a51f4deeb964cd63fae919d5c48d0dbe646fbe2ad1ff819",
+    "render/__init__.py": "41922e53ae19901c3987bc7a77fba43efde32afa587e70bc07cb81023d302a3a",
+    "render/box_scene.py": "e9b88610c6acd05078e9b9514f8059f804a31890f21b8025d3a4445465e0ae3e",
+    "render/ideal_gray.py": "6074ca248f815996d50c948165cc95079122f3e665cb0308610e3dd12d787f73",
+    "render/intent_scene.py": "3f91723513810f67085e43d4026086983ced81ff3a0feb514608f22fb05bd5e2",
+    "render/occluded_route.py": "c8520d4c97d9f0c69bd9ebd82965967e53d2095c60a38c71dfb4897ed79cf428",
+    "render/pole_scene.py": "db4ea99e43c6371beb971880be008ce48ab71be5b94f9643a50ff4674a714881",
+    "render/pose.py": "f198a0290dbd04999a463feac6d2acfd255a795ae08f4c4fe4ccd4ee2c79b956",
+    "render/pose_gradient.py": "47431e2c9fab6de0c0b550fe57131cc2d6ea0dbb5d13071945347b9d04550e85",
+    "render/scene_types.py": "273306c4a3891d9951f08b893c88dae75451614629e184d434b76036dfc8a6ad",
+    "render/slit_scene.py": "ad44dc36331832aaae3fb1698e220bdbd2b52e09f216e99ce39ec1e5a743a77d",
+    "rerun_vis.py": "08f4da349f2c1d46a933f2ffef69409d22efc44aa73df67d0c4dff1486408ea0",
+    "rollout_ops.py": "97df6e2b5f0301495f6e13731a3eb816d56792dc9bcf3e5011957099b47778f8",
+    "sensors/__init__.py": "07f90ec8a144562510c9bc2b9b08efb3ce3c04f4efcc580443e9e7b1504b5fa0",
+    "sensors/imx900_calibration.py": "88da22456c74d64ed5ece77bb888964f4979c8a23ba28c5d15ea29d70496d9d0",
+    "sensors/imx900_camera.py": "e02d1181c421201f81986a7ca05adbd831fee4de63c2a2477c9c7ab7b4b00bdd",
+    "tools/intent_common.py": "7aad5a7d58f5347e136d83a0f6be0f359a6607c4b3e9a847cea5a726b0d02944",
+    "tools/run_joint_slit_learning.py": "d4d6a929757a2f2f780ecb24c33e597ed591232df6661a0677374b11faa75a76",
+    "train_utils.py": "3052d619e8c257d3b9a02e57bb69516db4e8991537aa7bcc710e1c08debc5257",
+    "trainer.py": "deb12751d416467ebfe025344e64733696e5d96192468427c753afa5eb2adc49",
+    "utils.py": "78bd329f41d13ec72426366610ed7f57ba4d29082e80fba96ec2b286892e0c50"
+  },
+  "calibration_sha256": "5f442910b718cdb3827f514c13e8ab99e8863a4e58ef7970860c3c4a5260c50f",
+  "development": [
+    {
+      "seed": 910000,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 910001,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 910002,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 910003,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 910004,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 910005,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 910006,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 910007,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 910008,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 910009,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 910010,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 910011,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 910012,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 910013,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 910014,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 910015,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 910016,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 910017,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 910018,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 910019,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 910020,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 910021,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 910022,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 910023,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 910024,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 910025,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 910026,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 910027,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 910028,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 910029,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 910030,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 910031,
+      "scenario": "bright_to_dark",
+      "side": 1
+    }
+  ],
+  "confirmation": [
+    {
+      "seed": 920000,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920001,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920002,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920003,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920004,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920005,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920006,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920007,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920008,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920009,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920010,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920011,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920012,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920013,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920014,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920015,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920016,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920017,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920018,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920019,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920020,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920021,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920022,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920023,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920024,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920025,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920026,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920027,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920028,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920029,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920030,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920031,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920032,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920033,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920034,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920035,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920036,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920037,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920038,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920039,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920040,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920041,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920042,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920043,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920044,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920045,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920046,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920047,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920048,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920049,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920050,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920051,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920052,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920053,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920054,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920055,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 920056,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 920057,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 920058,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 920059,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 920060,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 920061,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 920062,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 920063,
+      "scenario": "bright_to_dark",
+      "side": 1
+    }
+  ],
+  "demonstrations": [
+    {
+      "seed": 930000,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930001,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930002,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930003,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930004,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930005,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930006,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930007,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930008,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930009,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930010,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930011,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930012,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930013,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930014,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930015,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930016,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930017,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930018,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930019,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930020,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930021,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930022,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930023,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930024,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930025,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930026,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930027,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930028,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930029,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930030,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930031,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930032,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930033,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930034,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930035,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930036,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930037,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930038,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930039,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930040,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930041,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930042,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930043,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930044,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930045,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930046,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930047,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930048,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930049,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930050,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930051,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930052,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930053,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930054,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930055,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930056,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930057,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930058,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930059,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930060,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930061,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930062,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930063,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930064,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930065,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930066,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930067,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930068,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930069,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930070,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930071,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930072,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930073,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930074,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930075,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930076,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930077,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930078,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930079,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930080,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930081,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930082,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930083,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930084,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930085,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930086,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930087,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930088,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930089,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930090,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930091,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930092,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930093,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930094,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930095,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930096,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930097,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930098,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930099,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930100,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930101,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930102,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930103,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930104,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930105,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930106,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930107,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930108,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930109,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930110,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930111,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930112,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930113,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930114,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930115,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930116,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930117,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930118,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930119,
+      "scenario": "bright_to_dark",
+      "side": 1
+    },
+    {
+      "seed": 930120,
+      "scenario": "dark",
+      "side": -1
+    },
+    {
+      "seed": 930121,
+      "scenario": "bright",
+      "side": -1
+    },
+    {
+      "seed": 930122,
+      "scenario": "dark_to_bright",
+      "side": -1
+    },
+    {
+      "seed": 930123,
+      "scenario": "bright_to_dark",
+      "side": -1
+    },
+    {
+      "seed": 930124,
+      "scenario": "dark",
+      "side": 1
+    },
+    {
+      "seed": 930125,
+      "scenario": "bright",
+      "side": 1
+    },
+    {
+      "seed": 930126,
+      "scenario": "dark_to_bright",
+      "side": 1
+    },
+    {
+      "seed": 930127,
+      "scenario": "bright_to_dark",
+      "side": 1
+    }
+  ],
+  "direct": {
+    "seed": 42,
+    "updates": 2000,
+    "checks": [
+      500,
+      1000,
+      1500,
+      2000
+    ],
+    "lr": 0.0003
+  },
+  "fallback": {
+    "imitation_updates": 800,
+    "imitation_lr": 0.001,
+    "batch": 8,
+    "task_updates": 500,
+    "task_lr": 3e-05,
+    "camera_labels": false
+  },
+  "arms": {
+    "updates": 1000,
+    "batch": 4,
+    "flight_lr": 1e-05,
+    "camera_lr": 0.0001,
+    "checks": [
+      200,
+      400,
+      600,
+      800,
+      1000
+    ],
+    "handoff_updates": 200,
+    "groups": [
+      "A_mean_ae",
+      "B_full",
+      "C_no_motion_image",
+      "D_no_eg_image"
+    ]
+  },
+  "criterion": {
+    "normal": 16,
+    "zero_difference": 8,
+    "per_side": 6,
+    "per_light": 2
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "weight_decay": 0.01,
+    "clip": 5,
+    "cosine_end_factor": 0.01
+  },
+  "runtime": {
+    "python": "/home/zhaoguodong/miniconda3/envs/mappo-mpc/bin/python",
+    "torch": "2.1.0+cu121",
+    "cuda": "12.1",
+    "extension": "/home/zhaoguodong/work/code/DiffPhysDrone/src/quadsim_cuda.cpython-39-x86_64-linux-gnu.so",
+    "extension_sha256": "1a918668ba2f32c639817990d92c98d34d52a392fe0d0d8d58bad524d8762c7a",
+    "gpu": "NVIDIA GeForce RTX 4080",
+    "amp": false,
+    "tf32": true
+  },
+  "no_training_seed_expansion": true,
+  "calibrated": false
+}

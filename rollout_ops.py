@@ -68,6 +68,14 @@ def select_policy_gray_obs(gray_obs, mode="gray"):
     return gray_obs
 
 
+def blend_camera_request(learned, automatic, alpha):
+    """Bounded research handoff, not a supervised target or an extra update."""
+    alpha = float(alpha)
+    if not 0 <= alpha <= 1:
+        raise ValueError("camera handoff alpha must be in [0,1]")
+    return (1 - alpha) * automatic.detach() + alpha * learned
+
+
 def build_local_frame(env):
     fwd = env.R[:, :, 0].clone()
     fwd[:, 2] = 0

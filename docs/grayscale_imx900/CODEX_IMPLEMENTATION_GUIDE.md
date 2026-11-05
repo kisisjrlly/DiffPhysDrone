@@ -17,6 +17,14 @@ to that original experiment. No legacy D455 code or results are merged here.
 
 ### Two-block transfer audit identifies a collision-geometry priority (2026-11-03)
 
+**2026-11-05 superseding authorization:** the user approved the bounded
+[joint-slit learning plan](JOINT_SLIT_LEARNING_PLAN_2026_11_05.md). Fix the
+sphere sweep and rerun OD/WD, then build a fresh in-distribution common flight
+checkpoint with mean AE, allowing one disclosed flight-only imitation fallback.
+Only after its gate passes run the four prescribed joint-learning arms.
+Earlier inference-only/no-training stops remain historical, not this round's
+restriction. Do not expand seeds, scenes, physical parameters or budgets.
+
 See [GRAY_TRANSFER_CROSS_2026_11_03.md](GRAY_TRANSFER_CROSS_2026_11_03.md) and its
 locked plan. Only two new conditions (32 historical episodes) were evaluated;
 no training or production physics changes. At the old start, old/old=8/16,

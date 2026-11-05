@@ -317,7 +317,7 @@ def sphere_segment_certificate(start,end,boxes,radius):
 def terminal_geometry(out):
     import torch
     from train_utils import build_env
-    from render.box_scene import swept_box_collision
+    from render.box_scene import expanded_box_sweep
     args=variants()['OO'].args(resolved_args())
     env=build_env(1,args,torch.device('cuda'),eval_mode=True)
     env.reset('dark')
@@ -336,7 +336,7 @@ def terminal_geometry(out):
             end=torch.from_numpy(trace['post_p'][-1].copy())
             boxes=torch.from_numpy(trace['initial_voxels'].copy())
             sampled,lower=sphere_segment_certificate(start,end,boxes,radius)
-            broad=bool(swept_box_collision(start,end,boxes,radius).item())
+            broad=bool(expanded_box_sweep(start,end,boxes,radius).item())
             ref=load_trace(source_cell(out,reference)/f'ep_{i:03d}.npz')
             all_start=torch.from_numpy(ref['pre_p'][:,0].copy())
             all_end=torch.from_numpy(ref['post_p'][:,0].copy())

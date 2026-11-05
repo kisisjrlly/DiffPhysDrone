@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from render.box_scene import swept_box_collision
+from render.box_scene import expanded_box_sweep, swept_box_collision
 from tools.audit_gray_transfer_cross import (variants,paired_results,observation_steps,
     restore_pose,verify_cell,PREVIOUS,sphere_segment_certificate)
 
@@ -54,7 +54,8 @@ def test_pose_restore_uses_previous_attitude_and_period_without_future_access():
 def test_expanded_box_can_stop_a_safely_clear_spherical_corner_pass():
     boxes=torch.tensor([[[0.,0.,0.,1.,1.,1.]]])
     start=torch.tensor([[1.10,1.10,-.10]]);end=torch.tensor([[1.10,1.10,.10]])
-    assert swept_box_collision(start,end,boxes,.12).item()
+    assert expanded_box_sweep(start,end,boxes,.12).item()
+    assert not swept_box_collision(start,end,boxes,.12).item()
     sampled,lower=sphere_segment_certificate(start,end,boxes,.12)
     assert lower.item()>.0011
     assert lower.item()<sampled.item()

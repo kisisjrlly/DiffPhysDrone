@@ -25,7 +25,7 @@ from autograd_ops import run
 from render.ideal_gray import render_ideal_grayscale
 from utils import g_decay
 from render.pose import dynamics_step, update_attitude
-from render.box_scene import box_clearance, swept_box_collision
+from render.box_scene import box_clearance, swept_box_collision, swept_box_clearance
 from render.intent_scene import build_intent_gates, render_exposure
 from render.pole_scene import build_sparse_poles, cylinder_clearance, swept_cylinder_clearance
 from render.scene_types import DIFFERENTIABLE_SCENES
@@ -639,11 +639,7 @@ class Env:
     def transition_clearance(self):
         start = (self.R_scene_T @ self.p_old[:, :, None]).squeeze(-1)
         end = (self.R_scene_T @ self.p[:, :, None]).squeeze(-1)
-        fractions = torch.linspace(0, 1, 17, device=self.p.device, dtype=self.p.dtype)
-        points = start[None] + fractions[:, None, None] * (end - start)[None]
-        clearance = box_clearance(points, self.voxels, self.drone_radius).amin(0)
-        swept = swept_box_collision(start, end, self.voxels, self.drone_radius)
-        clearance = torch.where(swept, clearance.clamp_max(0), clearance)
+        clearance = swept_box_clearance(start, end, self.voxels, self.drone_radius)
         if self.scene_layout == "sparse_poles":
             clearance = torch.minimum(clearance, swept_cylinder_clearance(start, end, self.cyl, self.drone_radius))
         return clearance

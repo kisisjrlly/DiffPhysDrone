@@ -1,0 +1,150 @@
+{
+  "cells": {
+    "OD": {
+      "successes": 8.0,
+      "collisions": 8.0,
+      "episodes": 16
+    },
+    "WD": {
+      "successes": 3.0,
+      "collisions": 13.0,
+      "episodes": 16
+    }
+  },
+  "witnesses": [
+    {
+      "cell": "OD",
+      "seed": 30005,
+      "corrected_clearance_m": 0.013909115953545936,
+      "old_stop_is_now_safe": true,
+      "continued_steps": 52,
+      "old_steps": 28,
+      "outcome": {
+        "episode_seed": 30005,
+        "scenario": "bright",
+        "camera_profile": "e-con e-CAM37M_CUONX / Sony IMX900 provisional",
+        "camera_profile_calibrated": false,
+        "success_rate": 1.0,
+        "collision_rate": 0.0,
+        "goal_reach_rate": 1.0,
+        "final_goal_dist": 0.3497578203678131,
+        "avg_speed": 0.8018237352371216,
+        "min_clearance": 0.008193261921405792,
+        "exposure_mean": 0.045507386326789856,
+        "gain_mean": 0.0031271849293261766,
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.018635375425219536,
+        "blur_strength": 0.030410772189497948,
+        "light_scale": 2.1635613441467285,
+        "motion_proxy": 0.8501884937286377,
+        "characteristic_depth": 1.2338680028915405,
+        "steps": 52,
+        "stop_reason": "goal",
+        "elapsed_s": 3.466666666666671,
+        "deadline_s": 6.0
+      }
+    },
+    {
+      "cell": "OD",
+      "seed": 30015,
+      "corrected_clearance_m": 0.012813168347359821,
+      "old_stop_is_now_safe": true,
+      "continued_steps": 52,
+      "old_steps": 27,
+      "outcome": {
+        "episode_seed": 30015,
+        "scenario": "bright_to_dark",
+        "camera_profile": "e-con e-CAM37M_CUONX / Sony IMX900 provisional",
+        "camera_profile_calibrated": false,
+        "success_rate": 1.0,
+        "collision_rate": 0.0,
+        "goal_reach_rate": 1.0,
+        "final_goal_dist": 0.3411937654018402,
+        "avg_speed": 0.8014057278633118,
+        "min_clearance": 0.0053947195410728455,
+        "exposure_mean": 0.15323516726493835,
+        "gain_mean": 0.009713321924209595,
+        "saturation_fraction": 0.000804064329713583,
+        "dark_fraction": 0.013894454576075077,
+        "blur_strength": 0.05014495924115181,
+        "light_scale": 1.405639886856079,
+        "motion_proxy": 0.751708447933197,
+        "characteristic_depth": 1.5274637937545776,
+        "steps": 52,
+        "stop_reason": "goal",
+        "elapsed_s": 3.466666666666671,
+        "deadline_s": 6.0
+      }
+    },
+    {
+      "cell": "WD",
+      "seed": 30001,
+      "corrected_clearance_m": 0.012045687106750524,
+      "old_stop_is_now_safe": true,
+      "continued_steps": 49,
+      "old_steps": 26,
+      "outcome": {
+        "episode_seed": 30001,
+        "scenario": "bright",
+        "camera_profile": "e-con e-CAM37M_CUONX / Sony IMX900 provisional",
+        "camera_profile_calibrated": false,
+        "success_rate": 1.0,
+        "collision_rate": 0.0,
+        "goal_reach_rate": 1.0,
+        "final_goal_dist": 0.3392196595668793,
+        "avg_speed": 0.8295292854309082,
+        "min_clearance": 0.0031838789582252502,
+        "exposure_mean": 0.04771909862756729,
+        "gain_mean": 0.002644089749082923,
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.02882593870162964,
+        "blur_strength": 9.827508620219305e-05,
+        "light_scale": 2.1663663387298584,
+        "motion_proxy": 0.0,
+        "characteristic_depth": 0.0,
+        "steps": 49,
+        "stop_reason": "goal",
+        "elapsed_s": 3.26666666666667,
+        "deadline_s": 6.0
+      }
+    },
+    {
+      "cell": "WD",
+      "seed": 30008,
+      "corrected_clearance_m": 0.02935827259095322,
+      "old_stop_is_now_safe": true,
+      "continued_steps": 50,
+      "old_steps": 27,
+      "outcome": {
+        "episode_seed": 30008,
+        "scenario": "dark",
+        "camera_profile": "e-con e-CAM37M_CUONX / Sony IMX900 provisional",
+        "camera_profile_calibrated": false,
+        "success_rate": 1.0,
+        "collision_rate": 0.0,
+        "goal_reach_rate": 1.0,
+        "final_goal_dist": 0.3300246000289917,
+        "avg_speed": 0.8179994821548462,
+        "min_clearance": 0.0063423290848731995,
+        "exposure_mean": 0.6967097520828247,
+        "gain_mean": 0.07223972678184509,
+        "saturation_fraction": 0.0,
+        "dark_fraction": 0.01783275417983532,
+        "blur_strength": 7.65274089644663e-05,
+        "light_scale": 0.1241220086812973,
+        "motion_proxy": 0.0,
+        "characteristic_depth": 0.0,
+        "steps": 50,
+        "stop_reason": "goal",
+        "elapsed_s": 3.333333333333337,
+        "deadline_s": 6.0
+      }
+    }
+  ],
+  "source_sha256": {
+    "render/box_scene.py": "e9b88610c6acd05078e9b9514f8059f804a31890f21b8025d3a4445465e0ae3e",
+    "env_cuda.py": "ebfca124e2bac9efccacb0f508bcddff169858721765832b0767afe2589db2bc",
+    "tools/audit_sphere_collision_correction.py": "5e935b682f4ef0b295f47821ca601a35cd41f9a7504a666408bede4952c31e73"
+  },
+  "claim": "Collision correction only; no joint-learning or generalized flight claim."
+}
