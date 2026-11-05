@@ -152,6 +152,14 @@ def report(out):
             text.append(f'|{arm}|{results["successes"][arm]}/64|{cost["generated_steps"]}|{cost["optimization_seconds"]:.1f}|')
         text.extend(['', f'交叉结果：`{json.dumps(results["crosses"], ensure_ascii=False)}`；'
                      f'交互成功数差：{results["interaction_success_count"]}。'])
+    if (out/'demo_status.json').exists():
+        demonstration = load(out/'demo_status.json')
+        write_json(artifact/'demo_status.json', demonstration)
+        if demonstration['produced']:
+            text.extend(['', f'真实网络重放：[固定第0号配对案例]({demonstration["path"]})。'
+                         '该案例不代表整体成功率，也不替代配合证据。'])
+        else:
+            text.extend(['', f'未制作优势演示：{demonstration["reason"]}'])
     text.extend(['', '## 尚未证明', '',
         '单个训练seed、开发样本筛选；没有跨seed统计、RL算法竞争或真机证据。'
         '梯度切断组是机制检查，策略交叉下降也可能包含分布失配。相机仍未实测标定。',

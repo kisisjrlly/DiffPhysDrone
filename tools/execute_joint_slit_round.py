@@ -37,6 +37,7 @@ def main():
         if (out/'common_locked.json').exists():
             run('run_joint_slit_followup.py', out, 'arms')
             run('run_joint_slit_followup.py', out, 'evaluate')
+        run('render_joint_slit_video.py', out)
         run('report_joint_slit_learning.py', out)
 
 
