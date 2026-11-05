@@ -1,10 +1,25 @@
 """Reporting must separate task success, learning cost and preparation failures."""
-from tools.report_joint_slit_learning import classify, summarize_episodes
+from tools.report_joint_slit_learning import classify, summarize_episodes, discarded_cost
 from tools.run_joint_slit_followup import ARMS
 
 
 def curves(final=20):
     return {arm:[(0,20), (200,final), (1000,final)] for arm in ARMS}
+
+
+def test_retry_cost_counts_only_discarded_work_not_prior_training(tmp_path):
+    import json
+    from tools.run_joint_slit_followup import truncate_metrics
+    path = tmp_path/'imitation_metrics.jsonl'
+    rows = [dict(iteration=1,cumulative_optimization_seconds=10.,valid_steps=8),
+            dict(iteration=2,cumulative_optimization_seconds=12.,valid_steps=9)]
+    path.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+    truncate_metrics(path, 1)
+    record = json.loads(next(tmp_path.glob('*_discarded_*.json')).read_text())
+    assert discarded_cost(record) == dict(updates=1,optimization_seconds=2.,generated_steps=0,valid_steps=9)
+    assert len(path.read_text().splitlines()) == 1
+    direct = dict(rows=[dict(optimization_seconds=3.,generated_steps=360,valid_steps=240)])
+    assert discarded_cost(direct)['optimization_seconds'] == 3.
 
 
 def test_all_arm_regression_is_not_reported_as_perception_failure():

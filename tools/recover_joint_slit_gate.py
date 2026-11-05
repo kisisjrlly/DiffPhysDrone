@@ -62,6 +62,9 @@ def recover(out):
 
 
 if __name__ == '__main__':
+    torch.set_num_threads(4)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
     parser = argparse.ArgumentParser()
     parser.add_argument('--out_dir', type=Path, required=True)
     recover(parser.parse_args().out_dir.resolve())

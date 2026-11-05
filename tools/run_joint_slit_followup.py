@@ -71,8 +71,11 @@ def truncate_metrics(path, iteration):
         rows = [json.loads(line) for line in path.read_text().splitlines()]
         discarded = [row for row in rows if row['iteration'] > iteration]
         if discarded:
+            previous_seconds = next((row['cumulative_optimization_seconds'] for row in reversed(rows)
+                                     if row['iteration'] <= iteration), 0.)
             write_json(path.with_name(path.stem+f'_discarded_{time.time_ns()}.json'),
-                       dict(reason='Crash after last atomic optimizer state; work retained for cost accounting', rows=discarded))
+                       dict(reason='Crash after last atomic optimizer state; work retained for cost accounting',
+                            previous_optimization_seconds=previous_seconds, rows=discarded))
         path.write_text(''.join(json.dumps(row)+'\n' for row in rows if row['iteration'] <= iteration))
 
 
@@ -182,10 +185,12 @@ def fallback(out, protocol):
         optimizer.step()
         scheduler.step()
         torch.cuda.synchronize()
-        seconds += time.perf_counter()-start
+        update_seconds = time.perf_counter()-start
+        seconds += update_seconds
         with metrics.open('a') as handle:
             handle.write(json.dumps(dict(iteration=iteration+1, loss=float(loss.detach()),
-                valid_steps=int(valid.sum()), cumulative_optimization_seconds=seconds))+'\n')
+                valid_steps=int(valid.sum()), optimization_seconds=update_seconds,
+                cumulative_optimization_seconds=seconds))+'\n')
         if (iteration+1) % 25 == 0:
             save_state(latest, model, optimizer, scheduler, iteration+1, seconds, out)
             print(f'[imitation] {iteration+1}/800 loss={float(loss):.5f}', flush=True)

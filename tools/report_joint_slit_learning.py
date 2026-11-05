@@ -21,6 +21,17 @@ def metrics(path):
     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
 
+def discarded_cost(record):
+    rows = record['rows']
+    if all('optimization_seconds' in row for row in rows):
+        seconds = sum(row['optimization_seconds'] for row in rows)
+    else:
+        seconds = rows[-1]['cumulative_optimization_seconds']-record['previous_optimization_seconds'] if rows else 0.
+    return dict(updates=len(rows), optimization_seconds=seconds,
+                generated_steps=sum(row.get('generated_steps', 0) for row in rows),
+                valid_steps=sum(row.get('valid_steps', 0) for row in rows))
+
+
 def summarize_episodes(rows):
     return dict(episodes=len(rows), successes=sum(int(r['success_rate']) for r in rows),
                 collisions=sum(int(r['collision_rate']) for r in rows),
@@ -69,6 +80,8 @@ def report(out):
     common_rows = metrics(out/'common_direct/metrics.jsonl')
     fallback_imitation = metrics(out/'fallback/imitation_metrics.jsonl')
     fallback_task = metrics(out/'fallback/task_metrics.jsonl')
+    discarded = {str(path.relative_to(out)):load(path) for path in out.rglob('*_discarded_*.json')}
+    overhead = {path:discarded_cost(value) for path,value in discarded.items()}
     costs = dict(common_generated_steps=sum(r['generated_steps'] for r in common_rows+fallback_task),
                  common_valid_steps=sum(r['valid_steps'] for r in common_rows+fallback_task),
                  common_optimization_seconds=sum(r['optimization_seconds'] for r in common_rows+fallback_task),
@@ -92,13 +105,19 @@ def report(out):
                 generated_steps=sum(r['generated_steps'] for r in arm_metrics),
                 valid_steps=sum(r['valid_steps'] for r in arm_metrics),
                 optimization_seconds=done['optimization_seconds'], final_sha256=done['final_sha256'])
+            arm_overhead = [value for path,value in overhead.items() if path.startswith(f'arms/{arm}/')]
+            costs['arms'][arm]['executed_generated_steps'] = costs['arms'][arm]['generated_steps']+sum(r['generated_steps'] for r in arm_overhead)
+            costs['arms'][arm]['executed_optimization_seconds'] = done['optimization_seconds']+sum(r['optimization_seconds'] for r in arm_overhead)
             updates, successes, seconds = [0], [common['normal']/32], [0.]
             by_update = {r['iteration']:r['cumulative_optimization_seconds'] for r in arm_metrics}
             for step in (200,400,600,800,1000):
                 development = load(directory/f'eval_{step:04d}.json')['rows']
                 updates.append(step)
                 successes.append(sum(r['success_rate'] for r in development)/32)
-                seconds.append(by_update[step])
+                retry_seconds = sum(discarded_cost(value)['optimization_seconds'] for path,value in discarded.items()
+                                    if path.startswith(f'arms/{arm}/') and value['rows']
+                                    and min(row['iteration'] for row in value['rows']) <= step)
+                seconds.append(by_update[step]+retry_seconds)
             development_curves[arm] = list(zip(updates, [round(value*32) for value in successes]))
             axes[1].plot([i*360 for i in updates], successes, 'o-', color=color, label=arm)
             axes[2].plot(seconds, successes, 'o-', color=color, label=arm)
@@ -138,10 +157,14 @@ def report(out):
             shutil.copy2(path, destination)
     for path in sorted((out/'common_direct').glob('gate_*.json')):
         shutil.copy2(path, artifact/path.name)
-    discarded = {str(path.relative_to(out)):load(path) for path in out.rglob('*_discarded_*.json')}
     costs['discarded_update_records'] = discarded
-    costs['discarded_optimization_seconds'] = sum(
-        row.get('optimization_seconds',0.) for value in discarded.values() for row in value['rows'])
+    costs['discarded_optimization_seconds'] = sum(value['optimization_seconds'] for value in overhead.values())
+    costs['discarded_generated_steps'] = sum(value['generated_steps'] for value in overhead.values())
+    costs['measured_total_optimization_seconds'] = (
+        costs['common_optimization_seconds']+costs['imitation_optimization_seconds']+
+        sum(value['optimization_seconds'] for value in costs['arms'].values())+
+        costs['discarded_optimization_seconds'])
+    costs['measurement_scope'] = 'Completed logged optimizer updates, including discarded retries; excludes unlogged partial work, evaluation and process startup.'
     write_json(artifact/'costs.json', costs)
     if rows:
         keys = sorted({key for row in rows for key in row})
@@ -161,6 +184,10 @@ def report(out):
         text.append(f'- 一次热身后最终开发集：正常{last_gate["normal"]}/32、零图{last_gate["zero"]}/32；联合比较未启动。')
     if 'demonstrations' in costs:
         text.append(f'- 教师采集的成功次数为{costs["demonstrations"]["successes"]}/128，这是教师表现，不是学习策略成绩。')
+    if discarded:
+        text.append(f'- 中断后重做的已记录更新另计：{sum(value["updates"] for value in overhead.values())}次、'
+                    f'{costs["discarded_generated_steps"]}个生成控制步、{costs["discarded_optimization_seconds"]:.1f}秒。'
+                    '耗时只覆盖已完成并记入日志的优化更新，不含未记录的半次更新、评估或进程启动。')
     if final.exists():
         text.extend(['', '|方法|最终安全到达|训练生成步|训练秒数|', '|---|---:|---:|---:|'])
         for arm in ARMS:
