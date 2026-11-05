@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -24,6 +25,13 @@ def recover(out):
     saved = torch.load(latest, map_location='cpu')
     if saved['protocol_sha256'] != sha(out/'protocol.json'):
         raise RuntimeError('Resume protocol mismatch')
+    metrics = target/'metrics.jsonl'
+    if metrics.exists():
+        discarded = [json.loads(line) for line in metrics.read_text().splitlines()
+                     if json.loads(line)['iteration'] > saved['iteration']]
+        if discarded:
+            write_json(target/f'metrics_discarded_{time.time_ns()}.json', dict(
+                reason='Work after last atomic snapshot; retain cost before base runner truncates log', rows=discarded))
     initialization = json.loads((target/'initialization.json').read_text())
     for completed in DIRECT_CHECKS:
         if completed > saved['iteration']:

@@ -1,0 +1,33 @@
+{
+  "files": {
+    "tools/gray_chain_components.py": {
+      "sha256": "f0b9ef2423d4c6ffefb841c8bddc466af2cbe3c1831ab617075c7bcd1fd2a37c",
+      "origin": "current, unchanged since audit"
+    },
+    "tools/audit_policy_sensing_decision.py": {
+      "sha256": "f8f76182a27cd51dee08e9ee84aa986159e3b967d0c5fb50959ed25dd77e208d",
+      "origin": "current, unchanged since audit"
+    },
+    "env_cuda.py": {
+      "sha256": "ebfca124e2bac9efccacb0f508bcddff169858721765832b0767afe2589db2bc",
+      "origin": "current, unchanged since audit"
+    },
+    "eval.py": {
+      "sha256": "da9637c6bf426de6968ab7e6e16ac430789d7dc3e505b3251b64cbc488657070",
+      "origin": "current, unchanged since audit"
+    },
+    "rollout_ops.py": {
+      "sha256": "b04371699cdcd05f36647efb0bfb345330a671093e1daf574865ca086ed151ef",
+      "origin": "git 4b2b3c6, SHA256 matches recorded audit input"
+    },
+    "render/box_scene.py": {
+      "sha256": "e9b88610c6acd05078e9b9514f8059f804a31890f21b8025d3a4445465e0ae3e",
+      "origin": "current, unchanged since audit"
+    },
+    "tools/audit_sphere_collision_correction.py": {
+      "sha256": "5e935b682f4ef0b295f47821ca601a35cd41f9a7504a666408bede4952c31e73",
+      "origin": "current, unchanged since audit"
+    }
+  },
+  "note": "rollout_ops.py acquired an unused camera-handoff helper after collision execution. Preserve the exact earlier module whose hash is in inputs.json; no replay, replacement of outcomes, or new episodes."
+}

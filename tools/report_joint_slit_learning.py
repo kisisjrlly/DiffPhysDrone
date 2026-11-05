@@ -21,6 +21,38 @@ def metrics(path):
     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
 
+def summarize_episodes(rows):
+    return dict(episodes=len(rows), successes=sum(int(r['success_rate']) for r in rows),
+                collisions=sum(int(r['collision_rate']) for r in rows),
+                timeouts=sum(r['stop_reason']=='timeout' for r in rows),
+                penalized_completion_s=sum(r['failed_penalized_time_s'] for r in rows)/len(rows),
+                mean_control_cost=sum(r['control_cost'] for r in rows)/len(rows),
+                per_light={light: sum(int(r['success_rate']) for r in rows if r['scenario']==light)
+                           for light in sorted({r['scenario'] for r in rows})},
+                per_side={str(side): sum(int(r['success_rate']) for r in rows if r['side']==side) for side in (-1,1)})
+
+
+def classify(results, development_curves, baseline_successes):
+    """Engineering categories, not significance or best-algorithm claims."""
+    successes = results['successes']
+    if results['joint_candidate']:
+        return '出现拍摄—飞行配合候选', '下一轮只验证候选收益对应的关键学习信号。'
+    if min(successes.values()) >= 60:
+        return '各组接近全成功，检查缺乏区分能力', '停止扩展本场景，不收紧时限或增加噪声。'
+    if all(curve[-1][1] < baseline_successes for curve in development_curves.values()):
+        return '后续训练使各组开发集成绩均低于共同起点', '下一轮只定位更新过程为何破坏已有飞行能力。'
+    if successes[ARMS[1]]-successes[ARMS[0]] >= 4:
+        return '学习拍摄有任务收益，尚未证明飞行动作配合', '只定位当前拍摄收益来源，不宣称联合配合成立。'
+    # A predeclared descriptive curve marker, never a checkpoint selector.
+    # If preparation already meets 24/32, all first-hit values are zero.
+    first_hit = {name: next((step for step,n in curve if n >= 24), None)
+                 for name,curve in development_curves.items()}
+    a, b = first_hit[ARMS[0]], first_hit[ARMS[1]]
+    if abs(successes[ARMS[1]]-successes[ARMS[0]]) < 4 and b is not None and (a is None or b < a):
+        return '最终成绩相近，完整联合组较早达到开发集24/32', '先核对达到该成绩的实际训练耗时；只报告候选学习效率收益。'
+    return '当前场景与预算未显示明确联合优势', '停止扩大本轮实验；依据现有失败记录定位一个具体障碍。'
+
+
 def report(out):
     import matplotlib
     matplotlib.use('Agg')
@@ -49,7 +81,7 @@ def report(out):
     axes[0].plot([r['iteration'] for r in common_rows], [r['loss'] for r in common_rows], color='#354e6b', lw=.8)
     axes[0].set(xlabel='Common-flight updates', ylabel='Task objective', title='Shared preparation')
     colors = ('#646c76', '#246c9b', '#ce8c3c', '#9b678e')
-    rows = []
+    rows, development_curves = [], {}
     if final.exists():
         results = load(final)
         for arm, color in zip(ARMS, colors):
@@ -67,19 +99,14 @@ def report(out):
                 updates.append(step)
                 successes.append(sum(r['success_rate'] for r in development)/32)
                 seconds.append(by_update[step])
+            development_curves[arm] = list(zip(updates, [round(value*32) for value in successes]))
             axes[1].plot([i*360 for i in updates], successes, 'o-', color=color, label=arm)
             axes[2].plot(seconds, successes, 'o-', color=color, label=arm)
             episodes = load(directory/'confirmation/results.json')['rows']
             rows.extend(dict(arm=arm, **row) for row in episodes)
         axes[1].legend(fontsize=7)
-        if results['joint_candidate']:
-            category, next_work = '出现拍摄—飞行配合候选', '下一轮只验证候选收益对应的关键学习信号。'
-        elif min(results['successes'].values()) >= 60:
-            category, next_work = '各组接近全成功，检查缺乏区分能力', '停止扩展本场景，不收紧时限或增加噪声。'
-        elif results['successes'][ARMS[1]]-results['successes'][ARMS[0]] >= 4:
-            category, next_work = '学习拍摄有任务收益，尚未证明飞行动作配合', '只定位当前拍摄收益来源，不宣称联合配合成立。'
-        else:
-            category, next_work = '当前场景与预算未显示明确联合优势', '先依据现有学习曲线判断技能保持或效率问题，不自动追加训练。'
+        category, next_work = classify(results, development_curves, common['normal'])
+        write_json(artifact/'task_metrics.json', {arm:summarize_episodes([r for r in rows if r['arm']==arm]) for arm in ARMS})
     else:
         results = load(stopped)
         category, next_work = '共同视觉飞行起点未建立', results['next_work']
@@ -100,6 +127,10 @@ def report(out):
             shutil.copy2(path, destination)
     for path in sorted((out/'common_direct').glob('gate_*.json')):
         shutil.copy2(path, artifact/path.name)
+    discarded = {str(path.relative_to(out)):load(path) for path in out.rglob('*_discarded_*.json')}
+    costs['discarded_update_records'] = discarded
+    costs['discarded_optimization_seconds'] = sum(
+        row.get('optimization_seconds',0.) for value in discarded.values() for row in value['rows'])
     write_json(artifact/'costs.json', costs)
     if rows:
         keys = sorted({key for row in rows for key in row})

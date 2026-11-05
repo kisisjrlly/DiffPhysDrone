@@ -49,3 +49,27 @@ def test_exterior_derivatives_match_finite_differences():
     start = torch.tensor([[1.1, 1.3, .1]], dtype=torch.float64, requires_grad=True)
     end = torch.tensor([[1.4, 1.05, .2]], dtype=torch.float64, requires_grad=True)
     assert torch.autograd.gradcheck(lambda a, b: swept_box_clearance(a, b, boxes, .12), (start, end))
+
+
+@pytest.mark.parametrize('dtype', [torch.float32, torch.float64])
+def test_continuous_clearance_matches_independent_convex_distance_minimization(dtype):
+    import numpy as np
+    rng = np.random.default_rng(177)
+    start, end = rng.uniform(-3,3,(2,128,3))
+    half = rng.uniform(.1,1.2,(128,3))
+    lo, hi = np.zeros(128), np.ones(128)
+    def distance(t):
+        return np.linalg.norm(np.maximum(np.abs(start+t[:,None]*(end-start))-half,0),axis=-1)
+    # Independent one-dimensional convex search; no slab/candidate equations.
+    for _ in range(90):
+        a,b = lo+(hi-lo)/3, hi-(hi-lo)/3
+        choose_left = distance(a) <= distance(b)
+        hi = np.where(choose_left,b,hi)
+        lo = np.where(choose_left,lo,a)
+    expected = distance((lo+hi)/2)
+    boxes = np.concatenate([np.zeros_like(half),half],axis=-1)[:,None]
+    result = swept_box_clearance(torch.tensor(start,dtype=dtype),torch.tensor(end,dtype=dtype),
+                                 torch.tensor(boxes,dtype=dtype),.12).numpy()
+    outside = expected > 1e-8
+    np.testing.assert_allclose(result[outside],expected[outside]-.12,atol=2e-6 if dtype==torch.float32 else 1e-10,rtol=1e-6)
+    assert np.all(result[~outside] <= -.12+1e-6)
