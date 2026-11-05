@@ -20,4 +20,4 @@ tests/test_joint_slit_followup.py::test_frame_and_command_logging_preserves_eval
     char_depth = torch.nanmedian(valid_depth.flatten(1), dim=1).values
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-223 passed, 7 warnings in 14.51s
+223 passed, 7 warnings in 12.79s

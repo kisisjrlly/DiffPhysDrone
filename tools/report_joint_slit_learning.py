@@ -172,7 +172,7 @@ def report(out):
     if rows:
         keys = sorted({key for row in rows for key in row})
         with (artifact/'episodes.csv').open('w') as handle:
-            writer = csv.DictWriter(handle, fieldnames=keys)
+            writer = csv.DictWriter(handle, fieldnames=keys, lineterminator='\n')
             writer.writeheader()
             writer.writerows(rows)
     text = ['# 当前窄缝联合学习：2026-11-05执行结果', '', f'**结论：{category}。**', '',
@@ -208,7 +208,7 @@ def report(out):
     if preparation_rows:
         keys = sorted({key for row in preparation_rows for key in row})
         with (artifact/'common_development_episodes.csv').open('w') as handle:
-            writer = csv.DictWriter(handle, fieldnames=keys)
+            writer = csv.DictWriter(handle, fieldnames=keys, lineterminator='\n')
             writer.writeheader()
             writer.writerows(preparation_rows)
     if final.exists():

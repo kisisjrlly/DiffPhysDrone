@@ -40,10 +40,14 @@
     }
   },
   "report_sha256": "95ae1b3c68181fc852b134f67dd04ebe1d2e7272042ba5521525c6b434d6e2db",
-  "pytest_sha256": "73c06892e075965294ea517efed1eaa3fe8c4ee597c0aa7afafd355eeb2994dc",
+  "pytest_sha256": "a8312819d8974c5d5a5404d6ae1f11fe1aa0584d599c82bf78f7db287f759373",
   "administrative_remaining": [
-    "commit",
-    "push attempt",
+    "final evidence commit",
     "Bark"
-  ]
+  ],
+  "push_attempt": {
+    "exit_code": 128,
+    "reason": "fatal: unable to access 'https://github.com/kisisjrlly/DiffPhysDrone.git/': server certificate verification failed. CAfile: none CRLfile: none",
+    "tls_verification_disabled": false
+  }
 }
