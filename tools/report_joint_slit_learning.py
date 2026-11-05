@@ -110,10 +110,21 @@ def report(out):
     else:
         results = load(stopped)
         category, next_work = '共同视觉飞行起点未建立', results['next_work']
-        for ax in axes[1:]:
-            ax.text(.5,.5,'Joint training not started\nCommon-flight gate failed', ha='center', va='center', transform=ax.transAxes)
-    axes[1].set(xlabel='Generated control steps', ylabel='Development success', ylim=(-.02,1.02), title='Matched interaction budget')
-    axes[2].set(xlabel='Optimization seconds', ylabel='Development success', ylim=(-.02,1.02), title='Actual training cost')
+        checked = [load(path) for path in sorted((out/'common_direct').glob('gate_*.json'))]
+        for key,color,label in (('normal','#246c9b','Normal images'),('zero','#9b678e','Zero images')):
+            axes[1].plot([r['iteration']*360 for r in checked],[r[key]/32 for r in checked],'o-',color=color,label=label)
+            fallback_result = load(out/'fallback/decision.json')
+            axes[1].scatter([(len(common_rows)+len(fallback_task))*360],[fallback_result[key]/32],
+                            marker='*',s=100,color=color)
+        axes[1].legend(fontsize=8)
+        if fallback_imitation:
+            axes[2].plot([r['cumulative_optimization_seconds'] for r in fallback_imitation],
+                         [r['loss'] for r in fallback_imitation],color='#ce8c3c',lw=.9)
+        axes[1].set(xlabel='Generated task-control steps',ylabel='Development success',ylim=(-.02,1.02),title='Common-flight gates; star = after imitation')
+        axes[2].set(xlabel='Imitation optimization seconds',ylabel='Acceleration imitation loss',title='One disclosed flight-only warmup')
+    if final.exists():
+        axes[1].set(xlabel='Generated control steps', ylabel='Development success', ylim=(-.02,1.02), title='Matched interaction budget')
+        axes[2].set(xlabel='Optimization seconds', ylabel='Development success', ylim=(-.02,1.02), title='Actual training cost')
     for ax in axes:
         ax.grid(alpha=.18)
         ax.spines[['top','right']].set_visible(False)
@@ -145,6 +156,11 @@ def report(out):
         f'- 共同准备：直接任务更新{len(common_rows)}次；模仿更新{len(fallback_imitation)}次；热身后任务更新{len(fallback_task)}次。']
     if common:
         text.append(f'- 共同起点开发集：正常{common["normal"]}/32、零图{common["zero"]}/32。')
+    elif (out/'fallback/decision.json').exists():
+        last_gate = load(out/'fallback/decision.json')
+        text.append(f'- 一次热身后最终开发集：正常{last_gate["normal"]}/32、零图{last_gate["zero"]}/32；联合比较未启动。')
+    if 'demonstrations' in costs:
+        text.append(f'- 教师采集的成功次数为{costs["demonstrations"]["successes"]}/128，这是教师表现，不是学习策略成绩。')
     if final.exists():
         text.extend(['', '|方法|最终安全到达|训练生成步|训练秒数|', '|---|---:|---:|---:|'])
         for arm in ARMS:
