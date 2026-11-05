@@ -188,6 +188,26 @@ def report(out):
         text.append(f'- 中断后重做的已记录更新另计：{sum(value["updates"] for value in overhead.values())}次、'
                     f'{costs["discarded_generated_steps"]}个生成控制步、{costs["discarded_optimization_seconds"]:.1f}秒。'
                     '耗时只覆盖已完成并记入日志的优化更新，不含未记录的半次更新、评估或进程启动。')
+    preparation_rows = []
+    text.extend(['', '|共同准备检查|图像|成功|碰撞|超时|', '|---|---|---:|---:|---:|'])
+    scheduled = [(f'direct_{step}', out/f'common_direct/eval_{step:04d}')
+                 for step in (500,1000,1500,2000)]
+    scheduled.append(('after_imitation', out/'fallback/eval'))
+    for phase,prefix in scheduled:
+        for mode in ('gray','zero'):
+            path = Path(str(prefix)+f'_{mode}.json')
+            if not path.exists():
+                continue
+            episodes = load(path)['rows']
+            summary = summarize_episodes(episodes)
+            text.append(f'|{phase}|{mode}|{summary["successes"]}/32|{summary["collisions"]}|{summary["timeouts"]}|')
+            preparation_rows.extend(dict(phase=phase,image_mode=mode,**row) for row in episodes)
+    if preparation_rows:
+        keys = sorted({key for row in preparation_rows for key in row})
+        with (artifact/'common_development_episodes.csv').open('w') as handle:
+            writer = csv.DictWriter(handle, fieldnames=keys)
+            writer.writeheader()
+            writer.writerows(preparation_rows)
     if final.exists():
         text.extend(['', '|方法|最终安全到达|训练生成步|训练秒数|', '|---|---:|---:|---:|'])
         for arm in ARMS:
