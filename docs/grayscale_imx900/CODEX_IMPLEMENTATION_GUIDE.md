@@ -25,6 +25,17 @@ Only after its gate passes run the four prescribed joint-learning arms.
 Earlier inference-only/no-training stops remain historical, not this round's
 restriction. Do not expand seeds, scenes, physical parameters or budgets.
 
+**2026-11-05 executed stop:** see [the bounded-round result](JOINT_SLIT_LEARNING_2026_11_05.md).
+Sphere-corrected OD/WD are 8/16 and 3/16. Direct common-flight training exhausted
+2000 updates (normal 3/32, zero 0/32). The single authorized flight-only warmup
+used all 128 teacher episodes (83 successes), 800 imitation updates and 500 task
+updates; its final normal/zero results are 0/32 and 0/32. No joint arms, confirmation
+or crossed-policy experiments ran. Do not interpret this as a negative test of
+differentiable sensing. No further training is authorized by this completed round.
+The next question is why the disclosed flight-only preparation failed in closed
+loop. The imitation endpoint was not separately evaluated, so the evidence does
+not locate failure to imitation versus subsequent task optimization.
+
 See [GRAY_TRANSFER_CROSS_2026_11_03.md](GRAY_TRANSFER_CROSS_2026_11_03.md) and its
 locked plan. Only two new conditions (32 historical episodes) were evaluated;
 no training or production physics changes. At the old start, old/old=8/16,

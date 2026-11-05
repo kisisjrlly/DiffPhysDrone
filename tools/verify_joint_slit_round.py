@@ -146,6 +146,26 @@ def verify(out):
         check_metrics(out/'common_direct/metrics.jsonl', 2000)
         check_metrics(out/'fallback/imitation_metrics.jsonl', 800, generated_steps=False)
         check_metrics(out/'fallback/task_metrics.jsonl', 500)
+        for step in (500,1000,1500,2000):
+            prefix = out/f'common_direct/eval_{step:04d}'
+            gray_rows = check_episodes(Path(str(prefix)+'_gray.json'), protocol['development'])
+            zero_rows = check_episodes(Path(str(prefix)+'_zero.json'), protocol['development'])
+            observed = gate(gray_rows,zero_rows)
+            recorded = load(out/f'common_direct/gate_{step:04d}.json')
+            if any(recorded[key] != value for key,value in observed.items()) or observed['passed']:
+                raise ValueError('Direct scheduled gate contradicts the fallback decision')
+            if sha(out/f'common_direct/checkpoint{step:04d}.pth') != recorded['checkpoint_sha256']:
+                raise ValueError('Direct scheduled checkpoint changed')
+        demonstration = load(out/'fallback/demonstration_manifest.json')
+        stored = torch.load(out/'fallback/demonstrations.pt', map_location='cpu')
+        if (stored['specs'] != protocol['demonstrations'] or demonstration['episodes'] != 128
+                or stored['camera_labels'] or demonstration['camera_labels']
+                or sha(out/'fallback/demonstrations.pt') != demonstration['sha256']):
+            raise ValueError('Flight-only demonstration scope or provenance changed')
+        if set(stored['data']) != {'frames','state','action','valid'}:
+            raise ValueError('Unexpected demonstration labels')
+        if sum(r['success'] for r in stored['outcomes']) != demonstration['successes']:
+            raise ValueError('Teacher results differ from stored demonstrations')
         normal = check_episodes(out/'fallback/eval_gray.json', protocol['development'])
         zero = check_episodes(out/'fallback/eval_zero.json', protocol['development'])
         if gate(normal,zero)['passed']:
@@ -155,6 +175,8 @@ def verify(out):
             raise ValueError('Failed warmup changed frozen camera weights')
         if (out/'arms').exists():
             raise ValueError('Joint arms started without a valid common checkpoint')
+        if (out/'final_results.json').exists() or load(out/'demo_status.json')['produced']:
+            raise ValueError('Joint result or learned demonstration claimed after failed preparation')
         checks.append('prescribed direct + one warmup exhausted, gate failure stops arms')
     report_path = ROOT/'docs/grayscale_imx900/JOINT_SLIT_LEARNING_2026_11_05.md'
     report_status = load(out/'report_status.json')

@@ -1,0 +1,23 @@
+........................................................................ [ 32%]
+........................................................................ [ 64%]
+........................................................................ [ 96%]
+.......                                                                  [100%]
+=============================== warnings summary ===============================
+tests/test_actor_critic.py::test_return_pretrained_critic_restores_exact_weights_and_rejects_wrong_architecture
+  /home/zhaoguodong/miniconda3/envs/mappo-mpc/lib/python3.9/site-packages/torch/_utils.py:831: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+    return self.fget.__get__(instance, owner)()
+
+tests/test_gray_chain_regression.py::test_composition_matches_independent_production_step[0]
+  /home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/tools/gray_chain_components.py:113: UserWarning: median CUDA with indices output does not have a deterministic implementation, but you set 'torch.use_deterministic_algorithms(True, warn_only=True)'. You can file an issue at https://github.com/pytorch/pytorch/issues to help us prioritize adding deterministic support for this operation. (Triggered internally at ../aten/src/ATen/Context.cpp:71.)
+    characteristic=torch.nanmedian(valid.flatten(1),dim=1).values
+
+tests/test_gray_chain_regression.py::test_composition_matches_independent_production_step[0]
+tests/test_gray_chain_regression.py::test_composition_matches_independent_production_step[11]
+tests/test_gray_chain_regression.py::test_recording_preserves_rng_trajectory_and_parameters
+tests/test_gray_chain_regression.py::test_zero_network_still_drives_ae_from_real_frame
+tests/test_joint_slit_followup.py::test_frame_and_command_logging_preserves_evaluation_and_rng
+  /home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/rollout_ops.py:35: UserWarning: median CUDA with indices output does not have a deterministic implementation, but you set 'torch.use_deterministic_algorithms(True, warn_only=True)'. You can file an issue at https://github.com/pytorch/pytorch/issues to help us prioritize adding deterministic support for this operation. (Triggered internally at ../aten/src/ATen/Context.cpp:71.)
+    char_depth = torch.nanmedian(valid_depth.flatten(1), dim=1).values
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+223 passed, 7 warnings in 14.51s

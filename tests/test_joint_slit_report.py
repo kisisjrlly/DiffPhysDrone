@@ -51,3 +51,6 @@ def test_summary_counts_failures_in_completion_cost_and_keeps_layout_splits():
     assert summary['penalized_completion_s']==5
     assert summary['per_side']=={'-1':1,'1':0}
     assert summary['per_light']=={'bright':0,'dark':1}
+    for row in rows:
+        del row['control_cost']
+    assert summarize_episodes(rows)['mean_control_cost'] is None

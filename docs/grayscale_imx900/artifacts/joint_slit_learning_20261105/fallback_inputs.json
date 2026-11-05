@@ -1,0 +1,7 @@
+{
+  "protocol_sha256": "811b34270250a013526188115b1bd22910aa30d8526b8422de74fae075e25366",
+  "followup_sha256": "0edb6eb57c90e802a6f54fcb321dd8245571d5175e9cf94681760516993ec0c6",
+  "teacher_source_sha256": "20e96ff93f83098212ef75cdeeddd57127ea5cc59c9018c6e7caf34bb64455a5",
+  "checkpoint_sha256": "01c8638f8149da594cef8b71c3232a551420c177c8c677fece2c6388d205dad5",
+  "stage": "single_flight_imitation"
+}

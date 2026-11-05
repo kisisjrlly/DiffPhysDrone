@@ -1,0 +1,15 @@
+{
+  "executed_evidence_passed": true,
+  "checks": [
+    "locked numerical sources, full configuration and provisional calibration",
+    "32 collision reruns; four original false stops continued",
+    "prescribed direct + one warmup exhausted, gate failure stops arms",
+    "report, learning curve and cost inventory"
+  ],
+  "remaining_manual_audit": [
+    "test coverage and full pytest",
+    "interpretation and conditional learned demonstration",
+    "commit/push result",
+    "Bark receipt"
+  ]
+}

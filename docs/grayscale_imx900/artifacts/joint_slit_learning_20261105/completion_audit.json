@@ -1,0 +1,49 @@
+{
+  "scope": "JOINT_SLIT_LEARNING_PLAN_2026_11_05.md",
+  "experiment_terminal": true,
+  "checks": {
+    "collision_geometry": {
+      "evidence": "collision_correction.json; collision_source_provenance.json; tests/test_sphere_box_sweep.py",
+      "result": "OD=8/16 WD=3/16; all four false stops continued"
+    },
+    "locked_conditions": {
+      "evidence": "protocol.json and execution_verification.json",
+      "result": "current numerical sources match locked snapshots; calibrated false; 200605 parameters; unchanged scene and physical parameters"
+    },
+    "bounded_preparation": {
+      "evidence": "common_development_episodes.csv; gate_*.json; fallback_decision.json; run_inventory.json",
+      "result": "2000 direct + 800 imitation + 500 task; all scheduled gates failed; camera-specific weights unchanged"
+    },
+    "demonstrations": {
+      "evidence": "fallback_demonstration_manifest.json; local fallback/demonstrations.pt verified against hash and locked 128 identities",
+      "result": "128 unfiltered cases,83 teacher successes; only frames,state,action,valid; no camera labels"
+    },
+    "conditional_arms": {
+      "evidence": "decision.json; demo_status.json; execution_verification.json",
+      "result": "not applicable: failed common gate; no arms, confirmation,crosses or scripted replacement video"
+    },
+    "costs_and_recovery": {
+      "evidence": "costs.json; interruption_01.json; interruption_02.json",
+      "result": "40 discarded completed updates retained;210.3 measured extra optimizer seconds; no bitwise determinism claim"
+    },
+    "engineering_tests": {
+      "evidence": "pytest_current.log; tests/test_joint_slit_followup.py; tests/test_gray_chain_regression.py; tests/test_occluded_route.py; tests/test_closed_loop_derivatives.py",
+      "result": "223 passed,7 warnings; checks cover forward-preserving cuts, camera gradients, actual-flight intent, logging/RNG, queue, noise and preprocessing"
+    },
+    "report_and_figure": {
+      "evidence": "JOINT_SLIT_LEARNING_2026_11_05.md; learning_curves.png",
+      "result": "manually reviewed reduced preview; failed preparation category; no joint-method claim"
+    },
+    "next_work": {
+      "evidence": "CODEX_IMPLEMENTATION_GUIDE.md",
+      "result": "locate closed-loop flight preparation obstacle; imitation endpoint not separately evaluated, so failure stage is unresolved; no extra experiment started"
+    }
+  },
+  "report_sha256": "95ae1b3c68181fc852b134f67dd04ebe1d2e7272042ba5521525c6b434d6e2db",
+  "pytest_sha256": "73c06892e075965294ea517efed1eaa3fe8c4ee597c0aa7afafd355eeb2994dc",
+  "administrative_remaining": [
+    "commit",
+    "push attempt",
+    "Bark"
+  ]
+}

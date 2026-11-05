@@ -1,0 +1,9 @@
+{
+  "verified_exit_code": 143,
+  "old_worker_pid": 2191847,
+  "restored_snapshot_update": 1350,
+  "last_logged_update": 1366,
+  "reason": "SIGTERM, no application traceback; origin unknown",
+  "action": "Recover full model/optimizer/scheduler/RNG; restart detached from command session",
+  "recorded_at_ns": 1793865854221234136
+}

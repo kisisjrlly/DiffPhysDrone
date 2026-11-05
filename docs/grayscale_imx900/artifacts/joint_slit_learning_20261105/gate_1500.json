@@ -1,0 +1,21 @@
+{
+  "passed": false,
+  "normal": 1,
+  "zero": 0,
+  "per_side": {
+    "-1": 0,
+    "1": 1
+  },
+  "per_light": {
+    "dark": 0,
+    "bright": 0,
+    "dark_to_bright": 0,
+    "bright_to_dark": 1
+  },
+  "iteration": 1500,
+  "checkpoint": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/joint_slit_learning_20261105/common_direct/checkpoint1500.pth",
+  "checkpoint_sha256": "46e51578f78f8e7f51469f9d52c893f9354892bb04d791503d05ae20139f8c24",
+  "optimization_seconds": 7690.048137030652,
+  "generated_steps": 540000,
+  "camera_specific_unchanged": true
+}

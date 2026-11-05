@@ -1,0 +1,9 @@
+{
+  "verified_exit_code": 143,
+  "old_worker_pid": 2052824,
+  "old_supervisor_pid": 2110395,
+  "last_logged_update": 1024,
+  "restored_snapshot_update": 1000,
+  "reason": "SIGTERM; no application traceback or OOM recorded; external origin unknown",
+  "action": "Resume model, optimizer, scheduler and RNG from saved update1000; retain discarded update costs"
+}

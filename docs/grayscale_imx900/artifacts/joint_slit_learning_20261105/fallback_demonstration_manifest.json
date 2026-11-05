@@ -1,0 +1,908 @@
+{
+  "sha256": "a2c92d739a0e732456425579f7ef7ee6e1e73232ea86a5a150faa949ceaf303e",
+  "episodes": 128,
+  "generated_steps": 11520,
+  "valid_steps": 8442,
+  "collection_seconds": 180.87677703797817,
+  "privileged_flight_labels": true,
+  "camera_labels": false,
+  "successes": 83,
+  "outcomes": [
+    {
+      "seed": 930000,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930001,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930002,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930003,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930004,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930005,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930006,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930007,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930008,
+      "scenario": "dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930009,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930010,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930011,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930012,
+      "scenario": "dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930013,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930014,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930015,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930016,
+      "scenario": "dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930017,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930018,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930019,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930020,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930021,
+      "scenario": "bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930022,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930023,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930024,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930025,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930026,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930027,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930028,
+      "scenario": "dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930029,
+      "scenario": "bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930030,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930031,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930032,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930033,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930034,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930035,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930036,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930037,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930038,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930039,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930040,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930041,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930042,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930043,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930044,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930045,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930046,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930047,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930048,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930049,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930050,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930051,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930052,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930053,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930054,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930055,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930056,
+      "scenario": "dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930057,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930058,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930059,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930060,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930061,
+      "scenario": "bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930062,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930063,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930064,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930065,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930066,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930067,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930068,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930069,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930070,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930071,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930072,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930073,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930074,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930075,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930076,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930077,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930078,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930079,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930080,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930081,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930082,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930083,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930084,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930085,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930086,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930087,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930088,
+      "scenario": "dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930089,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930090,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930091,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930092,
+      "scenario": "dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930093,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930094,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930095,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930096,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930097,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930098,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930099,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930100,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930101,
+      "scenario": "bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930102,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930103,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930104,
+      "scenario": "dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930105,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930106,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930107,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930108,
+      "scenario": "dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930109,
+      "scenario": "bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930110,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930111,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930112,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930113,
+      "scenario": "bright",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930114,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930115,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930116,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930117,
+      "scenario": "bright",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930118,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930119,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930120,
+      "scenario": "dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930121,
+      "scenario": "bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930122,
+      "scenario": "dark_to_bright",
+      "side": -1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930123,
+      "scenario": "bright_to_dark",
+      "side": -1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930124,
+      "scenario": "dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    },
+    {
+      "seed": 930125,
+      "scenario": "bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930126,
+      "scenario": "dark_to_bright",
+      "side": 1,
+      "success": false,
+      "collision": true
+    },
+    {
+      "seed": 930127,
+      "scenario": "bright_to_dark",
+      "side": 1,
+      "success": true,
+      "collision": false
+    }
+  ]
+}

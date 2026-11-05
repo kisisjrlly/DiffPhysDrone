@@ -1,0 +1,6 @@
+{
+  "passed": false,
+  "next_stage": "single_imitation_warmup",
+  "final_checkpoint": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/joint_slit_learning_20261105/common_direct/checkpoint2000.pth",
+  "updates": 2000
+}

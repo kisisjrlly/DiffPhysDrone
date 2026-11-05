@@ -1,0 +1,25 @@
+{
+  "category": "common_flight_not_established",
+  "evidence": {
+    "passed": false,
+    "normal": 0,
+    "zero": 0,
+    "per_side": {
+      "-1": 0,
+      "1": 0
+    },
+    "per_light": {
+      "dark": 0,
+      "bright": 0,
+      "dark_to_bright": 0,
+      "bright_to_dark": 0
+    },
+    "source": "single_imitation_warmup",
+    "checkpoint": "/home/zhaoguodong/.codex/worktrees/imx900-intent-joint/DiffPhysDrone/logs/joint_slit_learning_20261105/fallback/final.pth",
+    "checkpoint_sha256": "d4d0edb1b1a4b8ff138d6e2f965f3cbf9a21ab22e9839e463f84083821b7aa25",
+    "camera_labels": false,
+    "camera_specific_unchanged": true
+  },
+  "next_work": "定位基础视觉飞行的学习障碍；不启动联合比较。",
+  "complete_experiment_stop": true
+}

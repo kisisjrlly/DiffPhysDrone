@@ -37,7 +37,8 @@ def summarize_episodes(rows):
                 collisions=sum(int(r['collision_rate']) for r in rows),
                 timeouts=sum(r['stop_reason']=='timeout' for r in rows),
                 penalized_completion_s=sum(r['failed_penalized_time_s'] for r in rows)/len(rows),
-                mean_control_cost=sum(r['control_cost'] for r in rows)/len(rows),
+                mean_control_cost=(sum(r['control_cost'] for r in rows)/len(rows)
+                                   if all('control_cost' in r for r in rows) else None),
                 per_light={light: sum(int(r['success_rate']) for r in rows if r['scenario']==light)
                            for light in sorted({r['scenario'] for r in rows})},
                 per_side={str(side): sum(int(r['success_rate']) for r in rows if r['side']==side) for side in (-1,1)})
@@ -147,6 +148,8 @@ def report(out):
     for ax in axes:
         ax.grid(alpha=.18)
         ax.spines[['top','right']].set_visible(False)
+    axes[1].ticklabel_format(axis='x', style='sci', scilimits=(0,0))
+    axes[1].locator_params(axis='x', nbins=5)
     fig.savefig(artifact/'learning_curves.png', dpi=180)
     plt.close(fig)
     for name in ('protocol.json','collision/correction.json','common_locked.json','common_direct_decision.json',
@@ -223,9 +226,13 @@ def report(out):
                          '该案例不代表整体成功率，也不替代配合证据。'])
         else:
             text.extend(['', f'未制作优势演示：{demonstration["reason"]}'])
-    text.extend(['', '## 尚未证明', '',
-        '单个训练seed、开发样本筛选；没有跨seed统计、RL算法竞争或真机证据。'
-        '梯度切断组是机制检查，策略交叉下降也可能包含分布失配。相机仍未实测标定。',
+    limitations = ('联合训练、梯度切断比较、64次确认评估及交叉组合均未启动；'
+                  '本轮不能判断可微感知的任务收益。模仿损失降低不等于闭环飞行成功；'
+                  '未单独评估模仿结束时的模型，不能判断失败发生在模仿阶段还是后续任务更新阶段。'
+                  if not final.exists() else
+                  '梯度切断组是机制检查，策略交叉下降也可能包含分布失配。')
+    text.extend(['', '## 尚未证明', '', limitations+
+        '本轮只有单个训练seed和固定开发样本，没有跨seed统计、RL算法竞争或真机证据。相机仍未实测标定。',
         '', '## 下一项唯一工作', '', next_work, '',
         '完整配置、源码快照、逐步训练指标和检查点在运行目录：', f'`{out}`', '',
         '![学习过程](artifacts/joint_slit_learning_20261105/learning_curves.png)', ''])
