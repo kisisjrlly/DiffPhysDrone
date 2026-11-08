@@ -14,7 +14,10 @@ def render_gray_sensor(env, exposure, gain, differentiable=True):
     temporal = getattr(env, "scene_layout", "single_wall_slit") in DIFFERENTIABLE_SCENES
     if temporal:
         from render.intent_scene import render_exposure
-        ideal, render_aux = render_exposure(env, sensor_exposure, return_aux=True)
+        ideal, render_aux = render_exposure(
+            env, sensor_exposure, return_aux=True,
+            trajectory=getattr(env, "exposure_trajectory", "extrapolate"),
+        )
     else:
         ideal, render_aux = env.render_gray_ideal(return_aux=True)
 
@@ -131,6 +134,11 @@ def policy_forward(model, state, hx, env, **kwargs):
         timeline = torch.cat([requested * 2 - 1, pending * 2 - 1,
                               times[None].expand(state.shape[0], -1)], -1)
         kwargs["camera_timeline"] = timeline
+    if getattr(model, "needs_state_observation", False):
+        # The residual GRUs consume the motion/target observation directly.
+        # ``state`` is exactly that vector; pass it rather than reconstructing
+        # it downstream. Opt-in: legacy policies do not accept this keyword.
+        kwargs.setdefault("state_observation", state)
     return model(state, hx, **kwargs)
 
 

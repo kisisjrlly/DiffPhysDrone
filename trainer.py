@@ -29,6 +29,7 @@ from rollout_ops import (
     blend_camera_request,
 )
 from train_utils import MetricSmoother, periodic_tail_ops
+from render.exposure_history import record_history_step
 from render.scene_types import DIFFERENTIABLE_SCENES
 from actor_critic import (
     camera_score_function_loss,
@@ -394,6 +395,12 @@ def _rollout(env, model, args, B, device, use_amp, vis, should_vis):
                 prev_gray = prev_gray.detach()
         if audit_seed is not None:
             set_global_seed((int(audit_seed) * 1000003 + 3 * t + 2) % (2**32), args.deterministic)
+        # Record the pose that is about to be stepped away from, so the next
+        # frame's shutter integration can look back at motion that really
+        # happened. Recorded before ``env.run`` because that call advances
+        # ``env.v`` to its post-step value.
+        if getattr(env, "exposure_history", None) is not None:
+            record_history_step(env, ctl_dt)
         env.run(act_buffer[t], ctl_dt, target_v_raw)
 
         # Terminal state belongs to the action just taken. Keep it in the
@@ -514,6 +521,11 @@ def train(args, model, env_train, env_full, optim, sched, scaler, vis, checkpoin
         tic = time.time()
         env_train.reset()
         model.reset()
+        # Frame 0 has no past; seed the synthetic pre-history from the reset
+        # state so the first shutter reproduces the legacy zero-acceleration
+        # replay exactly and every later frame sees real recorded motion.
+        if getattr(env_train, "exposure_history", None) is not None:
+            env_train.exposure_history.prime_from_env(env_train)
         B = env_train.batch_size
         should_vis = bool(
             args.vis_enable and i % max(args.vis_every_iters, 1) == 0

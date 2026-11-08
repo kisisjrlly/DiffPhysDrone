@@ -1,0 +1,61 @@
+# Residual joint learning on the single slit (plan 2026-11-06, sections 3/5/7).
+#
+# GEOMETRY AS SPECIFIED BY THE PLAN (section 3): joint_slit, x=-2.5, 90 steps.
+#
+# WARNING - the baseline gate FAILS on this geometry, 0/32. The base
+# checkpoint was trained on single_wall_slit at x=-1.5 with 60 steps and
+# sensor_grad_mode=detached, so it does not fly the joint_slit task at all.
+# That result is recorded in the plan as section 3.1 and must be resolved
+# before arms A-F are launched; this file is kept at the plan's geometry so the
+# blocker stays reproducible rather than being papered over by editing the
+# scene until the base happens to pass.
+#
+# The three deliberate differences from the base are:
+#   * the research 50 ms exposure profile (the provisional hardware calibration
+#     is untouched);
+#   * the fixed operating point in that profile's units - the old E=0.10 is
+#     890 us, which is E=0.01583166 here, NOT 0.10 (0.10 would mean 5090 us);
+#   * the recorded-motion shutter integral instead of extrapolation.
+--scene_layout joint_slit
+--policy_arch residual_joint
+--residual_base_checkpoint checkpoint/2026-09-24-11-35-14/final.pth
+--joint_backward consistent
+--grad_decay 1
+--observation_grad_mode full
+--pose_gradient_estimator warp_ste
+--gray_temporal_samples 9
+--camera_control_mode learned
+--sensor_grad_mode full
+--imx900_calibration configs/calibration/grayscale_research_50ms.json
+--exposure_trajectory history
+--exposure_history_length 4
+--gray_saturation_mode ste
+--fixed_camera_exposure 0.01583166
+--fixed_camera_gain 0.02
+--simple_start_x -2.5
+--simple_wall_x 0
+--simple_goal_x 1.5
+--simple_slit_half_y 0.15
+--simple_slit_center_y_min -0.75
+--simple_slit_center_y_max 0.75
+--simple_slit_center_z 1.5
+--simple_back_wall_x_min 2.0
+--simple_back_wall_x_max 2.85
+--gray_transition_x 0
+--gray_transition_width 0.25
+--gray_dark_scale 0.12
+--gray_bright_scale 2.2
+--gray_width 96
+--gray_height 72
+--gray_nn_width 48
+--gray_nn_height 36
+--cam_angle 5
+--base_control_freq 15
+--control_dt_jitter 0
+--flight_max_speed 1.15
+--max_acc_cmd 2.2
+--timesteps 90
+--batch_size 4
+--loss_v_window 12
+--scenarios dark bright dark_to_bright bright_to_dark
+--no-amp

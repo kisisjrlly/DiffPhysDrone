@@ -112,6 +112,8 @@ class IntentModel(nn.Module):
 
 def build_policy(args, obs_dim=None):
     obs_dim = (7 if args.no_odom else 10) if obs_dim is None else obs_dim
+    if getattr(args, "policy_arch", "legacy") == "residual_joint":
+        return build_residual_joint_policy(args, obs_dim)
     if getattr(args, "policy_arch", "legacy") == "intent_shared":
         return IntentModel(
             obs_dim, gray_nn_width=args.gray_nn_width, gray_nn_height=args.gray_nn_height,
@@ -121,3 +123,66 @@ def build_policy(args, obs_dim=None):
         )
     return Model(obs_dim, 3, include_camera_state_in_obs=args.include_camera_state_in_obs,
                  gray_nn_width=args.gray_nn_width, gray_nn_height=args.gray_nn_height)
+
+
+def build_residual_joint_policy(args, obs_dim=None):
+    """Frozen legacy base + jointly-learned flight/camera residuals.
+
+    Imported lazily so that runs using the plain legacy policy do not pay for
+    ``residual_joint_model``'s extra imports.
+    """
+    import json
+    import os
+
+    from residual_joint_model import ResidualJointPolicy, load_legacy_base
+
+    if getattr(args, "residual_flight", True) is False and getattr(args, "residual_camera", True) is False:
+        raise ValueError("residual_joint needs at least one enabled residual head")
+    checkpoint = getattr(args, "residual_base_checkpoint", None)
+    if not checkpoint:
+        raise ValueError("--residual_base_checkpoint must be set for policy_arch=residual_joint")
+    if not os.path.isfile(checkpoint):
+        raise ValueError(f"--residual_base_checkpoint not found: {checkpoint}")
+    base_args_path = getattr(args, "residual_base_args", None) or os.path.join(
+        os.path.dirname(checkpoint), "args.json"
+    )
+    if not os.path.isfile(base_args_path):
+        raise ValueError(f"residual base args not found: {base_args_path}")
+    with open(base_args_path) as handle:
+        base_args = json.load(handle)
+
+    # The base must be reconstructed with *its own* observation/vision
+    # configuration, not the current run's - the checkpoint only loads strictly
+    # when the widths match.
+    state_dict = torch.load(checkpoint, map_location="cpu")
+    state_dict = {k: v for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+    base = load_legacy_base(
+        state_dict,
+        include_camera_state_in_obs=bool(base_args.get("include_camera_state_in_obs", False)),
+        gray_nn_width=int(base_args.get("gray_nn_width", 48)),
+        gray_nn_height=int(base_args.get("gray_nn_height", 36)),
+        no_odom=bool(base_args.get("no_odom", False)),
+    )
+    policy = ResidualJointPolicy(
+        base,
+        include_camera_state_in_obs=bool(base_args.get("include_camera_state_in_obs", False)),
+        no_odom=bool(base_args.get("no_odom", False)),
+        gray_nn_width=policy_gray_width(args),
+        gray_nn_height=policy_gray_height(args),
+        hidden=int(getattr(args, "residual_hidden", 64)),
+        flight_residual=bool(getattr(args, "residual_flight", True)),
+        camera_residual=bool(getattr(args, "residual_camera", True)),
+    )
+    policy.base_source = checkpoint
+    policy.base_digest = None  # filled below for the protocol lock
+    from residual_joint_model import state_dict_digest
+    policy.base_digest = state_dict_digest(state_dict)
+    return policy
+
+
+def policy_gray_width(args):
+    return int(getattr(args, "gray_nn_width", 48))
+
+
+def policy_gray_height(args):
+    return int(getattr(args, "gray_nn_height", 36))

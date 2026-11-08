@@ -1,0 +1,63 @@
+{
+  "control_period_ms": 66.66666666666667,
+  "px_per_rad": 69.8875458673313,
+  "depth_floor_m": 0.35,
+  "temporal_samples": 9,
+  "noise_enabled": false,
+  "analytic_agreement": {
+    "0.89": 0.0,
+    "8": 0.0,
+    "20": 0.0,
+    "50": 0.0
+  },
+  "analytic_agreement_ok": true,
+  "constant_velocity_max_mae": 0.0,
+  "measurements": [
+    {
+      "exposure_ms": 0.89,
+      "shutter_over_period": 0.01335,
+      "spans_multiple_intervals": false,
+      "image_mae": 0.0,
+      "mean_brightness": 0.04497567564249039,
+      "image_mae_relative": 0.0,
+      "shift_px": 0.0,
+      "analytic_shift_px": 0.7108561808219984,
+      "speed_m_s": 4.0
+    },
+    {
+      "exposure_ms": 8.0,
+      "shutter_over_period": 0.12000000000000001,
+      "spans_multiple_intervals": false,
+      "image_mae": 0.0,
+      "mean_brightness": 0.04472822695970535,
+      "image_mae_relative": 0.0,
+      "shift_px": 0.0,
+      "analytic_shift_px": 6.389718479298862,
+      "speed_m_s": 4.0
+    },
+    {
+      "exposure_ms": 20.0,
+      "shutter_over_period": 0.3,
+      "spans_multiple_intervals": false,
+      "image_mae": 0.0,
+      "mean_brightness": 0.044316697865724564,
+      "image_mae_relative": 0.0,
+      "shift_px": 0.0,
+      "analytic_shift_px": 15.974296198247155,
+      "speed_m_s": 4.0
+    },
+    {
+      "exposure_ms": 50.0,
+      "shutter_over_period": 0.75,
+      "spans_multiple_intervals": false,
+      "image_mae": 0.0,
+      "mean_brightness": 0.04334929585456848,
+      "image_mae_relative": 0.0,
+      "shift_px": 0.0,
+      "analytic_shift_px": 39.93574049561789,
+      "speed_m_s": 4.0
+    }
+  ],
+  "verdict": "TRAJECTORY_MODELS_IDENTICAL_BY_CONSTRUCTION",
+  "explanation": "the longest shutter spans 0.750 of one control period (66.67 ms), so every shutter sample lies inside the most recent recorded interval, where the trapezoidal history integral is exactly v_end*tau and therefore equals extrapolation. The two models cannot be distinguished in this configuration; this is neither a pass nor a failure of the history implementation."
+}

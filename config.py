@@ -53,7 +53,16 @@ def build_parser():
     p.add_argument("--grad_decay", type=float, default=0.3)
     p.add_argument("--joint_backward", choices=["legacy", "consistent"], default="legacy",
                    help="Optional research mode: preserve feedback/smoothing derivatives and differentiate approach weights; requires grad_decay=1.")
-    p.add_argument("--policy_arch", choices=["legacy", "intent_shared"], default="legacy")
+    p.add_argument("--policy_arch", choices=["legacy", "intent_shared", "residual_joint"], default="legacy")
+    p.add_argument("--residual_base_checkpoint", type=str, default=None,
+                   help="Frozen legacy checkpoint the residual_joint policy is built on.")
+    p.add_argument("--residual_base_args", type=str, default=None,
+                   help="args.json of the base checkpoint; defaults to the sibling of --residual_base_checkpoint.")
+    p.add_argument("--residual_flight", default=True, action=argparse.BooleanOptionalAction,
+                   help="Enable the learned flight residual (off = component comparison arm).")
+    p.add_argument("--residual_camera", default=True, action=argparse.BooleanOptionalAction,
+                   help="Enable the learned camera residual (off = component comparison arm).")
+    p.add_argument("--residual_hidden", type=int, default=64)
     p.add_argument("--camera_use_flight_intent", default=True, action=argparse.BooleanOptionalAction)
     p.add_argument("--camera_queue_aligned_intent", default=False, action=argparse.BooleanOptionalAction)
     p.add_argument("--intent_horizon_s", type=float, default=0.20)
@@ -173,6 +182,22 @@ def build_parser():
     p.add_argument("--gray_soft_clip_beta", type=float, default=12.0)
     p.add_argument("--gray_enable_noise", default=True, action=argparse.BooleanOptionalAction)
 
+    # How the shutter interval is reconstructed. "extrapolate" is the legacy
+    # end-velocity replay, documented as acceptable up to ~8 ms. "history"
+    # integrates the recorded per-step motion instead and is what any shutter
+    # of tens of milliseconds requires; see render/exposure_history.py.
+    p.add_argument(
+        "--exposure_trajectory",
+        choices=["extrapolate", "history"],
+        default="extrapolate",
+    )
+    p.add_argument(
+        "--exposure_history_length",
+        type=int,
+        default=4,
+        help="Control periods of motion retained for --exposure_trajectory history.",
+    )
+
     p.add_argument("--ellipsoid_collision", default=False, action="store_true")
     p.add_argument("--drone_a", type=float, default=0.15)
     p.add_argument("--drone_c", type=float, default=0.075)
@@ -259,8 +284,12 @@ def validate_args(args):
             raise ValueError("live flight guidance must leave supervised steps")
         if args.pole_layout == "parallax_pair" and args.live_flight_guidance_start_step < 24:
             raise ValueError("parallax guidance cannot label initial measurement actions")
-    if args.joint_backward == "consistent" and (args.policy_arch != "intent_shared" or args.grad_decay != 1):
-        raise ValueError("consistent joint backward requires intent_shared and grad_decay=1")
+    if args.joint_backward == "consistent" and (
+        args.policy_arch not in ("intent_shared", "residual_joint") or args.grad_decay != 1
+    ):
+        raise ValueError(
+            "consistent joint backward requires intent_shared or residual_joint, and grad_decay=1"
+        )
     if args.joint_backward == "consistent" and args.scene_layout not in DIFFERENTIABLE_SCENES:
         raise ValueError("consistent joint backward requires a differentiable scene")
     if args.base_control_freq <= 0 or args.max_acc_cmd <= 0:
@@ -278,6 +307,14 @@ def validate_args(args):
             raise ValueError("differentiable scenes require at least 3 temporal shutter samples")
     elif args.observation_grad_mode == "full" or args.gray_temporal_samples != 1:
         raise ValueError("pose gradients / temporal integration require a differentiable scene")
+    if args.exposure_history_length < 2:
+        raise ValueError("--exposure_history_length must retain at least two control periods")
+    if args.exposure_trajectory == "history" and args.gray_temporal_samples < 3:
+        # A single shutter sample cannot express motion blur, so the history
+        # would change nothing; refuse rather than silently do nothing.
+        raise ValueError(
+            "--exposure_trajectory history requires gray_temporal_samples >= 3"
+        )
     if args.pose_gradient_estimator != "analytic" and args.scene_layout not in DIFFERENTIABLE_SCENES:
         raise ValueError("image-warp pose gradients require a differentiable scene")
     if args.camera_queue_aligned_intent and (args.policy_arch != "intent_shared" or args.scene_layout not in DIFFERENTIABLE_SCENES):
@@ -430,6 +467,7 @@ def print_runtime_mode(args):
     print(f"observation_grad_mode     : {args.observation_grad_mode}")
     print(f"scene_layout              : {args.scene_layout}")
     print(f"gray_temporal_samples     : {args.gray_temporal_samples}")
+    print(f"exposure_trajectory       : {args.exposure_trajectory}")
     print(f"policy_gray_mode          : {args.policy_gray_mode}")
     print(f"train_flight_only         : {args.train_flight_only}")
     print(f"train_camera_only         : {args.train_camera_only}")

@@ -140,6 +140,20 @@ def build_env(batch_size, args, device, *, eval_mode=False):
     env.gray_enable_noise = bool(args.gray_enable_noise)
     env.control_period_s = 1 / args.base_control_freq
     env.camera_queue_aligned_intent = args.camera_queue_aligned_intent
+    env.exposure_trajectory = args.exposure_trajectory
+    if args.exposure_trajectory == "history":
+        from render.exposure_history import attach as attach_exposure_history
+        history = attach_exposure_history(env, length=args.exposure_history_length)
+        # The buffer must span at least the longest shutter, or a deep batch
+        # of samples would clamp at the oldest recorded interval instead of
+        # integrating the motion that actually happened.
+        span = history.length * env.control_period_s
+        longest_us = env.imx900_calibration.exposure_us_max
+        if span + 1e-9 < longest_us * 1e-6:
+            raise ValueError(
+                f"exposure history spans {span*1e3:.1f} ms but the profile allows "
+                f"{longest_us/1e3:.1f} ms shutters; raise --exposure_history_length"
+            )
     if args.scene_layout in DIFFERENTIABLE_SCENES:
         period_us = 1e6 / args.base_control_freq
         if env.imx900_calibration.exposure_us_max > period_us:

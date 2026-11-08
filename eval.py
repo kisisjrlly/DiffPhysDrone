@@ -15,6 +15,7 @@ from controllers.auto_exposure import (
     mean_auto_exposure_target,
 )
 from intent_model import build_policy
+from render.exposure_history import record_history_step
 from rerun_vis import RerunVis
 from rollout_ops import (
     render_gray_sensor,
@@ -123,6 +124,10 @@ def run_one_episode(
     use_amp = bool(args.amp and device.type == "cuda")
     env.reset(scene_name=scene_name)
     model.reset()
+    # Frame 0 has no past; seed the synthetic pre-history from the reset state
+    # so the first shutter reproduces the legacy zero-acceleration replay.
+    if getattr(env, "exposure_history", None) is not None:
+        env.exposure_history.prime_from_env(env)
     h = None
     cam_h = None
     act_buffer = [env.act] * 2
@@ -337,6 +342,10 @@ def run_one_episode(
             )
 
         set_global_seed((episode_seed * 1000003 + 3 * t + 2) % (2**32), args.deterministic)
+        # Record the pose being stepped away from, before ``env.run`` advances
+        # ``env.v`` to its post-step value.
+        if getattr(env, "exposure_history", None) is not None:
+            record_history_step(env, ctl_dt)
         env.run(act_buffer[t], ctl_dt, target_v_raw)
         elapsed_s += ctl_dt
         final_goal_dist = torch.norm(env.p_target - env.p, dim=-1).detach()

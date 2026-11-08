@@ -1,0 +1,249 @@
+{
+  "episodes": 32,
+  "start": 910000,
+  "successes": 0,
+  "fraction": 0.0,
+  "required_fraction": 0.5,
+  "passed": false,
+  "records": [
+    {
+      "episode_seed": 910000,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 3.0000000000000027,
+      "collision": true
+    },
+    {
+      "episode_seed": 910001,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 3.0000000000000027,
+      "collision": true
+    },
+    {
+      "episode_seed": 910002,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910003,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.6666666666666683,
+      "collision": true
+    },
+    {
+      "episode_seed": 910004,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.800000000000002,
+      "collision": true
+    },
+    {
+      "episode_seed": 910005,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 3.0000000000000027,
+      "collision": true
+    },
+    {
+      "episode_seed": 910006,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 3.0666666666666695,
+      "collision": true
+    },
+    {
+      "episode_seed": 910007,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.6666666666666683,
+      "collision": true
+    },
+    {
+      "episode_seed": 910008,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.866666666666669,
+      "collision": true
+    },
+    {
+      "episode_seed": 910009,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910010,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 2.866666666666669,
+      "collision": true
+    },
+    {
+      "episode_seed": 910011,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.866666666666669,
+      "collision": true
+    },
+    {
+      "episode_seed": 910012,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.866666666666669,
+      "collision": true
+    },
+    {
+      "episode_seed": 910013,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910014,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910015,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.800000000000002,
+      "collision": true
+    },
+    {
+      "episode_seed": 910016,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.800000000000002,
+      "collision": true
+    },
+    {
+      "episode_seed": 910017,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910018,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 3.0000000000000027,
+      "collision": true
+    },
+    {
+      "episode_seed": 910019,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.733333333333335,
+      "collision": true
+    },
+    {
+      "episode_seed": 910020,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.6666666666666683,
+      "collision": true
+    },
+    {
+      "episode_seed": 910021,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910022,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 3.0000000000000027,
+      "collision": true
+    },
+    {
+      "episode_seed": 910023,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.800000000000002,
+      "collision": true
+    },
+    {
+      "episode_seed": 910024,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.733333333333335,
+      "collision": true
+    },
+    {
+      "episode_seed": 910025,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 2.933333333333336,
+      "collision": true
+    },
+    {
+      "episode_seed": 910026,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 3.1333333333333364,
+      "collision": true
+    },
+    {
+      "episode_seed": 910027,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.866666666666669,
+      "collision": true
+    },
+    {
+      "episode_seed": 910028,
+      "scene": "dark",
+      "reached": false,
+      "duration_s": 2.800000000000002,
+      "collision": true
+    },
+    {
+      "episode_seed": 910029,
+      "scene": "bright",
+      "reached": false,
+      "duration_s": 3.1333333333333364,
+      "collision": true
+    },
+    {
+      "episode_seed": 910030,
+      "scene": "dark_to_bright",
+      "reached": false,
+      "duration_s": 2.866666666666669,
+      "collision": true
+    },
+    {
+      "episode_seed": 910031,
+      "scene": "bright_to_dark",
+      "reached": false,
+      "duration_s": 2.6000000000000014,
+      "collision": true
+    }
+  ],
+  "lock_config_digest": "bf315a507314dbc5ccec68e03560a6911b52585b99381e5ef74ec11a213b9de5",
+  "geometry": {
+    "scene_layout": "joint_slit",
+    "simple_start_x": -2.5,
+    "timesteps": 90
+  },
+  "reference": {
+    "note": "the same checkpoint under its own training geometry scores 4/8; see the plan's section 3.1 for the full comparison",
+    "base_native_geometry": {
+      "scene_layout": "single_wall_slit",
+      "simple_start_x": -1.5,
+      "timesteps": 60,
+      "successes_8_episodes": 4
+    }
+  }
+}

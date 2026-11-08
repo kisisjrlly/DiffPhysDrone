@@ -125,6 +125,16 @@ def main():
     env_train = build_env(args.batch_size, args, device)
     obs_dim = 7 if args.no_odom else 10
     model = build_policy(args, obs_dim).to(device)
+    if getattr(args, "policy_arch", "legacy") == "residual_joint":
+        # The camera residual maps physical milliseconds/factor back through
+        # the *active* profile, so the profile must be bound before any call.
+        model.bind_calibration(env_train.imx900_calibration)
+        print(
+            f"[info] residual_joint: base={getattr(model, 'base_source', '?')} "
+            f"digest={str(getattr(model, 'base_digest', ''))[:16]} "
+            f"trainable={model.trainable_parameter_count()} "
+            f"flight={model.flight_residual_enabled} camera={model.camera_residual_enabled}"
+        )
     critic = LatentCostCritic(latent_dim=128).to(device) if args.policy_update_mode == "short_horizon_ac" else None
     if args.policy_arch == "intent_shared" and not args.resume:
         model.initialize_camera_output(args.fixed_camera_exposure, args.fixed_camera_gain)

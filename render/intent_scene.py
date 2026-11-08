@@ -117,19 +117,49 @@ def render_with_pose_gradient(env, position, rotation):
     return image, aux
 
 
-def render_exposure(env, exposure01, *, return_aux=False):
-    """Uniform shutter integration over the past exposure, ending at now.
+def scene_local_pose(env):
+    """Current scene-local pose and the body rate over the last control step.
 
-    Constant velocity and angular rate during <=8ms are local approximations.
-    There is no access to future simulator states. Timing/sample count are
-    explicit; no unmeasured multiplier amplifies motion blur.
+    Returned in scene-local frame (``R_scene_T`` applied) because the renderer
+    traces against ``env.voxels`` which live in that frame. Detached when the
+    configured observation gradient mode asks for it, exactly as before.
     """
     position = (env.R_scene_T @ env.p[:, :, None]).squeeze(-1)
     velocity = (env.R_scene_T @ env.v[:, :, None]).squeeze(-1)
     rotation = env.R_scene_T @ env.R
     omega = body_angular_velocity(env.R_old, env.R, env.last_control_dt)
     if env.observation_grad_mode == "detached":
-        position, velocity, rotation, omega = (value.detach() for value in (position, velocity, rotation, omega))
+        position, velocity, rotation, omega = (
+            value.detach() for value in (position, velocity, rotation, omega)
+        )
+    return position, velocity, rotation, omega
+
+
+def render_exposure(env, exposure01, *, return_aux=False, trajectory="extrapolate"):
+    """Uniform shutter integration over the past exposure, ending at now.
+
+    ``trajectory="extrapolate"`` (the default, and the historical behaviour)
+    extrapolates the current end velocity and body rate backwards over the
+    whole shutter. That is a local approximation whose error grows with
+    exposure duration; it was documented as acceptable for <=8 ms.
+    ``trajectory="history"`` instead interpolates the recorded per-step
+    motion history (see ``render/exposure_history.py``), which is what longer
+    shutters require. The two paths share the sample count, the noise model
+    and the aux layout so they can be compared frame by frame.
+
+    There is no access to future simulator states in either path. Timing and
+    sample count are explicit; no unmeasured multiplier amplifies the blur.
+    """
+    history = getattr(env, "exposure_history", None)
+    use_history = trajectory == "history"
+    if use_history and history is None:
+        raise RuntimeError(
+            "trajectory='history' requires env.exposure_history; "
+            "enable it with --exposure_trajectory history"
+        )
+    position, velocity, rotation, omega = scene_local_pose(env)
+    if use_history:
+        omega = history.matched_angular_rate(position, rotation, omega)
     camera_rotation = rotation @ env.R_cam
     with torch.no_grad():
         sharp, aux = render_scene_irradiance(env, position, camera_rotation)
@@ -137,10 +167,16 @@ def render_exposure(env, exposure01, *, return_aux=False):
     if samples > 1:
         duration = env.gray_camera.calibration.exposure_to_us(exposure01) * 1e-6
         accumulated = torch.zeros_like(sharp)
-        for fraction in (torch.arange(samples, device=position.device, dtype=position.dtype) + 0.5) / samples:
+        fractions = (torch.arange(samples, device=position.device, dtype=position.dtype) + 0.5) / samples
+        for fraction in fractions:
             offset = -duration * fraction
-            sample_p = position + velocity * offset[:, None]
-            sample_R = rotation @ rotation_exp(omega * offset[:, None]) @ env.R_cam
+            if use_history:
+                sample_p, sample_R = history.sample(
+                    position, rotation, omega, offset, camera_rotation=env.R_cam
+                )
+            else:
+                sample_p = position + velocity * offset[:, None]
+                sample_R = rotation @ rotation_exp(omega * offset[:, None]) @ env.R_cam
             def image_at(p, r):
                 return render_with_pose_gradient(env, p, r)[0]
             if torch.is_grad_enabled() and (sample_p.requires_grad or sample_R.requires_grad):
@@ -154,6 +190,7 @@ def render_exposure(env, exposure01, *, return_aux=False):
     aux["temporal_blur_mae"] = (image.detach() - sharp).abs().mean(dim=(1, 2, 3))
     aux["angular_speed_rad_s"] = omega.norm(dim=-1)
     aux["temporal_samples"] = samples
+    aux["exposure_trajectory"] = 1.0 if use_history else 0.0
     if return_aux:
         return image, aux
     return image, None

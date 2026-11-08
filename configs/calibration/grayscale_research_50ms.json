@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "profile_name": "IMX900-derived generic research approximation, 100us-50ms shutter",
+  "calibrated": false,
+  "source": "EXPLICITLY NOT A HARDWARE CALIBRATION. The exposure bounds are widened from the provisional e-CAM37M_CUONX / IMX900 development profile to 100us-50000us so that longer-shutter imaging can be studied in software. Reference exposure, gain law, photon/read-noise terms, response curve and black/saturation levels are copied unchanged from imx900_provisional.json and remain unmeasured. Do not cite any result from this profile as a real-camera measurement.",
+  "exposure": {
+    "mapping": "linear",
+    "min_us": 100,
+    "max_us": 50000,
+    "reference_us": 1000,
+    "step_us": 0,
+    "lut_x": null,
+    "lut_us": null,
+    "signal_scale": 1
+  },
+  "gain": {
+    "mapping": "log",
+    "min_factor": 1,
+    "max_factor": 8,
+    "step_factor": 0,
+    "lut_x": null,
+    "lut_factor": null
+  },
+  "noise": {
+    "shot_alpha": 0.015,
+    "shot_beta": 0,
+    "read_mapping": "power",
+    "read_std_base": 0.005,
+    "read_gain_exponent": 1,
+    "read_lut_gain": null,
+    "read_lut_std": null
+  },
+  "black_level": 0,
+  "saturation_level": 1,
+  "quantization_bits": 0,
+  "response": {
+    "mapping": "linear",
+    "lut_x": null,
+    "lut_y": null
+  },
+  "motion_blur": {
+    "scale": 0.08,
+    "spread": 0.0
+  },
+  "actuator": {
+    "command_delay_frames": 0,
+    "command_delay_jitter_frames": 0
+  }
+}

@@ -272,6 +272,28 @@ class IMX900Calibration:
     def exposure_to_relative(self, exposure01: TensorOrFloat) -> TensorOrFloat:
         return self.exposure_to_us(exposure01) / self.exposure_reference_us
 
+    def exposure_normalized(self, exposure_us: TensorOrFloat) -> TensorOrFloat:
+        """Inverse of :meth:`exposure_to_us`, clamped to the valid range.
+
+        Needed by controllers that decide in microseconds and must return the
+        normalized coordinate the actuator actually accepts.
+        """
+        if isinstance(exposure_us, torch.Tensor):
+            if self.exposure_mapping == "lut":
+                value = _interp_lut_tensor(exposure_us, self.exposure_lut_us,
+                                           self.exposure_lut_x)
+            else:
+                span = self.exposure_us_max - self.exposure_us_min
+                value = (exposure_us - self.exposure_us_min) / max(span, 1e-12)
+            return value.clamp(0.0, 1.0)
+        value = float(exposure_us)
+        if self.exposure_mapping == "lut":
+            normalized = _interp_lut_float(value, self.exposure_lut_us, self.exposure_lut_x)
+        else:
+            span = self.exposure_us_max - self.exposure_us_min
+            normalized = (value - self.exposure_us_min) / max(span, 1e-12)
+        return min(max(normalized, 0.0), 1.0)
+
     def gain_to_factor(self, gain01: TensorOrFloat) -> TensorOrFloat:
         x = _clamp01(gain01)
         if isinstance(x, torch.Tensor):
@@ -294,6 +316,34 @@ class IMX900Calibration:
         else:
             value = _interp_lut_float(x, self.gain_lut_x, self.gain_lut_factor)
         return _ste_quantize(value, self.gain_factor_step)
+
+    def gain_from_factor(self, gain_factor: TensorOrFloat) -> TensorOrFloat:
+        """Inverse of :meth:`gain_to_factor`, clamped to ``[0, 1]``."""
+        if isinstance(gain_factor, torch.Tensor):
+            if self.gain_mapping == "linear":
+                span = self.gain_factor_max - self.gain_factor_min
+                value = (gain_factor - self.gain_factor_min) / max(span, 1e-12)
+            elif self.gain_mapping == "log":
+                ratio = self.gain_factor_max / self.gain_factor_min
+                value = torch.log(
+                    (gain_factor / self.gain_factor_min).clamp_min(1e-12)
+                ) / max(math.log(ratio), 1e-12)
+            else:
+                value = _interp_lut_tensor(gain_factor, self.gain_lut_factor,
+                                           self.gain_lut_x)
+            return value.clamp(0.0, 1.0)
+        value = float(gain_factor)
+        if self.gain_mapping == "linear":
+            span = self.gain_factor_max - self.gain_factor_min
+            normalized = (value - self.gain_factor_min) / max(span, 1e-12)
+        elif self.gain_mapping == "log":
+            ratio = self.gain_factor_max / self.gain_factor_min
+            normalized = math.log(max(value, 1e-12) / self.gain_factor_min) / max(
+                math.log(ratio), 1e-12
+            )
+        else:
+            normalized = _interp_lut_float(value, self.gain_lut_factor, self.gain_lut_x)
+        return min(max(normalized, 0.0), 1.0)
 
     def read_noise_std(self, gain_factor: TensorOrFloat) -> TensorOrFloat:
         if self.read_noise_mapping == "lut":
