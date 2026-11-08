@@ -174,10 +174,16 @@ def audit(args, device, *, train_per_class, test_per_class, seed):
                 count=test_per_class, seed=seed + 7919, split="test",
             )
             scores = ridge_probe(train_x, train_y, test_x, test_y)
+            accuracy = _accuracy(scores, test_y)
+            n_test = int(test_y.numel())
             cells.append({
                 "speed_m_s": speed,
                 "exposure_ms": exposure_ms,
-                "accuracy": _accuracy(scores, test_y),
+                "accuracy": accuracy,
+                "n_test": n_test,
+                # Binomial standard error of this cell's accuracy. Without it a
+                # 2-sample difference looks like a peak; see classify().
+                "accuracy_se": math.sqrt(max(accuracy * (1.0 - accuracy), 0.0) / max(n_test, 1)),
                 "log_loss": _log_loss(scores, test_y),
                 "mean_brightness": mean_br,
                 "saturation_fraction": sat,
@@ -187,8 +193,101 @@ def audit(args, device, *, train_per_class, test_per_class, seed):
     return cells
 
 
-def classify(cells, *, slope_threshold, monotone_margin):
-    """Apply the plan's registered R1/R2/R3 thresholds."""
+def interaction_test(cells, *, short_ms=0.89, long_ms=8.0, z_threshold=2.0):
+    """Does the long-exposure penalty grow with speed? Two-proportion z-test.
+
+    Why this replaces the peak-slope rule
+    -------------------------------------
+    ``classification`` used to decide the verdict from ``argmax`` of accuracy
+    over the exposure grid. That estimator is unsound here for three reasons,
+    all observed on real runs:
+
+      * argmax is discontinuous - a single test sample changing can move the
+        "peak" from 20 ms to 0.89 ms and swing the slope by +/-11 ms/(m/s);
+      * it ignores sample size, so it treats a 2-sample lead as a peak;
+      * on the reduced-light run it reported R1 (slope -11.6) while the two
+        readouts disagreed in *sign* at the driving cell: accuracy said 8 ms was
+        worse than 0.89 ms at 1.15 m/s (0.875 vs 1.000) while log-loss said it
+        was better (0.4376 vs 0.4490). A criterion that can be flipped by which
+        readout you print is not a criterion.
+
+    This test asks the physical question directly: is a long exposure
+    *significantly* worse at high speed than at low speed? Motion blur grows as
+    v*T/z, so if blur is the mechanism, ``time_long`` must be penalised more
+    when the drone moves faster, and not before. It requires both readouts to
+    agree in sign, so a coincidence in one cannot carry the verdict.
+    """
+    def cell(speed, exposure):
+        for c in cells:
+            if c["speed_m_s"] == speed and c["exposure_ms"] == exposure:
+                return c
+        raise KeyError((speed, exposure))
+
+    speeds = sorted({c["speed_m_s"] for c in cells})
+    rows = []
+    for speed in speeds:
+        short = cell(speed, short_ms)
+        long_ = cell(speed, long_ms)
+        pooled = short["accuracy_se"] ** 2 + long_["accuracy_se"] ** 2
+        z = ((short["accuracy"] - long_["accuracy"]) / math.sqrt(pooled)) if pooled > 0 else 0.0
+        delta_log_loss = long_["log_loss"] - short["log_loss"]
+        rows.append({
+            "speed_m_s": speed,
+            "accuracy_short": short["accuracy"],
+            "accuracy_long": long_["accuracy"],
+            "accuracy_penalty": short["accuracy"] - long_["accuracy"],
+            "z": z,
+            "log_loss_short": short["log_loss"],
+            "log_loss_long": long_["log_loss"],
+            "log_loss_penalty": delta_log_loss,
+            # Both readouts must call the long exposure worse.
+            "readouts_agree": (z > 0) == (delta_log_loss > 0),
+        })
+
+    slow, fast = rows[0], rows[-1]
+    # The correct interaction contrast is a difference of differences, not
+    # "is the penalty significant at speed and absent at rest". In a saturating
+    # camera the long-exposure penalty is never absent: saturation depends on T
+    # only, so it penalises long exposure identically at every speed. What
+    # motion blur adds is an *increment* on top of that baseline, so the thing
+    # to test is
+    #
+    #     contrast = (p_short - p_long)_fast - (p_short - p_long)_slow
+    #
+    # with the variance of all four cells. Requiring "no penalty at slow speed"
+    # would make detection impossible by construction, which is what an earlier
+    # version of this function did.
+    contrast = fast["accuracy_penalty"] - slow["accuracy_penalty"]
+    var = 0.0
+    for speed in (slow["speed_m_s"], fast["speed_m_s"]):
+        for exposure in (short_ms, long_ms):
+            var += cell(speed, exposure)["accuracy_se"] ** 2
+    se = math.sqrt(var)
+    z = contrast / se if se > 0 else 0.0
+    # log-loss interaction contrast, same shape, must agree in sign.
+    log_contrast = fast["log_loss_penalty"] - slow["log_loss_penalty"]
+
+    detected = bool(z >= z_threshold and log_contrast > 0)
+    underpowered = abs(z) < z_threshold
+    return {
+        "short_ms": short_ms,
+        "long_ms": long_ms,
+        "z_threshold": z_threshold,
+        "per_speed": rows,
+        "interaction_contrast": contrast,
+        "interaction_se": se,
+        "interaction_z": z,
+        "log_loss_interaction_contrast": log_contrast,
+        "detected": detected,
+        "underpowered": underpowered,
+        "slow_speed_penalised": slow["z"] >= z_threshold,
+        "fast_speed_penalised": fast["z"] >= z_threshold,
+        "readouts_agree_on_interaction": bool((z > 0) == (log_contrast > 0)),
+    }
+
+
+def classify(cells, *, slope_threshold, monotone_margin, interaction=None):
+    """Apply the registered verdicts, now with a sample-size-aware interaction test."""
     speeds = sorted({c["speed_m_s"] for c in cells})
     per_speed_peak = {}
     for speed in speeds:
@@ -246,15 +345,29 @@ def classify(cells, *, slope_threshold, monotone_margin):
     # shortest exposure *tested*, the true optimum may lie below the grid. That
     # is truncation, not decoupling, and it means the probe has not bracketed
     # the optimum and cannot answer the question either way.
-    interaction_present = slope <= -slope_threshold
+    #
+    # The authoritative interaction decision is ``interaction`` (two-proportion
+    # z-test requiring both readouts to agree), not the peak slope. The slope is
+    # still reported for continuity but is not allowed to carry the verdict on
+    # its own: on a real run it produced R1 while accuracy and log-loss
+    # disagreed in sign at the cell that drove it.
+    interaction_present = bool(interaction and interaction.get("detected"))
+    underpowered = bool(interaction and interaction.get("underpowered"))
 
     if interaction_present:
         verdict = "R1_INTERACTION_EXISTS"
         blocks_training = False
-        meaning = ("peak exposure falls as speed rises: exposure and motion are coupled, "
-                   "so there is something for a camera head to learn."
-                   + (" The readout also degrades with longer exposure, so the usable "
-                      "exposure range sits at the short end." if monotone_worse else ""))
+        meaning = ("the long-exposure penalty is significantly larger at high speed than "
+                   "at low speed, with both accuracy and log-loss agreeing: exposure and "
+                   "motion are coupled, so there is something for a camera head to learn.")
+    elif underpowered:
+        verdict = "R5_UNDERPOWERED"
+        blocks_training = True
+        meaning = ("no exposure pair separates the speeds at this sample size (all "
+                   "|z| < threshold), so the grid cannot distinguish 'no interaction' "
+                   "from 'effect too small to resolve'. Increase test samples per cell, "
+                   "or make the effect physically larger, before treating this as a "
+                   "decision. The peak-slope value is reported but is not a decision.")
     elif pinned_short:
         verdict = "R4_GRID_TRUNCATED"
         blocks_training = True
@@ -269,22 +382,18 @@ def classify(cells, *, slope_threshold, monotone_margin):
                    "monotonically along the exposure axis: exposure and motion are "
                    "decoupled, and long exposure loses for a speed-independent reason "
                    "(saturation). There is no speed-dependent camera policy to learn.")
-    elif pinned_long:
-        verdict = "R3_NO_INTERACTION_FLAT"
-        blocks_training = True
-        meaning = ("peaks are pinned at the ceiling at every speed and the readout does not "
-                   "degrade along the exposure axis: the grid is degenerate, it does not "
-                   "separate the exposures at all.")
     else:
         verdict = "R3_NO_INTERACTION_FLAT"
         blocks_training = True
-        meaning = ("peak position neither trends with speed nor degrades with exposure: the "
-                   "grid is flat and carries no usable signal.")
+        meaning = ("the long-exposure penalty does not depend on speed and the readout "
+                   "does not degrade monotonically with exposure: exposure and motion "
+                   "are decoupled in the measured range.")
 
     return {
         "per_speed": per_speed_peak,
         "peak_vs_speed_slope_ms_per_m_s": slope,
         "interaction_present": interaction_present,
+        "interaction_test": interaction,
         "long_exposure_penalty": monotone_worse,
         "monotone_worse": monotone_worse,
         "pinned_short": pinned_short,
@@ -308,10 +417,12 @@ def main():
     parser.add_argument("--slope_threshold", type=float, default=1.0,
                         help="ms of peak exposure per m/s of speed; part of the protocol lock")
     parser.add_argument("--monotone_margin", type=float, default=0.01)
+    parser.add_argument("--z_threshold", type=float, default=2.0,
+                        help="two-proportion z for the interaction test; part of the lock")
     argv = sys.argv[1:]
     tool_argv, rest, i = [], [], 0
     tool_flags = {"--out_dir", "--device", "--train_per_class", "--test_per_class",
-                  "--seed", "--slope_threshold", "--monotone_margin"}
+                  "--seed", "--slope_threshold", "--monotone_margin", "--z_threshold"}
     while i < len(argv):
         if argv[i] in tool_flags:
             tool_argv.extend(argv[i:i + 2])
@@ -328,8 +439,10 @@ def main():
 
     cells = audit(args, device, train_per_class=cli.train_per_class,
                   test_per_class=cli.test_per_class, seed=cli.seed)
+    interaction = interaction_test(cells, z_threshold=cli.z_threshold)
     result = classify(cells, slope_threshold=cli.slope_threshold,
-                      monotone_margin=cli.monotone_margin)
+                      monotone_margin=cli.monotone_margin,
+                      interaction=interaction)
 
     report = {
         "protocol": {
@@ -358,8 +471,19 @@ def main():
               f"{cell['saturation_fraction']:6.3f} {cell['frame_contrast']:9.5f}")
     print()
     print(f"peak vs speed slope : {result['peak_vs_speed_slope_ms_per_m_s']:+.3f} ms/(m/s) "
-          f"(threshold {cli.slope_threshold})")
+          f"(reported only; argmax is not a decision rule)")
     print(f"monotone worse      : {result['monotone_worse']}")
+    print(f"interaction z-test  : short {interaction['short_ms']} ms vs long "
+          f"{interaction['long_ms']} ms, |z| >= {interaction['z_threshold']}")
+    for row in interaction["per_speed"]:
+        print(f"  v={row['speed_m_s']:.2f}  penalty={row['accuracy_penalty']:+.3f} "
+              f"z={row['z']:+.2f}  dlogloss={row['log_loss_penalty']:+.4f}  "
+              f"agree={row['readouts_agree']}")
+    print(f"  interaction contrast (fast - slow) : "
+          f"{interaction['interaction_contrast']:+.4f} "
+          f"(se {interaction['interaction_se']:.4f}, z {interaction['interaction_z']:+.2f})")
+    print(f"  log-loss interaction contrast      : "
+          f"{interaction['log_loss_interaction_contrast']:+.4f}")
     print(f"verdict             : {result['verdict']}")
     print(f"  {result['meaning']}")
     print(f"\nwrote {out}")

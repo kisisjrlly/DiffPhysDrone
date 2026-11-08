@@ -1,0 +1,254 @@
+{
+  "px_per_rad": 29.26829268292683,
+  "approach_z_m": 0.35,
+  "blur_px_usable": 1.0,
+  "saturation_usable": 0.1,
+  "control_period_ms": 66.66666666666667,
+  "rows": [
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.1,
+      "blur_px": 0.0025087108013937287,
+      "shutter_over_period": 0.0015,
+      "mean": 0.04946623370051384,
+      "saturation": 0.0,
+      "contrast": 0.01638787053525448
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.2,
+      "blur_px": 0.005017421602787457,
+      "shutter_over_period": 0.003,
+      "mean": 0.09716344624757767,
+      "saturation": 0.0,
+      "contrast": 0.032336242496967316
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.4,
+      "blur_px": 0.010034843205574915,
+      "shutter_over_period": 0.006,
+      "mean": 0.1961987465620041,
+      "saturation": 0.0,
+      "contrast": 0.06563153862953186
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.89,
+      "blur_px": 0.022327526132404185,
+      "shutter_over_period": 0.013349999999999999,
+      "mean": 0.4368225038051605,
+      "saturation": 0.0027443214785307646,
+      "contrast": 0.14412546157836914
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 2.0,
+      "blur_px": 0.050174216027874564,
+      "shutter_over_period": 0.03,
+      "mean": 0.6856415271759033,
+      "saturation": 0.47708696126937866,
+      "contrast": 0.18473008275032043
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 4.0,
+      "blur_px": 0.10034843205574913,
+      "shutter_over_period": 0.06,
+      "mean": 0.7643712162971497,
+      "saturation": 0.6825312972068787,
+      "contrast": 0.14619514346122742
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 8.0,
+      "blur_px": 0.20069686411149826,
+      "shutter_over_period": 0.12,
+      "mean": 0.82899010181427,
+      "saturation": 0.7100242376327515,
+      "contrast": 0.11694493889808655
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 20.0,
+      "blur_px": 0.5017421602787457,
+      "shutter_over_period": 0.3,
+      "mean": 0.9798680543899536,
+      "saturation": 0.9408140182495117,
+      "contrast": 0.10245388746261597
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 50.0,
+      "blur_px": 1.2543554006968642,
+      "shutter_over_period": 0.75,
+      "mean": 0.9933971166610718,
+      "saturation": 0.9787281155586243,
+      "contrast": 0.04273950681090355
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.1,
+      "blur_px": 0.005017421602787457,
+      "shutter_over_period": 0.0015,
+      "mean": 0.048909880220890045,
+      "saturation": 0.0,
+      "contrast": 0.016498392447829247
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.2,
+      "blur_px": 0.010034843205574915,
+      "shutter_over_period": 0.003,
+      "mean": 0.09719181805849075,
+      "saturation": 0.0,
+      "contrast": 0.03312819078564644
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.4,
+      "blur_px": 0.02006968641114983,
+      "shutter_over_period": 0.006,
+      "mean": 0.19559411704540253,
+      "saturation": 0.0,
+      "contrast": 0.06624136865139008
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.89,
+      "blur_px": 0.04465505226480837,
+      "shutter_over_period": 0.013349999999999999,
+      "mean": 0.4311484694480896,
+      "saturation": 0.024802878499031067,
+      "contrast": 0.14358286559581757
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 2.0,
+      "blur_px": 0.10034843205574913,
+      "shutter_over_period": 0.03,
+      "mean": 0.686930775642395,
+      "saturation": 0.4698215126991272,
+      "contrast": 0.18669651448726654
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 4.0,
+      "blur_px": 0.20069686411149826,
+      "shutter_over_period": 0.06,
+      "mean": 0.7633438110351562,
+      "saturation": 0.6810664534568787,
+      "contrast": 0.1498027741909027
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 8.0,
+      "blur_px": 0.4013937282229965,
+      "shutter_over_period": 0.12,
+      "mean": 0.8298652768135071,
+      "saturation": 0.708251953125,
+      "contrast": 0.12100760638713837
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 20.0,
+      "blur_px": 1.0034843205574915,
+      "shutter_over_period": 0.3,
+      "mean": 0.9738731384277344,
+      "saturation": 0.8826723694801331,
+      "contrast": 0.1028633639216423
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 50.0,
+      "blur_px": 2.5087108013937285,
+      "shutter_over_period": 0.75,
+      "mean": 0.9933593273162842,
+      "saturation": 0.9782307744026184,
+      "contrast": 0.042300958186388016
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.1,
+      "blur_px": 0.009616724738675959,
+      "shutter_over_period": 0.0015,
+      "mean": 0.04863325506448746,
+      "saturation": 0.0,
+      "contrast": 0.018208254128694534
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.2,
+      "blur_px": 0.019233449477351918,
+      "shutter_over_period": 0.003,
+      "mean": 0.09717550873756409,
+      "saturation": 0.0,
+      "contrast": 0.03594006597995758
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.4,
+      "blur_px": 0.038466898954703836,
+      "shutter_over_period": 0.006,
+      "mean": 0.19284893572330475,
+      "saturation": 0.0,
+      "contrast": 0.07242340594530106
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.89,
+      "blur_px": 0.08558885017421602,
+      "shutter_over_period": 0.013349999999999999,
+      "mean": 0.4304514229297638,
+      "saturation": 0.013576931320130825,
+      "contrast": 0.16010385751724243
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 2.0,
+      "blur_px": 0.1923344947735192,
+      "shutter_over_period": 0.03,
+      "mean": 0.6708536744117737,
+      "saturation": 0.44698530435562134,
+      "contrast": 0.20093773305416107
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 4.0,
+      "blur_px": 0.3846689895470384,
+      "shutter_over_period": 0.06,
+      "mean": 0.7599722146987915,
+      "saturation": 0.6696144342422485,
+      "contrast": 0.1617359071969986
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 8.0,
+      "blur_px": 0.7693379790940768,
+      "shutter_over_period": 0.12,
+      "mean": 0.823459267616272,
+      "saturation": 0.7035952210426331,
+      "contrast": 0.13333885371685028
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 20.0,
+      "blur_px": 1.9233449477351918,
+      "shutter_over_period": 0.3,
+      "mean": 0.9712284207344055,
+      "saturation": 0.8763789534568787,
+      "contrast": 0.11795968562364578
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 50.0,
+      "blur_px": 4.80836236933798,
+      "shutter_over_period": 0.75,
+      "mean": 0.9926691651344299,
+      "saturation": 0.9758979082107544,
+      "contrast": 0.04604990407824516
+    }
+  ],
+  "feasible_cells": 0,
+  "interaction_reachable": false
+}
