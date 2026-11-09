@@ -1,0 +1,366 @@
+{
+  "tolerance_m": 0.075,
+  "baseline_rmse_m": 0.17320508075688773,
+  "offset_range_m": 0.3,
+  "exposures_ms": [
+    0.1,
+    0.2,
+    0.4,
+    0.89,
+    2.0,
+    8.0,
+    20.0,
+    50.0
+  ],
+  "speeds_m_s": [
+    0.6,
+    1.15
+  ],
+  "distances_m": [
+    1.2,
+    0.8,
+    0.5
+  ],
+  "worst_rmse_m": 0.16207771003246307,
+  "best_rmse_m": 0.03617087006568909,
+  "worst_over_tolerance": 2.1610361337661743,
+  "max_rmse_variation_across_exposures_m": 0.08919839560985565,
+  "rows": [
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 0.1,
+      "rmse_m": 0.11604692786931992,
+      "rmse_over_tolerance": 1.5472923715909324
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 0.2,
+      "rmse_m": 0.11966824531555176,
+      "rmse_over_tolerance": 1.595576604207357
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 0.4,
+      "rmse_m": 0.11313772201538086,
+      "rmse_over_tolerance": 1.5085029602050781
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 0.89,
+      "rmse_m": 0.1141514927148819,
+      "rmse_over_tolerance": 1.522019902865092
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 2.0,
+      "rmse_m": 0.09214486181735992,
+      "rmse_over_tolerance": 1.228598157564799
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 8.0,
+      "rmse_m": 0.03617087006568909,
+      "rmse_over_tolerance": 0.4822782675425212
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 20.0,
+      "rmse_m": 0.1205253079533577,
+      "rmse_over_tolerance": 1.6070041060447693
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 1.2,
+      "exposure_ms": 50.0,
+      "rmse_m": 0.12536926567554474,
+      "rmse_over_tolerance": 1.6715902090072632
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 0.1,
+      "rmse_m": 0.11463752388954163,
+      "rmse_over_tolerance": 1.5285003185272217
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 0.2,
+      "rmse_m": 0.11493449658155441,
+      "rmse_over_tolerance": 1.5324599544207256
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 0.4,
+      "rmse_m": 0.11503449082374573,
+      "rmse_over_tolerance": 1.5337932109832764
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 0.89,
+      "rmse_m": 0.11165207624435425,
+      "rmse_over_tolerance": 1.4886943499247234
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 2.0,
+      "rmse_m": 0.08854828774929047,
+      "rmse_over_tolerance": 1.1806438366572063
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 8.0,
+      "rmse_m": 0.1048162430524826,
+      "rmse_over_tolerance": 1.3975499073664348
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 20.0,
+      "rmse_m": 0.12815383076667786,
+      "rmse_over_tolerance": 1.7087177435557048
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.8,
+      "exposure_ms": 50.0,
+      "rmse_m": 0.1368478387594223,
+      "rmse_over_tolerance": 1.8246378501256308
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 0.1,
+      "rmse_m": 0.12977996468544006,
+      "rmse_over_tolerance": 1.730399529139201
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 0.2,
+      "rmse_m": 0.12652647495269775,
+      "rmse_over_tolerance": 1.6870196660359702
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 0.4,
+      "rmse_m": 0.1269250214099884,
+      "rmse_over_tolerance": 1.6923336187998455
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 0.89,
+      "rmse_m": 0.12494326382875443,
+      "rmse_over_tolerance": 1.6659101843833923
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 2.0,
+      "rmse_m": 0.11233299225568771,
+      "rmse_over_tolerance": 1.4977732300758362
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 8.0,
+      "rmse_m": 0.12777894735336304,
+      "rmse_over_tolerance": 1.7037192980448406
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 20.0,
+      "rmse_m": 0.15236727893352509,
+      "rmse_over_tolerance": 2.031563719113668
+    },
+    {
+      "speed_m_s": 0.6,
+      "distance_m": 0.5,
+      "exposure_ms": 50.0,
+      "rmse_m": 0.16207771003246307,
+      "rmse_over_tolerance": 2.1610361337661743
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 0.1,
+      "rmse_m": 0.11723627150058746,
+      "rmse_over_tolerance": 1.5631502866744995
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 0.2,
+      "rmse_m": 0.11628814786672592,
+      "rmse_over_tolerance": 1.5505086382230124
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 0.4,
+      "rmse_m": 0.1175304651260376,
+      "rmse_over_tolerance": 1.567072868347168
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 0.89,
+      "rmse_m": 0.11159344762563705,
+      "rmse_over_tolerance": 1.4879126350084941
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 2.0,
+      "rmse_m": 0.09135903418064117,
+      "rmse_over_tolerance": 1.2181204557418823
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 8.0,
+      "rmse_m": 0.03951048105955124,
+      "rmse_over_tolerance": 0.5268064141273499
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 20.0,
+      "rmse_m": 0.11934617906808853,
+      "rmse_over_tolerance": 1.591282387574514
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 1.2,
+      "exposure_ms": 50.0,
+      "rmse_m": 0.12467201054096222,
+      "rmse_over_tolerance": 1.6622934738794963
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 0.1,
+      "rmse_m": 0.1111498475074768,
+      "rmse_over_tolerance": 1.4819979667663574
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 0.2,
+      "rmse_m": 0.1146758645772934,
+      "rmse_over_tolerance": 1.5290115276972454
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 0.4,
+      "rmse_m": 0.10766677558422089,
+      "rmse_over_tolerance": 1.4355570077896118
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 0.89,
+      "rmse_m": 0.10782530158758163,
+      "rmse_over_tolerance": 1.4376706878344219
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 2.0,
+      "rmse_m": 0.08316197991371155,
+      "rmse_over_tolerance": 1.1088263988494873
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 8.0,
+      "rmse_m": 0.11958639323711395,
+      "rmse_over_tolerance": 1.5944852431615195
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 20.0,
+      "rmse_m": 0.1327422857284546,
+      "rmse_over_tolerance": 1.7698971430460613
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.8,
+      "exposure_ms": 50.0,
+      "rmse_m": 0.15171705186367035,
+      "rmse_over_tolerance": 2.022894024848938
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 0.1,
+      "rmse_m": 0.153312548995018,
+      "rmse_over_tolerance": 2.0441673199335737
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 0.2,
+      "rmse_m": 0.15329501032829285,
+      "rmse_over_tolerance": 2.0439334710439048
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 0.4,
+      "rmse_m": 0.14601801335811615,
+      "rmse_over_tolerance": 1.946906844774882
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 0.89,
+      "rmse_m": 0.15212363004684448,
+      "rmse_over_tolerance": 2.0283150672912598
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 2.0,
+      "rmse_m": 0.13893401622772217,
+      "rmse_over_tolerance": 1.8524535497029624
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 8.0,
+      "rmse_m": 0.14667122066020966,
+      "rmse_over_tolerance": 1.9556162754694622
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 20.0,
+      "rmse_m": 0.15465062856674194,
+      "rmse_over_tolerance": 2.0620083808898926
+    },
+    {
+      "speed_m_s": 1.15,
+      "distance_m": 0.5,
+      "exposure_ms": 50.0,
+      "rmse_m": 0.16077260673046112,
+      "rmse_over_tolerance": 2.1436347564061484
+    }
+  ]
+}
