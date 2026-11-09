@@ -1,0 +1,396 @@
+{
+  "protocol": {
+    "exposures_ms": [
+      0.1,
+      0.2,
+      0.4,
+      0.89,
+      8.0,
+      20.0,
+      50.0
+    ],
+    "speeds_m_s": [
+      0.3,
+      0.6,
+      1.15
+    ],
+    "center_delta_m": 0.05,
+    "readout": "ridge_probe, fixed alpha, train-only normalization",
+    "privileged_inputs": [],
+    "task_loss_used": false,
+    "seed": 42,
+    "train_per_class": 128,
+    "test_per_class": 128
+  },
+  "cells": [
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.1,
+      "accuracy": 0.8125,
+      "n_test": 128,
+      "accuracy_se": 0.034499065884093155,
+      "log_loss": 0.4944272910960159,
+      "mean_brightness": 0.050863977521657944,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.009092705324292183
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.2,
+      "accuracy": 0.7421875,
+      "n_test": 128,
+      "accuracy_se": 0.03866373612271319,
+      "log_loss": 0.4975098888881163,
+      "mean_brightness": 0.10402768850326538,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.01760956645011902
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.4,
+      "accuracy": 1.0,
+      "n_test": 128,
+      "accuracy_se": 0.0,
+      "log_loss": 0.49372016294042825,
+      "mean_brightness": 0.20369623601436615,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.03322327882051468
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 0.89,
+      "accuracy": 0.84375,
+      "n_test": 128,
+      "accuracy_se": 0.032093118603818326,
+      "log_loss": 0.4886625223008597,
+      "mean_brightness": 0.44857358932495117,
+      "saturation_fraction": 0.07763671875,
+      "frame_contrast": 0.07157602906227112
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 8.0,
+      "accuracy": 1.0,
+      "n_test": 128,
+      "accuracy_se": 0.0,
+      "log_loss": 0.4539601397737725,
+      "mean_brightness": 0.7279103398323059,
+      "saturation_fraction": 0.49177834391593933,
+      "frame_contrast": 0.054430633783340454
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 20.0,
+      "accuracy": 0.7265625,
+      "n_test": 128,
+      "accuracy_se": 0.03939676319129748,
+      "log_loss": 0.5093013656198454,
+      "mean_brightness": 0.9806104898452759,
+      "saturation_fraction": 0.9161286354064941,
+      "frame_contrast": 0.06935051828622818
+    },
+    {
+      "speed_m_s": 0.3,
+      "exposure_ms": 50.0,
+      "accuracy": 0.7265625,
+      "n_test": 128,
+      "accuracy_se": 0.03939676319129748,
+      "log_loss": 0.5083347122218989,
+      "mean_brightness": 0.9918581247329712,
+      "saturation_fraction": 0.9846881031990051,
+      "frame_contrast": 0.048584163188934326
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.1,
+      "accuracy": 0.78125,
+      "n_test": 128,
+      "accuracy_se": 0.03653962291771427,
+      "log_loss": 0.4990174514557857,
+      "mean_brightness": 0.05145987868309021,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.009315982460975647
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.2,
+      "accuracy": 1.0,
+      "n_test": 128,
+      "accuracy_se": 0.0,
+      "log_loss": 0.49316901903621757,
+      "mean_brightness": 0.10290508717298508,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.01751115173101425
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.4,
+      "accuracy": 0.75,
+      "n_test": 128,
+      "accuracy_se": 0.038273277230987154,
+      "log_loss": 0.4880921168723077,
+      "mean_brightness": 0.2025224268436432,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.032975077629089355
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 0.89,
+      "accuracy": 1.0,
+      "n_test": 128,
+      "accuracy_se": 0.0,
+      "log_loss": 0.489493732773021,
+      "mean_brightness": 0.4522010087966919,
+      "saturation_fraction": 0.09981508553028107,
+      "frame_contrast": 0.07157677412033081
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 8.0,
+      "accuracy": 0.9921875,
+      "n_test": 128,
+      "accuracy_se": 0.007781922583256459,
+      "log_loss": 0.45553427847295014,
+      "mean_brightness": 0.729087769985199,
+      "saturation_fraction": 0.49141213297843933,
+      "frame_contrast": 0.057133398950099945
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 20.0,
+      "accuracy": 0.71875,
+      "n_test": 128,
+      "accuracy_se": 0.039740214744874616,
+      "log_loss": 0.5089957892617117,
+      "mean_brightness": 0.9801303744316101,
+      "saturation_fraction": 0.9147440791130066,
+      "frame_contrast": 0.06743071973323822
+    },
+    {
+      "speed_m_s": 0.6,
+      "exposure_ms": 50.0,
+      "accuracy": 0.6875,
+      "n_test": 128,
+      "accuracy_se": 0.040969095631646545,
+      "log_loss": 0.5097949552509092,
+      "mean_brightness": 0.9925158619880676,
+      "saturation_fraction": 0.9851763844490051,
+      "frame_contrast": 0.04588659852743149
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.1,
+      "accuracy": 0.796875,
+      "n_test": 128,
+      "accuracy_se": 0.035560823156314696,
+      "log_loss": 0.4893153496752448,
+      "mean_brightness": 0.051109425723552704,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.009363828226923943
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.2,
+      "accuracy": 0.9921875,
+      "n_test": 128,
+      "accuracy_se": 0.007781922583256459,
+      "log_loss": 0.4856121915829619,
+      "mean_brightness": 0.10286741703748703,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.017855020239949226
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.4,
+      "accuracy": 0.90625,
+      "n_test": 128,
+      "accuracy_se": 0.025763488199751796,
+      "log_loss": 0.4876911701015145,
+      "mean_brightness": 0.20386862754821777,
+      "saturation_fraction": 0.0,
+      "frame_contrast": 0.03489384800195694
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 0.89,
+      "accuracy": 1.0,
+      "n_test": 128,
+      "accuracy_se": 0.0,
+      "log_loss": 0.4866090855781293,
+      "mean_brightness": 0.44276928901672363,
+      "saturation_fraction": 0.07379715889692307,
+      "frame_contrast": 0.07467389106750488
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 8.0,
+      "accuracy": 0.9921875,
+      "n_test": 128,
+      "accuracy_se": 0.007781922583256459,
+      "log_loss": 0.46443946769127137,
+      "mean_brightness": 0.7402992248535156,
+      "saturation_fraction": 0.49247685074806213,
+      "frame_contrast": 0.05795340985059738
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 20.0,
+      "accuracy": 0.7265625,
+      "n_test": 128,
+      "accuracy_se": 0.03939676319129748,
+      "log_loss": 0.5083549259655233,
+      "mean_brightness": 0.9787761569023132,
+      "saturation_fraction": 0.90460205078125,
+      "frame_contrast": 0.06782367825508118
+    },
+    {
+      "speed_m_s": 1.15,
+      "exposure_ms": 50.0,
+      "accuracy": 0.7578125,
+      "n_test": 128,
+      "accuracy_se": 0.03786620306707284,
+      "log_loss": 0.5174391208432851,
+      "mean_brightness": 0.993028998374939,
+      "saturation_fraction": 0.9857302308082581,
+      "frame_contrast": 0.04285116121172905
+    }
+  ],
+  "classification": {
+    "per_speed": {
+      "0.3": {
+        "peak_exposure_ms": 0.4,
+        "peak_accuracy": 1.0,
+        "exposures": {
+          "0.1": 0.8125,
+          "0.2": 0.7421875,
+          "0.4": 1.0,
+          "0.89": 0.84375,
+          "8.0": 1.0,
+          "20.0": 0.7265625,
+          "50.0": 0.7265625
+        },
+        "log_losses": {
+          "0.1": 0.4944272910960159,
+          "0.2": 0.4975098888881163,
+          "0.4": 0.49372016294042825,
+          "0.89": 0.4886625223008597,
+          "8.0": 0.4539601397737725,
+          "20.0": 0.5093013656198454,
+          "50.0": 0.5083347122218989
+        }
+      },
+      "0.6": {
+        "peak_exposure_ms": 0.2,
+        "peak_accuracy": 1.0,
+        "exposures": {
+          "0.1": 0.78125,
+          "0.2": 1.0,
+          "0.4": 0.75,
+          "0.89": 1.0,
+          "8.0": 0.9921875,
+          "20.0": 0.71875,
+          "50.0": 0.6875
+        },
+        "log_losses": {
+          "0.1": 0.4990174514557857,
+          "0.2": 0.49316901903621757,
+          "0.4": 0.4880921168723077,
+          "0.89": 0.489493732773021,
+          "8.0": 0.45553427847295014,
+          "20.0": 0.5089957892617117,
+          "50.0": 0.5097949552509092
+        }
+      },
+      "1.15": {
+        "peak_exposure_ms": 0.89,
+        "peak_accuracy": 1.0,
+        "exposures": {
+          "0.1": 0.796875,
+          "0.2": 0.9921875,
+          "0.4": 0.90625,
+          "0.89": 1.0,
+          "8.0": 0.9921875,
+          "20.0": 0.7265625,
+          "50.0": 0.7578125
+        },
+        "log_losses": {
+          "0.1": 0.4893153496752448,
+          "0.2": 0.4856121915829619,
+          "0.4": 0.4876911701015145,
+          "0.89": 0.4866090855781293,
+          "8.0": 0.46443946769127137,
+          "20.0": 0.5083549259655233,
+          "50.0": 0.5174391208432851
+        }
+      }
+    },
+    "peak_vs_speed_slope_ms_per_m_s": 0.6600896860986547,
+    "interaction_present": false,
+    "interaction_test": {
+      "short_ms": 0.89,
+      "long_ms": 8.0,
+      "z_threshold": 2.0,
+      "per_speed": [
+        {
+          "speed_m_s": 0.3,
+          "accuracy_short": 0.84375,
+          "accuracy_long": 1.0,
+          "accuracy_penalty": -0.15625,
+          "z": -4.868644955601477,
+          "log_loss_short": 0.4886625223008597,
+          "log_loss_long": 0.4539601397737725,
+          "log_loss_penalty": -0.03470238252708724,
+          "readouts_agree": true
+        },
+        {
+          "speed_m_s": 0.6,
+          "accuracy_short": 1.0,
+          "accuracy_long": 0.9921875,
+          "accuracy_penalty": 0.0078125,
+          "z": 1.0039292882210538,
+          "log_loss_short": 0.489493732773021,
+          "log_loss_long": 0.45553427847295014,
+          "log_loss_penalty": -0.03395945430007086,
+          "readouts_agree": false
+        },
+        {
+          "speed_m_s": 1.15,
+          "accuracy_short": 1.0,
+          "accuracy_long": 0.9921875,
+          "accuracy_penalty": 0.0078125,
+          "z": 1.0039292882210538,
+          "log_loss_short": 0.4866090855781293,
+          "log_loss_long": 0.46443946769127137,
+          "log_loss_penalty": -0.02216961788685795,
+          "readouts_agree": false
+        }
+      ],
+      "interaction_contrast": 0.1640625,
+      "interaction_se": 0.033023121911935384,
+      "interaction_z": 4.9681099333223155,
+      "log_loss_interaction_contrast": 0.012532764640229288,
+      "detected": true,
+      "underpowered": false,
+      "slow_speed_penalised": false,
+      "fast_speed_penalised": false,
+      "readouts_agree_on_interaction": true
+    },
+    "readout_ceiling": {
+      "threshold": 0.98,
+      "cells_at_ceiling": 8,
+      "total_cells": 21,
+      "degenerate": true
+    },
+    "long_exposure_penalty": false,
+    "monotone_worse": false,
+    "pinned_short": false,
+    "pinned_long": false,
+    "verdict": "R6_READOUT_CEILING",
+    "blocks_training": true,
+    "meaning": "8 of 21 cells already read >= 0.98: the discrimination task is too easy for this readout, so exposure has almost no dynamic range to act on. Any apparent interaction is the noise of the few cells below ceiling. This is not evidence of coupling, and it is not evidence of decoupling either - the readout cannot answer the question. Make the discrimination harder (smaller centre offset, coarser input, more noise) or use a closed-loop task metric.",
+    "thresholds": {
+      "slope_threshold": 1.0,
+      "monotone_margin": 0.01
+    }
+  }
+}

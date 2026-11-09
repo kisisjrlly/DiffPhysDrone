@@ -286,7 +286,37 @@ def interaction_test(cells, *, short_ms=0.89, long_ms=8.0, z_threshold=2.0):
     }
 
 
-def classify(cells, *, slope_threshold, monotone_margin, interaction=None):
+def readout_ceiling(cells, *, threshold=0.98, min_cells=4):
+    """Is the discrimination task so easy that exposure cannot possibly matter?
+
+    Observed on the single-wall geometry: at 48x36 the ridge readout reaches
+    ~1.000 at *four* exposures per speed (0.2, 0.4, 0.89, 8 ms), and 8 ms is
+    statistically indistinguishable from 0.89 ms at the two higher speeds. A
+    classifier that already separates the two slit positions perfectly has no
+    dynamic range left for exposure to act on, so any "interaction" measured
+    from the remaining cells is the noise of the few that fall below ceiling.
+
+    Concretely, a run on that geometry reported R1 with z=+4.97 where the whole
+    contrast came from one cell reading 0.844 at 0.89 ms while 0.4 ms read
+    1.000 at the same speed - physically impossible, and enough to fake a
+    precise interaction because the binomial standard error at p=0.84 is small.
+
+    A near-ceiling grid is therefore not evidence of coupling; it is evidence
+    that this readout cannot answer the question. The fix is a harder
+    discrimination task (smaller centre offset, coarser input, more noise) or a
+    closed-loop task metric, not more training.
+    """
+    at_ceiling = [c for c in cells if c["accuracy"] >= threshold]
+    return {
+        "threshold": threshold,
+        "cells_at_ceiling": len(at_ceiling),
+        "total_cells": len(cells),
+        "degenerate": len(at_ceiling) >= min_cells,
+    }
+
+
+def classify(cells, *, slope_threshold, monotone_margin, interaction=None,
+             ceiling=None):
     """Apply the registered verdicts, now with a sample-size-aware interaction test."""
     speeds = sorted({c["speed_m_s"] for c in cells})
     per_speed_peak = {}
@@ -353,8 +383,24 @@ def classify(cells, *, slope_threshold, monotone_margin, interaction=None):
     # disagreed in sign at the cell that drove it.
     interaction_present = bool(interaction and interaction.get("detected"))
     underpowered = bool(interaction and interaction.get("underpowered"))
+    degenerate = bool(ceiling and ceiling.get("degenerate"))
 
-    if interaction_present:
+    if degenerate:
+        # Checked first: a saturated readout invalidates every other branch.
+        verdict = "R6_READOUT_CEILING"
+        blocks_training = True
+        interaction_present = False
+        meaning = (
+            f"{ceiling['cells_at_ceiling']} of {ceiling['total_cells']} cells already "
+            f"read >= {ceiling['threshold']:.2f}: the discrimination task is too easy for "
+            "this readout, so exposure has almost no dynamic range to act on. Any "
+            "apparent interaction is the noise of the few cells below ceiling. This is "
+            "not evidence of coupling, and it is not evidence of decoupling either - "
+            "the readout cannot answer the question. Make the discrimination harder "
+            "(smaller centre offset, coarser input, more noise) or use a closed-loop "
+            "task metric."
+        )
+    elif interaction_present:
         verdict = "R1_INTERACTION_EXISTS"
         blocks_training = False
         meaning = ("the long-exposure penalty is significantly larger at high speed than "
@@ -394,6 +440,7 @@ def classify(cells, *, slope_threshold, monotone_margin, interaction=None):
         "peak_vs_speed_slope_ms_per_m_s": slope,
         "interaction_present": interaction_present,
         "interaction_test": interaction,
+        "readout_ceiling": ceiling,
         "long_exposure_penalty": monotone_worse,
         "monotone_worse": monotone_worse,
         "pinned_short": pinned_short,
@@ -440,9 +487,10 @@ def main():
     cells = audit(args, device, train_per_class=cli.train_per_class,
                   test_per_class=cli.test_per_class, seed=cli.seed)
     interaction = interaction_test(cells, z_threshold=cli.z_threshold)
+    ceiling = readout_ceiling(cells)
     result = classify(cells, slope_threshold=cli.slope_threshold,
                       monotone_margin=cli.monotone_margin,
-                      interaction=interaction)
+                      interaction=interaction, ceiling=ceiling)
 
     report = {
         "protocol": {
@@ -479,6 +527,8 @@ def main():
         print(f"  v={row['speed_m_s']:.2f}  penalty={row['accuracy_penalty']:+.3f} "
               f"z={row['z']:+.2f}  dlogloss={row['log_loss_penalty']:+.4f}  "
               f"agree={row['readouts_agree']}")
+    print(f"readout ceiling     : {ceiling['cells_at_ceiling']}/{ceiling['total_cells']} "
+          f"cells >= {ceiling['threshold']:.2f} (degenerate={ceiling['degenerate']})")
     print(f"  interaction contrast (fast - slow) : "
           f"{interaction['interaction_contrast']:+.4f} "
           f"(se {interaction['interaction_se']:.4f}, z {interaction['interaction_z']:+.2f})")

@@ -149,3 +149,50 @@ def test_accuracy_se_shrinks_with_sample_size():
     few = _cell(1.15, SHORT, 0.9, 0.4, n=100)["accuracy_se"]
     many = _cell(1.15, SHORT, 0.9, 0.4, n=1600)["accuracy_se"]
     assert few == many * 4.0
+
+
+def test_readout_ceiling_overrides_an_apparent_interaction():
+    """A saturated readout must not be allowed to report coupling.
+
+    Observed on the single-wall geometry: four exposures per speed read ~1.000,
+    and the reported R1 (z=+4.97) came entirely from one cell reading 0.844 at
+    0.89 ms while 0.4 ms read 1.000 at the same speed. When the classifier
+    already separates the classes perfectly there is no dynamic range left for
+    exposure to act on, so the remaining variation is noise.
+    """
+    cells = []
+    for speed, short_acc, long_acc in ((0.3, 0.844, 1.000),
+                                       (0.6, 1.000, 0.992),
+                                       (1.15, 1.000, 0.992)):
+        cells.append(_cell(speed, SHORT, short_acc, 0.45, n=128))
+        cells.append(_cell(speed, LONG, long_acc, 0.45, n=128))
+    # Fill the grid with near-ceiling cells, as the real run had.
+    for speed in (0.3, 0.6, 1.15):
+        for exposure in (0.2, 0.4, 20.0):
+            cells.append(_cell(speed, exposure, 1.0, 0.44, n=128))
+
+    interaction = probe.interaction_test(cells)
+    ceiling = probe.readout_ceiling(cells)
+    classification = probe.classify(cells, slope_threshold=1.0, monotone_margin=0.01,
+                                    interaction=interaction, ceiling=ceiling)
+
+    assert ceiling["degenerate"] is True
+    assert ceiling["cells_at_ceiling"] >= 4
+    assert classification["verdict"] == "R6_READOUT_CEILING"
+    assert classification["blocks_training"] is True
+    assert classification["interaction_present"] is False
+    # The message must say the readout cannot answer, not that coupling is absent.
+    assert "cannot answer" in classification["meaning"]
+
+
+def test_ceiling_guard_leaves_a_hard_grid_alone():
+    """A grid with real dynamic range must not be dismissed as degenerate."""
+    cells = []
+    for speed in (0.3, 1.15):
+        for exposure, acc in ((SHORT, 0.95), (LONG, 0.65)):
+            cells.append(_cell(speed, exposure, acc, 0.5, n=256))
+        for exposure in (0.2, 0.4, 20.0):
+            cells.append(_cell(speed, exposure, 0.8, 0.5, n=256))
+
+    ceiling = probe.readout_ceiling(cells)
+    assert ceiling["degenerate"] is False
