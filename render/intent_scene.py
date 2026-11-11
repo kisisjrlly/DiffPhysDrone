@@ -94,6 +94,13 @@ def render_scene_irradiance(env, position, rotation):
         light = surface_light_scale(env, aux["points"])
     elif env.scene_layout == "joint_slit":
         light = slit_surface_light(env, aux["points"])
+    elif env.scene_layout == "single_wall_slit_diff":
+        # The historical single-wall renderer applies one global light scale
+        # derived from the current vehicle x position.  Keep that radiometry
+        # for the differentiable equivalent so a baseline comparison changes
+        # the renderer path, not the task's illumination rule.
+        scale = env._scenario_light_scale(position[:, 0])
+        light = scale[:, None, None].expand(-1, depth.shape[-2], depth.shape[-1])
     else:
         light = env.surface_lights.gather(1, ids.flatten(1)).reshape_as(depth)
     image = image * light[:, None] * env.gray_light_factor[:, None, None, None]

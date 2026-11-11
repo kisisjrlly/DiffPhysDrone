@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from render.scene_types import DIFFERENTIABLE_SCENES
 
 
-def render_gray_sensor(env, exposure, gain, differentiable=True):
+def render_gray_sensor(env, exposure, gain, differentiable=True, *, shot_noise=None, read_noise=None):
     if not hasattr(env, "gray_camera"):
         raise RuntimeError("env.gray_camera is not configured")
     sensor_exposure = exposure if differentiable else exposure.detach()
@@ -52,6 +52,7 @@ def render_gray_sensor(env, exposure, gain, differentiable=True):
         sensor_gain,
         motion=None if temporal else motion,
         enable_noise=bool(getattr(env, "gray_enable_noise", True)),
+        shot_noise=shot_noise, read_noise=read_noise,
     )
     aux = dict(render_aux or {})
     aux.update(camera_aux or {})

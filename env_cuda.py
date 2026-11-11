@@ -418,6 +418,17 @@ class Env:
                 "goal_independent_of_slit": True, "enclosed_corridor": True,
                 "legacy_wall_boxes_preserved": True,
             }
+        if self.scene_layout == "single_wall_slit_diff":
+            return {
+                "geometry_kind": "single_wall_slit",
+                "renderer_mode": "differentiable_equivalent",
+                "illumination_scenario": self.current_scene_names[idx],
+                "slit_center_y": float(self.slit_center_y[idx].detach().cpu()),
+                "slit_half_y": float(self.slit_half_y[idx].detach().cpu()),
+                "back_wall_x": float(self.back_wall_x[idx].detach().cpu()),
+                "world_geometry_source": "legacy_single_wall_slit_voxels",
+                "collision_geometry": "sphere_continuous_box_sweep",
+            }
         if self.scene_layout == "sparse_poles":
             return {
                 "geometry_kind": "sparse_poles", "illumination_scenario": self.current_scene_names[idx],
@@ -590,10 +601,11 @@ class Env:
         out[:, 1] = centers[:, 2]
         return out.cpu().numpy()
 
-    def run(self, act_pred, ctl_dt=1 / 15, v_pred=None):
+    def run(self, act_pred, ctl_dt=1 / 15, v_pred=None, *, disturbance_noise=None):
         self.dg = (
             self.dg * math.sqrt(max(1 - ctl_dt / 4, 0.0))
-            + torch.randn_like(self.dg) * 0.2 * math.sqrt(ctl_dt / 4)
+            + (torch.randn_like(self.dg) if disturbance_noise is None else disturbance_noise)
+            * 0.2 * math.sqrt(ctl_dt / 4)
         )
         self.p_old = self.p
         dynamics_fn = dynamics_step if self.scene_layout in DIFFERENTIABLE_SCENES else run

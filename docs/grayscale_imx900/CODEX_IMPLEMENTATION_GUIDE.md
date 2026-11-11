@@ -170,6 +170,10 @@ competitive RL benchmark. Do not expand this iteration to RL implementation.
 A disclosed common flight-only imitation warm start may be used for both;
 no E/G teacher targets are supplied.
 
+### 2026-11-11: bounded common-controller joint experiment
+
+The user explicitly authorized implementation of [the locked bounded execution protocol](BOUNDED_JOINT_EXECUTION_2026_11_11.md). This supersedes the historical training stops only for its six arms on `single_wall_slit_diff`. Use the shared frozen reader/controller and original-noise generic 50ms research profile; do not reuse the proof profile or per-cell fitted readers. Known poor fixed exposure is not a research admission gate. Frozen historical checkpoints and reports remain unchanged. Initial reader error is reported, not tuned into a new permission gate. Trials and differentiable camera updates share the full task cost. Current round count is six by measured runtime, 2880 optimization rollouts per arm. Training/evaluation results are not yet established.
+
 ## Phase 0 — legacy separation ✅ COMPLETE
 
 - D455 executable sensor path removed from this branch.
