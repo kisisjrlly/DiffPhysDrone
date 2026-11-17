@@ -28,16 +28,33 @@ MODES=dict(A1='mean',A2='gradient',A3='motion',B='learned',C='learned',D='learne
 SPLITS=dict(collection=list(range(128)), train=list(range(256)), development=list(range(16)), confirmation=list(range(64)))
 
 
+def sync_directory(path):
+    descriptor=os.open(str(Path(path)),os.O_RDONLY|os.O_DIRECTORY)
+    try:os.fsync(descriptor)
+    finally:os.close(descriptor)
+
+
+def durable_append(path,value):
+    with Path(path).open('a') as stream:
+        stream.write(json.dumps(value)+'\n');stream.flush();os.fsync(stream.fileno())
+
+
 def write_json(path,value):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     temp=path.with_suffix(path.suffix+'.tmp')
-    temp.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+'\n')
+    with temp.open('w') as stream:
+        stream.write(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+'\n')
+        stream.flush();os.fsync(stream.fileno())
     temp.replace(path)
+    sync_directory(path.parent)
 
 
 def save(path,value):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    tmp=path.with_suffix('.tmp');torch.save(value,tmp);tmp.replace(path)
+    tmp=path.with_suffix('.tmp')
+    with tmp.open('wb') as stream:
+        torch.save(value,stream);stream.flush();os.fsync(stream.fileno())
+    tmp.replace(path);sync_directory(path.parent)
 
 
 def sha(path):
@@ -79,7 +96,7 @@ class Ledger:
         finally:
             if torch.cuda.is_available():torch.cuda.synchronize()
             row=dict(kind=kind,arm=arm,seconds=time.monotonic()-start,time=time.time())
-            with self.path.open('a') as f:f.write(json.dumps(row)+'\n')
+            durable_append(self.path,row)
             self.current=None;self.started=None
 
     def arm_seconds(self,arm):
@@ -88,7 +105,7 @@ class Ledger:
     def episode(self,namespace,ids,kind,arm):
         # A planned full rollout is counted even if an exception aborts the call.
         row=dict(kind='rollout',phase=kind,arm=arm,namespace=namespace,ids=list(ids),count=len(ids),time=time.time())
-        with self.path.open('a') as f:f.write(json.dumps(row)+'\n')
+        durable_append(self.path,row)
 
 
 class Experiment:

@@ -1,0 +1,42 @@
+[
+  {
+    "update": 100,
+    "validation_rmse": 0.2051460789311339
+  },
+  {
+    "update": 200,
+    "validation_rmse": 0.15352672604713521
+  },
+  {
+    "update": 300,
+    "validation_rmse": 0.1405627258484698
+  },
+  {
+    "update": 400,
+    "validation_rmse": 0.1361125175639665
+  },
+  {
+    "update": 500,
+    "validation_rmse": 0.13656690885030653
+  },
+  {
+    "update": 600,
+    "validation_rmse": 0.1316205844283421
+  },
+  {
+    "update": 700,
+    "validation_rmse": 0.12514574524731514
+  },
+  {
+    "update": 800,
+    "validation_rmse": 0.12941910852185565
+  },
+  {
+    "update": 900,
+    "validation_rmse": 0.1403716639948629
+  },
+  {
+    "update": 1000,
+    "validation_rmse": 0.1184018516803401
+  }
+]

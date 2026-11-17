@@ -1,0 +1,26 @@
+{
+  "interruption": {
+    "kind": "train_interrupted",
+    "arm": "C",
+    "seconds": 2065.654598236084,
+    "time": 1794386433.8460531,
+    "lower_bound_seconds": 666.3502666950226,
+    "previous_boot_id": "91a3149a-a7a1-4d36-a8fc-238f8537696d",
+    "current_boot_id": "972d6f42-bc31-4b96-a70d-f106b47a79b4",
+    "interruption_boot_time": 1794385465,
+    "reason": "Second host reboot. Upper-bound charge includes unknown downtime. C checkpoint retained cycle19/380 rollouts. Torn zero-filled ledger suffix archived verbatim.",
+    "original_ledger_sha256": "83c264df6ecd0ce2b2e71fe12c8b87b38fc4c134fc4628ab298fb69942c5d641",
+    "valid_ledger_rows": 757,
+    "discarded_tail_bytes": 296
+  },
+  "uncertain_attempts": {
+    "kind": "rollout",
+    "phase": "interrupted_unrecoverable_upper_bound",
+    "arm": "C",
+    "namespace": "train",
+    "ids": [],
+    "count": 20,
+    "time": 1794386433.852288,
+    "reason": "One next C cycle may have started; torn ledger cannot identify actual calls. Charge entire 20-episode cycle conservatively, do not invent completed outputs."
+  }
+}

@@ -86,6 +86,7 @@ class IMX900Calibration:
     exposure_us_max: float = 8000.0
     exposure_reference_us: float = 1000.0
     exposure_step_us: float = 0.0
+    exposure_normalization: str = "none"
     exposure_lut_x: Optional[List[float]] = None
     exposure_lut_us: Optional[List[float]] = None
     signal_scale: float = 1.0
@@ -132,6 +133,8 @@ class IMX900Calibration:
             raise ValueError("invalid exposure range")
         if self.exposure_reference_us <= 0 or self.exposure_step_us < 0:
             raise ValueError("invalid exposure reference/step")
+        if self.exposure_normalization not in {"none", "reference_charge"}:
+            raise ValueError("exposure_normalization must be none or reference_charge")
         if self.signal_scale <= 0:
             raise ValueError("signal_scale must be > 0")
         if self.exposure_mapping == "lut":
@@ -224,6 +227,7 @@ class IMX900Calibration:
             exposure_us_max=float(exposure.get("max_us", 8000.0)),
             exposure_reference_us=float(exposure.get("reference_us", 1000.0)),
             exposure_step_us=float(exposure.get("step_us", 0.0)),
+            exposure_normalization=str(exposure.get("normalization", "none")).lower(),
             exposure_lut_x=exposure.get("lut_x"),
             exposure_lut_us=exposure.get("lut_us"),
             signal_scale=float(exposure.get("signal_scale", 1.0)),

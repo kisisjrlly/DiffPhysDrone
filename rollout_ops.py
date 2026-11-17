@@ -54,6 +54,17 @@ def render_gray_sensor(env, exposure, gain, differentiable=True, *, shot_noise=N
         enable_noise=bool(getattr(env, "gray_enable_noise", True)),
         shot_noise=shot_noise, read_noise=read_noise,
     )
+    raw_gray = gray
+    if bool(getattr(env, "proof_camera_input_normalize", False)):
+        # This is an explicit software-only input convention for the proof
+        # camera.  It removes the deterministic exposure brightness change so
+        # the policy can be tested on the remaining noise/blur tradeoff.  The
+        # raw sensor frame is retained in aux and is the only frame used for
+        # visualisation/diagnostics.
+        relative = env.gray_camera.calibration.exposure_to_relative(sensor_exposure)
+        scale = float(env.gray_camera.calibration.signal_scale)
+        denom = (relative * scale).clamp_min(1e-6).view(-1, 1, 1, 1)
+        gray = (gray / denom).clamp(0.0, 1.0)
     aux = dict(render_aux or {})
     aux.update(camera_aux or {})
     if temporal:
@@ -61,6 +72,8 @@ def render_gray_sensor(env, exposure, gain, differentiable=True, *, shot_noise=N
         # exposure duration. Do not apply the legacy box blur a second time.
         aux["blur_strength"] = render_aux["temporal_blur_mae"][:, None, None, None]
     aux["ideal_gray"] = ideal.detach()
+    aux["raw_gray"] = raw_gray.detach()
+    aux["policy_input_normalized"] = bool(getattr(env, "proof_camera_input_normalize", False))
     aux["motion_proxy"] = motion.detach()
     aux["characteristic_depth"] = char_depth.detach()
     return gray, aux

@@ -1,0 +1,30 @@
+# C: joint camera and flight learning through the differentiable renderer.
+--scene_layout single_wall_slit_diff
+--policy_arch legacy
+--observation_grad_mode full
+--pose_gradient_estimator analytic
+--gray_temporal_samples 3
+--camera_control_mode learned
+--sensor_grad_mode full
+--imx900_calibration configs/calibration/proof_camera_surrogate.json
+--fixed_camera_exposure 0.01583166
+--fixed_camera_gain 0.0
+--simple_start_x -1.5
+--simple_goal_x 1.5
+--simple_slit_half_y 0.15
+--gray_transition_x 0.0
+--gray_transition_width 0.25
+--gray_width 96
+--gray_height 72
+--gray_nn_width 48
+--gray_nn_height 36
+--base_control_freq 15
+--flight_max_speed 1.15
+--max_acc_cmd 2.2
+--timesteps 60
+--batch_size 2
+--loss_v_window 12
+--scenarios dark bright dark_to_bright bright_to_dark
+--reset_camera_branch_from_seed
+--no-amp
+--wandb_disabled

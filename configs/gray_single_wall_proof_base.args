@@ -1,0 +1,40 @@
+# Minimal flight-only base for the proof-camera mechanism check.
+--scene_layout single_wall_slit_diff
+--policy_arch legacy
+--joint_backward legacy
+--grad_decay 0.3
+--observation_grad_mode detached
+--pose_gradient_estimator analytic
+--gray_temporal_samples 9
+--camera_control_mode mean_ae
+--sensor_grad_mode detached
+--imx900_calibration configs/calibration/proof_camera_surrogate.json
+--gray_saturation_mode ste
+--fixed_camera_exposure 0.01583166
+--fixed_camera_gain 0.0
+--simple_start_x -1.5
+--simple_wall_x 0
+--simple_goal_x 1.5
+--simple_slit_half_y 0.15
+--gray_transition_x 0.0
+--gray_transition_width 0.25
+--gray_dark_scale 0.12
+--gray_bright_scale 2.2
+--gray_width 96
+--gray_height 72
+--gray_nn_width 48
+--gray_nn_height 36
+--cam_angle 5
+--base_control_freq 15
+--control_dt_jitter 0
+--flight_max_speed 1.15
+--max_acc_cmd 2.2
+--timesteps 60
+--batch_size 8
+--loss_v_window 12
+--coef_obj_avoidance 0.5
+--coef_collide 10.0
+--scenarios dark bright dark_to_bright bright_to_dark
+--proof_camera_input_normalize
+--no-amp
+--wandb_disabled

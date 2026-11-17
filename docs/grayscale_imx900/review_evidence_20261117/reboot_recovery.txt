@@ -1,0 +1,9 @@
+{
+  "kind": "train_interrupted",
+  "arm": "B",
+  "seconds": 1485.5589308738708,
+  "time": 1794382589.84682,
+  "interruption_boot_time": 1794382128,
+  "lower_bound_seconds": 1216.6685190200806,
+  "reason": "Host reboot removed process. Conservative upper-bound accounting through next boot; includes possible downtime. Last uncommitted4-episode attempt remains charged; resume starts saved optimizer/cursor."
+}

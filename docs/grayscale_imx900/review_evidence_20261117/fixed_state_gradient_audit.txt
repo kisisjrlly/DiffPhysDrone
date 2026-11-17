@@ -1,0 +1,1220 @@
+{
+  "rows": [
+    {
+      "state": "stationary",
+      "exposure_us": 890.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": 10.880880355834961,
+      "finite_difference": 10.87978458404541,
+      "same_direction": true,
+      "forward_value": 0.12942735850811005,
+      "detached_value": 0.12942735850811005,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 890.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": 0.3968919813632965,
+      "finite_difference": 0.3986060619354248,
+      "same_direction": true,
+      "forward_value": 0.12942735850811005,
+      "detached_value": 0.12942735850811005,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 890.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": -1.204225778579712,
+      "finite_difference": -1.4160573482513428,
+      "same_direction": true,
+      "forward_value": 0.12942735850811005,
+      "detached_value": 0.12942735850811005,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 8000.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": 0.662273645401001,
+      "finite_difference": 0.661313533782959,
+      "same_direction": true,
+      "forward_value": 0.3841608762741089,
+      "detached_value": 0.3841608762741089,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 8000.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": 0.23886102437973022,
+      "finite_difference": 0.23871660232543945,
+      "same_direction": true,
+      "forward_value": 0.3841608762741089,
+      "detached_value": 0.3841608762741089,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 8000.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": -3.440908670425415,
+      "finite_difference": 8.028000831604004,
+      "same_direction": false,
+      "forward_value": 0.3841608762741089,
+      "detached_value": 0.3841608762741089,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 50000.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": -0.16378124058246613,
+      "finite_difference": -0.08240342140197754,
+      "same_direction": true,
+      "forward_value": 0.07683845609426498,
+      "detached_value": 0.07683845609426498,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 50000.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": -0.3428015410900116,
+      "finite_difference": -0.34261494874954224,
+      "same_direction": true,
+      "forward_value": 0.07683845609426498,
+      "detached_value": 0.07683845609426498,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "stationary",
+      "exposure_us": 50000.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": 1.5724543333053589,
+      "finite_difference": -0.07275491952896118,
+      "same_direction": false,
+      "forward_value": 0.07683845609426498,
+      "detached_value": 0.07683845609426498,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          -0.003505605272948742,
+          1.5057823657989502
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          -0.01359223760664463,
+          0.0223322045058012
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            1.0,
+            -0.00025294674560427666,
+            0.0
+          ],
+          [
+            0.00025294674560427666,
+            1.0,
+            0.0
+          ],
+          [
+            -0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 890.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": -0.29665055871009827,
+      "finite_difference": -0.29640448093414307,
+      "same_direction": true,
+      "forward_value": 0.0009631216526031494,
+      "detached_value": 0.0009631216526031494,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 890.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": -0.010895212180912495,
+      "finite_difference": -0.010932272300124168,
+      "same_direction": true,
+      "forward_value": 0.0009631216526031494,
+      "detached_value": 0.0009631216526031494,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 890.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": 0.07974401116371155,
+      "finite_difference": 1.6828337907791138,
+      "same_direction": true,
+      "forward_value": 0.0009631216526031494,
+      "detached_value": 0.0009631216526031494,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 8000.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": -0.029245566576719284,
+      "finite_difference": -0.02875516563653946,
+      "same_direction": true,
+      "forward_value": 0.0018235299503430724,
+      "detached_value": 0.0018235299503430724,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 8000.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": -0.010475963354110718,
+      "finite_difference": -0.010518706403672695,
+      "same_direction": true,
+      "forward_value": 0.0018235299503430724,
+      "detached_value": 0.0018235299503430724,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 8000.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": 0.16432002186775208,
+      "finite_difference": 3.152523994445801,
+      "same_direction": true,
+      "forward_value": 0.0018235299503430724,
+      "detached_value": 0.0018235299503430724,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 50000.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": 0.03789341822266579,
+      "finite_difference": 0.018421560525894165,
+      "same_direction": true,
+      "forward_value": 0.014076837338507175,
+      "detached_value": 0.014076837338507175,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 50000.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": 0.07596749067306519,
+      "finite_difference": 0.07594935595989227,
+      "same_direction": true,
+      "forward_value": 0.014076837338507175,
+      "detached_value": 0.014076837338507175,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "lateral",
+      "exposure_us": 50000.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": -0.02798505872488022,
+      "finite_difference": 0.00855419784784317,
+      "same_direction": false,
+      "forward_value": 0.014076837338507175,
+      "detached_value": 0.014076837338507175,
+      "actual_position": [
+        [
+          -1.505061388015747,
+          0.07565951347351074,
+          1.5216903686523438
+        ]
+      ],
+      "actual_velocity": [
+        [
+          -0.019648969173431396,
+          0.323357492685318,
+          0.05817362293601036
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9999871850013733,
+            0.0050618830136954784,
+            0.0
+          ],
+          [
+            -0.005045178811997175,
+            0.9966872930526733,
+            0.08117299526929855
+          ],
+          [
+            0.00041088819853030145,
+            -0.08117195218801498,
+            0.9967000484466553
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 890.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": 1.3275938034057617,
+      "finite_difference": 1.332610845565796,
+      "same_direction": true,
+      "forward_value": 0.11824000626802444,
+      "detached_value": 0.11824000626802444,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 890.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": 0.04066711664199829,
+      "finite_difference": 0.03956258296966553,
+      "same_direction": true,
+      "forward_value": 0.11824000626802444,
+      "detached_value": 0.11824000626802444,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 890.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": 0.5634731650352478,
+      "finite_difference": -0.2720579504966736,
+      "same_direction": false,
+      "forward_value": 0.11824000626802444,
+      "detached_value": 0.11824000626802444,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 8000.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": -0.5998432040214539,
+      "finite_difference": -0.5801022052764893,
+      "same_direction": true,
+      "forward_value": 0.1592947095632553,
+      "detached_value": 0.1592947095632553,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 8000.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": -0.19736239314079285,
+      "finite_difference": -0.19758939743041992,
+      "same_direction": true,
+      "forward_value": 0.1592947095632553,
+      "detached_value": 0.1592947095632553,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 8000.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": 1.6537561416625977,
+      "finite_difference": -1.2182444334030151,
+      "same_direction": false,
+      "forward_value": 0.1592947095632553,
+      "detached_value": 0.1592947095632553,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local image-warp approximation; not exact hard-render derivative"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 50000.0,
+      "variable": "exposure",
+      "step": 0.0001,
+      "autograd": -0.006166666746139526,
+      "finite_difference": 0.005736947059631348,
+      "same_direction": false,
+      "forward_value": 0.06253931671380997,
+      "detached_value": 0.06253931671380997,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 50000.0,
+      "variable": "gain",
+      "step": 0.0001,
+      "autograd": 0.024269863963127136,
+      "finite_difference": 0.024884939193725586,
+      "same_direction": true,
+      "forward_value": 0.06253931671380997,
+      "detached_value": 0.06253931671380997,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    },
+    {
+      "state": "turning",
+      "exposure_us": 50000.0,
+      "variable": "position_y",
+      "step": 0.0001,
+      "autograd": 1.1367015838623047,
+      "finite_difference": -0.17687678337097168,
+      "same_direction": false,
+      "forward_value": 0.06253931671380997,
+      "detached_value": 0.06253931671380997,
+      "actual_position": [
+        [
+          -1.4653127193450928,
+          0.1554887294769287,
+          1.5383200645446777
+        ]
+      ],
+      "actual_velocity": [
+        [
+          0.14929768443107605,
+          0.6621943712234497,
+          0.09551064670085907
+        ]
+      ],
+      "actual_rotation": [
+        [
+          [
+            0.9991852641105652,
+            0.004021549131721258,
+            0.04015878587961197
+          ],
+          [
+            -0.010428513400256634,
+            0.9869588017463684,
+            0.16063514351844788
+          ],
+          [
+            -0.03898906707763672,
+            -0.1609230637550354,
+            0.9861965179443359
+          ]
+        ]
+      ],
+      "limitation": "Local warp depth/visibility derivative approximate; max-exposure finite difference crosses bound"
+    }
+  ],
+  "interpretation": "Reports actual motion and raw direction agreement; not a task-benefit or training gate."
+}

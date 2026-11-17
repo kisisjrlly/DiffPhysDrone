@@ -138,6 +138,7 @@ def build_env(batch_size, args, device, *, eval_mode=False):
     env.gray_camera = build_imx900_camera(args).to(device)
     env.imx900_calibration = env.gray_camera.calibration
     env.gray_enable_noise = bool(args.gray_enable_noise)
+    env.proof_camera_input_normalize = bool(getattr(args, "proof_camera_input_normalize", False))
     env.control_period_s = 1 / args.base_control_freq
     env.camera_queue_aligned_intent = args.camera_queue_aligned_intent
     env.exposure_trajectory = args.exposure_trajectory

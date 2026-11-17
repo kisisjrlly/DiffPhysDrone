@@ -181,6 +181,18 @@ def build_parser():
     p.add_argument("--gray_saturation_mode", choices=["ste", "hard", "soft"], default="soft")
     p.add_argument("--gray_soft_clip_beta", type=float, default=12.0)
     p.add_argument("--gray_enable_noise", default=True, action=argparse.BooleanOptionalAction)
+    p.add_argument(
+        "--proof_camera_input_normalize",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Mechanism-test only: exposure-compensate the proof camera frame before policy input; raw frame remains in renderer aux.",
+    )
+    p.add_argument(
+        "--reset_camera_branch_from_seed",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Reset the learned camera branch from a fixed seed before a proof arm.",
+    )
 
     # How the shutter interval is reconstructed. "extrapolate" is the legacy
     # end-velocity replay, documented as acceptable up to ~8 ms. "history"

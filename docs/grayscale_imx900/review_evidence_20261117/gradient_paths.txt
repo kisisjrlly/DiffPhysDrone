@@ -1,0 +1,10 @@
+{
+  "exposure_to_sensor": "physical shutter units, once-only reparameterized noise, actual hard clamp derivative",
+  "exposure_to_sampling": "history sampling retains duration derivative; nine samples",
+  "reader": "weights frozen; input and attitude derivatives retained",
+  "camera_feedback": "same mean-AE recurrence retains graph; no hidden detach",
+  "flight_queue": "two commands; actual executed input",
+  "dynamics": "grad_decay=1; differentiable attitude/drag, explicit noise",
+  "pose_to_image": "warp_ste; local fixed-depth approximation, misses disocclusion",
+  "terminal": "hard event active masks; no exact event-time derivative claim"
+}

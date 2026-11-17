@@ -179,6 +179,16 @@ class IMX900DifferentiableCamera(nn.Module):
                 ).expand_as(charge)
             noisy_signal = noisy_signal + shot_std * shot_noise + read_std * read_noise
 
+        if self.calibration.exposure_normalization == "reference_charge":
+            # Proof-camera-only radiometric compensation.  The shutter still
+            # controls temporal integration and the noise is generated from
+            # the actual charge, but the mean output is referred back to the
+            # calibration reference so long exposure does not trivially win
+            # by saturating the whole frame.  This is a software mechanism
+            # model, never a hardware claim.
+            compensation = self.calibration.exposure_reference_us / exposure_us.clamp_min(1e-6)
+            noisy_signal = noisy_signal * compensation
+
         pre_clip = noisy_signal + self.calibration.black_level
         signal_normalized = pre_clip / self.calibration.saturation_level
         image = self._saturate(signal_normalized)

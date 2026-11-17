@@ -136,9 +136,6 @@ def main():
             f"flight={model.flight_residual_enabled} camera={model.camera_residual_enabled}"
         )
     critic = LatentCostCritic(latent_dim=128).to(device) if args.policy_update_mode == "short_horizon_ac" else None
-    if args.policy_arch == "intent_shared" and not args.resume:
-        model.initialize_camera_output(args.fixed_camera_exposure, args.fixed_camera_gain)
-
     if args.resume:
         print(f"[info] loading checkpoint: {args.resume}")
         state_dict = torch.load(args.resume, map_location=device)
@@ -146,6 +143,25 @@ def main():
             model.load_flight_state_dict(state_dict)
         else:
             model.load_state_dict(state_dict, strict=True)
+
+    if (
+        getattr(model, "initialize_camera_output", None) is not None
+        and args.camera_control_mode == "learned"
+        and not args.train_camera_only
+    ):
+        # Every learned-camera arm starts from the same physical operating
+        # point.  This also applies to the legacy Model used by the proof
+        # experiment; otherwise its zero camera logits silently start at 0.5,
+        # which is a different exposure after switching profiles.
+        model.initialize_camera_output(args.fixed_camera_exposure, args.fixed_camera_gain)
+    if (
+        bool(getattr(args, "reset_camera_branch_from_seed", False))
+        and not args.train_camera_only
+        and getattr(model, "reset_camera_parameters_from_seed", None) is not None
+    ):
+        model.reset_camera_parameters_from_seed(
+            args.seed, args.fixed_camera_exposure, args.fixed_camera_gain
+        )
 
     critic_source = None
     if args.critic_resume:

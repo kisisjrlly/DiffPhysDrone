@@ -1,0 +1,213 @@
+{
+  "snapshot_date": "2026-11-17",
+  "experimental_status": "incomplete; no live trainer; confirmation not run",
+  "planned_optimization_rollouts_per_arm": 2880,
+  "arms": {
+    "A1": {
+      "checkpoint_sha256": "371a5406f3758c3a54271ce116976ccdf0834931333bc3172414e3b8312d480b",
+      "cycle": 150,
+      "rollouts": 2400,
+      "cursor": 1200,
+      "round_done": 5,
+      "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+      "config_hash": "874cbc294c0956e0902c668165ad36ff3439ca5b7d7375e99e6d6a2bdce6c4a5",
+      "motion": [
+        0.48874184489250183,
+        0.28901004791259766,
+        0.3305332064628601,
+        0.5638010501861572,
+        0.4815458059310913,
+        0.7422863245010376
+      ],
+      "camera": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "development_successes": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "A2": {
+      "checkpoint_sha256": "a84ce04bc511030368f394f890f70b76e035e9a6d373a6ea6110eea8082f9fdf",
+      "cycle": 150,
+      "rollouts": 2400,
+      "cursor": 1200,
+      "round_done": 5,
+      "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+      "config_hash": "874cbc294c0956e0902c668165ad36ff3439ca5b7d7375e99e6d6a2bdce6c4a5",
+      "motion": [
+        0.6579469442367554,
+        0.4014938771724701,
+        0.5262807607650757,
+        0.5947136878967285,
+        0.30273309350013733,
+        0.9381512403488159
+      ],
+      "camera": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "development_successes": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "A3": {
+      "checkpoint_sha256": "41ec756c5a517b73fed991ee68faa9f288dc5e849d75d1741e8c72cd9d56d8dc",
+      "cycle": 150,
+      "rollouts": 2400,
+      "cursor": 1200,
+      "round_done": 5,
+      "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+      "config_hash": "874cbc294c0956e0902c668165ad36ff3439ca5b7d7375e99e6d6a2bdce6c4a5",
+      "motion": [
+        0.48874184489250183,
+        0.28901004791259766,
+        0.3305332064628601,
+        0.5638010501861572,
+        0.4815458059310913,
+        0.7422863245010376
+      ],
+      "camera": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "development_successes": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "B": {
+      "checkpoint_sha256": "5cfad0ab88d9fbbf871f849bc6e25e490042944a35df5b9442b024893a2b2465",
+      "cycle": 506,
+      "rollouts": 2024,
+      "cursor": 2024,
+      "round_done": 4,
+      "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+      "config_hash": "874cbc294c0956e0902c668165ad36ff3439ca5b7d7375e99e6d6a2bdce6c4a5",
+      "motion": [
+        0.7272727489471436,
+        0.1666666716337204,
+        0.1666666716337204,
+        0.1666666716337204,
+        0.5000000596046448,
+        1.0
+      ],
+      "camera": [
+        0.15732811391353607,
+        -0.03572143241763115,
+        0.3277018070220947,
+        -0.06615979224443436,
+        0.06909018754959106,
+        -0.011077520437538624
+      ],
+      "development_successes": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "C": {
+      "checkpoint_sha256": "3d372e5e7c56b8354b2cbb3ebd454ba82125a1c347bfaa53f47f36082279ad2a",
+      "cycle": 96,
+      "rollouts": 1920,
+      "cursor": 1152,
+      "round_done": 4,
+      "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+      "config_hash": "874cbc294c0956e0902c668165ad36ff3439ca5b7d7375e99e6d6a2bdce6c4a5",
+      "motion": [
+        0.41176337003707886,
+        0.3605031371116638,
+        0.40585729479789734,
+        0.5544484257698059,
+        0.4111931324005127,
+        0.9320358037948608
+      ],
+      "camera": [
+        0.142917200922966,
+        -0.12305350601673126,
+        0.07907827943563461,
+        -0.060050781816244125,
+        0.06005077809095383,
+        -0.06005078926682472
+      ],
+      "development_successes": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "D": {
+      "checkpoint_sha256": "4caf97d8c887012593abb7da83692af0603d9e4df01583f9d4c4d38f26f5c0fd",
+      "cycle": 120,
+      "rollouts": 1920,
+      "cursor": 960,
+      "round_done": 4,
+      "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+      "config_hash": "874cbc294c0956e0902c668165ad36ff3439ca5b7d7375e99e6d6a2bdce6c4a5",
+      "motion": [
+        0.5627469420433044,
+        0.39536213874816895,
+        0.4239467978477478,
+        0.5803967118263245,
+        0.3183594346046448,
+        0.8301270604133606
+      ],
+      "camera": [
+        0.16246889531612396,
+        -0.10924550145864487,
+        -0.052773043513298035,
+        0.007388748228549957,
+        0.05227062478661537,
+        0.036881815642118454
+      ],
+      "development_successes": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "reader": {
+    "checkpoint_sha256": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+    "update": 1000,
+    "validation_mse": 0.014018998481333256,
+    "validation_rmse": 0.1184018516803401,
+    "data_hash": "16a419be58ef3294838cba0fad2b30c65215ea902c4834d4e88c8a8e23232079",
+    "split_hash": "774de36d1817a299aba0d0a2747fd55477a5109def956cacd1a43be0feec645f"
+  },
+  "closed_stage_hours_only": 6.591807604891522,
+  "time_limitation": "Last interrupted stage has not been reconciled; previous interruption upper bounds may include downtime. Not total GPU usage.",
+  "total_saved_optimization_rollouts": 13064,
+  "missing_final_artifacts": [
+    "trained.json",
+    "evaluated.json",
+    "summary.json",
+    "RESULTS_ZH.md"
+  ]
+}

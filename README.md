@@ -1,5 +1,10 @@
 # DiffPhysDrone — Grayscale / IMX900 Active Sensing
 
+> **2026-11-17 code review:** current research code is on
+> `codex/imx900-intent-closed-loop`. Start with the
+> [review handoff and recorded progress](docs/grayscale_imx900/REVIEW_HANDOFF_2026_11_17.md).
+> The six-arm experiment is incomplete; no joint-learning success is claimed.
+
 > Branch: `active-sensing-grayscale-imx900`
 
 This branch is a **grayscale-only research line**. The executable D455 /

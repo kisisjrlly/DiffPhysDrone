@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-17",
+  "reason": "Publish previously untracked review/proof helpers and configurations; expand hash manifest membership after explicit Git staging.",
+  "changed_existing_source_files": [],
+  "added_manifest_members": [
+    "bounded_route/video.py",
+    "configs/calibration/proof_camera_surrogate.json",
+    "configs/gray_proof_arm_a.args",
+    "configs/gray_proof_arm_b.args",
+    "configs/gray_proof_arm_c.args",
+    "configs/gray_proof_arm_d.args",
+    "configs/gray_single_wall_proof_base.args",
+    "configs/gray_single_wall_proof_train.args",
+    "tests/test_single_wall_slit_diff.py",
+    "tools/audit_proof_camera.py",
+    "tools/run_proof_four_arms.py",
+    "tools/supervise_bounded_route.py"
+  ],
+  "numerical_changes": false,
+  "training_resumed": false,
+  "original_training_manifest": "protocol_revisions/github_review_publication_20261117/protocol_before.json",
+  "historical_review_manifest": "docs/grayscale_imx900/review_evidence_20261117/protocol.txt",
+  "fresh_restore_verification": "Experiment construction and strict frozen-reader restore passed on CPU. No rollout or training."
+}

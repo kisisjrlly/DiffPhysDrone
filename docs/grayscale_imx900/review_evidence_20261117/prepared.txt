@@ -1,0 +1,6 @@
+{
+  "reader_hash": "ae2d200a532375c5a514beb1813212caf5b512f89cd5bfeb5e890b31ac46fb85",
+  "data_hash": "16a419be58ef3294838cba0fad2b30c65215ea902c4834d4e88c8a8e23232079",
+  "seconds": 238.16680715400014,
+  "complete": true
+}

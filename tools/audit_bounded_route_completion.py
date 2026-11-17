@@ -109,7 +109,15 @@ def audit(out):
     passed_test_count = max((int(n) for n in re.findall(r'(\d+) passed', tests.read_text())),default=0) if tests.exists() else 0
     check('full pytest evidence',passed_test_count>=326 and 'FAILED ' not in tests.read_text(),dict(path='verification_tests.txt',passed=passed_test_count))
     repo=read('repository_delivery.json',{})
-    check('implementation/results committed and push attempted',bool(repo.get('commit')) and repo.get('push_attempted') is True,'repository_delivery.json')
+    results_commit=repo.get('results_commit')
+    committed_summary=False
+    if results_commit:
+        probe=subprocess.run(['git','show',f'{results_commit}:exports/bounded_joint_20261111/summary.json'],capture_output=True)
+        committed_summary=(probe.returncode==0 and (out/'summary.json').exists()
+                           and hashlib.sha256(probe.stdout).hexdigest()==digest(out/'summary.json'))
+    check('implementation/results committed and push attempted',bool(repo.get('implementation_commit'))
+          and committed_summary and repo.get('results_commit_pending') is False and repo.get('push_attempted') is True,
+          dict(path='repository_delivery.json',committed_summary_matches=committed_summary))
     return dict(complete=all(x['passed'] for x in checks),passed=sum(x['passed'] for x in checks),
                 required=len(checks),checks=checks)
 

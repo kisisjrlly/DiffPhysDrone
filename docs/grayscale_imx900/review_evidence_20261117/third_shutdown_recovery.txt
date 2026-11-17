@@ -1,0 +1,9 @@
+{
+  "kind": "train_interrupted",
+  "arm": "A2",
+  "seconds": 123.70523619651794,
+  "time": 1794465675.0944946,
+  "lower_bound_seconds": 27.16526436805725,
+  "reason": "Verified orderly shutdown of boot972d6f42; charge through last shutdown journal timestamp, not next-day downtime. Checkpoint cycle31/496 retained; all unsaved attempts remain ledger charged.",
+  "previous_boot_id": "972d6f42bc314b96a70df106b47a79b4"
+}
